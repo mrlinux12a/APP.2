@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="1" class="con-azione">
+  <div class="app">
+    <%- include('partials/appbar', { titolo, intestazione: 'Cerca prodotti', indietro: '/home' }) %>
+
+    <div class="contenuto" style="padding-bottom:0;">
+      <form class="barra-ricerca" method="GET" action="/cerca">
+        <span class="lente">🔍</span>
+        <input type="search" name="q" value="<%= q %>" data-ricerca autofocus
+               placeholder="Scrivi anche solo una parte, es. &quot;valv&quot;"
+               aria-label="Cerca un prodotto">
+      </form>
+    </div>
+
+    <form method="POST" action="/carrello">
+      <input type="hidden" name="ritorno" value="/cerca?q=<%= encodeURIComponent(q) %>">
+      <div class="contenuto" style="padding-top:0;">
+        <div id="risultati">
+          <% if (!q) { %>
+            <div class="vuoto"><span class="emoji">🔍</span>Scrivi anche solo un pezzo di parola: cercando &laquo;valv&raquo; trovi tutte le valvole.</div>
+          <% } else if (!risultati.length) { %>
+            <div class="vuoto"><span class="emoji">🤷</span>Nessun prodotto trovato per &laquo;<%= q %>&raquo;.</div>
+          <% } else { %>
+            <div class="card card-fitta">
+              <% risultati.forEach(function (p) { %>
+                <%- include('partials/prodotto', { p }) %>
+              <% }); %>
+            </div>
+          <% } %>
+        </div>
+      </div>
+
+      <%- include('partials/barra_procedi') %>
+    </form>
+  </div>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

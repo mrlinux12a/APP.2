@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="1">
+  <div class="app">
+    <%- include('partials/appbar', { titolo, intestazione: 'Richiesta #' + richiesta.id, indietro: '/distributore' }) %>
+
+    <div class="contenuto">
+      <% if (errore) { %><div class="errore"><%= errore %></div><% } %>
+
+      <div class="sezione-titolo">Cliente ordinante</div>
+      <%- include('partials/anagrafica_cliente', { cliente, indirizzoCliente, distanza }) %>
+
+      <div class="card card-fitta">
+        <div class="riga-lista">
+          <span class="icona">🕒</span>
+          <span class="corpo">
+            <span class="etichetta">Ricevuta alle <%= fmt.oraSola(richiesta.creato_il) %></span>
+            <span class="dettaglio">
+              <% if (apribile) { %>
+                Restano <%= fmt.mmss(secondi) %> per rispondere
+              <% } else { %>
+                Finestra di conferma chiusa
+              <% } %>
+            </span>
+          </span>
+          <span class="stato-badge stato-<%= risposta.esito %>">
+            <%= risposta.esito === 'confermato'
+                ? (risposta.copertura === 'parziale' ? 'Parziale' : 'Confermata')
+                : (risposta.esito === 'non_disponibile' ? 'Non disponibile' : (risposta.esito === 'scaduto' ? 'Non risposta' : 'In attesa')) %>
+          </span>
+        </div>
+      </div>
+
+      <% if (apribile) { %>
+        <form method="POST" action="/distributore/richieste/<%= richiesta.id %>/rispondi">
+          <div class="sezione-titolo">Disponibilità al banco</div>
+          <p class="nota" style="margin-top:0;">
+            Indica per ogni riga quanti pezzi riesci a coprire. Se ne metti meno di quelli
+            richiesti la conferma parte come <strong>parziale</strong>: il cliente vede subito
+            cosa manca. Se non hai nulla, usa il pulsante di rifiuto in fondo.
+          </p>
+          <div class="card card-fitta">
+            <% offerta.righe.forEach(function (r) { %>
+              <div class="prodotto">
+                <div class="info">
+                  <div class="nome"><%= r.nome %></div>
+                  <div class="meta">
+                    Cod. <%= r.codice %> · richiesti <strong><%= r.quantita_richiesta %></strong> pz
+                  </div>
+                  <div class="prezzo">
+                    € <%= euro(prezzoCliente(r)) %> <span class="iva">+ IVA · cad. per il cliente</span>
+                  </div>
+                </div>
+                <div class="stepper">
+                  <button type="button" data-passo="-1" aria-label="Togli">−</button>
+                  <input type="number" min="0" max="<%= r.quantita_richiesta %>" step="1"
+                         inputmode="numeric" name="disp_<%= r.product_id %>"
+                         value="<%= r.quantita_richiesta %>"
+                         aria-label="Pezzi disponibili di <%= r.nome %>">
+                  <button type="button" data-passo="1" aria-label="Aggiungi">+</button>
+                </div>
+              </div>
+            <% }); %>
+          </div>
+          <button class="btn btn-chiaro btn-blocco" type="button" data-azzera-righe style="margin-bottom:14px;">
+            Azzera tutte le quantità
+          </button>
+
+          <div class="sezione-titolo">Tempi</div>
+          <div class="card">
+            <label for="partenza_ore">Partenza ordine stimata</label>
+            <select id="partenza_ore" name="partenza_ore">
+              <option value="1">entro 1 ora</option>
+              <option value="2" selected>entro 2 ore</option>
+              <option value="4">entro 4 ore</option>
+              <option value="8">in giornata (8 ore)</option>
+              <option value="24">domani (24 ore)</option>
+              <option value="48">entro 48 ore</option>
+            </select>
+
+            <label for="consegna_ore">Consegna stimata al cliente</label>
+            <select id="consegna_ore" name="consegna_ore">
+              <option value="2">2 ore</option>
+              <option value="4">4 ore</option>
+              <option value="6" <%= distributore.consegna_ore_default === 6 ? 'selected' : '' %>>6 ore</option>
+              <option value="24" <%= distributore.consegna_ore_default === 24 ? 'selected' : '' %>>24 ore</option>
+              <option value="48" <%= distributore.consegna_ore_default === 48 ? 'selected' : '' %>>48 ore</option>
+              <option value="72">72 ore</option>
+            </select>
+            <p class="nota" style="margin:0;">
+              La consegna non può precedere la partenza: se scegli un valore più basso viene
+              allineato al tempo di partenza.
+            </p>
+
+            <label for="note" style="margin-top:12px;">Note per il cliente (opzionale)</label>
+            <textarea id="note" name="note" rows="2"
+                      placeholder="Es. il 18000 BTU arriva giovedì, ritiro banco 2..."></textarea>
+          </div>
+
+          <button class="btn btn-verde btn-blocco" type="submit" name="azione" value="conferma">
+            Conferma disponibilità e tempi
+          </button>
+          <button class="btn btn-rosso btn-blocco" type="submit" name="azione" value="rifiuta"
+                  style="margin-top:10px;">
+            Rifiuta: merce non disponibile
+          </button>
+        </form>
+
+      <% } else if (risposta.esito === 'confermato') { %>
+        <div class="avviso <%= risposta.copertura === 'parziale' ? 'avviso-attenzione' : 'avviso-ok' %>">
+          <% if (risposta.copertura === 'parziale') { %>
+            Hai confermato <strong>solo una parte</strong> del materiale.
+          <% } else { %>
+            Hai confermato <strong>tutto</strong> il materiale.
+          <% } %>
+          <br>Partenza stimata: <%= fmt.tempoConsegna(risposta.partenza_ore) %> ·
+          consegna stimata: <%= fmt.tempoConsegna(risposta.consegna_ore) %>.
+          <% if (risposta.note) { %><br>Note: <%= risposta.note %><% } %>
+        </div>
+
+        <div class="sezione-titolo">Cosa hai confermato</div>
+        <div class="card">
+          <% offerta.righe.forEach(function (r) { %>
+            <div class="riga-articolo">
+              <div class="qta"><%= r.quantita %>×</div>
+              <div class="desc">
+                <%= r.nome %>
+                <div class="meta">
+                  Cod. <%= r.codice %>
+                  <% if (r.quantita < r.quantita_richiesta) { %>
+                    · <span style="color:var(--rosso);">richiesti <%= r.quantita_richiesta %>, mancano <%= r.quantita_richiesta - r.quantita %></span>
+                  <% } %>
+                </div>
+              </div>
+              <div class="imp">€ <%= euro(prezzoCliente(r) * r.quantita) %></div>
+            </div>
+          <% }); %>
+          <div class="riepilogo-riga forte">
+            <span class="voce">Totale per il cliente</span>
+            <span>€ <%= euro(offerta.totali.imponibile) %> + IVA</span>
+          </div>
+        </div>
+
+        <% if (ordine && ordine.distributor_id === distributore.id) { %>
+          <a class="btn btn-primary btn-blocco" href="/distributore/ordini/<%= ordine.id %>">
+            Il cliente ha ordinato: gestisci l'ordine #<%= ordine.id %>
+          </a>
+        <% } else if (richiesta.stato === 'ordinata') { %>
+          <div class="avviso avviso-attenzione">Il cliente ha scelto un altro distributore.</div>
+        <% } else { %>
+          <p class="nota">In attesa che il cliente scelga con quale distributore ordinare.</p>
+        <% } %>
+
+      <% } else { %>
+        <div class="avviso avviso-attenzione">
+          <% if (risposta.esito === 'non_disponibile') { %>
+            Hai rifiutato la richiesta per indisponibilità della merce.
+          <% } else if (richiesta.stato === 'annullata') { %>
+            Il cliente ha annullato la richiesta prima della tua risposta.
+          <% } else if (richiesta.stato === 'ordinata') { %>
+            Il cliente ha già chiuso l'ordine con un altro distributore.
+          <% } else { %>
+            Nessuna risposta entro i 10 minuti: la richiesta è stata chiusa senza la tua conferma.
+          <% } %>
+        </div>
+
+        <div class="sezione-titolo">Materiale che era stato richiesto</div>
+        <div class="card">
+          <% offerta.righe.forEach(function (r) { %>
+            <div class="riga-articolo">
+              <div class="qta"><%= r.quantita_richiesta %>×</div>
+              <div class="desc">
+                <%= r.nome %>
+                <div class="meta">Cod. <%= r.codice %></div>
+              </div>
+            </div>
+          <% }); %>
+        </div>
+      <% } %>
+    </div>
+  </div>
+
+  <%- include('partials/nav_distributore', { attivo: 'richieste' }) %>
+  <script src="/app.js" defer></script>
+</body>
+</html>

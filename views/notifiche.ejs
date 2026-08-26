@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="1">
+  <div class="app">
+    <%- include('partials/appbar', { titolo, intestazione: 'Notifiche', indietro: '/' }) %>
+
+    <div class="contenuto">
+      <button class="btn btn-chiaro btn-blocco" type="button" data-abilita-notifiche>
+        Attiva le notifiche sul telefono
+      </button>
+
+      <% if (!elenco.length) { %>
+        <div class="vuoto"><span class="emoji">🔕</span>Nessuna notifica per ora.</div>
+      <% } else { %>
+        <div class="card card-fitta" style="margin-top:12px;">
+          <% elenco.forEach(function (n) { %>
+            <a class="riga-lista" href="<%= n.link || '#' %>">
+              <span class="icona"><%= n.letta ? '📩' : '🔔' %></span>
+              <span class="corpo">
+                <span class="etichetta"><%= n.titolo %></span>
+                <span class="dettaglio"><%= n.testo %></span>
+                <span class="dettaglio"><%= fmt.dataOra(n.creato_il) %></span>
+              </span>
+              <% if (n.link) { %><span class="freccia">›</span><% } %>
+            </a>
+          <% }); %>
+        </div>
+      <% } %>
+    </div>
+  </div>
+
+  <% if (currentUser.ruolo === 'cliente') { %>
+    <%- include('partials/nav', { attivo: '' }) %>
+  <% } %>
+  <script src="/app.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+<div class="barra-azione">
+  <div class="interno">
+    <div style="flex:1">
+      <div class="conteggio" data-conteggio="<%= carrelloPezzi %>">
+        <%= carrelloPezzi ? carrelloPezzi + ' pezzi selezionati' : 'Nessun materiale selezionato' %>
+      </div>
+      <button class="btn btn-chiaro" type="submit" name="azione" value="aggiungi"
+              formaction="/carrello" style="padding:4px 0;border:none;background:none;font-size:0.82rem;font-weight:600;">
+        Aggiungi e continua a scegliere
+      </button>
+    </div>
+    <button class="btn btn-primary" type="submit" name="azione" value="procedi"
+            formaction="/carrello" data-procedi <%= carrelloPezzi ? '' : 'disabled' %>>
+      Procedi
+    </button>
+  </div>
+</div>

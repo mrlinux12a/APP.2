@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="1" class="con-azione">
+  <div class="app">
+    <%- include('partials/appbar', { titolo, intestazione: "Riepilogo dell'ordine", indietro: '/richieste/' + richiesta.id }) %>
+
+    <form method="POST" action="/ordini">
+      <input type="hidden" name="request_id" value="<%= richiesta.id %>">
+      <input type="hidden" name="distributor_id" value="<%= offerta.distributore.id %>">
+      <input type="hidden" name="modalita" value="<%= modalita %>">
+
+      <div class="contenuto">
+        <div class="sezione-titolo">Dettagli dell'ordine</div>
+        <div class="card card-fitta">
+          <div class="riga-lista">
+            <span class="icona">👤</span>
+            <span class="corpo">
+              <span class="etichetta"><%= cliente.ragione_sociale %></span>
+              <span class="dettaglio"><%= cliente.telefono || 'Telefono non impostato' %></span>
+            </span>
+          </div>
+          <div class="riga-lista">
+            <span class="icona">🏪</span>
+            <span class="corpo">
+              <span class="etichetta"><%= offerta.distributore.nome %></span>
+              <span class="dettaglio"><%= offerta.distributore.filiale %> · zona <%= offerta.distributore.zona %></span>
+            </span>
+          </div>
+          <div class="riga-lista">
+            <span class="icona">🕒</span>
+            <span class="corpo">
+              <span class="etichetta">Partenza ordine stimata: <%= fmt.tempoConsegna(risposta.partenza_ore) %></span>
+              <span class="dettaglio">Consegna stimata in <%= fmt.tempoConsegna(risposta.consegna_ore) %> — tempi dichiarati dal banco</span>
+            </span>
+          </div>
+        </div>
+
+        <% if (offerta.mancanti.length) { %>
+          <div class="avviso avviso-attenzione">
+            <strong>Disponibilità parziale.</strong> Questo distributore non copre tutto:
+            <% offerta.mancanti.forEach(function (m, i) { %><%= i ? ', ' : '' %><%= m.mancano %> pz di <%= m.nome %><% }); %>.
+            Ordinando qui ricevi solo il materiale confermato; per il resto puoi fare una
+            nuova richiesta.
+          </div>
+        <% } %>
+
+        <div class="sezione-titolo">Come vuoi ricevere il materiale?</div>
+        <div class="scelta-modalita">
+          <a class="<%= modalita === 'consegna_mezzo_grossista' ? 'attiva' : '' %>"
+             href="/richieste/<%= richiesta.id %>/offerta/<%= offerta.distributore.id %>?modalita=consegna">
+            Consegna in cantiere
+          </a>
+          <a class="<%= modalita === 'ritiro' ? 'attiva' : '' %>"
+             href="/richieste/<%= richiesta.id %>/offerta/<%= offerta.distributore.id %>?modalita=ritiro">
+            Ritiro al banco
+          </a>
+        </div>
+        <p class="nota">
+          <%= modalita === 'ritiro'
+              ? 'Ritiri tu al banco del distributore: nessun costo di consegna.'
+              : (offerta.totali.costo_consegna > 0
+                 ? 'Consegna con mezzo del distributore: € ' + euro(offerta.totali.costo_consegna) + ' + IVA.'
+                 : 'Consegna con mezzo del distributore inclusa nel prezzo.') %>
+        </p>
+
+        <% if (modalita !== 'ritiro') { %>
+          <div class="sezione-titolo">Dove consegniamo</div>
+          <div class="card">
+            <label for="destinazione">Destinazione della merce</label>
+            <input type="text" id="destinazione" name="destinazione"
+                   value="<%= cliente.indirizzo_consegna || '' %>"
+                   placeholder="Via, numero, CAP, città">
+            <p class="nota" style="margin:0;">
+              È l'indirizzo che finisce sulla bolla / DDT insieme alla tua ragione sociale.
+            </p>
+          </div>
+        <% } %>
+
+        <div class="sezione-titolo">Note per il distributore</div>
+        <div class="card">
+          <textarea name="note" rows="2" placeholder="Es. orario preferito, riferimento cantiere..."></textarea>
+        </div>
+
+        <div class="sezione-titolo">Come vuoi pagare?</div>
+        <div class="card card-fitta">
+          <div class="riga-lista">
+            <span class="icona">💳</span>
+            <span class="corpo">
+              <span class="etichetta">Alle condizioni concordate con il distributore</span>
+              <span class="dettaglio">I metodi di pagamento in app verranno definiti più avanti</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="sezione-titolo">Riepilogo ordine</div>
+        <div class="card">
+          <% offerta.carrello.forEach(function (r) { %>
+            <div class="riga-articolo">
+              <div class="qta"><%= r.quantita %>×</div>
+              <div class="desc">
+                <%= r.prodotto.nome %>
+                <div class="meta">
+                  Cod. <%= r.prodotto.codice %> · € <%= euro(prezzoCliente(r.prodotto)) %> cad. + IVA
+                </div>
+              </div>
+              <div class="imp">€ <%= euro(prezzoCliente(r.prodotto) * r.quantita) %></div>
+            </div>
+          <% }); %>
+        </div>
+
+        <div class="card">
+          <div class="riepilogo-riga">
+            <span class="voce">Merce (IVA esclusa)</span>
+            <span>€ <%= euro(offerta.totali.totale_finale) %></span>
+          </div>
+          <div class="riepilogo-riga">
+            <span class="voce">Costo di consegna</span>
+            <span><%= offerta.totali.costo_consegna > 0 ? '€ ' + euro(offerta.totali.costo_consegna) : 'inclusa' %></span>
+          </div>
+          <div class="riepilogo-riga">
+            <span class="voce">Imponibile</span>
+            <span>€ <%= euro(offerta.totali.imponibile) %></span>
+          </div>
+          <div class="riepilogo-riga">
+            <span class="voce">IVA <%= ivaPct %>%</span>
+            <span>€ <%= euro(offerta.totali.iva) %></span>
+          </div>
+          <div class="riepilogo-riga forte">
+            <span class="voce">Totale</span>
+            <span>€ <%= euro(offerta.totali.totale_ivato) %></span>
+          </div>
+        </div>
+
+        <p class="nota">
+          Premendo <strong>Invia l'ordine</strong> confermi il contenuto dell'ordine e i dati
+          inseriti. Il distributore riceve la conferma e prepara il materiale.
+        </p>
+      </div>
+
+      <div class="barra-azione">
+        <div class="interno">
+          <div style="flex:1">
+            <div class="conteggio">Totale IVA inclusa</div>
+            <div style="font-weight:800; font-size:1.05rem;">€ <%= euro(offerta.totali.totale_ivato) %></div>
+          </div>
+          <button class="btn btn-primary" type="submit">Invia l'ordine</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

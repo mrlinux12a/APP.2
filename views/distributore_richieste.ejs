@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="1">
+  <div class="app">
+    <%- include('partials/appbar', { titolo, intestazione: distributore.nome, indietro: null }) %>
+
+    <div class="contenuto">
+      <p class="sottotitolo"><%= distributore.filiale %> · zona <%= distributore.zona %></p>
+
+      <div class="riquadri-conta">
+        <div class="conta-box">
+          <span class="numero"><%= contatori.daRispondere %></span>
+          <span class="etichetta">da confermare</span>
+        </div>
+        <a class="conta-box" href="/distributore/ordini">
+          <span class="numero"><%= contatori.daPreparare %></span>
+          <span class="etichetta">ordini da preparare</span>
+        </a>
+        <a class="conta-box" href="/distributore/ordini">
+          <span class="numero"><%= contatori.inPreparazione %></span>
+          <span class="etichetta">in preparazione</span>
+        </a>
+      </div>
+
+      <%- include('partials/geolocalizzazione', {
+            ruolo: 'distributore',
+            titoloBox: 'Posizione del banco',
+            spiegazione: 'Con il tuo consenso il banco condivide la posizione in tempo reale: serve a calcolare la distanza dal cantiere del cliente e, quando la merce parte, a far seguire la consegna al cliente.'
+          }) %>
+
+      <div class="sezione-titolo">Da confermare</div>
+      <% if (!daRispondere.length) { %>
+        <div class="vuoto"><span class="emoji">✅</span>Nessuna richiesta in attesa.</div>
+      <% } else { %>
+        <div class="card card-fitta">
+          <% daRispondere.forEach(function (r) { %>
+            <a class="riga-lista" href="/distributore/richieste/<%= r.id %>">
+              <span class="icona">⏳</span>
+              <span class="corpo">
+                <span class="etichetta">Richiesta #<%= r.id %> — <%= r.cliente_nome %></span>
+                <span class="dettaglio"><%= r.pezzi %> pz · ricevuta <%= fmt.oraSola(r.creato_il) %></span>
+              </span>
+              <span class="stato-badge stato-in_attesa"><%= fmt.mmss(Math.max(0, r.secondi)) %></span>
+            </a>
+          <% }); %>
+        </div>
+        <p class="nota">
+          Hai 10 minuti per rispondere. Se non rispondi la richiesta risulta non confermata.
+        </p>
+      <% } %>
+
+      <div class="sezione-titolo">Storico richieste</div>
+      <% if (!storico.length) { %>
+        <div class="vuoto"><span class="emoji">📭</span>Ancora nessuna richiesta chiusa.</div>
+      <% } else { %>
+        <div class="card card-fitta">
+          <% storico.forEach(function (r) { %>
+            <a class="riga-lista" href="/distributore/richieste/<%= r.id %>">
+              <span class="icona"><%= r.stato === 'ordinata' && r.esito === 'confermato' ? '📦' : '📄' %></span>
+              <span class="corpo">
+                <span class="etichetta">Richiesta #<%= r.id %> — <%= r.cliente_nome %></span>
+                <span class="dettaglio"><%= r.pezzi %> pz · <%= fmt.dataOra(r.creato_il) %></span>
+              </span>
+              <span class="stato-badge stato-<%= r.esito %>">
+                <%= r.esito === 'confermato' ? 'Confermata' : (r.esito === 'non_disponibile' ? 'Non disponibile' : (r.esito === 'scaduto' ? 'Non risposta' : 'In attesa')) %>
+              </span>
+            </a>
+          <% }); %>
+        </div>
+      <% } %>
+
+      <form method="POST" action="/logout" style="margin-top:16px;">
+        <button class="btn btn-chiaro btn-blocco" type="submit">Esci</button>
+      </form>
+    </div>
+  </div>
+
+  <%- include('partials/nav_distributore', { attivo: 'richieste' }) %>
+  <script src="/app.js" defer></script>
+</body>
+</html>

@@ -1,57 +1,166 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <%- include('partials/head', { titolo: 'Ordine #' + ordine.id }) %>
+  <%- include('partials/app_head', { titolo }) %>
 </head>
-<body>
-  <%- include('partials/topbar') %>
-  <main>
-    <h1>Ordine #<%= ordine.id %></h1>
-    <p>
-      <span class="stato-badge stato-<%= ordine.stato %>">
-        <%= ordine.stato === 'inviato' ? 'Inviato' : (ordine.stato === 'in_evasione' ? 'In evasione' : 'Evaso') %>
-      </span>
-    </p>
+<body data-loggato="1">
+  <div class="app<%= currentUser.ruolo === 'cliente' ? '' : ' app-largo' %>">
+    <%- include('partials/appbar', {
+          titolo,
+          intestazione: 'Ordine #' + ordine.id,
+          indietro: currentUser.ruolo === 'agente' ? '/agente/ordini' : (currentUser.ruolo === 'distributore' ? '/distributore' : '/ordini')
+        }) %>
 
-    <div class="card">
-      <table>
-        <tr><th>Cliente</th><td><%= cliente.ragione_sociale %></td></tr>
-        <tr><th>Data ordine</th><td><%= ordine.creato_il %></td></tr>
-        <tr><th>Modalità</th><td><%= ordine.modalita === 'ritiro' ? 'Ritiro in sede' : (ordine.modalita === 'consegna_mezzo_grossista' ? 'Consegna con mezzo del grossista' : 'Consegna esterna') %></td></tr>
-        <% if (ordine.note) { %><tr><th>Note</th><td><%= ordine.note %></td></tr><% } %>
-      </table>
+    <div class="contenuto">
+      <% if (nuovo) { %>
+        <div class="avviso avviso-ok">
+          <strong>Ordine inviato.</strong> Il distributore ha ricevuto la conferma e prepara il materiale.
+        </div>
+      <% } %>
+
+      <div class="card card-fitta">
+        <div class="riga-lista">
+          <span class="icona">📦</span>
+          <span class="corpo">
+            <span class="etichetta">Ordine #<%= ordine.id %></span>
+            <span class="dettaglio"><%= fmt.dataOra(ordine.creato_il) %></span>
+          </span>
+          <span class="stato-badge stato-<%= ordine.stato %>">
+            <%= ordine.stato === 'inviato' ? 'Inviato' : (ordine.stato === 'in_evasione' ? 'In preparazione' : 'Partito') %>
+          </span>
+        </div>
+        <% if (distributore) { %>
+          <div class="riga-lista">
+            <span class="icona">🏪</span>
+            <span class="corpo">
+              <span class="etichetta"><%= distributore.nome %></span>
+              <span class="dettaglio"><%= distributore.filiale %></span>
+            </span>
+          </div>
+        <% } %>
+        <div class="riga-lista">
+          <span class="icona">👤</span>
+          <span class="corpo">
+            <span class="etichetta"><%= cliente.ragione_sociale %></span>
+            <span class="dettaglio"><%= cliente.telefono || '—' %></span>
+          </span>
+        </div>
+        <div class="riga-lista">
+          <span class="icona">🚚</span>
+          <span class="corpo">
+            <span class="etichetta">
+              <%= ordine.modalita === 'ritiro' ? 'Ritiro al banco' : 'Consegna con mezzo del distributore' %>
+            </span>
+            <span class="dettaglio">
+              <% if (ordine.partenza_ore) { %>Partenza stimata: <%= fmt.tempoConsegna(ordine.partenza_ore) %> · <% } %>
+              <%= ordine.consegna_ore ? 'consegna stimata: ' + fmt.tempoConsegna(ordine.consegna_ore) : 'tempo da concordare' %>
+            </span>
+          </span>
+        </div>
+        <% if (ordine.destinazione) { %>
+          <div class="riga-lista">
+            <span class="icona">🚩</span>
+            <span class="corpo">
+              <span class="etichetta">Destinazione merce</span>
+              <span class="dettaglio"><%= ordine.destinazione %></span>
+            </span>
+          </div>
+        <% } %>
+        <% if (ordine.ddt_numero) { %>
+          <a class="riga-lista" href="/ddt/<%= ordine.id %>">
+            <span class="icona">🧾</span>
+            <span class="corpo">
+              <span class="etichetta">Bolla / DDT n. <%= ordine.ddt_numero %></span>
+              <span class="dettaglio">Del <%= fmt.dataSola(ordine.ddt_data) %> — intestata a <%= cliente.ragione_sociale %></span>
+            </span>
+            <span class="freccia">›</span>
+          </a>
+        <% } %>
+        <% if (ordine.note) { %>
+          <div class="riga-lista">
+            <span class="icona">📝</span>
+            <span class="corpo">
+              <span class="etichetta">Note</span>
+              <span class="dettaglio"><%= ordine.note %></span>
+            </span>
+          </div>
+        <% } %>
+      </div>
+
+      <% if (currentUser.ruolo === 'cliente' && ordine.modalita !== 'ritiro' && ordine.stato !== 'inviato') { %>
+        <div class="sezione-titolo">Dov'è la merce</div>
+        <div class="card" data-segui-ordine="<%= ordine.id %>">
+          <div class="riga-lista" style="padding:0; border:none;">
+            <span class="icona">🚚</span>
+            <span class="corpo">
+              <span class="etichetta" data-segui-titolo>Tracciamento non attivo</span>
+              <span class="dettaglio" data-segui-stato>
+                Il distributore condivide la posizione del mezzo quando la merce parte.
+              </span>
+            </span>
+          </div>
+          <svg class="geo-mappa" viewBox="0 0 320 180" data-segui-mappa hidden
+               role="img" aria-label="Schema della posizione del mezzo rispetto alla destinazione"></svg>
+          <div class="geo-legenda" data-segui-legenda hidden>
+            <span class="p-mezzo">Mezzo del distributore</span>
+            <span class="p-dest">Destinazione</span>
+          </div>
+          <% if (!geo.consenso) { %>
+            <p class="nota" style="margin-bottom:0;">
+              Per vedere la distanza dal tuo cantiere attiva la tua posizione nella home:
+              serve il tuo consenso e puoi revocarlo quando vuoi.
+            </p>
+          <% } %>
+        </div>
+      <% } %>
+
+      <div class="sezione-titolo">Prodotti</div>
+      <div class="card">
+        <% righe.forEach(function (r) { %>
+          <div class="riga-articolo">
+            <div class="qta"><%= r.quantita %>×</div>
+            <div class="desc">
+              <%= r.nome_snapshot %>
+              <div class="meta">Cod. <%= r.codice_snapshot %> · € <%= euro(r.prezzo_unitario_cliente) %> cad. + IVA</div>
+            </div>
+            <div class="imp">€ <%= euro(r.subtotale_cliente) %></div>
+          </div>
+        <% }); %>
+      </div>
+
+      <div class="card">
+        <div class="riepilogo-riga">
+          <span class="voce">Merce (IVA esclusa)</span>
+          <span>€ <%= euro(ordine.totale_finale) %></span>
+        </div>
+        <div class="riepilogo-riga">
+          <span class="voce">Costo di consegna</span>
+          <span><%= ordine.costo_consegna > 0 ? '€ ' + euro(ordine.costo_consegna) : 'inclusa' %></span>
+        </div>
+        <div class="riepilogo-riga">
+          <span class="voce">IVA <%= ivaPct %>%</span>
+          <span>€ <%= euro(ordine.iva) %></span>
+        </div>
+        <div class="riepilogo-riga forte">
+          <span class="voce">Totale</span>
+          <span>€ <%= euro(totaleOrdine(ordine)) %></span>
+        </div>
+      </div>
+
+      <p class="nota">
+        Il prezzo definitivo, con eventuale sconto aggiuntivo, sarà confermato in fattura
+        come di consueto.
+      </p>
+
+      <% if (currentUser.ruolo === 'cliente') { %>
+        <a class="btn btn-primary btn-blocco" href="/home">Nuovo ordine</a>
+      <% } %>
     </div>
+  </div>
 
-    <div class="card">
-      <h2>Prodotti</h2>
-      <table>
-        <thead>
-          <tr><th>Prodotto</th><th>Q.tà</th><th>Prezzo unit.</th><th>Subtotale</th></tr>
-        </thead>
-        <tbody>
-          <% righe.forEach(function(r) { %>
-            <tr>
-              <td><%= r.nome_snapshot %><br><span class="prodotto-meta">Cod. <%= r.codice_snapshot %></span></td>
-              <td><%= r.quantita %></td>
-              <td>€ <%= r.prezzo_netto_unitario.toFixed(2) %></td>
-              <td>€ <%= r.subtotale.toFixed(2) %></td>
-            </tr>
-          <% }); %>
-        </tbody>
-      </table>
-    </div>
-
-    <div class="totale-box">
-      <span>Totale ordine</span>
-      <span>€ <%= ordine.totale_finale.toFixed(2) %></span>
-    </div>
-    <p style="color:#888; font-size:0.85rem;">Il prezzo definitivo, con eventuale sconto aggiuntivo, sarà confermato in fattura come di consueto.</p>
-
-    <% if (currentUser.ruolo === 'cliente') { %>
-      <p><a class="link-secondario" href="/catalogo">← Torna al catalogo</a></p>
-    <% } else { %>
-      <p><a class="link-secondario" href="/agente/ordini">← Torna alla lista ordini</a></p>
-    <% } %>
-  </main>
+  <% if (currentUser.ruolo === 'cliente') { %>
+    <%- include('partials/nav', { attivo: 'ordini' }) %>
+  <% } %>
+  <script src="/app.js" defer></script>
 </body>
 </html>
