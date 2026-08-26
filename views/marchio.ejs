@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="1"<%- elenco ? ' class="con-azione"' : '' %>>
+  <div class="app">
+    <%- include('partials/appbar', {
+          titolo,
+          intestazione: marca.nome,
+          indietro: elenco ? '/marchi/' + marca.slug : '/marchi'
+        }) %>
+
+    <div class="contenuto" style="padding-bottom:0;">
+      <%- include('partials/barra_ricerca', {
+            azione: '/marchi/' + marca.slug,
+            q,
+            ambito: { marchio: marca.slug, famiglia: famiglia ? famiglia.codice : '' },
+            segnaposto: famiglia ? 'Cerca in ' + famiglia.codice : 'Cerca nel listino ' + marca.nome
+          }) %>
+    </div>
+
+    <% if (!elenco) { %>
+      <div class="contenuto" style="padding-top:0;">
+        <div class="card testata-marchio">
+          <span class="logo-marchio grande" style="--marchio:<%= marca.colore %>">
+            <%= marca.iniziali || marca.nome.slice(0, 2) %>
+          </span>
+          <div>
+            <div class="nome-marchio"><%= marca.nome %></div>
+            <div class="dettaglio"><%= marca.descrizione %></div>
+          </div>
+        </div>
+
+        <div class="card card-fitta">
+          <div class="riga-lista">
+            <span class="icona">📗</span>
+            <span class="corpo">
+              <span class="etichetta"><%= marca.listino_nome %></span>
+              <span class="dettaglio">Aggiornato a <%= marca.listino_aggiornato %></span>
+            </span>
+          </div>
+          <% if (marca.distributore_ufficiale) { %>
+            <div class="riga-lista">
+              <span class="icona">🏢</span>
+              <span class="corpo">
+                <span class="etichetta">Distributore ufficiale</span>
+                <span class="dettaglio"><%= marca.distributore_ufficiale %></span>
+              </span>
+            </div>
+          <% } %>
+          <div class="riga-lista">
+            <span class="icona">🏷</span>
+            <span class="corpo">
+              <span class="etichetta">Sconto Base configurato: <%= marca.sconto_default_pct %>%</span>
+              <span class="dettaglio">
+                Valore di configurazione: ogni banco applica poi le proprie condizioni
+              </span>
+            </span>
+          </div>
+        </div>
+
+        <div class="sezione-titolo">Famiglie di prodotto</div>
+        <div class="card card-fitta">
+          <% famiglie.forEach(function (f) { %>
+            <a class="riga-lista" href="/marchi/<%= marca.slug %>?famiglia=<%= encodeURIComponent(f.codice) %>">
+              <span class="icona">📁</span>
+              <span class="corpo">
+                <span class="etichetta"><%= f.nome %></span>
+                <span class="dettaglio"><%= f.n_prodotti %> articoli</span>
+              </span>
+              <span class="freccia">›</span>
+            </a>
+          <% }); %>
+        </div>
+
+        <p class="nota">
+          I prezzi del listino <%= marca.nome %> sono IVA, trasporto e contributo RAEE esclusi:
+          il RAEE viene aggiunto come voce separata nel riepilogo dell'ordine.
+        </p>
+      </div>
+
+    <% } else { %>
+      <form method="POST" action="/carrello">
+        <input type="hidden" name="ritorno"
+               value="/marchi/<%= marca.slug %>?famiglia=<%= encodeURIComponent(famiglia ? famiglia.codice : '') %>&p=<%= elenco.pagina || 1 %>">
+        <div class="contenuto" style="padding-top:0;">
+          <p class="sottotitolo">
+            <% if (elenco.ricerca) { %>
+              <strong><%= elenco.righe.length %></strong> risultati per «<%= q %>»<% if (famiglia) { %> in <%= famiglia.codice %><% } %>
+            <% } else { %>
+              <strong><%= famiglia.nome %></strong> — <%= elenco.totale %> articoli
+            <% } %>
+          </p>
+
+          <div id="risultati">
+            <% if (!elenco.righe.length) { %>
+              <div class="vuoto"><span class="emoji">🤷</span>Nessun articolo trovato.</div>
+            <% } else { %>
+              <div class="card card-fitta">
+                <% elenco.righe.forEach(function (p) { %>
+                  <%- include('partials/prodotto', { p }) %>
+                <% }); %>
+              </div>
+            <% } %>
+          </div>
+
+          <% if (!elenco.ricerca) { %>
+            <div data-paginazione>
+              <%- include('partials/paginazione', {
+                    elenco,
+                    base: '/marchi/' + marca.slug + '?famiglia=' + encodeURIComponent(famiglia.codice)
+                  }) %>
+            </div>
+          <% } %>
+
+          <p class="nota">
+            Prezzi IVA esclusa, contributo RAEE a parte. La disponibilità la conferma il banco
+            del distributore entro 10 minuti da quando premi Procedi.
+          </p>
+        </div>
+
+        <%- include('partials/barra_procedi') %>
+      </form>
+    <% } %>
+  </div>
+
+  <% if (!elenco) { %><%- include('partials/nav', { attivo: 'home' }) %><% } %>
+  <script src="/app.js" defer></script>
+</body>
+</html>

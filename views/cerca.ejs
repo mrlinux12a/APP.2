@@ -8,12 +8,12 @@
     <%- include('partials/appbar', { titolo, intestazione: 'Cerca prodotti', indietro: '/home' }) %>
 
     <div class="contenuto" style="padding-bottom:0;">
-      <form class="barra-ricerca" method="GET" action="/cerca">
-        <span class="lente">🔍</span>
-        <input type="search" name="q" value="<%= q %>" data-ricerca autofocus
-               placeholder="Scrivi anche solo una parte, es. &quot;valv&quot;"
-               aria-label="Cerca un prodotto">
-      </form>
+      <%- include('partials/barra_ricerca', {
+            azione: '/cerca',
+            q,
+            ambito: {},
+            segnaposto: 'Scrivi anche solo una parte, es. "valv"'
+          }) %>
     </div>
 
     <form method="POST" action="/carrello">

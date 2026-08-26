@@ -47,26 +47,40 @@
   if (campoRicerca && contenitore) {
     let timer = null;
     let ultima = campoRicerca.value.trim();
+    // Elenco mostrato all'apertura della pagina: si ripristina svuotando la ricerca.
+    const contenutoIniziale = contenitore.innerHTML;
+    const paginazione = document.querySelector('[data-paginazione]');
+    // Ambito della pagina (categoria, marchio, famiglia, gruppo): la ricerca resta lì dentro.
+    const ambito = campoRicerca.dataset.ambito || '';
 
     campoRicerca.addEventListener('input', function () {
       clearTimeout(timer);
       timer = setTimeout(cerca, 220);
     });
 
+    function mostraPaginazione(visibile) {
+      if (!paginazione) return;
+      if (visibile) paginazione.removeAttribute('hidden');
+      else paginazione.setAttribute('hidden', '');
+    }
+
     function cerca() {
       const q = campoRicerca.value.trim();
       if (q === ultima) return;
       ultima = q;
       if (q.length < 2) {
-        contenitore.innerHTML =
-          '<div class="vuoto"><span class="emoji">🔍</span>Scrivi almeno due lettere: bastano anche solo pezzi di parola.</div>';
+        // Torna l'elenco di partenza: in un catalogo di migliaia di articoli è quello
+        // che serve, non un messaggio di aiuto.
+        contenitore.innerHTML = contenutoIniziale;
+        mostraPaginazione(true);
         aggiornaBarra();
         return;
       }
-      fetch('/api/cerca?q=' + encodeURIComponent(q))
+      fetch('/api/cerca?q=' + encodeURIComponent(q) + (ambito ? '&' + ambito : ''))
         .then(function (r) { return r.json(); })
         .then(function (dati) {
           if (campoRicerca.value.trim() !== q) return;
+          mostraPaginazione(false);
           disegnaRisultati(dati.risultati || []);
         })
         .catch(function () { /* offline: resta l'ultimo elenco mostrato */ });
@@ -93,8 +107,14 @@
           return (
             '<div class="prodotto">' +
             '<div class="info">' +
-            '<div class="nome">' + esc(p.nome) + '</div>' +
+            '<div class="nome">' +
+            (p.brand_nome
+              ? '<span class="marchio-tag" style="--marchio:' + esc(p.brand_colore || '#1d4e89') + '">' +
+                esc(p.brand_nome) + '</span> '
+              : '') +
+            esc(p.nome) + '</div>' +
             '<div class="meta">Cod. ' + esc(p.codice) + ' · ' + esc(p.macro_nome || '') +
+            (p.raee ? ' · RAEE € ' + p.raee : '') +
             ' <span class="badge badge-' + p.disponibilita + '">' + esc(p.disponibilita_testo) + '</span></div>' +
             '<div class="prezzo">' + barrato + '€ ' + p.prezzo + ' <span class="iva">+ IVA</span></div>' +
             '</div>' +
@@ -245,7 +265,12 @@
       }),
     })
       .then(function (r) { return r.json(); })
-      .then(function () { scriviStato('Attiva — posizione aggiornata ora'); })
+      .then(function () {
+        scriviStato('Attiva — posizione aggiornata ora');
+        window.dispatchEvent(new CustomEvent('posizione-aggiornata', {
+          detail: { lat: pos.coords.latitude, lng: pos.coords.longitude, precisione: pos.coords.accuracy },
+        }));
+      })
       .catch(function () { /* riprova al prossimo rilevamento */ });
   }
 
@@ -310,6 +335,7 @@
         fetch('/api/posizione/revoca', { method: 'POST' }).then(function () {
           segnaAttiva(false);
           scriviStato('Non attiva: la posizione salvata è stata cancellata.');
+          window.dispatchEvent(new CustomEvent('posizione-revocata'));
         });
       });
     }
@@ -348,76 +374,8 @@
     if (off) off.addEventListener('click', function () { imposta(false); });
   }
 
-  // ---------- Cliente: segue il mezzo in tempo reale ----------
-
-  const segui = document.querySelector('[data-segui-ordine]');
-  if (segui) {
-    const ordineId = segui.dataset.seguiOrdine;
-    const titolo = segui.querySelector('[data-segui-titolo]');
-    const stato = segui.querySelector('[data-segui-stato]');
-    const mappa = segui.querySelector('[data-segui-mappa]');
-    const legenda = segui.querySelector('[data-segui-legenda]');
-
-    // Schema di posizione, non una mappa stradale: due punti e la distanza fra loro.
-    const disegna = function (d) {
-      if (!mappa || !d.mezzo || !d.destinazione) {
-        if (mappa) mappa.setAttribute('hidden', '');
-        if (legenda) legenda.setAttribute('hidden', '');
-        return;
-      }
-      const punti = [d.mezzo, d.destinazione];
-      const lat = punti.map(function (p) { return p.lat; });
-      const lng = punti.map(function (p) { return p.lng; });
-      const latMin = Math.min.apply(null, lat);
-      const latMax = Math.max.apply(null, lat);
-      const lngMin = Math.min.apply(null, lng);
-      const lngMax = Math.max.apply(null, lng);
-      const spanLat = Math.max(latMax - latMin, 0.002);
-      const spanLng = Math.max(lngMax - lngMin, 0.002);
-
-      const x = function (p) { return 40 + ((p.lng - lngMin) / spanLng) * 240; };
-      const y = function (p) { return 140 - ((p.lat - latMin) / spanLat) * 100; };
-
-      mappa.innerHTML =
-        '<line x1="' + x(d.mezzo) + '" y1="' + y(d.mezzo) + '" x2="' + x(d.destinazione) +
-        '" y2="' + y(d.destinazione) + '" stroke="#b9c0c9" stroke-width="2" stroke-dasharray="5 4"/>' +
-        '<circle cx="' + x(d.destinazione) + '" cy="' + y(d.destinazione) + '" r="8" fill="#2e7d32"/>' +
-        '<circle cx="' + x(d.mezzo) + '" cy="' + y(d.mezzo) + '" r="9" fill="#1d4e89"/>' +
-        '<text x="160" y="168" text-anchor="middle" font-size="12" fill="#6b7480">' +
-        (d.distanza ? d.distanza + ' in linea d’aria' : 'distanza non calcolabile') +
-        '</text>';
-      mappa.removeAttribute('hidden');
-      if (legenda) legenda.removeAttribute('hidden');
-    };
-
-    const aggiorna = function () {
-      fetch('/api/ordini/' + ordineId + '/posizione')
-        .then(function (r) { return r.json(); })
-        .then(function (d) {
-          if (!d.attivo) {
-            if (titolo) titolo.textContent = 'Tracciamento non attivo';
-            if (stato) {
-              stato.textContent =
-                'Il distributore condivide la posizione del mezzo quando la merce parte.';
-            }
-            if (mappa) mappa.setAttribute('hidden', '');
-            if (legenda) legenda.setAttribute('hidden', '');
-            return;
-          }
-          if (titolo) titolo.textContent = 'Mezzo in viaggio' + (d.nome_mezzo ? ' — ' + d.nome_mezzo : '');
-          if (stato) {
-            stato.textContent = d.distanza
-              ? 'A ' + d.distanza + ' dalla destinazione, in aggiornamento continuo.'
-              : 'Posizione condivisa dal banco. Attiva la tua posizione per vedere la distanza.';
-          }
-          disegna(d);
-        })
-        .catch(function () { /* riprova al giro dopo */ });
-    };
-
-    aggiorna();
-    setInterval(aggiorna, 8000);
-  }
+  // La consegna in tempo reale la disegna mappa.js: qui restano solo consenso e invio
+  // della posizione.
 
   // ---------- Banco: azzera tutte le quantità disponibili ----------
 
@@ -429,4 +387,64 @@
       });
     });
   }
+})();
+
+/* Banco distributore: sconti riga per riga con ricalcolo immediato del prezzo cliente. */
+(function () {
+  'use strict';
+
+  const modulo = document.querySelector('[data-modulo-risposta]');
+  if (!modulo) return;
+
+  const servizio = parseFloat(modulo.dataset.servizio || '10') || 0;
+
+  function euro(n) {
+    return n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  // Stesso calcolo del server: (listino − sconto) + servizio, IVA esclusa.
+  function ricalcola(riga) {
+    const listino = parseFloat(riga.dataset.listino);
+    const campo = riga.querySelector('[data-sconto-riga]');
+    const uscita = riga.querySelector('[data-prezzo-riga]');
+    if (!Number.isFinite(listino) || !campo || !uscita) return;
+
+    let sconto = parseFloat(String(campo.value).replace(',', '.'));
+    if (!Number.isFinite(sconto)) sconto = 0;
+    sconto = Math.min(90, Math.max(0, sconto));
+
+    const netto = Math.round(listino * (1 - sconto / 100) * 100) / 100;
+    const cliente = Math.round(netto * (1 + servizio / 100) * 100) / 100;
+    uscita.textContent = euro(cliente);
+
+    const standard = parseFloat(riga.dataset.standard);
+    riga.classList.toggle('sconto-modificato', Number.isFinite(standard) && sconto !== standard);
+  }
+
+  function tutteLeRighe() {
+    return Array.prototype.slice.call(modulo.querySelectorAll('.riga-banco'));
+  }
+
+  modulo.addEventListener('input', function (e) {
+    if (e.target.matches('[data-sconto-riga]')) {
+      const riga = e.target.closest('.riga-banco');
+      if (riga) ricalcola(riga);
+    }
+  });
+
+  const applica = modulo.querySelector('[data-applica-sconto]');
+  const campoCliente = modulo.querySelector('[data-sconto-cliente]');
+  if (applica && campoCliente) {
+    applica.addEventListener('click', function () {
+      const valore = String(campoCliente.value).trim();
+      if (valore === '') return;
+      tutteLeRighe().forEach(function (riga) {
+        const campo = riga.querySelector('[data-sconto-riga]');
+        if (campo) campo.value = valore;
+        ricalcola(riga);
+      });
+    });
+  }
+
+  tutteLeRighe().forEach(ricalcola);
 })();

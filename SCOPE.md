@@ -42,6 +42,16 @@ Aggiornato al 26/08/2026 (vista cliente mobile con richiesta di disponibilità m
   revoca che cancella le coordinate; il cliente segue il mezzo in consegna con distanza in linea
   d'aria (schema locale, nessun servizio di mappe esterno).
 
+- **Marchi con listini ufficiali dei produttori**, caricati da Excel con un importatore
+  generico (`db/importa_listino.js`). TOSHIBA è il primo: 2388 articoli, 6 famiglie, con EAN,
+  contributo RAEE, refrigerante, F-GAS e GWP. La struttura regge quanti marchi si vuole.
+- **Contributo RAEE come voce separata** in riepilogo, ordine e bolla: i listini dichiarano i
+  prezzi IVA, trasporto e RAEE esclusi.
+- **Sconti al banco**: riga per riga, o uno sconto unico applicato a tutte le righe e salvabile
+  nell'anagrafica del cliente, oppure accettazione secca al prezzo di richiesta.
+- **Geolocalizzazione su mappa** (Leaflet servito in locale, tasselli OpenStreetMap) in tutte le
+  schermate che mostrano una posizione.
+
 ## Da costruire (prossimi passi)
 
 - **Metodi di pagamento in app** — oggi il riepilogo dice "alle condizioni concordate con il
@@ -52,6 +62,13 @@ Aggiornato al 26/08/2026 (vista cliente mobile con richiesta di disponibilità m
   gestione a filiali con più banchi per distributore è il passo successivo.
 - **Anagrafiche reali**: partite IVA, codici fiscali e indirizzi nel seed sono valori di comodo
   per la demo e vanno sostituiti prima di emettere documenti veri.
+- **Sconti reali per marchio e distributore**: oggi l'importatore applica uno sconto Base unico
+  (parametro `--sconto`) con una piccola variazione per banco. Vanno caricate le condizioni vere,
+  presumibilmente per famiglia di prodotto.
+- **Prodotti a sistema**: il listino Toshiba PDF quota anche il prezzo di sistema (interna +
+  esterna); in app oggi ogni articolo è a sé.
+- **Tasselli della mappa**: si usa il server pubblico di OpenStreetMap, adatto al volume di una
+  demo. Per il pilot serve un provider con contratto (o un proxy con cache).
 - **Conferma di consegna**: oggi l'ultimo stato è "Partito"; manca la presa in carico firmata
   dal destinatario (lo spazio firma è già in bolla, ma su carta).
 - **Il residuo di un ordine parziale**: oggi il cliente rifà la richiesta per ciò che manca,

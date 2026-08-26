@@ -1,0 +1,17 @@
+<% if (elenco.pagine > 1) { %>
+  <div class="paginazione">
+    <% if (elenco.pagina > 1) { %>
+      <a class="btn btn-chiaro" href="<%= base %>&p=<%= elenco.pagina - 1 %>">‹ Precedente</a>
+    <% } else { %>
+      <span class="btn btn-chiaro" aria-disabled="true">‹ Precedente</span>
+    <% } %>
+    <span class="conta-pagina">
+      Pagina <%= elenco.pagina %> di <%= elenco.pagine %> · <%= elenco.totale %> prodotti
+    </span>
+    <% if (elenco.pagina < elenco.pagine) { %>
+      <a class="btn btn-chiaro" href="<%= base %>&p=<%= elenco.pagina + 1 %>">Successiva ›</a>
+    <% } else { %>
+      <span class="btn btn-chiaro" aria-disabled="true">Successiva ›</span>
+    <% } %>
+  </div>
+<% } %>

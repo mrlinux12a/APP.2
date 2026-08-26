@@ -40,7 +40,11 @@ clienti pilota (per ora si aggiornano a mano nel DB o rilanciando `db/seed.js` c
 1. **Home** — barra di ricerca e macro categorie merceologiche (Condizionamento, Caldaie e
    scaldacqua, Minuteria e raccorderia).
 2. **Ricerca parziale** — basta un frammento di parola: scrivendo `valv` escono tutte le valvole,
-   in qualunque categoria. La ricerca parte mentre si digita.
+   in qualunque categoria. Cerca in nome, codice, categoria, marchio ed EAN, e parte mentre si
+   digita. La stessa barra c'è in **ogni elenco di selezione** (categoria, marchio, famiglia) ma
+   lì è limitata all'elenco che stai sfogliando: dentro la famiglia RAV cerchi tra i 130 articoli
+   RAV, non in tutto il catalogo. Svuotando il campo torna l'elenco paginato di partenza, e tutto
+   funziona anche senza JavaScript (la barra è un normale form GET).
 3. **Scelta del materiale** — dalla categoria si impostano le quantità e si preme **Procedi**
    (oppure "Aggiungi e continua a scegliere" per pescare da più categorie).
 4. **Attesa** — la richiesta parte verso i distributori della zona del cliente che trattano
@@ -77,6 +81,50 @@ il confronto lato cliente ne prevede tre.
 Chi non risponde entro i 10 minuti risulta "non risposta": la non risposta **non** vale come
 disponibilità.
 
+## Marchi e listini dei produttori
+
+I listini ufficiali dei produttori si caricano da Excel con un importatore generico:
+
+```
+node db/importa_listino.js --marchio toshiba --file "listino.xlsx" --sconto 30
+```
+
+È idempotente (rilanciarlo aggiorna, non duplica) e per ogni prodotto importa codice,
+descrizione, famiglia, EAN, contributo RAEE, refrigerante, F-GAS e GWP. Crea anche le righe
+di listino per ogni banco distributore: senza quelle nessuno può confermare il marchio.
+
+Per aggiungere un marchio basta una voce in `MARCHI` dentro `db/importa_listino.js` con la
+mappatura delle colonne del suo file: la struttura regge quanti marchi si vuole.
+
+**TOSHIBA** è il primo caricato — listino ufficiale 2026 Rev. 2, distribuito da T-Air Solutions
+Italy (Beijer Ref Italy): **2388 articoli** in 6 famiglie (RAS, RAV, VRF, NEXETA, ESTIA, EDEN).
+Il cliente lo trova dalla sezione *Marchi* in home: marchio → famiglia → articoli paginati.
+
+> Lo sconto Base applicato dall'importatore (`--sconto`) è un valore di configurazione, non le
+> condizioni commerciali reali: va sostituito con gli sconti veri prima di usare i prezzi con i
+> clienti.
+
+## Sconti al banco
+
+Nella risposta a una richiesta il distributore può:
+
+- **accettare al prezzo di richiesta** — un pulsante, conferma alle condizioni standard del suo
+  listino, quelle che il cliente ha già visto;
+- **applicare uno sconto riga per riga** — ogni riga ha il suo campo sconto, il prezzo per il
+  cliente si ricalcola mentre lo si scrive;
+- **usare lo sconto concordato col cliente** — un campo applica la stessa percentuale a tutte le
+  righe e, se lo si spunta, resta nell'anagrafica del cliente e precompila le prossime richieste
+  di quel cliente a quel banco.
+
+Le righe con sconto diverso dallo standard restano evidenziate, e il cliente vede il prezzo già
+scontato nel confronto offerte.
+
+## Contributo RAEE
+
+I listini dei produttori dichiarano i prezzi IVA, trasporto e RAEE esclusi. Il contributo RAEE
+per articolo viene importato insieme al prodotto e compare come **voce separata** nel riepilogo
+dell'ordine, nel dettaglio ordine e in bolla.
+
 ## Bolla / DDT
 
 All'emissione l'app assegna un **numero progressivo per distributore e per anno** (es. `1/2026`)
@@ -105,9 +153,11 @@ coordinata. Dopo il consenso l'app usa `watchPosition` e invia al massimo un agg
   coordinate salvate e interrompe le condivisioni attive. Se il permesso viene negato o tolto
   dal browser, il server viene allineato automaticamente.
 
-Il cliente vede la consegna in uno **schema di posizione** (SVG generato in locale, con mezzo,
-destinazione e distanza in linea d'aria): non è una mappa stradale e non dipende da servizi
-esterni.
+Le posizioni si vedono su **mappa vera** (Leaflet servito dal progetto, tasselli
+OpenStreetMap): la propria posizione nel riquadro consenso, il mezzo e la destinazione con la
+distanza nella schermata di consegna, la destinazione della merce nella vista ordine del banco.
+Leaflet è in `public/vendor/leaflet` e viene caricato solo nelle pagine che hanno una mappa; i
+tasselli richiedono la connessione a internet e la mappa degrada a un messaggio se manca.
 
 **Agente**
 

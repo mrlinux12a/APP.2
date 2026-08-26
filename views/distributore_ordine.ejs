@@ -52,6 +52,25 @@
       <%- include('partials/anagrafica_cliente', {
             cliente, indirizzoCliente, destinazione: ordine.destinazione, distanza }) %>
 
+      <% if (ordine.modalita !== 'ritiro') { %>
+        <div class="card">
+          <div class="riga-lista" style="padding:0; border:none;">
+            <span class="icona">🗺</span>
+            <span class="corpo">
+              <span class="etichetta">Dove consegnare</span>
+              <span class="dettaglio">
+                <%= cliente.geo_consenso ? 'Posizione condivisa dal cliente' : 'Il cliente non ha condiviso la posizione' %>
+              </span>
+            </span>
+          </div>
+          <div class="mappa <%= cliente.geo_consenso && cliente.geo_lat !== null ? 'mappa-attiva' : '' %>"
+               data-mappa-punto
+               data-lat="<%= cliente.geo_lat === null ? '' : cliente.geo_lat %>"
+               data-lng="<%= cliente.geo_lng === null ? '' : cliente.geo_lng %>"
+               data-etichetta="<%= ordine.destinazione || cliente.ragione_sociale %>"></div>
+        </div>
+      <% } %>
+
       <% if (mancanti.length) { %>
         <div class="avviso avviso-attenzione">
           Ordine accettato in <strong>disponibilità parziale</strong>: il cliente sa che mancano
@@ -71,7 +90,10 @@
             <div class="imp">€ <%= euro(r.subtotale_cliente) %></div>
           </div>
         <% }); %>
-        <div class="riepilogo-riga"><span class="voce">Imponibile</span><span>€ <%= euro(ordine.totale_finale + ordine.costo_consegna) %></span></div>
+        <% if (ordine.contributo_raee > 0) { %>
+          <div class="riepilogo-riga"><span class="voce">Contributo RAEE</span><span>€ <%= euro(ordine.contributo_raee) %></span></div>
+        <% } %>
+        <div class="riepilogo-riga"><span class="voce">Imponibile</span><span>€ <%= euro(ordine.totale_finale + ordine.contributo_raee + ordine.costo_consegna) %></span></div>
         <div class="riepilogo-riga"><span class="voce">IVA <%= ivaPct %>%</span><span>€ <%= euro(ordine.iva) %></span></div>
         <div class="riepilogo-riga forte"><span class="voce">Totale</span><span>€ <%= euro(totaleOrdine(ordine)) %></span></div>
       </div>
@@ -155,5 +177,6 @@
 
   <%- include('partials/nav_distributore', { attivo: 'ordini' }) %>
   <script src="/app.js" defer></script>
+  <script src="/mappa.js" defer></script>
 </body>
 </html>

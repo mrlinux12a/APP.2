@@ -95,6 +95,9 @@
       <div class="ddt-riquadro">
         <table class="ddt-meta">
           <tr><th>Imponibile merce</th><td class="destra">€ <%= euro(ordine.totale_finale) %></td></tr>
+          <% if (ordine.contributo_raee > 0) { %>
+            <tr><th>Contributo RAEE</th><td class="destra">€ <%= euro(ordine.contributo_raee) %></td></tr>
+          <% } %>
           <tr><th>Trasporto</th><td class="destra"><%= ordine.costo_consegna > 0 ? '€ ' + euro(ordine.costo_consegna) : 'incluso' %></td></tr>
           <tr><th>IVA <%= ivaPct %>%</th><td class="destra">€ <%= euro(ordine.iva) %></td></tr>
           <tr class="ddt-totale"><th>Totale documento</th><td class="destra">€ <%= euro(ordine.totale_ivato) %></td></tr>

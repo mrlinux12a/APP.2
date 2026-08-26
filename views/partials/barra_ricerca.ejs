@@ -1,0 +1,20 @@
+<%
+  // Barra di ricerca con la stessa logica parziale della pagina Cerca, ma limitata
+  // all'elenco che si sta sfogliando. `ambito` è { macro, marchio, famiglia, gruppo }.
+  const a = typeof ambito !== 'undefined' && ambito ? ambito : {};
+  const qsAmbito = Object.keys(a)
+    .filter(function (k) { return a[k]; })
+    .map(function (k) { return k + '=' + encodeURIComponent(a[k]); })
+    .join('&');
+%>
+<form class="barra-ricerca" method="GET" action="<%= azione %>">
+  <span class="lente">🔍</span>
+  <input type="search" name="q" value="<%= typeof q !== 'undefined' && q ? q : '' %>"
+         data-ricerca
+         data-ambito="<%= qsAmbito %>"
+         placeholder="<%= segnaposto %>"
+         aria-label="<%= segnaposto %>">
+  <% Object.keys(a).filter(function (k) { return a[k] && k !== 'macro' && k !== 'marchio'; }).forEach(function (k) { %>
+    <input type="hidden" name="<%= k %>" value="<%= a[k] %>">
+  <% }); %>
+</form>

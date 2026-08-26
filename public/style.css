@@ -606,15 +606,38 @@ th { color: var(--grigio); font-weight: 600; }
 /* ---------- Geolocalizzazione ---------- */
 
 .geo-box .btn { margin-top: 4px; }
-.geo-mappa {
+/* Mappa Leaflet: alta zero finché non c'è niente da mostrare, così non lascia buchi. */
+.mappa {
   width: 100%;
-  height: auto;
-  aspect-ratio: 320 / 180;
-  margin-top: 10px;
+  height: 0;
+  margin: 10px 0 0;
   border-radius: 10px;
+  overflow: hidden;
   background: #eef2f6;
   border: 1px solid var(--bordo);
+}
+.mappa.mappa-attiva { height: 220px; }
+.mappa .leaflet-container { height: 100%; width: 100%; font: inherit; }
+.mappa-grande.mappa-attiva { height: 300px; }
+
+.mappa-vuota {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 12px;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--grigio);
+}
+
+.segno-mappa span {
   display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 .geo-legenda {
   display: flex;
@@ -736,4 +759,112 @@ th { color: var(--grigio); font-weight: 600; }
   .ddt-foglio { border: none; border-radius: 0; margin: 0; max-width: none; padding: 0; }
   .ddt-righe thead th { background: #fff; }
   @page { margin: 14mm; }
+}
+
+/* ---------- Marchi ---------- */
+
+.logo-marchio {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 10px;
+  background: var(--marchio, var(--blu));
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
+}
+.logo-marchio.grande { width: 56px; height: 56px; font-size: 1.15rem; border-radius: 14px; }
+
+.marchio-tag {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: #fff;
+  background: var(--marchio, var(--blu));
+  vertical-align: 2px;
+  margin-right: 4px;
+}
+
+.striscia-marchi {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+.tessera-marchio {
+  flex: 0 0 auto;
+  width: 118px;
+  background: #fff;
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio);
+  padding: 12px;
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tessera-marchio .nome { font-weight: 700; font-size: 0.9rem; line-height: 1.2; }
+.tessera-marchio .conta { color: var(--grigio); font-size: 0.75rem; }
+.tessera-marchio.tutti .nome { color: var(--grigio); }
+
+.testata-marchio { display: flex; align-items: center; gap: 14px; }
+.testata-marchio .nome-marchio { font-weight: 800; font-size: 1.2rem; }
+.testata-marchio .dettaglio { color: var(--grigio); font-size: 0.85rem; margin-top: 2px; }
+
+/* ---------- Paginazione ---------- */
+
+.paginazione {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 14px 0;
+}
+.paginazione .btn { padding: 10px 14px; font-size: 0.85rem; }
+.paginazione .conta-pagina {
+  font-size: 0.78rem;
+  color: var(--grigio);
+  text-align: center;
+  flex: 1;
+}
+.paginazione [aria-disabled="true"] { opacity: 0.4; }
+
+/* ---------- Sconti al banco ---------- */
+
+.riga-sconto { display: flex; align-items: center; gap: 8px; }
+.riga-sconto input[type="number"] { margin: 0; }
+.riga-sconto .btn { padding: 10px 14px; font-size: 0.85rem; white-space: nowrap; }
+.riga-sconto.piccola { margin-top: 6px; gap: 6px; }
+.riga-sconto.piccola label { font-size: 0.78rem; color: var(--grigio); font-weight: 600; margin: 0; }
+.riga-sconto.piccola input[type="number"] {
+  width: 82px;
+  padding: 6px 8px;
+  font-size: 0.9rem;
+  border-radius: 8px;
+}
+
+.riga-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: normal;
+  font-size: 0.88rem;
+  margin: 10px 0 0;
+}
+.riga-check input { width: auto; margin: 0; }
+
+.riga-banco.sconto-modificato { background: #f2f9f3; }
+.riga-banco.sconto-modificato .riga-sconto.piccola input[type="number"] {
+  border-color: var(--verde);
+  color: var(--verde);
+  font-weight: 700;
 }

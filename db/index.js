@@ -87,6 +87,26 @@ aggiungiColonna('orders', 'tracciamento_attivo', 'INTEGER NOT NULL DEFAULT 0');
 aggiungiColonna('orders', 'geo_lat_consegna', 'REAL');
 aggiungiColonna('orders', 'geo_lng_consegna', 'REAL');
 
+// Marchi e dati di listino del produttore (EAN, RAEE, F-GAS...).
+aggiungiColonna('products', 'brand_slug', "TEXT NOT NULL DEFAULT ''");
+aggiungiColonna('products', 'famiglia', "TEXT NOT NULL DEFAULT ''");
+aggiungiColonna('products', 'ean', "TEXT NOT NULL DEFAULT ''");
+aggiungiColonna('products', 'raee', 'REAL NOT NULL DEFAULT 0');
+aggiungiColonna('products', 'cat_raee', "TEXT NOT NULL DEFAULT ''");
+aggiungiColonna('products', 'refrigerante', "TEXT NOT NULL DEFAULT ''");
+aggiungiColonna('products', 'fgas_kg', 'REAL');
+aggiungiColonna('products', 'gwp', 'REAL');
+
+// Sconto deciso dal banco sulla singola riga: se valorizzato sostituisce lo sconto Base
+// del distributore per quel prodotto, solo per quella richiesta.
+aggiungiColonna('request_response_items', 'sconto_riga_pct', 'REAL');
+aggiungiColonna('request_responses', 'sconto_cliente_pct', 'REAL');
+
+// Il contributo RAEE è escluso dai prezzi di listino: viaggia come voce separata.
+aggiungiColonna('orders', 'contributo_raee', 'REAL NOT NULL DEFAULT 0');
+aggiungiColonna('order_items', 'raee_unitario', 'REAL NOT NULL DEFAULT 0');
+aggiungiColonna('order_items', 'raee_riga', 'REAL NOT NULL DEFAULT 0');
+
 // Il CHECK sul ruolo nasceva con solo ('cliente','agente'): va riscritto per accettare
 // anche 'distributore'. In SQLite un CHECK si cambia solo ricreando la tabella.
 const usersDdl = db
@@ -119,6 +139,13 @@ if (usersDdl && !usersDdl.sql.includes("'distributore'")) {
   `);
   db.exec('PRAGMA foreign_keys = ON');
 }
+
+// Gli indici sulle colonne aggiunte per migrazione vanno creati dopo le ALTER,
+// non dentro schema.sql: su un DB vecchio la colonna non esiste ancora.
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_products_brand ON products(brand_slug);
+  CREATE INDEX IF NOT EXISTS idx_products_famiglia ON products(brand_slug, famiglia);
+`);
 
 // Piccolo helper per eseguire più operazioni in una transazione (BEGIN/COMMIT/ROLLBACK),
 // equivalente minimale a db.transaction() di better-sqlite3.

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="1">
+  <div class="app">
+    <%- include('partials/appbar', { titolo, intestazione: 'Marchi', indietro: '/home' }) %>
+
+    <div class="contenuto">
+      <p class="sottotitolo">
+        Listini ufficiali dei produttori. I prezzi mostrati sono di listino meno lo sconto Base,
+        con il servizio incluso e IVA esclusa.
+      </p>
+
+      <% if (!marchi.length) { %>
+        <div class="vuoto"><span class="emoji">🏷</span>Nessun marchio caricato per ora.</div>
+      <% } else { %>
+        <div class="card card-fitta">
+          <% marchi.forEach(function (m) { %>
+            <a class="riga-lista" href="/marchi/<%= m.slug %>">
+              <span class="logo-marchio" style="--marchio:<%= m.colore %>"><%= m.iniziali || m.nome.slice(0, 2) %></span>
+              <span class="corpo">
+                <span class="etichetta"><%= m.nome %></span>
+                <span class="dettaglio"><%= m.descrizione %></span>
+                <span class="dettaglio"><%= m.n_prodotti %> articoli · <%= m.listino_nome %></span>
+              </span>
+              <span class="freccia">›</span>
+            </a>
+          <% }); %>
+        </div>
+      <% } %>
+    </div>
+  </div>
+
+  <%- include('partials/nav', { attivo: 'home' }) %>
+  <script src="/app.js" defer></script>
+</body>
+</html>

@@ -116,6 +116,12 @@
             <span class="voce">Merce (IVA esclusa)</span>
             <span>€ <%= euro(offerta.totali.totale_finale) %></span>
           </div>
+          <% if (offerta.totali.contributo_raee > 0) { %>
+            <div class="riepilogo-riga">
+              <span class="voce">Contributo RAEE</span>
+              <span>€ <%= euro(offerta.totali.contributo_raee) %></span>
+            </div>
+          <% } %>
           <div class="riepilogo-riga">
             <span class="voce">Costo di consegna</span>
             <span><%= offerta.totali.costo_consegna > 0 ? '€ ' + euro(offerta.totali.costo_consegna) : 'inclusa' %></span>

@@ -191,7 +191,23 @@ function aggiornaScadenzeAperte() {
 // `righe` è una mappa { product_id: quantita_disponibile } compilata al banco.
 // Da lì si deduce l'esito: tutto coperto = conferma totale, qualcosa in meno = conferma
 // parziale, niente disponibile = rifiuto per indisponibilità merce.
-function rispondi(requestId, distributorId, { righe = {}, partenza_ore, consegna_ore, note, rifiuta = false }) {
+function rispondi(
+  requestId,
+  distributorId,
+  {
+    righe = {},
+    sconti = {},
+    partenza_ore,
+    consegna_ore,
+    note,
+    rifiuta = false,
+    // "Accetta al prezzo di richiesta": conferma senza toccare gli sconti, il cliente paga
+    // esattamente il prezzo che ha visto quando ha fatto la richiesta.
+    prezzoRichiesto = false,
+    scontoCliente = null,
+    salvaScontoCliente = false,
+  }
+) {
   const richiesta = aggiornaScadenza(requestId);
   if (!richiesta) return { ok: false, errore: 'Richiesta non trovata.' };
   if (richiesta.stato === 'ordinata') {
@@ -208,13 +224,35 @@ function rispondi(requestId, distributorId, { righe = {}, partenza_ore, consegna
   if (!risposta) return { ok: false, errore: 'Richiesta non assegnata a questo distributore.' };
   if (risposta.esito !== 'in_attesa') return { ok: false, errore: 'Hai già risposto a questa richiesta.' };
 
+  // Sconto standard del banco su ogni prodotto: è il riferimento sia per il "prezzo di
+  // richiesta" sia per capire se il banco ha applicato una condizione migliore.
+  const standard = new Map(
+    righeDistributore(requestId, distributorId).map((r) => [r.product_id, r.sconto_standard_pct])
+  );
+
+  function scontoApplicato(productId) {
+    if (prezzoRichiesto) return null; // nessuna modifica: resta lo sconto Base del listino
+    const grezzo = sconti[productId];
+    if (grezzo === undefined || grezzo === null || String(grezzo).trim() === '') return null;
+    const n = parseFloat(String(grezzo).replace(',', '.'));
+    if (!Number.isFinite(n)) return null;
+    const pulito = Math.round(Math.min(90, Math.max(0, n)) * 10) / 10;
+    return pulito === standard.get(productId) ? null : pulito;
+  }
+
   const richieste_ = righeRichiesta(requestId);
   const coperture = richieste_.map((r) => {
     const chiesta = r.quantita;
     const disponibile = rifiuta
       ? 0
       : Math.max(0, Math.min(chiesta, parseInt(righe[r.product_id], 10) || 0));
-    return { product_id: r.product_id, nome: r.nome, quantita_richiesta: chiesta, quantita_disponibile: disponibile };
+    return {
+      product_id: r.product_id,
+      nome: r.nome,
+      quantita_richiesta: chiesta,
+      quantita_disponibile: disponibile,
+      sconto_riga_pct: rifiuta ? null : scontoApplicato(r.product_id),
+    };
   });
 
   const pezziDisponibili = coperture.reduce((acc, r) => acc + r.quantita_disponibile, 0);
@@ -226,11 +264,16 @@ function rispondi(requestId, distributorId, { righe = {}, partenza_ore, consegna
   const partenza = Math.max(0, parseInt(partenza_ore, 10) || 0);
   const consegna = Math.max(partenza, parseInt(consegna_ore, 10) || partenza || 24);
 
+  const profilo =
+    scontoCliente === null || String(scontoCliente).trim() === ''
+      ? null
+      : Math.round(Math.min(90, Math.max(0, parseFloat(String(scontoCliente).replace(',', '.')) || 0)) * 10) / 10;
+
   const salva = db.transaction(() => {
     db.prepare(
       `UPDATE request_responses
           SET esito = ?, copertura = ?, partenza_ore = ?, consegna_ore = ?, note = ?,
-              risposto_il = datetime('now')
+              sconto_cliente_pct = ?, risposto_il = datetime('now')
         WHERE id = ?`
     ).run(
       esito,
@@ -238,17 +281,30 @@ function rispondi(requestId, distributorId, { righe = {}, partenza_ore, consegna
       esito === 'confermato' ? partenza : null,
       esito === 'confermato' ? consegna : null,
       note || null,
+      esito === 'confermato' && !prezzoRichiesto ? profilo : null,
       risposta.id
     );
 
     db.prepare('DELETE FROM request_response_items WHERE response_id = ?').run(risposta.id);
     const ins = db.prepare(
-      `INSERT INTO request_response_items (response_id, product_id, quantita_richiesta, quantita_disponibile)
-       VALUES (?, ?, ?, ?)`
+      `INSERT INTO request_response_items
+         (response_id, product_id, quantita_richiesta, quantita_disponibile, sconto_riga_pct)
+       VALUES (?, ?, ?, ?, ?)`
     );
     coperture.forEach((r) =>
-      ins.run(risposta.id, r.product_id, r.quantita_richiesta, r.quantita_disponibile)
+      ins.run(risposta.id, r.product_id, r.quantita_richiesta, r.quantita_disponibile, r.sconto_riga_pct)
     );
+
+    // Sconto concordato con questo cliente: resta in anagrafica e precompila le prossime
+    // richieste dello stesso cliente a questo banco.
+    if (salvaScontoCliente && profilo !== null && esito === 'confermato') {
+      db.prepare(
+        `INSERT INTO client_discounts (distributor_id, cliente_id, sconto_pct, aggiornato_il)
+         VALUES (?, ?, ?, datetime('now'))
+         ON CONFLICT(distributor_id, cliente_id) DO UPDATE SET
+           sconto_pct = excluded.sconto_pct, aggiornato_il = datetime('now')`
+      ).run(distributorId, richiesta.cliente_id, profilo);
+    }
   });
   salva();
 
@@ -317,9 +373,9 @@ function righeDistributore(requestId, distributorId) {
   return db
     .prepare(
       `SELECT ri.product_id, ri.quantita AS quantita_richiesta,
-              p.codice, p.nome, p.categoria,
-              dp.prezzo_listino, dp.sconto_base_pct,
-              rri.quantita_disponibile
+              p.codice, p.nome, p.categoria, p.brand_slug, p.raee,
+              dp.prezzo_listino, dp.sconto_base_pct AS sconto_standard_pct,
+              rri.quantita_disponibile, rri.sconto_riga_pct
          FROM request_items ri
          JOIN products p ON p.id = ri.product_id
          JOIN distributor_products dp
@@ -333,6 +389,10 @@ function righeDistributore(requestId, distributorId) {
     .map((r) => ({
       ...r,
       quantita: r.quantita_disponibile === null ? r.quantita_richiesta : r.quantita_disponibile,
+      // Lo sconto applicato è quello deciso dal banco per questa richiesta; se non l'ha
+      // toccato vale lo sconto Base standard del suo listino.
+      sconto_base_pct: r.sconto_riga_pct === null ? r.sconto_standard_pct : r.sconto_riga_pct,
+      sconto_personalizzato: r.sconto_riga_pct !== null && r.sconto_riga_pct !== r.sconto_standard_pct,
     }));
 }
 
@@ -350,6 +410,7 @@ function calcolaOfferta(requestId, distributorId, { modalita = 'consegna_mezzo_g
         nome: r.nome,
         prezzo_listino: r.prezzo_listino,
         sconto_base_pct: r.sconto_base_pct,
+        raee: r.raee,
       },
       quantita: r.quantita,
     }));
@@ -404,7 +465,16 @@ function offerte(requestId, { modalita = 'consegna_mezzo_grossista' } = {}) {
     });
 }
 
+// Sconto concordato tra un banco e un cliente (0 se non ce n'è uno in anagrafica).
+function scontoCliente(distributorId, clienteId) {
+  const r = db
+    .prepare('SELECT sconto_pct, aggiornato_il FROM client_discounts WHERE distributor_id = ? AND cliente_id = ?')
+    .get(distributorId, clienteId);
+  return r || null;
+}
+
 module.exports = {
+  scontoCliente,
   getRichiesta,
   righeRichiesta,
   risposteRichiesta,

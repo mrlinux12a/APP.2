@@ -40,10 +40,13 @@ function euro(n) {
 // A partire dalle righe carrello [{prodotto, quantita}], calcola righe ordine e totali.
 // `prodotto` può essere il prodotto di catalogo o la riga di listino di un distributore:
 // serve solo che abbia codice, nome, prezzo_listino e sconto_base_pct.
+// `prodotto.raee` (opzionale) è il contributo RAEE unitario: i listini dei produttori lo
+// dichiarano escluso dal prezzo, quindi viaggia come voce separata.
 function calcolaOrdine(righeCarrello, { costoConsegna = 0 } = {}) {
   const righe = righeCarrello.map(({ prodotto, quantita }) => {
     const prezzo_netto_unitario = prezzoNetto(prodotto);
     const prezzo_unitario_cliente = prezzoCliente(prodotto);
+    const raee_unitario = round2(prodotto.raee || 0);
     return {
       product_id: prodotto.id,
       codice_snapshot: prodotto.codice,
@@ -55,13 +58,16 @@ function calcolaOrdine(righeCarrello, { costoConsegna = 0 } = {}) {
       subtotale: round2(prezzo_netto_unitario * quantita),
       prezzo_unitario_cliente,
       subtotale_cliente: round2(prezzo_unitario_cliente * quantita),
+      raee_unitario,
+      raee_riga: round2(raee_unitario * quantita),
     };
   });
 
   const totale_netto = round2(righe.reduce((acc, r) => acc + r.subtotale, 0));
   const merce_cliente = round2(righe.reduce((acc, r) => acc + r.subtotale_cliente, 0));
+  const contributo_raee = round2(righe.reduce((acc, r) => acc + r.raee_riga, 0));
   const costo_consegna = round2(costoConsegna || 0);
-  const imponibile = round2(merce_cliente + costo_consegna);
+  const imponibile = round2(merce_cliente + contributo_raee + costo_consegna);
   const iva = round2(imponibile * (getIvaPct() / 100));
   const totale_ivato = round2(imponibile + iva);
 
@@ -69,6 +75,7 @@ function calcolaOrdine(righeCarrello, { costoConsegna = 0 } = {}) {
     righe,
     totale_netto,
     totale_finale: merce_cliente, // imponibile della sola merce (servizio già incluso)
+    contributo_raee,
     costo_consegna,
     imponibile,
     iva,

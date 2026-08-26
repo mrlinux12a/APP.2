@@ -155,6 +155,7 @@ app.get('/home', requireRole('cliente'), (req, res) => {
   res.render('home', {
     titolo: 'Ordini Minuteria',
     macro: catalogo.macroCategorie(),
+    marchi: catalogo.marchi(),
     inCorso,
     ultimiOrdini,
   });
@@ -180,13 +181,24 @@ const TESTO_DISPONIBILITA = {
 // Ricerca mentre si digita: stessa logica parziale della pagina /cerca.
 app.get('/api/cerca', requireRole('cliente'), (req, res) => {
   const q = (req.query.q || '').trim();
-  const risultati = q.length >= 2 ? catalogo.cercaProdotti(q, { limite: 60 }) : [];
+  // L'ambito arriva dalla pagina che sta cercando: categoria, marchio, famiglia, gruppo.
+  const ambito = {
+    macroSlug: req.query.macro || null,
+    brandSlug: req.query.marchio || null,
+    famiglia: req.query.famiglia || null,
+    gruppo: req.query.gruppo || null,
+    limite: 60,
+  };
+  const risultati = q.length >= 2 ? catalogo.cercaProdotti(q, ambito) : [];
   res.json({
     risultati: risultati.map((p) => ({
       id: p.id,
       codice: p.codice,
       nome: p.nome,
       macro_nome: p.macro_nome,
+      brand_nome: p.brand_nome,
+      brand_colore: p.brand_colore,
+      raee: p.raee > 0 ? pricing.euro(p.raee) : null,
       disponibilita: p.disponibilita,
       disponibilita_testo: TESTO_DISPONIBILITA[p.disponibilita] || p.disponibilita,
       sconto_base_pct: p.sconto_base_pct,
@@ -199,12 +211,48 @@ app.get('/api/cerca', requireRole('cliente'), (req, res) => {
 app.get('/categoria/:slug', requireRole('cliente'), (req, res) => {
   const macro = catalogo.macroCategoria(req.params.slug);
   if (!macro) return res.status(404).render('errore', { titolo: 'Non trovata', messaggio: 'Categoria non trovata.' });
-  res.render('categoria', {
-    titolo: macro.nome,
-    macro,
-    gruppi: catalogo.prodottiPerMacro(macro.slug),
-    carrello: getCarrello(req),
-  });
+
+  const gruppi = catalogo.gruppiPerMacro(macro.slug);
+  const gruppo = req.query.gruppo || (gruppi.length === 1 ? gruppi[0].nome : null);
+  const q = (req.query.q || '').trim();
+
+  // Con una ricerca attiva l'elenco è quello dei risultati, senza paginazione.
+  const elenco = q
+    ? { righe: catalogo.cercaProdotti(q, { macroSlug: macro.slug, gruppo, limite: 60 }), ricerca: true }
+    : gruppo
+    ? catalogo.prodottiDelGruppo(macro.slug, gruppo, req.query.p)
+    : null;
+
+  res.render('categoria', { titolo: macro.nome, macro, gruppi, gruppo, q, elenco });
+});
+
+// ---------- Cliente: marchi ----------
+
+app.get('/marchi', requireRole('cliente'), (req, res) => {
+  res.render('marchi', { titolo: 'Marchi', marchi: catalogo.marchi() });
+});
+
+app.get('/marchi/:slug', requireRole('cliente'), (req, res) => {
+  const marca = catalogo.marchio(req.params.slug);
+  if (!marca) return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Marchio non trovato.' });
+
+  const famiglie = catalogo.famiglieDelMarchio(marca.slug);
+  const codice = req.query.famiglia || null;
+  const famiglia = codice ? catalogo.famigliaDelMarchio(marca.slug, codice) : null;
+  const q = (req.query.q || '').trim();
+
+  // Cercando dentro un marchio i risultati restano dentro quel marchio (e, se si sta
+  // sfogliando una famiglia, dentro quella famiglia).
+  const elenco = q
+    ? {
+        righe: catalogo.cercaProdotti(q, { brandSlug: marca.slug, famiglia: codice, limite: 60 }),
+        ricerca: true,
+      }
+    : codice
+    ? catalogo.prodottiDelMarchio(marca.slug, codice, req.query.p)
+    : null;
+
+  res.render('marchio', { titolo: marca.nome, marca, famiglie, famiglia, q, elenco });
 });
 
 // ---------- Cliente: carrello ----------
@@ -369,15 +417,17 @@ app.post('/ordini', requireRole('cliente'), (req, res) => {
     `INSERT INTO orders
        (cliente_id, stato, modalita, note, totale_netto, totale_finale,
         request_id, distributor_id, consegna_ore, partenza_ore, destinazione,
-        costo_consegna, iva, totale_ivato)
-     VALUES (?, 'inviato', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        costo_consegna, contributo_raee, iva, totale_ivato)
+     VALUES (?, 'inviato', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertItem = db.prepare(
     `INSERT INTO order_items
        (order_id, product_id, codice_snapshot, nome_snapshot, quantita, prezzo_listino_snapshot,
-        sconto_pct_snapshot, prezzo_netto_unitario, subtotale, prezzo_unitario_cliente, subtotale_cliente)
+        sconto_pct_snapshot, prezzo_netto_unitario, subtotale, prezzo_unitario_cliente,
+        subtotale_cliente, raee_unitario, raee_riga)
      VALUES (@order_id, @product_id, @codice_snapshot, @nome_snapshot, @quantita, @prezzo_listino_snapshot,
-             @sconto_pct_snapshot, @prezzo_netto_unitario, @subtotale, @prezzo_unitario_cliente, @subtotale_cliente)`
+             @sconto_pct_snapshot, @prezzo_netto_unitario, @subtotale, @prezzo_unitario_cliente,
+             @subtotale_cliente, @raee_unitario, @raee_riga)`
   );
 
   const creaOrdine = db.transaction(() => {
@@ -393,6 +443,7 @@ app.post('/ordini', requireRole('cliente'), (req, res) => {
       risposta.partenza_ore,
       destinazione,
       totali.costo_consegna,
+      totali.contributo_raee,
       totali.iva,
       totali.totale_ivato
     );
@@ -662,6 +713,9 @@ app.get('/distributore/richieste/:id', requireRole('distributore'), (req, res) =
       richiesta.stato !== 'annullata',
     indirizzoCliente: ddt.indirizzoCompleto(cliente),
     distanza: distanzaClienteBanco(cliente, distributore),
+    // Sconto già concordato con questo cliente: precompila il modulo.
+    scontoCliente: richieste.scontoCliente(distributorId, richiesta.cliente_id),
+    servizioPct: pricing.getServizioPct(),
     errore: req.query.errore || null,
   });
 });
@@ -670,15 +724,25 @@ app.get('/distributore/richieste/:id', requireRole('distributore'), (req, res) =
 // coprire, più il tempo di partenza e quello di consegna. Il pulsante "rifiuta" azzera tutto.
 app.post('/distributore/richieste/:id/rispondi', requireRole('distributore'), (req, res) => {
   const righe = {};
+  const sconti = {};
   for (const [chiave, valore] of Object.entries(req.body)) {
-    if (!chiave.startsWith('disp_')) continue;
-    const id = parseInt(chiave.slice('disp_'.length), 10);
-    if (id) righe[id] = parseInt(valore, 10) || 0;
+    if (chiave.startsWith('disp_')) {
+      const id = parseInt(chiave.slice('disp_'.length), 10);
+      if (id) righe[id] = parseInt(valore, 10) || 0;
+    } else if (chiave.startsWith('sconto_riga_')) {
+      const id = parseInt(chiave.slice('sconto_riga_'.length), 10);
+      if (id) sconti[id] = valore;
+    }
   }
 
   const esitoRisposta = richieste.rispondi(req.params.id, req.session.user.distributor_id, {
     righe,
+    sconti,
     rifiuta: req.body.azione === 'rifiuta',
+    // "Accetta al prezzo di richiesta": conferma tutto com'è, senza toccare gli sconti.
+    prezzoRichiesto: req.body.azione === 'prezzo_richiesto',
+    scontoCliente: req.body.sconto_cliente,
+    salvaScontoCliente: req.body.salva_sconto === 'si',
     partenza_ore: req.body.partenza_ore,
     consegna_ore: req.body.consegna_ore,
     note: req.body.note,

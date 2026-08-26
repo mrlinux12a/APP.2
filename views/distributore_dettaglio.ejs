@@ -35,23 +35,63 @@
       </div>
 
       <% if (apribile) { %>
-        <form method="POST" action="/distributore/richieste/<%= richiesta.id %>/rispondi">
-          <div class="sezione-titolo">Disponibilità al banco</div>
+        <form method="POST" action="/distributore/richieste/<%= richiesta.id %>/rispondi"
+              data-modulo-risposta data-servizio="<%= servizioPct %>">
+          <div class="sezione-titolo">Sconto per questo cliente</div>
+          <div class="card">
+            <label for="sconto_cliente">Sconto da applicare a tutte le righe (%)</label>
+            <div class="riga-sconto">
+              <input type="number" id="sconto_cliente" name="sconto_cliente" min="0" max="90" step="0.5"
+                     inputmode="decimal" placeholder="es. 42"
+                     value="<%= scontoCliente ? scontoCliente.sconto_pct : '' %>"
+                     data-sconto-cliente>
+              <button class="btn btn-chiaro" type="button" data-applica-sconto>Applica a tutte</button>
+            </div>
+            <% if (scontoCliente) { %>
+              <p class="nota" style="margin:0;">
+                Sconto in anagrafica per <%= cliente.ragione_sociale %>:
+                <strong><%= scontoCliente.sconto_pct %>%</strong>, aggiornato il
+                <%= fmt.dataSola(scontoCliente.aggiornato_il) %>.
+              </p>
+            <% } else { %>
+              <p class="nota" style="margin:0;">
+                Per questo cliente non c'è ancora uno sconto concordato: quello che imposti qui
+                puoi salvarlo in anagrafica e verrà riproposto la prossima volta.
+              </p>
+            <% } %>
+            <label class="riga-check">
+              <input type="checkbox" name="salva_sconto" value="si">
+              Salva questo sconto nell'anagrafica del cliente
+            </label>
+          </div>
+
+          <div class="sezione-titolo">Disponibilità e prezzi riga per riga</div>
           <p class="nota" style="margin-top:0;">
-            Indica per ogni riga quanti pezzi riesci a coprire. Se ne metti meno di quelli
-            richiesti la conferma parte come <strong>parziale</strong>: il cliente vede subito
-            cosa manca. Se non hai nulla, usa il pulsante di rifiuto in fondo.
+            Per ogni riga indica quanti pezzi copri e, se vuoi, lo sconto preciso da applicare.
+            Meno pezzi di quelli richiesti = conferma <strong>parziale</strong>. In fondo puoi
+            accettare la chiamata al prezzo di richiesta senza toccare nulla, oppure rifiutare.
           </p>
           <div class="card card-fitta">
             <% offerta.righe.forEach(function (r) { %>
-              <div class="prodotto">
+              <div class="prodotto riga-banco"
+                   data-listino="<%= r.prezzo_listino %>"
+                   data-standard="<%= r.sconto_standard_pct %>">
                 <div class="info">
                   <div class="nome"><%= r.nome %></div>
                   <div class="meta">
                     Cod. <%= r.codice %> · richiesti <strong><%= r.quantita_richiesta %></strong> pz
+                    · listino € <%= euro(r.prezzo_listino) %>
+                  </div>
+                  <div class="riga-sconto piccola">
+                    <label for="sc_<%= r.product_id %>">Sconto %</label>
+                    <input type="number" id="sc_<%= r.product_id %>" name="sconto_riga_<%= r.product_id %>"
+                           min="0" max="90" step="0.5" inputmode="decimal"
+                           value="<%= r.sconto_base_pct %>" data-sconto-riga>
                   </div>
                   <div class="prezzo">
-                    € <%= euro(prezzoCliente(r)) %> <span class="iva">+ IVA · cad. per il cliente</span>
+                    € <span data-prezzo-riga><%= euro(prezzoCliente(r)) %></span>
+                    <span class="iva">+ IVA · cad. per il cliente</span>
+                    <% if (r.raee > 0) { %><span class="iva">· RAEE € <%= euro(r.raee) %></span><% } %>
                   </div>
                 </div>
                 <div class="stepper">
@@ -101,10 +141,17 @@
           </div>
 
           <button class="btn btn-verde btn-blocco" type="submit" name="azione" value="conferma">
-            Conferma disponibilità e tempi
+            Conferma con questi sconti e tempi
           </button>
-          <button class="btn btn-rosso btn-blocco" type="submit" name="azione" value="rifiuta"
+          <button class="btn btn-primary btn-blocco" type="submit" name="azione" value="prezzo_richiesto"
                   style="margin-top:10px;">
+            Accetta al prezzo di richiesta
+          </button>
+          <p class="nota">
+            "Al prezzo di richiesta" conferma alle condizioni standard del tuo listino, quelle
+            che il cliente ha già visto: gli sconti scritti sopra vengono ignorati.
+          </p>
+          <button class="btn btn-rosso btn-blocco" type="submit" name="azione" value="rifiuta">
             Rifiuta: merce non disponibile
           </button>
         </form>
@@ -129,7 +176,9 @@
               <div class="desc">
                 <%= r.nome %>
                 <div class="meta">
-                  Cod. <%= r.codice %>
+                  Cod. <%= r.codice %> · sconto <%= r.sconto_base_pct %>%<% if (r.sconto_personalizzato) { %>
+                    <span style="color:var(--verde); font-weight:600;">(personalizzato, standard <%= r.sconto_standard_pct %>%)</span>
+                  <% } %>
                   <% if (r.quantita < r.quantita_richiesta) { %>
                     · <span style="color:var(--rosso);">richiesti <%= r.quantita_richiesta %>, mancano <%= r.quantita_richiesta - r.quantita %></span>
                   <% } %>

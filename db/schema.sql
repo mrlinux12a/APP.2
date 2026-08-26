@@ -185,3 +185,46 @@ CREATE TABLE IF NOT EXISTS ddt_counters (
 );
 
 CREATE INDEX IF NOT EXISTS idx_response_items ON request_response_items(response_id);
+
+-- ============================================================
+-- Blocco 4 — Marchi (listini ufficiali dei produttori) e mappa.
+-- La struttura è generica: TOSHIBA è il primo marchio caricato, ne possono
+-- seguire quanti se ne vuole con lo stesso importatore.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS brands (
+  slug TEXT PRIMARY KEY,
+  nome TEXT NOT NULL,
+  descrizione TEXT NOT NULL DEFAULT '',
+  colore TEXT NOT NULL DEFAULT '#1d4e89',
+  iniziali TEXT NOT NULL DEFAULT '',
+  distributore_ufficiale TEXT NOT NULL DEFAULT '',
+  listino_nome TEXT NOT NULL DEFAULT '',
+  listino_aggiornato TEXT NOT NULL DEFAULT '',
+  ordine INTEGER NOT NULL DEFAULT 0,
+  attivo INTEGER NOT NULL DEFAULT 1,
+  sconto_default_pct REAL NOT NULL DEFAULT 0
+);
+
+-- Famiglie di prodotto dentro un marchio (RAS, ESTIA, VRF... per Toshiba).
+CREATE TABLE IF NOT EXISTS brand_families (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  brand_slug TEXT NOT NULL REFERENCES brands(slug),
+  codice TEXT NOT NULL,
+  nome TEXT NOT NULL,
+  descrizione TEXT NOT NULL DEFAULT '',
+  ordine INTEGER NOT NULL DEFAULT 0,
+  UNIQUE (brand_slug, codice)
+);
+
+-- Sconto concordato tra un banco e un singolo cliente: precompila il modulo di risposta
+-- quando arriva una richiesta da quel cliente.
+CREATE TABLE IF NOT EXISTS client_discounts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  distributor_id INTEGER NOT NULL REFERENCES distributors(id),
+  cliente_id INTEGER NOT NULL REFERENCES users(id),
+  sconto_pct REAL NOT NULL DEFAULT 0,
+  note TEXT NOT NULL DEFAULT '',
+  aggiornato_il TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (distributor_id, cliente_id)
+);

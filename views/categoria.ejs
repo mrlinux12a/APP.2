@@ -3,38 +3,89 @@
 <head>
   <%- include('partials/app_head', { titolo }) %>
 </head>
-<body data-loggato="1" class="con-azione">
+<body data-loggato="1"<%- elenco ? ' class="con-azione"' : '' %>>
   <div class="app">
-    <%- include('partials/appbar', { titolo, indietro: '/home' }) %>
+    <%- include('partials/appbar', {
+          titolo,
+          indietro: (elenco && gruppi.length > 1) || q ? '/categoria/' + macro.slug : '/home'
+        }) %>
 
-    <form method="POST" action="/carrello">
-      <input type="hidden" name="ritorno" value="/categoria/<%= macro.slug %>">
-      <div class="contenuto">
+    <div class="contenuto" style="padding-bottom:0;">
+      <%- include('partials/barra_ricerca', {
+            azione: '/categoria/' + macro.slug,
+            q,
+            ambito: { macro: macro.slug, gruppo: gruppo || '' },
+            segnaposto: gruppo ? 'Cerca in ' + gruppo : 'Cerca in ' + macro.nome
+          }) %>
+    </div>
+
+    <% if (!elenco) { %>
+      <div class="contenuto" style="padding-top:0;">
         <p class="sottotitolo"><%= macro.descrizione %></p>
-
-        <% gruppi.forEach(function (g) { %>
-          <div class="gruppo-titolo"><%= g.nome %></div>
-          <div class="card card-fitta">
-            <% g.prodotti.forEach(function (p) { %>
-              <%- include('partials/prodotto', { p }) %>
-            <% }); %>
-          </div>
-        <% }); %>
-
         <% if (!gruppi.length) { %>
           <div class="vuoto"><span class="emoji">📭</span>Nessun prodotto in questa categoria.</div>
+        <% } else { %>
+          <div class="card card-fitta">
+            <% gruppi.forEach(function (g) { %>
+              <a class="riga-lista" href="/categoria/<%= macro.slug %>?gruppo=<%= encodeURIComponent(g.nome) %>">
+                <span class="icona">📁</span>
+                <span class="corpo">
+                  <span class="etichetta"><%= g.nome %></span>
+                  <span class="dettaglio"><%= g.n %> prodotti</span>
+                </span>
+                <span class="freccia">›</span>
+              </a>
+            <% }); %>
+          </div>
         <% } %>
-
-        <p class="nota">
-          Prezzi IVA esclusa. La disponibilità viene chiesta al banco del distributore quando
-          premi Procedi: hanno 10 minuti per confermare.
-        </p>
       </div>
 
-      <%- include('partials/barra_procedi') %>
-    </form>
+    <% } else { %>
+      <form method="POST" action="/carrello">
+        <input type="hidden" name="ritorno"
+               value="/categoria/<%= macro.slug %>?gruppo=<%= encodeURIComponent(gruppo || '') %>&p=<%= elenco.pagina || 1 %>">
+        <div class="contenuto" style="padding-top:0;">
+          <p class="sottotitolo">
+            <% if (elenco.ricerca) { %>
+              <strong><%= elenco.righe.length %></strong> risultati per «<%= q %>»<% if (gruppo) { %> in <%= gruppo %><% } %>
+            <% } else { %>
+              <strong><%= gruppo %></strong> — <%= elenco.totale %> prodotti
+            <% } %>
+          </p>
+
+          <div id="risultati">
+            <% if (!elenco.righe.length) { %>
+              <div class="vuoto"><span class="emoji">🤷</span>Nessun prodotto trovato.</div>
+            <% } else { %>
+              <div class="card card-fitta">
+                <% elenco.righe.forEach(function (p) { %>
+                  <%- include('partials/prodotto', { p }) %>
+                <% }); %>
+              </div>
+            <% } %>
+          </div>
+
+          <% if (!elenco.ricerca) { %>
+            <div data-paginazione>
+              <%- include('partials/paginazione', {
+                    elenco,
+                    base: '/categoria/' + macro.slug + '?gruppo=' + encodeURIComponent(gruppo)
+                  }) %>
+            </div>
+          <% } %>
+
+          <p class="nota">
+            Prezzi IVA esclusa. La disponibilità viene chiesta al banco del distributore quando
+            premi Procedi: hanno 10 minuti per confermare.
+          </p>
+        </div>
+
+        <%- include('partials/barra_procedi') %>
+      </form>
+    <% } %>
   </div>
 
+  <% if (!elenco) { %><%- include('partials/nav', { attivo: 'home' }) %><% } %>
   <script src="/app.js" defer></script>
 </body>
 </html>

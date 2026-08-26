@@ -1,10 +1,21 @@
 <div class="prodotto">
   <div class="info">
-    <div class="nome"><%= p.nome %></div>
+    <div class="nome">
+      <% if (p.brand_nome) { %><span class="marchio-tag" style="--marchio:<%= p.brand_colore %>"><%= p.brand_nome %></span><% } %>
+      <%= p.nome %>
+    </div>
     <div class="meta">
       Cod. <%= p.codice %><% if (p.categoria) { %> · <%= p.categoria %><% } %>
       <span class="badge badge-<%= p.disponibilita %>"><%= testoDisponibilita[p.disponibilita] %></span>
     </div>
+    <% if (p.refrigerante || p.ean || p.raee > 0) { %>
+      <div class="meta">
+        <% if (p.refrigerante) { %><%= p.refrigerante %><% } %>
+        <% if (p.fgas_kg) { %> · F-GAS <%= p.fgas_kg %> kg<% if (p.gwp) { %> (GWP <%= p.gwp %>)<% } %><% } %>
+        <% if (p.raee > 0) { %> · RAEE € <%= euro(p.raee) %><% } %>
+        <% if (p.ean && p.ean.toUpperCase() !== 'TBA') { %> · EAN <%= p.ean %><% } %>
+      </div>
+    <% } %>
     <div class="prezzo">
       <% if (p.sconto_base_pct > 0) { %><span class="barrato">€ <%= euro(p.prezzo_listino) %></span><% } %>
       € <%= euro(prezzoCliente(p)) %> <span class="iva">+ IVA</span>

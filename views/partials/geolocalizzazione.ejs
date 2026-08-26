@@ -18,6 +18,12 @@
     </span>
   </div>
 
+  <div class="mappa <%= geo.consenso && geo.lat !== null ? 'mappa-attiva' : '' %>"
+       data-geo-mappa
+       data-lat="<%= geo.lat === null || geo.lat === undefined ? '' : geo.lat %>"
+       data-lng="<%= geo.lng === null || geo.lng === undefined ? '' : geo.lng %>"
+       data-precisione="<%= geo.precisione || '' %>"></div>
+
   <p class="nota" style="margin-bottom:10px;"><%= spiegazione %></p>
 
   <button class="btn btn-chiaro btn-blocco" type="button" data-geo-attiva <%- geo.consenso ? 'hidden' : '' %>>
@@ -27,3 +33,4 @@
     Disattiva e cancella la posizione
   </button>
 </div>
+<script src="/mappa.js" defer></script>

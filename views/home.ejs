@@ -40,6 +40,25 @@
         </div>
       <% } %>
 
+      <% if (marchi.length) { %>
+        <div class="sezione-titolo">Marchi</div>
+        <div class="striscia-marchi">
+          <% marchi.forEach(function (m) { %>
+            <a class="tessera-marchio" href="/marchi/<%= m.slug %>">
+              <span class="logo-marchio" style="--marchio:<%= m.colore %>">
+                <%= m.iniziali || m.nome.slice(0, 2) %>
+              </span>
+              <span class="nome"><%= m.nome %></span>
+              <span class="conta"><%= m.n_prodotti %> articoli</span>
+            </a>
+          <% }); %>
+          <a class="tessera-marchio tutti" href="/marchi">
+            <span class="logo-marchio" style="--marchio:#6b7480">＋</span>
+            <span class="nome">Tutti i marchi</span>
+          </a>
+        </div>
+      <% } %>
+
       <div class="sezione-titolo">Categorie merceologiche</div>
       <div class="griglia-macro">
         <% macro.forEach(function (m) { %>
