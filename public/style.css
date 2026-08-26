@@ -1,0 +1,171 @@
+:root {
+  --blu: #1d4e89;
+  --blu-scuro: #123a66;
+  --verde: #2e7d32;
+  --arancio: #e0912f;
+  --grigio: #666;
+  --sfondo: #f4f6f8;
+  --bordo: #dde3e8;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  margin: 0;
+  background: var(--sfondo);
+  color: #222;
+}
+
+header.topbar {
+  background: var(--blu);
+  color: #fff;
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+header.topbar .brand {
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+header.topbar form { margin: 0; }
+
+.btn {
+  display: inline-block;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 16px;
+  font-size: 1rem;
+  cursor: pointer;
+  text-decoration: none;
+  text-align: center;
+}
+
+.btn-primary { background: var(--blu); color: #fff; }
+.btn-primary:hover { background: var(--blu-scuro); }
+.btn-logout { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.6); }
+
+main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid var(--bordo);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+h1 { font-size: 1.4rem; margin-top: 0; }
+h2 { font-size: 1.15rem; }
+
+.errore {
+  background: #fdecea;
+  color: #a33;
+  border: 1px solid #f3c1bb;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--bordo); font-size: 0.95rem; }
+th { color: var(--grigio); font-weight: 600; }
+
+.categoria-titolo {
+  margin-top: 20px;
+  margin-bottom: 6px;
+  font-weight: 600;
+  color: var(--blu);
+}
+
+.prodotto-riga {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--bordo);
+}
+
+.prodotto-info { flex: 1; }
+.prodotto-nome { font-weight: 600; }
+.prodotto-meta { font-size: 0.85rem; color: var(--grigio); }
+.prodotto-prezzo { font-weight: 600; color: var(--blu); white-space: nowrap; }
+
+.badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 12px;
+  margin-left: 6px;
+}
+.badge-disponibile { background: #e6f4ea; color: var(--verde); }
+.badge-in_esaurimento { background: #fdf0dd; color: var(--arancio); }
+.badge-non_disponibile { background: #fdecea; color: #a33; }
+
+.stato-badge {
+  display: inline-block;
+  font-size: 0.8rem;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+.stato-inviato { background: #e8eef7; color: var(--blu); }
+.stato-in_evasione { background: #fdf0dd; color: var(--arancio); }
+.stato-evaso { background: #e6f4ea; color: var(--verde); }
+
+input[type="number"] {
+  width: 64px;
+  padding: 8px;
+  border: 1px solid var(--bordo);
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+input[type="text"], input[type="password"], textarea, select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--bordo);
+  border-radius: 6px;
+  font-size: 1rem;
+  margin-bottom: 12px;
+}
+
+label { font-weight: 600; display: block; margin-bottom: 4px; }
+
+.modalita-scelta { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+.modalita-scelta label { display: flex; align-items: center; gap: 6px; font-weight: normal; }
+
+.totale-box {
+  background: var(--blu);
+  color: #fff;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-top: 12px;
+}
+
+.login-wrapper {
+  max-width: 380px;
+  margin: 60px auto;
+  padding: 0 16px;
+}
+
+.link-secondario { color: var(--blu); text-decoration: none; }
+
+@media (max-width: 480px) {
+  .prodotto-riga { flex-wrap: wrap; }
+}

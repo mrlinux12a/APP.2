@@ -1,0 +1,5 @@
+node_modules/
+db/minuteria.db
+db/minuteria.db-wal
+db/minuteria.db-shm
+.env

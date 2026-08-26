@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/head', { titolo: 'Ordini in arrivo — Agente' }) %>
+</head>
+<body>
+  <%- include('partials/topbar') %>
+  <main>
+    <h1>Ordini in arrivo</h1>
+
+    <% if (ordini.length === 0) { %>
+      <div class="card">Nessun ordine ricevuto per ora.</div>
+    <% } else { %>
+      <div class="card">
+        <table>
+          <thead>
+            <tr><th>#</th><th>Cliente</th><th>Data</th><th>Modalità</th><th>Importo</th><th>Stato</th><th></th></tr>
+          </thead>
+          <tbody>
+            <% ordini.forEach(function(o) { %>
+              <tr>
+                <td>#<%= o.id %></td>
+                <td><%= o.cliente_nome %></td>
+                <td><%= o.creato_il %></td>
+                <td><%= o.modalita === 'ritiro' ? 'Ritiro' : (o.modalita === 'consegna_mezzo_grossista' ? 'Consegna' : 'Consegna est.') %></td>
+                <td>€ <%= o.totale_finale.toFixed(2) %></td>
+                <td><span class="stato-badge stato-<%= o.stato %>"><%= o.stato === 'inviato' ? 'Inviato' : (o.stato === 'in_evasione' ? 'In evasione' : 'Evaso') %></span></td>
+                <td><a class="link-secondario" href="/ordini/<%= o.id %>">Dettaglio</a></td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </main>
+</body>
+</html>

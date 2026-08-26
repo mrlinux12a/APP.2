@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/head', { titolo: 'Accedi — Ordini Minuteria' }) %>
+</head>
+<body>
+  <div class="login-wrapper">
+    <h1>Ordini Minuteria</h1>
+    <div class="card">
+      <% if (errore) { %>
+        <div class="errore"><%= errore %></div>
+      <% } %>
+      <form method="POST" action="/login">
+        <label for="username">Utente</label>
+        <input type="text" id="username" name="username" autocomplete="username" required>
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" required>
+        <button class="btn btn-primary" type="submit" style="width:100%">Accedi</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

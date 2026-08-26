@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/head', { titolo: 'Catalogo — Ordini Minuteria' }) %>
+</head>
+<body>
+  <%- include('partials/topbar') %>
+  <main>
+    <h1>Nuovo ordine</h1>
+    <p style="color:#666; margin-top:-8px;">Inserisci le quantità dei prodotti che ti servono. Il totale dell'ordine ti verrà mostrato alla conferma.</p>
+
+    <% if (errore) { %>
+      <div class="errore"><%= errore %></div>
+    <% } %>
+
+    <form method="POST" action="/ordini">
+      <div class="card">
+        <%
+          let categoriaCorrente = null;
+          prodotti.forEach(function(p) {
+            const prezzoNetto = Math.round((p.prezzo_listino * (1 - p.sconto_base_pct / 100) + Number.EPSILON) * 100) / 100;
+            if (p.categoria !== categoriaCorrente) {
+              categoriaCorrente = p.categoria;
+        %>
+          <div class="categoria-titolo"><%= categoriaCorrente %></div>
+        <% } %>
+          <div class="prodotto-riga">
+            <div class="prodotto-info">
+              <div class="prodotto-nome"><%= p.nome %>
+                <span class="badge badge-<%= p.disponibilita %>">
+                  <%= p.disponibilita === 'disponibile' ? 'Disponibile' : (p.disponibilita === 'in_esaurimento' ? 'In esaurimento' : 'Non disponibile') %>
+                </span>
+              </div>
+              <div class="prodotto-meta">Cod. <%= p.codice %></div>
+              <div class="prodotto-prezzo">
+                <% if (p.sconto_base_pct > 0) { %>
+                  <span style="text-decoration: line-through; color:#999; font-weight:normal;">€ <%= p.prezzo_listino.toFixed(2) %></span>
+                <% } %>
+                € <%= prezzoNetto.toFixed(2) %>
+              </div>
+            </div>
+            <div>
+              <input
+                type="number"
+                name="quantita_<%= p.id %>"
+                min="0"
+                step="1"
+                value="0"
+                <%= p.disponibilita === 'non_disponibile' ? 'disabled' : '' %>
+              >
+            </div>
+          </div>
+        <% }); %>
+      </div>
+
+      <div class="card">
+        <h2>Consegna</h2>
+        <div class="modalita-scelta">
+          <label><input type="radio" name="modalita" value="ritiro" checked> Ritiro in sede</label>
+          <label><input type="radio" name="modalita" value="consegna_mezzo_grossista"> Consegna con mezzo del grossista</label>
+        </div>
+        <label for="note">Note (opzionale)</label>
+        <textarea id="note" name="note" rows="2" placeholder="Es. orario preferito, riferimento cantiere..."></textarea>
+      </div>
+
+      <button class="btn btn-primary" type="submit" style="width:100%; padding:14px;">Invia ordine</button>
+    </form>
+  </main>
+</body>
+</html>

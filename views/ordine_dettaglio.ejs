@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/head', { titolo: 'Ordine #' + ordine.id }) %>
+</head>
+<body>
+  <%- include('partials/topbar') %>
+  <main>
+    <h1>Ordine #<%= ordine.id %></h1>
+    <p>
+      <span class="stato-badge stato-<%= ordine.stato %>">
+        <%= ordine.stato === 'inviato' ? 'Inviato' : (ordine.stato === 'in_evasione' ? 'In evasione' : 'Evaso') %>
+      </span>
+    </p>
+
+    <div class="card">
+      <table>
+        <tr><th>Cliente</th><td><%= cliente.ragione_sociale %></td></tr>
+        <tr><th>Data ordine</th><td><%= ordine.creato_il %></td></tr>
+        <tr><th>Modalità</th><td><%= ordine.modalita === 'ritiro' ? 'Ritiro in sede' : (ordine.modalita === 'consegna_mezzo_grossista' ? 'Consegna con mezzo del grossista' : 'Consegna esterna') %></td></tr>
+        <% if (ordine.note) { %><tr><th>Note</th><td><%= ordine.note %></td></tr><% } %>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Prodotti</h2>
+      <table>
+        <thead>
+          <tr><th>Prodotto</th><th>Q.tà</th><th>Prezzo unit.</th><th>Subtotale</th></tr>
+        </thead>
+        <tbody>
+          <% righe.forEach(function(r) { %>
+            <tr>
+              <td><%= r.nome_snapshot %><br><span class="prodotto-meta">Cod. <%= r.codice_snapshot %></span></td>
+              <td><%= r.quantita %></td>
+              <td>€ <%= r.prezzo_netto_unitario.toFixed(2) %></td>
+              <td>€ <%= r.subtotale.toFixed(2) %></td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="totale-box">
+      <span>Totale ordine</span>
+      <span>€ <%= ordine.totale_finale.toFixed(2) %></span>
+    </div>
+    <p style="color:#888; font-size:0.85rem;">Il prezzo definitivo, con eventuale sconto aggiuntivo, sarà confermato in fattura come di consueto.</p>
+
+    <% if (currentUser.ruolo === 'cliente') { %>
+      <p><a class="link-secondario" href="/catalogo">← Torna al catalogo</a></p>
+    <% } else { %>
+      <p><a class="link-secondario" href="/agente/ordini">← Torna alla lista ordini</a></p>
+    <% } %>
+  </main>
+</body>
+</html>
