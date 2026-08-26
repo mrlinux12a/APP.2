@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="1" class="con-azione">
+  <div class="app">
+    <%- include('partials/appbar', { titolo, indietro: '/home' }) %>
+
+    <form method="POST" action="/carrello">
+      <input type="hidden" name="ritorno" value="/categoria/<%= macro.slug %>">
+      <div class="contenuto">
+        <p class="sottotitolo"><%= macro.descrizione %></p>
+
+        <% gruppi.forEach(function (g) { %>
+          <div class="gruppo-titolo"><%= g.nome %></div>
+          <div class="card card-fitta">
+            <% g.prodotti.forEach(function (p) { %>
+              <%- include('partials/prodotto', { p }) %>
+            <% }); %>
+          </div>
+        <% }); %>
+
+        <% if (!gruppi.length) { %>
+          <div class="vuoto"><span class="emoji">📭</span>Nessun prodotto in questa categoria.</div>
+        <% } %>
+
+        <p class="nota">
+          Prezzi IVA esclusa. La disponibilità viene chiesta al banco del distributore quando
+          premi Procedi: hanno 10 minuti per confermare.
+        </p>
+      </div>
+
+      <%- include('partials/barra_procedi') %>
+    </form>
+  </div>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

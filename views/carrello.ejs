@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="1"<%- righe.length ? ' class="con-azione"' : '' %>>
+  <div class="app">
+    <%- include('partials/appbar', { titolo, intestazione: 'Materiale selezionato', indietro: '/home' }) %>
+
+    <% if (!righe.length) { %>
+      <div class="contenuto">
+        <div class="vuoto">
+          <span class="emoji">🧾</span>
+          Non hai ancora selezionato materiale.
+        </div>
+        <a class="btn btn-primary btn-blocco" href="/home">Scegli una categoria</a>
+      </div>
+    <% } else { %>
+      <form method="POST" action="/carrello">
+        <input type="hidden" name="modo" value="imposta">
+        <input type="hidden" name="ritorno" value="/carrello">
+        <div class="contenuto">
+          <div class="card card-fitta">
+            <% righe.forEach(function (r) { %>
+              <div class="prodotto">
+                <div class="info">
+                  <div class="nome"><%= r.prodotto.nome %></div>
+                  <div class="meta">Cod. <%= r.prodotto.codice %></div>
+                  <div class="prezzo">
+                    € <%= euro(prezzoCliente(r.prodotto)) %> <span class="iva">+ IVA · cad.</span>
+                  </div>
+                </div>
+                <div class="stepper">
+                  <button type="button" data-passo="-1" aria-label="Togli">−</button>
+                  <input type="number" min="0" step="1" inputmode="numeric"
+                         name="quantita_<%= r.prodotto.id %>" value="<%= r.quantita %>"
+                         aria-label="Quantità <%= r.prodotto.nome %>">
+                  <button type="button" data-passo="1" aria-label="Aggiungi">+</button>
+                </div>
+              </div>
+            <% }); %>
+          </div>
+
+          <button class="btn btn-chiaro btn-blocco" type="submit" name="azione" value="aggiorna">
+            Aggiorna quantità
+          </button>
+
+          <p class="nota">
+            Premendo Procedi la richiesta parte verso i distributori della tua zona: hanno
+            10 minuti per confermare la disponibilità al banco.
+          </p>
+        </div>
+
+        <div class="barra-azione">
+          <div class="interno">
+            <div style="flex:1" class="conteggio"><%= carrelloPezzi %> pezzi selezionati</div>
+            <button class="btn btn-primary" type="submit" name="azione" value="procedi">Procedi</button>
+          </div>
+        </div>
+      </form>
+
+      <form method="POST" action="/carrello/svuota" class="contenuto" style="padding-top:0;">
+        <button class="btn btn-rosso btn-blocco" type="submit">Svuota la selezione</button>
+      </form>
+    <% } %>
+  </div>
+
+  <% if (!righe.length) { %><%- include('partials/nav', { attivo: 'carrello' }) %><% } %>
+  <script src="/app.js" defer></script>
+</body>
+</html>

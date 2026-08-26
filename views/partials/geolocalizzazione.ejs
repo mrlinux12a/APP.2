@@ -1,0 +1,29 @@
+<div class="card geo-box" data-geo data-consenso="<%= geo.consenso ? '1' : '0' %>">
+  <div class="riga-lista" style="padding:0; border:none;">
+    <span class="icona">📍</span>
+    <span class="corpo">
+      <span class="etichetta"><%= titoloBox %></span>
+      <span class="dettaglio" data-geo-stato>
+        <% if (geo.consenso && geo.aggiornata_il) { %>
+          Attiva — ultimo aggiornamento <%= fmt.oraSola(geo.aggiornata_il) %>
+        <% } else if (geo.consenso) { %>
+          Attiva — in attesa del primo rilevamento
+        <% } else { %>
+          Non attiva: nessuna posizione registrata
+        <% } %>
+      </span>
+    </span>
+    <span class="stato-badge <%= geo.consenso ? 'stato-confermato' : 'stato-scaduto' %>" data-geo-badge>
+      <%= geo.consenso ? 'Consenso dato' : 'Spenta' %>
+    </span>
+  </div>
+
+  <p class="nota" style="margin-bottom:10px;"><%= spiegazione %></p>
+
+  <button class="btn btn-chiaro btn-blocco" type="button" data-geo-attiva <%- geo.consenso ? 'hidden' : '' %>>
+    Attiva la posizione in tempo reale
+  </button>
+  <button class="btn btn-rosso btn-blocco" type="button" data-geo-revoca <%- geo.consenso ? '' : 'hidden' %>>
+    Disattiva e cancella la posizione
+  </button>
+</div>

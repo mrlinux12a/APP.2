@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="1">
+  <div class="app">
+    <%- include('partials/appbar', { titolo, intestazione: 'Ordini da evadere', indietro: '/distributore' }) %>
+
+    <div class="contenuto">
+      <% if (!ordini.length) { %>
+        <div class="vuoto"><span class="emoji">📦</span>Nessun ordine ricevuto per ora.</div>
+      <% } else { %>
+        <div class="card card-fitta">
+          <% ordini.forEach(function (o) { %>
+            <a class="riga-lista" href="/distributore/ordini/<%= o.id %>">
+              <span class="icona">
+                <%= o.stato === 'inviato' ? '🆕' : (o.stato === 'in_evasione' ? '🛠' : '🚚') %>
+              </span>
+              <span class="corpo">
+                <span class="etichetta">Ordine #<%= o.id %> — <%= o.cliente_nome %></span>
+                <span class="dettaglio">
+                  <%= fmt.dataOra(o.creato_il) %> · € <%= euro(totaleOrdine(o)) %>
+                  <% if (o.ddt_numero) { %> · DDT <%= o.ddt_numero %><% } %>
+                </span>
+              </span>
+              <span class="stato-badge stato-<%= o.stato %>">
+                <%= o.stato === 'inviato' ? 'Da preparare' : (o.stato === 'in_evasione' ? 'In preparazione' : 'Partito') %>
+              </span>
+            </a>
+          <% }); %>
+        </div>
+        <p class="nota">
+          Flusso del banco: <strong>Da preparare</strong> → <strong>In preparazione</strong> →
+          <strong>Partito</strong> con bolla / DDT emessa e intestata al cliente.
+        </p>
+      <% } %>
+    </div>
+  </div>
+
+  <%- include('partials/nav_distributore', { attivo: 'ordini' }) %>
+  <script src="/app.js" defer></script>
+</body>
+</html>

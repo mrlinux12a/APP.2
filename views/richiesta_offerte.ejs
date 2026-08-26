@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="1">
+  <div class="app">
+    <%- include('partials/appbar', { titolo, intestazione: 'Riepilogo offerte', indietro: '/home' }) %>
+
+    <div class="contenuto">
+      <% if (richiesta.stato === 'annullata') { %>
+        <div class="avviso avviso-attenzione">Hai annullato questa richiesta.</div>
+      <% } else if (!offerte.length) { %>
+        <div class="avviso avviso-attenzione">
+          Nessun distributore ha confermato la disponibilità entro i 10 minuti.
+          La mancata risposta non vale come disponibilità: il materiale potrebbe esserci
+          ma non essere reperibile al banco.
+        </div>
+      <% } else { %>
+        <div class="avviso avviso-ok">
+          <strong><%= offerte.length %></strong>
+          <%= offerte.length === 1 ? 'distributore ha confermato' : 'distributori hanno confermato' %>
+          la disponibilità. Scegli con chi ordinare.
+        </div>
+      <% } %>
+
+      <% offerte.forEach(function (o, i) { %>
+        <a class="offerta <%= i === 0 && offerte.length > 1 && o.copertura === 'totale' ? 'migliore' : '' %>"
+           href="/richieste/<%= richiesta.id %>/offerta/<%= o.distributore.id %>">
+          <div class="testa">
+            <div>
+              <div class="nome"><%= o.distributore.nome %></div>
+              <div class="filiale"><%= o.distributore.filiale %></div>
+            </div>
+            <div class="totale">
+              <div class="valore">€ <%= euro(o.totali.imponibile) %></div>
+              <div class="iva">+ IVA</div>
+            </div>
+          </div>
+
+          <% if (o.copertura === 'parziale') { %>
+            <div class="tempo">
+              <span class="stato-badge stato-con_offerte">Disponibilità parziale</span>
+            </div>
+            <div class="tempo" style="color:var(--rosso);">
+              ⚠️ Mancano
+              <% o.mancanti.forEach(function (m, k) { %><%= k ? ', ' : '' %><%= m.mancano %> pz di <%= m.nome %><% }); %>
+            </div>
+          <% } else { %>
+            <div class="tempo">
+              <span class="stato-badge stato-confermato">Disponibilità totale</span>
+            </div>
+          <% } %>
+
+          <div class="tempo">🕒 Partenza ordine stimata: <%= fmt.tempoConsegna(o.partenza_ore) %></div>
+          <div class="tempo">🚚 Consegna stimata in <%= fmt.tempoConsegna(o.consegna_ore) %></div>
+          <div class="tempo">
+            📦 Merce € <%= euro(o.totali.totale_finale) %> + IVA ·
+            <%= o.totali.costo_consegna > 0 ? 'consegna € ' + euro(o.totali.costo_consegna) : 'consegna inclusa' %>
+          </div>
+          <% if (o.note) { %>
+            <div class="tempo">📝 <%= o.note %></div>
+          <% } %>
+          <% if (i === 0 && offerte.length > 1 && o.copertura === 'totale') { %>
+            <div class="tempo" style="color:var(--verde); font-weight:600;">✓ Offerta più conveniente</div>
+          <% } %>
+          <div class="piede">
+            <span>Procedi con l'ordine</span>
+            <span>›</span>
+          </div>
+        </a>
+      <% }); %>
+
+      <% if (risposte.some(function (r) { return r.esito !== 'confermato'; })) { %>
+        <div class="sezione-titolo">Altri distributori interpellati</div>
+        <div class="card card-fitta">
+          <% risposte.filter(function (r) { return r.esito !== 'confermato'; }).forEach(function (r) { %>
+            <div class="pill-distributore">
+              <div>
+                <div class="nome"><%= r.distributore_nome %></div>
+                <div class="filiale"><%= r.filiale %></div>
+              </div>
+              <span class="stato-badge stato-<%= r.esito %>">
+                <%= r.esito === 'non_disponibile' ? 'Non disponibile' : (r.esito === 'in_attesa' ? 'In attesa' : 'Nessuna risposta') %>
+              </span>
+            </div>
+          <% }); %>
+        </div>
+      <% } %>
+
+      <div class="sezione-titolo">Materiale richiesto</div>
+      <div class="card">
+        <% righe.forEach(function (r) { %>
+          <div class="riga-articolo">
+            <div class="qta"><%= r.quantita %>×</div>
+            <div class="desc">
+              <%= r.nome %>
+              <div class="meta">Cod. <%= r.codice %></div>
+            </div>
+          </div>
+        <% }); %>
+      </div>
+
+      <p class="nota">Prezzi IVA esclusa, già comprensivi del servizio. Richiesta del <%= fmt.dataOra(richiesta.creato_il) %>.</p>
+
+      <% if (!offerte.length) { %>
+        <a class="btn btn-primary btn-blocco" href="/home">Torna alla home</a>
+      <% } %>
+    </div>
+  </div>
+
+  <%- include('partials/nav', { attivo: 'home' }) %>
+  <script src="/app.js" defer></script>
+</body>
+</html>

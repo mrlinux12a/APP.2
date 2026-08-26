@@ -1,0 +1,23 @@
+<div class="prodotto">
+  <div class="info">
+    <div class="nome"><%= p.nome %></div>
+    <div class="meta">
+      Cod. <%= p.codice %><% if (p.categoria) { %> · <%= p.categoria %><% } %>
+      <span class="badge badge-<%= p.disponibilita %>"><%= testoDisponibilita[p.disponibilita] %></span>
+    </div>
+    <div class="prezzo">
+      <% if (p.sconto_base_pct > 0) { %><span class="barrato">€ <%= euro(p.prezzo_listino) %></span><% } %>
+      € <%= euro(prezzoCliente(p)) %> <span class="iva">+ IVA</span>
+    </div>
+  </div>
+  <% if (p.disponibilita === 'non_disponibile') { %>
+    <div class="meta">non disponibile</div>
+  <% } else { %>
+    <div class="stepper">
+      <button type="button" data-passo="-1" aria-label="Togli">−</button>
+      <input type="number" min="0" step="1" inputmode="numeric" data-qta
+             name="quantita_<%= p.id %>" value="0" aria-label="Quantità <%= p.nome %>">
+      <button type="button" data-passo="1" aria-label="Aggiungi">+</button>
+    </div>
+  <% } %>
+</div>

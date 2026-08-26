@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="1">
+  <div class="app">
+    <%- include('partials/appbar', { titolo, intestazione: 'Verifica disponibilità', indietro: '/home' }) %>
+
+    <div class="contenuto" data-attesa="<%= richiesta.id %>" data-secondi="<%= secondi %>">
+      <div class="card attesa">
+        <div class="cerchio-attesa"><span id="countdown"><%= fmt.mmss(secondi) %></span></div>
+        <div style="font-weight:700; font-size:1.05rem;">Stiamo chiedendo al banco</div>
+        <p class="sottotitolo" style="margin-top:6px;">
+          I distributori della zona <%= richiesta.zona %> hanno 10 minuti per confermare la
+          disponibilità del materiale. Ti avvisiamo con una notifica appena rispondono:
+          puoi anche chiudere questa schermata.
+        </p>
+        <button class="btn btn-chiaro btn-blocco" type="button" data-abilita-notifiche>
+          Attiva le notifiche sul telefono
+        </button>
+      </div>
+
+      <div class="sezione-titolo">Distributori interpellati</div>
+      <div class="card card-fitta" id="stato-distributori">
+        <% risposte.forEach(function (r) { %>
+          <div class="pill-distributore">
+            <div>
+              <div class="nome"><%= r.distributore_nome %></div>
+              <div class="filiale"><%= r.filiale %></div>
+            </div>
+            <span class="stato-badge stato-<%= r.esito %>" data-distributore="<%= r.distributore_nome %>">
+              <%= r.esito === 'in_attesa' ? 'In attesa' : (r.esito === 'confermato' ? 'Disponibile' : (r.esito === 'non_disponibile' ? 'Non disponibile' : 'Nessuna risposta')) %>
+            </span>
+          </div>
+        <% }); %>
+      </div>
+      <p class="nota">
+        Se un distributore non risponde entro i 10 minuti la richiesta risulta non confermata:
+        il materiale potrebbe esserci ma non essere reperibile al banco.
+      </p>
+
+      <div class="sezione-titolo">Materiale richiesto</div>
+      <div class="card">
+        <% righe.forEach(function (r) { %>
+          <div class="riga-articolo">
+            <div class="qta"><%= r.quantita %>×</div>
+            <div class="desc">
+              <%= r.nome %>
+              <div class="meta">Cod. <%= r.codice %></div>
+            </div>
+          </div>
+        <% }); %>
+      </div>
+
+      <form method="POST" action="/richieste/<%= richiesta.id %>/annulla">
+        <button class="btn btn-rosso btn-blocco" type="submit">Annulla la richiesta</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

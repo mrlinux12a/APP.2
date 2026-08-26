@@ -1,0 +1,12 @@
+<header class="appbar">
+  <% if (typeof indietro !== 'undefined' && indietro) { %>
+    <a class="icona-btn" href="<%= indietro %>" aria-label="Indietro">‹</a>
+  <% } else { %>
+    <span></span>
+  <% } %>
+  <div class="titolo"><%= typeof intestazione !== 'undefined' ? intestazione : titolo %></div>
+  <a class="icona-btn" href="/notifiche" aria-label="Notifiche">
+    🔔
+    <% if (notificheNonLette > 0) { %><span class="pallino"><%= notificheNonLette %></span><% } %>
+  </a>
+</header>

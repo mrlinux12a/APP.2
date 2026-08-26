@@ -4,22 +4,46 @@ function round2(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
+function getConfigNum(chiave, fallback) {
+  const row = db.prepare('SELECT valore FROM config WHERE chiave = ?').get(chiave);
+  return row ? parseFloat(row.valore) : fallback;
+}
+
 function getServizioPct() {
-  const row = db.prepare(`SELECT valore FROM config WHERE chiave = 'servizio_pct'`).get();
-  return row ? parseFloat(row.valore) : 10;
+  return getConfigNum('servizio_pct', 10);
 }
 
-// Calcola il prezzo netto di un prodotto (listino - sconto base)
-function prezzoNetto(prodotto) {
-  return round2(prodotto.prezzo_listino * (1 - prodotto.sconto_base_pct / 100));
+function getIvaPct() {
+  return getConfigNum('iva_pct', 22);
 }
 
-// A partire dalle righe carrello [{product, quantita}], calcola righe ordine e totali.
-// Il servizio (%) viene incluso solo nel totale finale, mai esposto come voce separata.
-function calcolaOrdine(righeCarrello) {
+function getFinestraMinuti() {
+  return getConfigNum('finestra_conferma_min', 10);
+}
+
+// Prezzo netto grossista: listino meno lo sconto Base del prodotto (o del distributore).
+function prezzoNetto({ prezzo_listino, sconto_base_pct }) {
+  return round2(prezzo_listino * (1 - sconto_base_pct / 100));
+}
+
+// Prezzo esposto al cliente: netto + 10% di servizio. È IVA esclusa: in interfaccia
+// va sempre accompagnato da "+ IVA".
+function prezzoCliente(riga) {
+  return round2(prezzoNetto(riga) * (1 + getServizioPct() / 100));
+}
+
+// Formattazione in euro, formato italiano (1.234,56).
+function euro(n) {
+  return (n || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// A partire dalle righe carrello [{prodotto, quantita}], calcola righe ordine e totali.
+// `prodotto` può essere il prodotto di catalogo o la riga di listino di un distributore:
+// serve solo che abbia codice, nome, prezzo_listino e sconto_base_pct.
+function calcolaOrdine(righeCarrello, { costoConsegna = 0 } = {}) {
   const righe = righeCarrello.map(({ prodotto, quantita }) => {
     const prezzo_netto_unitario = prezzoNetto(prodotto);
-    const subtotale = round2(prezzo_netto_unitario * quantita);
+    const prezzo_unitario_cliente = prezzoCliente(prodotto);
     return {
       product_id: prodotto.id,
       codice_snapshot: prodotto.codice,
@@ -28,15 +52,37 @@ function calcolaOrdine(righeCarrello) {
       prezzo_listino_snapshot: prodotto.prezzo_listino,
       sconto_pct_snapshot: prodotto.sconto_base_pct,
       prezzo_netto_unitario,
-      subtotale,
+      subtotale: round2(prezzo_netto_unitario * quantita),
+      prezzo_unitario_cliente,
+      subtotale_cliente: round2(prezzo_unitario_cliente * quantita),
     };
   });
 
   const totale_netto = round2(righe.reduce((acc, r) => acc + r.subtotale, 0));
-  const servizioPct = getServizioPct();
-  const totale_finale = round2(totale_netto * (1 + servizioPct / 100));
+  const merce_cliente = round2(righe.reduce((acc, r) => acc + r.subtotale_cliente, 0));
+  const costo_consegna = round2(costoConsegna || 0);
+  const imponibile = round2(merce_cliente + costo_consegna);
+  const iva = round2(imponibile * (getIvaPct() / 100));
+  const totale_ivato = round2(imponibile + iva);
 
-  return { righe, totale_netto, totale_finale };
+  return {
+    righe,
+    totale_netto,
+    totale_finale: merce_cliente, // imponibile della sola merce (servizio già incluso)
+    costo_consegna,
+    imponibile,
+    iva,
+    totale_ivato,
+  };
 }
 
-module.exports = { round2, getServizioPct, prezzoNetto, calcolaOrdine };
+module.exports = {
+  round2,
+  euro,
+  getServizioPct,
+  getIvaPct,
+  getFinestraMinuti,
+  prezzoNetto,
+  prezzoCliente,
+  calcolaOrdine,
+};

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="1" class="pagina-ddt">
+  <div class="ddt-azioni no-print">
+    <a class="link-secondario" href="<%= currentUser.ruolo === 'cliente' ? '/ordini/' + ordine.id : '/distributore/ordini/' + ordine.id %>">‹ Torna all'ordine</a>
+    <button class="btn btn-primary" type="button" onclick="window.print()">Stampa / salva PDF</button>
+  </div>
+
+  <div class="ddt-foglio">
+    <div class="ddt-intestazione">
+      <div class="ddt-mittente">
+        <div class="ddt-etichetta">Mittente</div>
+        <div class="ddt-ragione"><%= distributore.ragione_sociale || distributore.nome %></div>
+        <div><%= indirizzoMittente %></div>
+        <div>P. IVA <%= distributore.partita_iva || '—' %></div>
+        <div><%= distributore.filiale %></div>
+        <div><%= distributore.telefono %> <%= distributore.email ? ' · ' + distributore.email : '' %></div>
+      </div>
+      <div class="ddt-numero">
+        <div class="ddt-titolo-doc">Documento di trasporto</div>
+        <div class="ddt-sottotitolo">Bolla di accompagnamento — D.P.R. 472/96</div>
+        <table class="ddt-meta">
+          <tr><th>Numero</th><td><strong><%= ordine.ddt_numero %></strong></td></tr>
+          <tr><th>Data</th><td><%= fmt.dataSola(ordine.ddt_data) %></td></tr>
+          <tr><th>Ordine</th><td>#<%= ordine.id %> del <%= fmt.dataSola(ordine.creato_il) %></td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="ddt-riquadri">
+      <div class="ddt-riquadro">
+        <div class="ddt-etichetta">Destinatario / intestatario</div>
+        <div class="ddt-ragione"><%= cliente.ragione_sociale %></div>
+        <div><%= indirizzoCliente || '—' %></div>
+        <div>P. IVA <%= cliente.partita_iva || '—' %> · C.F. <%= cliente.codice_fiscale || '—' %></div>
+        <% if (cliente.sdi_pec) { %><div>Codice SDI / PEC: <%= cliente.sdi_pec %></div><% } %>
+        <div><%= cliente.telefono || '' %><%= cliente.email ? ' · ' + cliente.email : '' %></div>
+      </div>
+      <div class="ddt-riquadro">
+        <div class="ddt-etichetta">Luogo di destinazione della merce</div>
+        <div><%= ordine.destinazione || cliente.indirizzo_consegna || indirizzoCliente || '—' %></div>
+        <% if (cliente.referente) { %><div>Riferimento: <%= cliente.referente %></div><% } %>
+        <div class="ddt-etichetta" style="margin-top:8px;">Consegna</div>
+        <div>
+          <%= ordine.modalita === 'ritiro' ? 'Ritiro a cura del destinatario' : 'Consegna con mezzo del mittente' %>
+          <% if (ordine.consegna_ore) { %> — stimata in <%= fmt.tempoConsegna(ordine.consegna_ore) %><% } %>
+        </div>
+      </div>
+    </div>
+
+    <table class="ddt-righe">
+      <thead>
+        <tr>
+          <th style="width:110px;">Codice</th>
+          <th>Descrizione</th>
+          <th style="width:52px;">U.M.</th>
+          <th style="width:60px;" class="destra">Q.tà</th>
+          <th style="width:90px;" class="destra">Prezzo</th>
+          <th style="width:90px;" class="destra">Importo</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% righe.forEach(function (r) { %>
+          <tr>
+            <td><%= r.codice_snapshot %></td>
+            <td><%= r.nome_snapshot %></td>
+            <td>PZ</td>
+            <td class="destra"><%= r.quantita %></td>
+            <td class="destra"><%= euro(r.prezzo_unitario_cliente) %></td>
+            <td class="destra"><%= euro(r.subtotale_cliente) %></td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+
+    <div class="ddt-piede">
+      <div class="ddt-riquadro">
+        <table class="ddt-meta">
+          <tr><th>Causale del trasporto</th><td><%= ordine.ddt_causale %></td></tr>
+          <tr><th>Aspetto esteriore dei beni</th><td><%= ordine.ddt_aspetto %></td></tr>
+          <tr><th>Numero colli</th><td><%= colli %></td></tr>
+          <tr><th>Totale pezzi</th><td><%= pezzi %></td></tr>
+          <tr>
+            <th>Trasporto a cura di</th>
+            <td>
+              <%= ordine.ddt_trasporto === 'mittente' ? 'Mittente' : (ordine.ddt_trasporto === 'destinatario' ? 'Destinatario' : 'Vettore') %>
+            </td>
+          </tr>
+          <tr><th>Data e ora di partenza</th><td><%= fmt.dataOra(ordine.evaso_il) %></td></tr>
+        </table>
+      </div>
+      <div class="ddt-riquadro">
+        <table class="ddt-meta">
+          <tr><th>Imponibile merce</th><td class="destra">€ <%= euro(ordine.totale_finale) %></td></tr>
+          <tr><th>Trasporto</th><td class="destra"><%= ordine.costo_consegna > 0 ? '€ ' + euro(ordine.costo_consegna) : 'incluso' %></td></tr>
+          <tr><th>IVA <%= ivaPct %>%</th><td class="destra">€ <%= euro(ordine.iva) %></td></tr>
+          <tr class="ddt-totale"><th>Totale documento</th><td class="destra">€ <%= euro(ordine.totale_ivato) %></td></tr>
+        </table>
+        <p class="ddt-nota">
+          Documento emesso ai fini del trasporto. I corrispettivi indicati sono quelli concordati
+          in app; la fattura segue il processo abituale del distributore.
+        </p>
+      </div>
+    </div>
+
+    <% if (ordine.ddt_note) { %>
+      <div class="ddt-riquadro" style="margin-top:10px;">
+        <div class="ddt-etichetta">Annotazioni</div>
+        <div><%= ordine.ddt_note %></div>
+      </div>
+    <% } %>
+
+    <div class="ddt-firme">
+      <div><span class="ddt-etichetta">Firma del conducente</span><span class="ddt-riga-firma"></span></div>
+      <div><span class="ddt-etichetta">Firma del destinatario</span><span class="ddt-riga-firma"></span></div>
+    </div>
+  </div>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<div class="card card-fitta">
+  <div class="riga-lista">
+    <span class="icona">🏢</span>
+    <span class="corpo">
+      <span class="etichetta"><%= cliente.ragione_sociale %></span>
+      <span class="dettaglio">
+        <%= cliente.referente ? cliente.referente + ' · ' : '' %><%= indirizzoCliente || 'Indirizzo non impostato' %>
+      </span>
+    </span>
+  </div>
+  <div class="riga-lista">
+    <span class="icona">🧾</span>
+    <span class="corpo">
+      <span class="etichetta">P. IVA <%= cliente.partita_iva || '—' %></span>
+      <span class="dettaglio">
+        C.F. <%= cliente.codice_fiscale || '—' %><% if (cliente.sdi_pec) { %> · SDI/PEC <%= cliente.sdi_pec %><% } %>
+      </span>
+    </span>
+  </div>
+  <a class="riga-lista" href="tel:<%= (cliente.telefono || '').replace(/\s/g, '') %>">
+    <span class="icona">📞</span>
+    <span class="corpo">
+      <span class="etichetta"><%= cliente.telefono || 'Telefono non impostato' %></span>
+      <span class="dettaglio"><%= cliente.email || '—' %></span>
+    </span>
+    <span class="freccia">›</span>
+  </a>
+  <div class="riga-lista">
+    <span class="icona">🚩</span>
+    <span class="corpo">
+      <span class="etichetta">Destinazione merce</span>
+      <span class="dettaglio">
+        <%= (typeof destinazione !== 'undefined' && destinazione) ? destinazione : (cliente.indirizzo_consegna || indirizzoCliente || '—') %>
+      </span>
+    </span>
+  </div>
+  <% if (typeof distanza !== 'undefined' && distanza) { %>
+    <div class="riga-lista">
+      <span class="icona">📍</span>
+      <span class="corpo">
+        <span class="etichetta"><%= distanza %> dal banco</span>
+        <span class="dettaglio">Distanza in linea d'aria, da posizione condivisa con consenso</span>
+      </span>
+    </div>
+  <% } %>
+</div>

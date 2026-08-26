@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="1">
+  <div class="app">
+    <%- include('partials/appbar', { titolo, intestazione: 'Ordini Minuteria', indietro: null }) %>
+
+    <div class="contenuto">
+      <p class="sottotitolo">Ciao <%= currentUser.ragione_sociale %> — zona <%= currentUser.zona %>.</p>
+
+      <form class="barra-ricerca" method="GET" action="/cerca">
+        <span class="lente">🔍</span>
+        <input type="search" name="q" placeholder="Cerca un prodotto (anche solo &quot;valv&quot;)" aria-label="Cerca un prodotto">
+        <button type="submit">Cerca</button>
+      </form>
+
+      <%- include('partials/geolocalizzazione', {
+            ruolo: 'cliente',
+            titoloBox: 'La tua posizione',
+            spiegazione: 'Con il tuo consenso l’app usa la posizione in tempo reale per capire quanto dista il banco che ti serve e per farti seguire il mezzo in consegna. Puoi disattivarla quando vuoi: le coordinate vengono cancellate.'
+          }) %>
+
+      <% if (inCorso.length) { %>
+        <div class="sezione-titolo">Richieste in corso</div>
+        <div class="card card-fitta">
+          <% inCorso.forEach(function (r) { %>
+            <a class="riga-lista" href="/richieste/<%= r.id %>">
+              <span class="icona"><%= r.stato === 'in_attesa' ? '⏳' : '✅' %></span>
+              <span class="corpo">
+                <span class="etichetta">Richiesta #<%= r.id %></span>
+                <span class="dettaglio">
+                  <%= r.stato === 'in_attesa' ? 'In attesa di conferma dai distributori' : 'Offerte disponibili: scegli il distributore' %>
+                </span>
+              </span>
+              <span class="freccia">›</span>
+            </a>
+          <% }); %>
+        </div>
+      <% } %>
+
+      <div class="sezione-titolo">Categorie merceologiche</div>
+      <div class="griglia-macro">
+        <% macro.forEach(function (m) { %>
+          <a class="tessera" href="/categoria/<%= m.slug %>">
+            <span class="emoji"><%= m.icona %></span>
+            <span class="nome"><%= m.nome %></span>
+            <span class="conta"><%= m.n_prodotti %> prodotti</span>
+          </a>
+        <% }); %>
+      </div>
+
+      <% if (ultimiOrdini.length) { %>
+        <div class="sezione-titolo">Ultimi ordini</div>
+        <div class="card card-fitta">
+          <% ultimiOrdini.forEach(function (o) { %>
+            <a class="riga-lista" href="/ordini/<%= o.id %>">
+              <span class="icona">📦</span>
+              <span class="corpo">
+                <span class="etichetta">Ordine #<%= o.id %> — € <%= euro(totaleOrdine(o)) %></span>
+                <span class="dettaglio"><%= o.distributore_nome || 'Grossista' %> · <%= fmt.dataOra(o.creato_il) %></span>
+              </span>
+              <span class="freccia">›</span>
+            </a>
+          <% }); %>
+        </div>
+      <% } %>
+
+      <p class="nota">
+        I prezzi in app sono IVA esclusa. La disponibilità viene confermata dal banco del
+        distributore prima di chiudere l'ordine.
+      </p>
+
+      <button class="btn btn-chiaro btn-blocco" type="button" data-abilita-notifiche>
+        Attiva le notifiche sul telefono
+      </button>
+
+      <form method="POST" action="/logout" style="margin-top:12px;">
+        <button class="btn btn-chiaro btn-blocco" type="submit">Esci</button>
+      </form>
+    </div>
+  </div>
+
+  <%- include('partials/nav', { attivo: 'home' }) %>
+  <script src="/app.js" defer></script>
+</body>
+</html>

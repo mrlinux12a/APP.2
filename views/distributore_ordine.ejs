@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="1">
+  <div class="app">
+    <%- include('partials/appbar', { titolo, intestazione: 'Ordine #' + ordine.id, indietro: '/distributore/ordini' }) %>
+
+    <div class="contenuto">
+      <% if (errore) { %><div class="errore"><%= errore %></div><% } %>
+
+      <div class="card card-fitta">
+        <div class="riga-lista">
+          <span class="icona">📦</span>
+          <span class="corpo">
+            <span class="etichetta">Ordine #<%= ordine.id %></span>
+            <span class="dettaglio">Ricevuto <%= fmt.dataOra(ordine.creato_il) %></span>
+          </span>
+          <span class="stato-badge stato-<%= ordine.stato %>">
+            <%= ordine.stato === 'inviato' ? 'Da preparare' : (ordine.stato === 'in_evasione' ? 'In preparazione' : 'Partito') %>
+          </span>
+        </div>
+        <div class="riga-lista">
+          <span class="icona">🕒</span>
+          <span class="corpo">
+            <span class="etichetta">Partenza dichiarata: <%= fmt.tempoConsegna(ordine.partenza_ore) %></span>
+            <span class="dettaglio">Consegna dichiarata: <%= fmt.tempoConsegna(ordine.consegna_ore) %></span>
+          </span>
+        </div>
+        <div class="riga-lista">
+          <span class="icona">🚚</span>
+          <span class="corpo">
+            <span class="etichetta">
+              <%= ordine.modalita === 'ritiro' ? 'Ritiro al banco' : 'Consegna con mezzo del distributore' %>
+            </span>
+            <span class="dettaglio"><%= ordine.destinazione || '—' %></span>
+          </span>
+        </div>
+        <% if (ordine.note) { %>
+          <div class="riga-lista">
+            <span class="icona">📝</span>
+            <span class="corpo">
+              <span class="etichetta">Note del cliente</span>
+              <span class="dettaglio"><%= ordine.note %></span>
+            </span>
+          </div>
+        <% } %>
+      </div>
+
+      <div class="sezione-titolo">Cliente ordinante</div>
+      <%- include('partials/anagrafica_cliente', {
+            cliente, indirizzoCliente, destinazione: ordine.destinazione, distanza }) %>
+
+      <% if (mancanti.length) { %>
+        <div class="avviso avviso-attenzione">
+          Ordine accettato in <strong>disponibilità parziale</strong>: il cliente sa che mancano
+          <% mancanti.forEach(function (m, i) { %><%= i ? ', ' : '' %><%= m.mancano %> pz di <%= m.nome %><% }); %>.
+        </div>
+      <% } %>
+
+      <div class="sezione-titolo">Merce da preparare</div>
+      <div class="card">
+        <% righe.forEach(function (r) { %>
+          <div class="riga-articolo">
+            <div class="qta"><%= r.quantita %>×</div>
+            <div class="desc">
+              <%= r.nome_snapshot %>
+              <div class="meta">Cod. <%= r.codice_snapshot %> · € <%= euro(r.prezzo_unitario_cliente) %> cad. + IVA</div>
+            </div>
+            <div class="imp">€ <%= euro(r.subtotale_cliente) %></div>
+          </div>
+        <% }); %>
+        <div class="riepilogo-riga"><span class="voce">Imponibile</span><span>€ <%= euro(ordine.totale_finale + ordine.costo_consegna) %></span></div>
+        <div class="riepilogo-riga"><span class="voce">IVA <%= ivaPct %>%</span><span>€ <%= euro(ordine.iva) %></span></div>
+        <div class="riepilogo-riga forte"><span class="voce">Totale</span><span>€ <%= euro(totaleOrdine(ordine)) %></span></div>
+      </div>
+
+      <% if (ordine.stato === 'inviato') { %>
+        <form method="POST" action="/distributore/ordini/<%= ordine.id %>/preparazione">
+          <button class="btn btn-primary btn-blocco" type="submit">Prendi in preparazione</button>
+        </form>
+        <p class="nota">Il cliente riceve una notifica quando il banco prende in carico l'ordine.</p>
+
+      <% } else if (!ordine.ddt_numero) { %>
+        <div class="avviso avviso-info">
+          In preparazione dal <%= fmt.dataOra(ordine.preso_in_carico_il || ordine.in_evasione_il) %>.
+          Quando la merce parte, emetti la bolla.
+        </div>
+
+        <div class="sezione-titolo">Emetti bolla / DDT</div>
+        <form method="POST" action="/distributore/ordini/<%= ordine.id %>/ddt">
+          <div class="card">
+            <label for="colli">Numero colli</label>
+            <input type="number" id="colli" name="colli" min="1" step="1" value="1" inputmode="numeric">
+
+            <label for="aspetto">Aspetto esteriore dei beni</label>
+            <select id="aspetto" name="aspetto">
+              <option>Colli</option>
+              <option>Bancali</option>
+              <option>Scatole</option>
+              <option>Sfuso</option>
+            </select>
+
+            <label for="causale">Causale del trasporto</label>
+            <select id="causale" name="causale">
+              <option>Vendita</option>
+              <option>Conto visione</option>
+              <option>Reso</option>
+              <option>Conto lavorazione</option>
+            </select>
+
+            <label for="trasporto">Trasporto a cura di</label>
+            <select id="trasporto" name="trasporto">
+              <option value="mittente" <%= ordine.modalita !== 'ritiro' ? 'selected' : '' %>>Mittente (mezzo del distributore)</option>
+              <option value="destinatario" <%= ordine.modalita === 'ritiro' ? 'selected' : '' %>>Destinatario (ritiro al banco)</option>
+              <option value="vettore">Vettore terzo</option>
+            </select>
+
+            <label for="ddtnote">Annotazioni in bolla (opzionale)</label>
+            <textarea id="ddtnote" name="note" rows="2" placeholder="Es. consegna al cantiere, citofonare al capocantiere"></textarea>
+          </div>
+          <button class="btn btn-verde btn-blocco" type="submit">
+            Emetti bolla e segna la merce partita
+          </button>
+        </form>
+
+      <% } else { %>
+        <div class="avviso avviso-ok">
+          Bolla <strong>n. <%= ordine.ddt_numero %></strong> del <%= fmt.dataSola(ordine.ddt_data) %> —
+          merce partita il <%= fmt.dataOra(ordine.evaso_il) %>.
+        </div>
+        <a class="btn btn-primary btn-blocco" href="/ddt/<%= ordine.id %>">Apri e stampa la bolla / DDT</a>
+      <% } %>
+
+      <% if (ordine.stato !== 'inviato' && ordine.modalita !== 'ritiro') { %>
+        <div class="sezione-titolo">Consegna in tempo reale</div>
+        <div class="card" data-tracciamento="<%= ordine.id %>" data-attivo="<%= ordine.tracciamento_attivo ? '1' : '0' %>">
+          <p class="nota" style="margin-top:0;">
+            Attivando la condivisione, il cliente vede la posizione del mezzo mentre la merce
+            viaggia verso di lui. Si interrompe da qui o disattivando la posizione del banco.
+          </p>
+          <button class="btn btn-chiaro btn-blocco" type="button" data-tracciamento-on
+                  <%- ordine.tracciamento_attivo ? 'hidden' : '' %>>
+            Condividi la posizione del mezzo
+          </button>
+          <button class="btn btn-rosso btn-blocco" type="button" data-tracciamento-off
+                  <%- ordine.tracciamento_attivo ? '' : 'hidden' %>>
+            Interrompi la condivisione
+          </button>
+        </div>
+      <% } %>
+    </div>
+  </div>
+
+  <%- include('partials/nav_distributore', { attivo: 'ordini' }) %>
+  <script src="/app.js" defer></script>
+</body>
+</html>
