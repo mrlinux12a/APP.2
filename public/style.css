@@ -52,7 +52,7 @@ a { color: var(--blu); }
   background: #fff;
   border-bottom: 1px solid var(--bordo);
   display: grid;
-  grid-template-columns: 44px 1fr 44px;
+  grid-template-columns: 44px 1fr auto;
   align-items: center;
   min-height: 52px;
 }
@@ -867,4 +867,272 @@ th { color: var(--grigio); font-weight: 600; }
   border-color: var(--verde);
   color: var(--verde);
   font-weight: 700;
+}
+
+/* Legenda con un colore per insegna sulla mappa dei punti vendita */
+.legenda-insegne span::before { background: var(--colore-insegna, var(--blu)); }
+
+/* ---------- Ingresso: accedi / registrati ---------- */
+
+.ingresso { max-width: 460px; margin: 28px auto; padding: 0 16px 40px; }
+.ingresso-largo { max-width: 560px; }
+.ingresso-testata { text-align: center; margin-bottom: 18px; }
+.ingresso-marchio { font-size: 1.5rem; font-weight: 800; color: var(--blu); }
+.ingresso-testata p { color: var(--grigio); font-size: 0.9rem; line-height: 1.45; margin: 8px 0 0; }
+
+.schede { display: flex; gap: 6px; margin-bottom: 16px; }
+.schede a {
+  flex: 1;
+  text-align: center;
+  padding: 10px;
+  border-radius: 10px;
+  text-decoration: none;
+  font-weight: 700;
+  color: var(--grigio);
+  background: var(--sfondo);
+}
+.schede a.attiva { background: var(--blu-chiaro); color: var(--blu); }
+
+.scelta-radio {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--bordo);
+  border-radius: 10px;
+  background: #fff;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.scelta-radio input { width: auto; margin: 0; }
+.scelta-radio.attiva { border-color: var(--blu); background: var(--blu-chiaro); color: var(--blu); }
+
+.riga-campi { display: flex; gap: 8px; }
+.riga-campi > div { flex: 1; }
+
+.riga-scelta { cursor: pointer; font-weight: normal; margin: 0; }
+.riga-scelta input { width: auto; margin: 0; flex: none; }
+
+/* ---------- Sconti per ambito ---------- */
+
+.riga-sconto-ambito input[type="number"] {
+  width: 84px;
+  flex: none;
+  margin: 0;
+  padding: 8px;
+  text-align: center;
+  font-weight: 700;
+  border-radius: 8px;
+}
+
+/* ---------- Sconti a scalare (5 colonne) ---------- */
+
+.riga-sconti { padding: 12px 14px; border-bottom: 1px solid var(--bordo); }
+.riga-sconti:last-child { border-bottom: none; }
+.riga-sconti-testa { display: flex; align-items: center; gap: 12px; }
+.riga-sconti-testa .icona { font-size: 1.2rem; width: 24px; text-align: center; }
+.riga-sconti-testa .corpo { flex: 1; min-width: 0; }
+.riga-sconti-testa .etichetta { font-weight: 600; display: block; }
+.riga-sconti-testa .dettaglio { color: var(--grigio); font-size: 0.82rem; display: block; margin-top: 2px; }
+
+.sconto-effettivo {
+  font-weight: 800;
+  color: var(--verde);
+  background: var(--verde-chiaro);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.scaglioni { display: flex; gap: 6px; margin-top: 10px; }
+.scaglione { flex: 1; min-width: 0; margin: 0; }
+.scaglione .numero {
+  display: block;
+  font-size: 0.65rem;
+  color: var(--grigio);
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 3px;
+  white-space: nowrap;
+}
+.scaglione .campo {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--bordo);
+  border-radius: 8px;
+  background: #fff;
+  padding-right: 5px;
+}
+.scaglione input[type="number"] {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 2px 8px 6px;
+  border: none;
+  border-radius: 0;
+  text-align: right;
+  font-weight: 700;
+  font-size: 0.9rem;
+  -moz-appearance: textfield;
+}
+.scaglione .segno { color: var(--grigio); font-size: 0.8rem; font-weight: 600; }
+.scaglione .campo:focus-within { border-color: var(--blu); }
+
+/* ---------- Menu account a tendina ---------- */
+
+.azioni-appbar { display: flex; align-items: center; padding-right: 4px; }
+.menu-account { position: relative; }
+
+.menu-account .tendina {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 220px;
+  background: #fff;
+  border: 1px solid var(--bordo);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14);
+  overflow: hidden;
+  z-index: 40;
+}
+
+.menu-account .tendina-testata {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--bordo);
+  background: var(--sfondo);
+}
+.menu-account .tendina-testata .nome { font-weight: 700; font-size: 0.92rem; }
+.menu-account .tendina-testata .ruolo { color: var(--grigio); font-size: 0.78rem; margin-top: 2px; }
+
+.menu-account .tendina a,
+.menu-account .tendina .voce-esci {
+  display: block;
+  width: 100%;
+  padding: 12px 14px;
+  text-align: left;
+  text-decoration: none;
+  color: var(--testo);
+  font-size: 0.92rem;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--bordo);
+  cursor: pointer;
+  font-family: inherit;
+}
+.menu-account .tendina a:first-of-type { border-top: none; }
+.menu-account .tendina a:hover,
+.menu-account .tendina .voce-esci:hover { background: var(--sfondo); }
+.menu-account .tendina form { margin: 0; }
+.menu-account .tendina .voce-esci { color: var(--rosso); font-weight: 700; }
+
+/* ---------- Home orientata alla fretta ---------- */
+
+.domanda { font-size: 1.5rem; font-weight: 800; margin: 6px 2px 12px; }
+.barra-ricerca.grande { padding: 12px 16px; margin-bottom: 6px; }
+.barra-ricerca.grande input[type="search"] { font-size: 1.05rem; }
+.nota.sotto-ricerca { margin: 0 2px 6px; }
+
+.griglia-evidenza { display: grid; gap: 10px; }
+.tessera-grande {
+  background: #fff;
+  border: 1px solid var(--bordo);
+  border-left: 5px solid var(--blu);
+  border-radius: var(--raggio);
+  padding: 16px;
+  text-decoration: none;
+  color: inherit;
+  display: grid;
+  grid-template-columns: 46px 1fr;
+  grid-template-rows: auto auto auto;
+  column-gap: 12px;
+  align-items: start;
+}
+.tessera-grande .emoji { grid-row: 1 / 4; font-size: 2rem; line-height: 1; }
+.tessera-grande .nome { font-weight: 800; font-size: 1.15rem; }
+.tessera-grande .desc { color: var(--grigio); font-size: 0.85rem; line-height: 1.35; margin-top: 2px; }
+.tessera-grande .conta { color: var(--blu); font-size: 0.8rem; font-weight: 700; margin-top: 6px; }
+
+.altre-categorie { margin: 16px 0; }
+.altre-categorie summary {
+  font-weight: 700;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio);
+  cursor: pointer;
+}
+.altre-categorie[open] summary { border-radius: var(--raggio) var(--raggio) 0 0; margin-bottom: 0; }
+.altre-categorie[open] .card { border-top: none; border-radius: 0 0 var(--raggio) var(--raggio); }
+
+.avviso-selezione { border-color: var(--arancio); background: var(--arancio-chiaro); }
+
+/* riordino rapido */
+.frequenti { display: grid; gap: 8px; margin-bottom: 4px; }
+.pezzo-frequente {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: #fff;
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio);
+  padding: 12px 14px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.pezzo-frequente .nome { display: block; font-weight: 600; line-height: 1.3; }
+.pezzo-frequente .meta { display: block; color: var(--grigio); font-size: 0.8rem; margin-top: 3px; }
+.pezzo-frequente .aggiungi {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--blu);
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+/* ---------- Filtri a chip (misura, marchio) ---------- */
+
+.filtro-titolo {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--grigio);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 10px 2px 6px;
+}
+.filtro-titolo .secondario { font-weight: 500; text-transform: none; letter-spacing: 0; }
+
+.chip-riga {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 6px;
+}
+.chip {
+  flex: 0 0 auto;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--bordo);
+  background: #fff;
+  color: var(--testo);
+  text-decoration: none;
+  font-size: 0.86rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.chip.attivo { background: var(--blu); border-color: var(--blu); color: #fff; }
+
+.svuota-link {
+  background: none;
+  border: none;
+  padding: 4px 0;
+  color: var(--rosso);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
 }

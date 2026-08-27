@@ -1,6 +1,8 @@
 const db = require('../db');
-const { calcolaOrdine, getFinestraMinuti, round2 } = require('./pricing');
+const { calcolaOrdine, getFinestraMinuti, getFinestraSceltaMinuti, round2 } = require('./pricing');
+const consegna = require('./consegna');
 const { notifica, notificaDistributore } = require('./notifiche');
+const anagrafiche = require('./anagrafiche');
 
 // ---------- Lettura ----------
 
@@ -50,14 +52,26 @@ function secondiRimasti(richiesta) {
 
 // Sono i rivenditori attivi della zona che trattano TUTTI i prodotti richiesti:
 // solo loro possono confermare l'intera richiesta al banco.
-function distributoriCandidati(productIds, zona) {
+function distributoriCandidati(productIds, zona, clienteId = null) {
   if (!productIds.length) return [];
   const placeholders = productIds.map(() => '?').join(',');
+
+  // Se il cliente ha un'anagrafica approvata, la richiesta va solo ai banchi che lo hanno
+  // riconosciuto come proprio cliente.
+  const soloApprovati = clienteId
+    ? `AND EXISTS (
+         SELECT 1 FROM client_distributors cd
+          WHERE cd.distributor_id = d.id AND cd.cliente_id = ? AND cd.stato = 'approvato'
+       )`
+    : '';
+  const paramsCliente = clienteId ? [clienteId] : [];
+
   return db
     .prepare(
       `SELECT d.*
          FROM distributors d
         WHERE d.attivo = 1 AND d.zona = ?
+          ${soloApprovati}
           AND (
             SELECT COUNT(DISTINCT dp.product_id)
               FROM distributor_products dp
@@ -65,7 +79,7 @@ function distributoriCandidati(productIds, zona) {
           ) = ?
         ORDER BY d.nome`
     )
-    .all(zona, ...productIds, productIds.length);
+    .all(zona, ...paramsCliente, ...productIds, productIds.length);
 }
 
 // ---------- Creazione ----------
@@ -74,7 +88,7 @@ function distributoriCandidati(productIds, zona) {
 // Da qui parte la finestra di 10 minuti entro cui devono rispondere.
 function creaRichiesta(cliente, righeCarrello) {
   const productIds = righeCarrello.map((r) => r.prodotto.id);
-  const candidati = distributoriCandidati(productIds, cliente.zona);
+  const candidati = distributoriCandidati(productIds, cliente.zona, cliente.id);
   const minuti = getFinestraMinuti();
 
   const crea = db.transaction(() => {
@@ -107,6 +121,8 @@ function creaRichiesta(cliente, righeCarrello) {
       titolo: 'Nuova richiesta di disponibilità',
       testo: `${cliente.ragione_sociale} — ${nArticoli} pz. Hai ${minuti} minuti per confermare.`,
       link: `/distributore/richieste/${requestId}`,
+      categoria: 'richieste',
+      sottostato: 'inviata',
     })
   );
 
@@ -169,9 +185,33 @@ function aggiornaScadenza(requestId) {
         ? `${conferme} distributore/i ha confermato la disponibilità. Scegli con chi ordinare.`
         : 'Nessun distributore ha confermato entro i 10 minuti. Puoi ripetere la richiesta.',
     link: `/richieste/${requestId}`,
+    categoria: 'richieste',
   });
 
   return getRichiesta(requestId);
+}
+
+// Secondi che restano al cliente per scegliere fra più offerte confermate.
+function secondiPerScegliere(richiesta) {
+  if (!richiesta || !richiesta.scelta_scade_il) return null;
+  const row = db
+    .prepare(`SELECT CAST((julianday(?) - julianday('now')) * 86400 AS INTEGER) AS s`)
+    .get(richiesta.scelta_scade_il);
+  return Math.max(0, row ? row.s : 0);
+}
+
+// Offerta più veloce: vince il tempo di consegna stimato più basso.
+function offertaPiuVeloce(requestId) {
+  return db
+    .prepare(
+      `SELECT rr.*, d.nome AS distributore_nome
+         FROM request_responses rr
+         JOIN distributors d ON d.id = rr.distributor_id
+        WHERE rr.request_id = ? AND rr.esito = 'confermato'
+        ORDER BY IFNULL(rr.consegna_minuti_stimati, rr.consegna_ore * 60) ASC, rr.risposto_il ASC
+        LIMIT 1`
+    )
+    .get(requestId);
 }
 
 // Passata utile all'avvio e a ogni tanto: chiude tutte le richieste ormai scadute.
@@ -184,6 +224,22 @@ function aggiornaScadenzeAperte() {
     .all();
   aperte.forEach((r) => aggiornaScadenza(r.id));
   return aperte.length;
+}
+
+// Richieste con offerte pronte e finestra di scelta scaduta: si assegnano da sole.
+// Restituisce l'elenco delle richieste da chiudere automaticamente, l'ordine vero lo
+// crea server.js perché condivide il codice con l'ordine scelto a mano.
+function sceltePerScadenza() {
+  return db
+    .prepare(
+      `SELECT id, cliente_id FROM requests
+        WHERE stato = 'con_offerte'
+          AND assegnata_auto = 0
+          AND scelta_scade_il IS NOT NULL
+          AND scelta_scade_il <= datetime('now')
+          AND scade_il <= datetime('now')`
+    )
+    .all();
 }
 
 // ---------- Risposta del distributore ----------
@@ -320,11 +376,21 @@ function rispondi(
   const distributore = db.prepare('SELECT * FROM distributors WHERE id = ?').get(distributorId);
 
   if (esito === 'confermato') {
-    // Alla prima conferma la richiesta ha gia' almeno un'offerta valida: il cliente puo'
-    // scegliere subito, senza aspettare la fine dei 10 minuti.
-    db.prepare(`UPDATE requests SET stato = 'con_offerte' WHERE id = ? AND stato = 'in_attesa'`).run(
-      requestId
+    // Il tempo di consegna vero è partenza dichiarata + tragitto fino al cliente.
+    const stima = consegna.minutiStimati(distributorId, richiesta.cliente_id, partenza);
+    db.prepare('UPDATE request_responses SET consegna_minuti_stimati = ? WHERE id = ?').run(
+      stima.minuti,
+      risposta.id
     );
+
+    // Alla prima conferma la richiesta ha gia' almeno un'offerta valida: parte la
+    // finestra di 5 minuti entro cui il cliente sceglie, altrimenti si assegna da sola.
+    db.prepare(
+      `UPDATE requests
+          SET stato = 'con_offerte',
+              scelta_scade_il = datetime('now', '+' || ? || ' minutes')
+        WHERE id = ? AND stato = 'in_attesa'`
+    ).run(getFinestraSceltaMinuti(), requestId);
     const mancanti = coperture.filter((r) => r.quantita_disponibile < r.quantita_richiesta).length;
     notifica(richiesta.cliente_id, {
       titolo: copertura === 'totale' ? 'Disponibilità confermata' : 'Disponibilità parziale',
@@ -333,6 +399,7 @@ function rispondi(
           ? `${distributore.nome} ha confermato tutto il materiale. Vedi tempi e prezzo.`
           : `${distributore.nome} conferma solo una parte del materiale (${mancanti} riga/e ridotta/e). Vedi il dettaglio.`,
       link: `/richieste/${requestId}`,
+      categoria: 'richieste',
     });
   } else {
     const restano = db
@@ -357,6 +424,7 @@ function rispondi(
             ? 'Tutti i distributori hanno risposto. Scegli con chi ordinare.'
             : 'Nessun distributore della zona ha il materiale disponibile.',
         link: `/richieste/${requestId}`,
+        categoria: 'richieste',
       });
     }
   }
@@ -370,11 +438,15 @@ function rispondi(
 // risposto, la quantità è quella che ha dichiarato disponibile.
 function righeDistributore(requestId, distributorId) {
   const risposta = getRisposta(requestId, distributorId);
+  const richiesta = db.prepare('SELECT cliente_id FROM requests WHERE id = ?').get(requestId);
+  // Sconti concordati in anagrafica con questo cliente (generale, marchio, categoria, famiglia).
+  const regole = richiesta ? anagrafiche.regoleSconto(distributorId, richiesta.cliente_id) : [];
+
   return db
     .prepare(
       `SELECT ri.product_id, ri.quantita AS quantita_richiesta,
-              p.codice, p.nome, p.categoria, p.brand_slug, p.raee,
-              dp.prezzo_listino, dp.sconto_base_pct AS sconto_standard_pct,
+              p.codice, p.nome, p.categoria, p.brand_slug, p.famiglia, p.macro_slug, p.raee,
+              dp.prezzo_listino, dp.sconto_base_pct AS sconto_listino_pct,
               rri.quantita_disponibile, rri.sconto_riga_pct
          FROM request_items ri
          JOIN products p ON p.id = ri.product_id
@@ -386,14 +458,21 @@ function righeDistributore(requestId, distributorId) {
         ORDER BY p.categoria, p.nome`
     )
     .all(distributorId, risposta ? risposta.id : -1, requestId)
-    .map((r) => ({
-      ...r,
-      quantita: r.quantita_disponibile === null ? r.quantita_richiesta : r.quantita_disponibile,
-      // Lo sconto applicato è quello deciso dal banco per questa richiesta; se non l'ha
-      // toccato vale lo sconto Base standard del suo listino.
-      sconto_base_pct: r.sconto_riga_pct === null ? r.sconto_standard_pct : r.sconto_riga_pct,
-      sconto_personalizzato: r.sconto_riga_pct !== null && r.sconto_riga_pct !== r.sconto_standard_pct,
-    }));
+    .map((r) => {
+      // Ordine di precedenza: sconto deciso ora sulla riga → sconto in anagrafica per
+      // famiglia/marchio/categoria → sconto Base del listino del banco.
+      const daAnagrafica = anagrafiche.scontoPerProdotto(regole, r);
+      const standard = daAnagrafica ? daAnagrafica.pct : r.sconto_listino_pct;
+      const applicato = r.sconto_riga_pct === null ? standard : r.sconto_riga_pct;
+      return {
+        ...r,
+        quantita: r.quantita_disponibile === null ? r.quantita_richiesta : r.quantita_disponibile,
+        sconto_standard_pct: standard,
+        sconto_anagrafica: daAnagrafica ? daAnagrafica.ambito : null,
+        sconto_base_pct: applicato,
+        sconto_personalizzato: r.sconto_riga_pct !== null && r.sconto_riga_pct !== standard,
+      };
+    });
 }
 
 // Righe e totali della richiesta calcolati sul listino del singolo distributore.
@@ -452,6 +531,7 @@ function offerte(requestId, { modalita = 'consegna_mezzo_grossista' } = {}) {
         copertura: c.copertura,
         partenza_ore: c.partenza_ore,
         consegna_ore: c.consegna_ore,
+        consegna_minuti_stimati: c.consegna_minuti_stimati,
         note: c.note,
         risposto_il: c.risposto_il,
         mancanti,
@@ -480,6 +560,9 @@ module.exports = {
   risposteRichiesta,
   getRisposta,
   secondiRimasti,
+  secondiPerScegliere,
+  offertaPiuVeloce,
+  sceltePerScadenza,
   distributoriCandidati,
   creaRichiesta,
   aggiornaScadenza,

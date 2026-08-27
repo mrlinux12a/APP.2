@@ -183,34 +183,42 @@ const prodotti = [
 
 const distributori = [
   {
-    nome: 'AFIS SPA', filiale: 'Banco Genova Sampierdarena', zona: ZONA,
+    nome: 'AFIS SPA', filiale: 'Banco Genova Spataro', zona: ZONA,
     consegna_ore_default: 24, costo_consegna: 12.00,
-    ragione_sociale: 'AFIS S.p.A.', partita_iva: '01234567891',
-    indirizzo: 'Via Sampierdarena 118', cap: '16149', citta: 'Genova', provincia: 'GE',
-    telefono: '010 1112221', email: 'banco.sampierdarena@afis.example',
+    ragione_sociale: 'AFIS G. Clerici S.p.A.', partita_iva: '01234567891',
+    indirizzo: 'Via Spataro 44 rosso', cap: '16151', citta: 'Genova', provincia: 'GE',
+    telefono: '010 518601', email: 'banco.spataro@afis.example',
   },
   {
-    nome: 'BOREA SRL', filiale: 'Banco Genova Bolzaneto', zona: ZONA,
+    nome: 'BOREA SRL', filiale: 'Banco Genova Fegino', zona: ZONA,
     consegna_ore_default: 48, costo_consegna: 0.00,
     ragione_sociale: 'BOREA S.r.l.', partita_iva: '01234567892',
-    indirizzo: 'Via Bolzaneto 42', cap: '16162', citta: 'Genova', provincia: 'GE',
-    telefono: '010 1112222', email: 'banco.bolzaneto@borea.example',
+    indirizzo: 'Via Castel Morrone 1', cap: '16161', citta: 'Genova', provincia: 'GE',
+    telefono: '010 716871', email: 'banco.fegino@borea.example',
   },
   {
-    nome: 'CAMBIELLI SPA', filiale: 'Banco Genova Marassi', zona: ZONA,
+    nome: 'CAMBIELLI SPA', filiale: 'Banco Genova Campi', zona: ZONA,
     consegna_ore_default: 6, costo_consegna: 15.00,
-    ragione_sociale: 'CAMBIELLI S.p.A.', partita_iva: '01234567893',
-    indirizzo: 'Corso Marassi 7', cap: '16141', citta: 'Genova', provincia: 'GE',
-    telefono: '010 1112223', email: 'banco.marassi@cambielli.example',
+    ragione_sociale: 'Cambielli Edilfriuli S.p.A.', partita_iva: '01234567893',
+    indirizzo: 'Corso Ferdinando Maria Perrone 23/H', cap: '16152', citta: 'Genova', provincia: 'GE',
+    telefono: '010 6509509', email: 'banco.campi@cambielli.example',
+  },
+  {
+    nome: 'FIDRA SPA', filiale: 'Banco Genova Pegli', zona: ZONA,
+    consegna_ore_default: 24, costo_consegna: 10.00,
+    ragione_sociale: 'FIDRA S.p.A.', partita_iva: '01234567894',
+    indirizzo: 'Via Multedo di Pegli 4', cap: '16155', citta: 'Genova', provincia: 'GE',
+    telefono: '010 61731', email: 'banco.pegli@fidra.example',
   },
 ];
 
 // Ogni distributore applica uno sconto Base diverso, e la convenienza ruota da prodotto a
 // prodotto: così il confronto tra offerte è realistico e non vince sempre lo stesso.
+// Una colonna per distributore, nell'ordine in cui compaiono qui sopra.
 const GRIGLIA_SCONTI = [
-  [3, 6, 1], // prodotti con id % 3 === 0 → più conveniente BOREA
-  [5, 2, 3], // id % 3 === 1 → più conveniente AFIS
-  [2, 3, 7], // id % 3 === 2 → più conveniente CAMBIELLI
+  [3, 6, 1, 4], // prodotti con id % 3 === 0 → più conveniente BOREA
+  [5, 2, 3, 1], // id % 3 === 1 → più conveniente AFIS
+  [2, 3, 7, 5], // id % 3 === 2 → più conveniente CAMBIELLI
 ];
 
 // Cosa NON tratta ogni distributore (per far vedere il caso "non tutti lo trattano").
@@ -218,6 +226,7 @@ const NON_TRATTATI = {
   'AFIS SPA': [],
   'BOREA SRL': ['CND-401', 'CND-305'],
   'CAMBIELLI SPA': ['ELE-001', 'CAL-404'],
+  'FIDRA SPA': ['CND-305'],
 };
 
 // ---------- Esecuzione ----------
@@ -279,9 +288,10 @@ const utenti = [
 // Un profilo operatore per ogni banco distributore. I due richiesti — AFIS e CAMBIELLI —
 // hanno anche il referente di banco compilato.
 const REFERENTI_BANCO = {
-  'AFIS SPA': 'Banco AFIS — Sampierdarena',
-  'CAMBIELLI SPA': 'Banco CAMBIELLI — Marassi',
-  'BOREA SRL': 'Banco BOREA — Bolzaneto',
+  'AFIS SPA': 'Banco AFIS — Spataro',
+  'CAMBIELLI SPA': 'Banco CAMBIELLI — Campi',
+  'BOREA SRL': 'Banco BOREA — Fegino',
+  'FIDRA SPA': 'Banco FIDRA — Pegli',
 };
 
 distributoriSalvati.forEach((d) => {
@@ -305,8 +315,26 @@ distributoriSalvati.forEach((d) => {
 
 utenti.forEach(upsertUser);
 
+// I clienti demo risultano già approvati da tutti i banchi, altrimenti non potrebbero
+// inviare richieste. Le anagrafiche create dalla registrazione partono da 'in_attesa'.
+const insLegame = db.prepare(
+  `INSERT INTO client_distributors (cliente_id, distributor_id, stato, codice_cliente, deciso_il)
+   VALUES (?, ?, 'approvato', ?, datetime('now'))
+   ON CONFLICT(cliente_id, distributor_id) DO NOTHING`
+);
+let legami = 0;
+db.prepare(`SELECT id, username FROM users WHERE ruolo = 'cliente'`)
+  .all()
+  .forEach((c) => {
+    distributoriSalvati.forEach((d) => {
+      insLegame.run(c.id, d.id, 'DEMO-' + c.username.toUpperCase());
+      legami += 1;
+    });
+  });
+
 console.log('Seed completato:');
 console.log(`  ${macro.length} macro categorie`);
 console.log(`  ${prodotti.length} prodotti demo`);
 console.log(`  ${distributoriSalvati.length} distributori (${righeListino} righe di listino)`);
+console.log(`  ${legami} legami cliente-distributore (demo: già approvati)`);
 console.log(`  ${utenti.length} utenti (1 agente, 3 clienti, ${distributoriSalvati.length} banchi distributore)`);

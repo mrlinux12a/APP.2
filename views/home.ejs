@@ -8,19 +8,45 @@
     <%- include('partials/appbar', { titolo, intestazione: 'Ordini Minuteria', indietro: null }) %>
 
     <div class="contenuto">
-      <p class="sottotitolo">Ciao <%= currentUser.ragione_sociale %> — zona <%= currentUser.zona %>.</p>
-
-      <form class="barra-ricerca" method="GET" action="/cerca">
+      <h1 class="domanda">Cosa ti serve?</h1>
+      <form class="barra-ricerca grande" method="GET" action="/cerca">
         <span class="lente">🔍</span>
-        <input type="search" name="q" placeholder="Cerca un prodotto (anche solo &quot;valv&quot;)" aria-label="Cerca un prodotto">
+        <input type="search" name="q" enterkeyhint="search"
+               placeholder="Es. valvola sfera 3/4, raccordo 16, guarnizione"
+               aria-label="Cerca un pezzo">
         <button type="submit">Cerca</button>
       </form>
+      <p class="nota sotto-ricerca">
+        Scrivi anche solo un pezzo di parola o la misura: <strong>valv 3/4</strong> basta.
+      </p>
 
-      <%- include('partials/geolocalizzazione', {
-            ruolo: 'cliente',
-            titoloBox: 'La tua posizione',
-            spiegazione: 'Con il tuo consenso l’app usa la posizione in tempo reale per capire quanto dista il banco che ti serve e per farti seguire il mezzo in consegna. Puoi disattivarla quando vuoi: le coordinate vengono cancellate.'
-          }) %>
+      <% if (carrelloPezzi > 0) { %>
+        <a class="riga-lista card avviso-selezione" href="/carrello">
+          <span class="icona">🧾</span>
+          <span class="corpo">
+            <span class="etichetta"><%= carrelloPezzi %> pezzi selezionati</span>
+            <span class="dettaglio">Vai al riepilogo e chiedi la disponibilità</span>
+          </span>
+          <span class="freccia">›</span>
+        </a>
+      <% } %>
+
+      <% if (frequenti.length) { %>
+        <div class="sezione-titolo">Riordina in un tocco</div>
+        <form method="POST" action="/carrello" class="frequenti">
+          <input type="hidden" name="ritorno" value="/home">
+          <% frequenti.forEach(function (f) { %>
+            <button class="pezzo-frequente" type="submit" name="quantita_<%= f.product_id %>" value="1">
+              <span class="nome"><%= f.nome_snapshot %></span>
+              <span class="meta">
+                Cod. <%= f.codice_snapshot %><% if (f.misura) { %> · <%= f.misura %><% } %>
+                · ordinato <%= f.volte %> <%= f.volte === 1 ? 'volta' : 'volte' %>
+              </span>
+              <span class="aggiungi">+ Aggiungi</span>
+            </button>
+          <% }); %>
+        </form>
+      <% } %>
 
       <% if (inCorso.length) { %>
         <div class="sezione-titolo">Richieste in corso</div>
@@ -40,35 +66,49 @@
         </div>
       <% } %>
 
-      <% if (marchi.length) { %>
-        <div class="sezione-titolo">Marchi</div>
-        <div class="striscia-marchi">
-          <% marchi.forEach(function (m) { %>
-            <a class="tessera-marchio" href="/marchi/<%= m.slug %>">
-              <span class="logo-marchio" style="--marchio:<%= m.colore %>">
-                <%= m.iniziali || m.nome.slice(0, 2) %>
-              </span>
-              <span class="nome"><%= m.nome %></span>
-              <span class="conta"><%= m.n_prodotti %> articoli</span>
-            </a>
-          <% }); %>
-          <a class="tessera-marchio tutti" href="/marchi">
-            <span class="logo-marchio" style="--marchio:#6b7480">＋</span>
-            <span class="nome">Tutti i marchi</span>
-          </a>
-        </div>
-      <% } %>
-
-      <div class="sezione-titolo">Categorie merceologiche</div>
-      <div class="griglia-macro">
-        <% macro.forEach(function (m) { %>
-          <a class="tessera" href="/categoria/<%= m.slug %>">
+      <div class="sezione-titolo">Le più richieste</div>
+      <div class="griglia-evidenza">
+        <% inEvidenza.forEach(function (m) { %>
+          <a class="tessera-grande" href="/categoria/<%= m.slug %>">
             <span class="emoji"><%= m.icona %></span>
             <span class="nome"><%= m.nome %></span>
-            <span class="conta"><%= m.n_prodotti %> prodotti</span>
+            <span class="desc"><%= m.descrizione %></span>
+            <span class="conta"><%= m.n_prodotti %> articoli</span>
           </a>
         <% }); %>
       </div>
+
+      <details class="altre-categorie">
+        <summary>Altre categorie</summary>
+        <div class="card card-fitta">
+          <% altre.forEach(function (m) { %>
+            <a class="riga-lista" href="/categoria/<%= m.slug %>">
+              <span class="icona"><%= m.icona %></span>
+              <span class="corpo">
+                <span class="etichetta"><%= m.nome %></span>
+                <span class="dettaglio"><%= m.n_prodotti %> articoli</span>
+              </span>
+              <span class="freccia">›</span>
+            </a>
+          <% }); %>
+        </div>
+      </details>
+
+      <%- include('partials/geolocalizzazione', {
+            ruolo: 'cliente',
+            titoloBox: 'Punti vendita vicino a te',
+            punti,
+            spiegazione: 'La posizione serve a mostrarti i banchi più vicini e a farti seguire il mezzo in consegna. Puoi disattivarla quando vuoi: le coordinate vengono cancellate.'
+          }) %>
+
+      <a class="riga-lista card" href="/punti-vendita">
+        <span class="icona">🗺</span>
+        <span class="corpo">
+          <span class="etichetta">Tutti i punti vendita</span>
+          <span class="dettaglio">Indirizzi e distanze dei banchi in zona</span>
+        </span>
+        <span class="freccia">›</span>
+      </a>
 
       <% if (ultimiOrdini.length) { %>
         <div class="sezione-titolo">Ultimi ordini</div>
@@ -94,10 +134,6 @@
       <button class="btn btn-chiaro btn-blocco" type="button" data-abilita-notifiche>
         Attiva le notifiche sul telefono
       </button>
-
-      <form method="POST" action="/logout" style="margin-top:12px;">
-        <button class="btn btn-chiaro btn-blocco" type="submit">Esci</button>
-      </form>
     </div>
   </div>
 

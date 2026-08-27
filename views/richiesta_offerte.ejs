@@ -22,6 +22,19 @@
           <%= offerte.length === 1 ? 'distributore ha confermato' : 'distributori hanno confermato' %>
           la disponibilità. Scegli con chi ordinare.
         </div>
+
+        <% if (secondiScelta !== null && secondiScelta > 0) { %>
+          <div class="avviso avviso-attenzione conto-scelta" data-scelta data-secondi="<%= secondiScelta %>">
+            Hai <strong><span id="countdown-scelta"><%= fmt.mmss(secondiScelta) %></span></strong>
+            per scegliere. Se non scegli, l'ordine va da solo al distributore con la
+            <strong>consegna più veloce</strong>.
+          </div>
+        <% } else if (secondiScelta === 0) { %>
+          <div class="avviso avviso-attenzione">
+            I <%= minutiScelta %> minuti per scegliere sono scaduti: l'ordine sta per essere
+            assegnato al distributore più veloce.
+          </div>
+        <% } %>
       <% } %>
 
       <% offerte.forEach(function (o, i) { %>
@@ -52,8 +65,13 @@
             </div>
           <% } %>
 
-          <div class="tempo">🕒 Partenza ordine stimata: <%= fmt.tempoConsegna(o.partenza_ore) %></div>
-          <div class="tempo">🚚 Consegna stimata in <%= fmt.tempoConsegna(o.consegna_ore) %></div>
+          <div class="tempo">🕒 Parte dalla filiale entro <%= fmt.tempoConsegna(o.partenza_ore) %></div>
+          <div class="tempo">
+            🚚 Da te in <strong><%= consegna.inParole(o.consegna_minuti_stimati) %></strong>
+            <% if (o.distributore.id === idPiuVeloce && offerte.length > 1) { %>
+              <span class="stato-badge stato-confermato">più veloce</span>
+            <% } %>
+          </div>
           <div class="tempo">
             📦 Merce € <%= euro(o.totali.totale_finale) %> + IVA ·
             <%= o.totali.costo_consegna > 0 ? 'consegna € ' + euro(o.totali.costo_consegna) : 'consegna inclusa' %>

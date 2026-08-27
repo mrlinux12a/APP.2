@@ -102,6 +102,37 @@ aggiungiColonna('products', 'gwp', 'REAL');
 aggiungiColonna('request_response_items', 'sconto_riga_pct', 'REAL');
 aggiungiColonna('request_responses', 'sconto_cliente_pct', 'REAL');
 
+// Sconti a scalare: nel settore si scrivono come 40+10+5, non come un unico valore.
+// sconto_pct resta come sconto effettivo calcolato, per non rompere i dati esistenti.
+['sconto1', 'sconto2', 'sconto3', 'sconto4', 'sconto5'].forEach((c) =>
+  aggiungiColonna('client_discount_rules', c, 'REAL')
+);
+
+// Centro notifiche raggruppato: categoria, sottostato e ordine collegato.
+aggiungiColonna('notifications', 'categoria', "TEXT NOT NULL DEFAULT 'generale'");
+aggiungiColonna('notifications', 'sottostato', "TEXT NOT NULL DEFAULT ''");
+aggiungiColonna('notifications', 'order_id', 'INTEGER');
+
+// Finestra di 5 minuti per scegliere fra più offerte, e assegnazione automatica.
+aggiungiColonna('requests', 'scelta_scade_il', 'TEXT');
+aggiungiColonna('requests', 'assegnata_auto', 'INTEGER NOT NULL DEFAULT 0');
+aggiungiColonna('request_responses', 'consegna_minuti_stimati', 'INTEGER');
+
+// Classificazione per frequenza d'uso: sottocategoria e misura del prodotto.
+aggiungiColonna('products', 'sottocategoria', "TEXT NOT NULL DEFAULT ''");
+aggiungiColonna('products', 'misura', "TEXT NOT NULL DEFAULT ''");
+aggiungiColonna('macro_categorie', 'priorita', 'INTEGER NOT NULL DEFAULT 99');
+aggiungiColonna('macro_categorie', 'in_evidenza', 'INTEGER NOT NULL DEFAULT 0');
+
+// Lo sconto unico di anagrafica non esiste più: ogni marchio ha condizioni sue.
+// Le regole 'generale' rimaste da prima non verrebbero comunque più applicate.
+db.exec(`DELETE FROM client_discount_rules WHERE ambito = 'generale'`);
+
+// Anagrafica cliente creata in autonomia: forma giuridica e stato dell'iscrizione.
+aggiungiColonna('users', 'tipo_soggetto', "TEXT NOT NULL DEFAULT 'impresa'");
+aggiungiColonna('users', 'stato_anagrafica', "TEXT NOT NULL DEFAULT 'attivo'");
+aggiungiColonna('users', 'iscritto_il', 'TEXT');
+
 // Il contributo RAEE è escluso dai prezzi di listino: viaggia come voce separata.
 aggiungiColonna('orders', 'contributo_raee', 'REAL NOT NULL DEFAULT 0');
 aggiungiColonna('order_items', 'raee_unitario', 'REAL NOT NULL DEFAULT 0');

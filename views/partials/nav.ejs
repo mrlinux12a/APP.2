@@ -2,10 +2,6 @@
   <div class="interno">
     <a href="/home" class="<%= attivo === 'home' ? 'attivo' : '' %>"><span class="ico">🏠</span>Home</a>
     <a href="/cerca" class="<%= attivo === 'cerca' ? 'attivo' : '' %>"><span class="ico">🔍</span>Cerca</a>
-    <a href="/carrello" class="<%= attivo === 'carrello' ? 'attivo' : '' %>">
-      <span class="ico">🧾</span>Selezione
-      <% if (carrelloPezzi > 0) { %><span class="pallino"><%= carrelloPezzi %></span><% } %>
-    </a>
     <a href="/ordini" class="<%= attivo === 'ordini' ? 'attivo' : '' %>"><span class="ico">📦</span>Ordini</a>
   </div>
 </nav>

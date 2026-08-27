@@ -5,8 +5,40 @@
     <span></span>
   <% } %>
   <div class="titolo"><%= typeof intestazione !== 'undefined' ? intestazione : titolo %></div>
-  <a class="icona-btn" href="/notifiche" aria-label="Notifiche">
-    🔔
-    <% if (notificheNonLette > 0) { %><span class="pallino"><%= notificheNonLette %></span><% } %>
-  </a>
+
+  <div class="azioni-appbar">
+    <a class="icona-btn" href="/notifiche" aria-label="Notifiche">
+      🔔
+      <% if (notificheNonLette > 0) { %><span class="pallino"><%= notificheNonLette %></span><% } %>
+    </a>
+
+    <% if (currentUser) { %>
+      <div class="menu-account" data-menu-account>
+        <button class="icona-btn" type="button" data-menu-apri
+                aria-haspopup="true" aria-expanded="false" aria-label="Menu account">👤</button>
+        <div class="tendina" data-menu-tendina hidden>
+          <div class="tendina-testata">
+            <div class="nome"><%= currentUser.ragione_sociale %></div>
+            <div class="ruolo">
+              <%= currentUser.ruolo === 'cliente' ? 'Cliente'
+                  : (currentUser.ruolo === 'distributore' ? 'Banco distributore' : 'Agente') %>
+            </div>
+          </div>
+          <% if (currentUser.ruolo === 'cliente') { %>
+            <a href="/profilo">La mia anagrafica</a>
+            <a href="/ordini">I miei ordini</a>
+            <a href="/punti-vendita">Punti vendita</a>
+          <% } else if (currentUser.ruolo === 'distributore') { %>
+            <a href="/distributore/clienti">Clienti</a>
+            <a href="/distributore/ordini">Ordini da evadere</a>
+            <a href="/punti-vendita">Punti vendita</a>
+          <% } %>
+          <a href="/notifiche">Notifiche</a>
+          <form method="POST" action="/logout">
+            <button type="submit" class="voce-esci">Esci</button>
+          </form>
+        </div>
+      </div>
+    <% } %>
+  </div>
 </header>

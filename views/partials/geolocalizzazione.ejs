@@ -22,7 +22,12 @@
        data-geo-mappa
        data-lat="<%= geo.lat === null || geo.lat === undefined ? '' : geo.lat %>"
        data-lng="<%= geo.lng === null || geo.lng === undefined ? '' : geo.lng %>"
-       data-precisione="<%= geo.precisione || '' %>"></div>
+       data-precisione="<%= geo.precisione || '' %>"
+       data-vicini="<%= typeof punti !== 'undefined' && punti ? encodeURIComponent(JSON.stringify(punti)) : '' %>"></div>
+  <div class="geo-legenda" data-geo-vicini hidden>
+    <span class="p-mezzo">La tua posizione</span>
+    <span class="p-banco">Punti vendita vicini</span>
+  </div>
 
   <p class="nota" style="margin-bottom:10px;"><%= spiegazione %></p>
 

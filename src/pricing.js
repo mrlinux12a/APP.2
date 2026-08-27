@@ -21,6 +21,21 @@ function getFinestraMinuti() {
   return getConfigNum('finestra_conferma_min', 10);
 }
 
+// Minuti che il cliente ha per scegliere fra più distributori che hanno confermato.
+function getFinestraSceltaMinuti() {
+  return getConfigNum('finestra_scelta_min', 5);
+}
+
+// Ordine minimo, calcolato sui prezzi già maggiorati del servizio e IVA esclusa.
+function getOrdineMinimo() {
+  return getConfigNum('ordine_minimo', 33);
+}
+
+// Spedizione fissa: si somma dopo, non concorre a raggiungere il minimo.
+function getSpedizioneFissa() {
+  return getConfigNum('spedizione_fissa', 10);
+}
+
 // Prezzo netto grossista: listino meno lo sconto Base del prodotto (o del distributore).
 function prezzoNetto({ prezzo_listino, sconto_base_pct }) {
   return round2(prezzo_listino * (1 - sconto_base_pct / 100));
@@ -89,6 +104,9 @@ module.exports = {
   getServizioPct,
   getIvaPct,
   getFinestraMinuti,
+  getFinestraSceltaMinuti,
+  getOrdineMinimo,
+  getSpedizioneFissa,
   prezzoNetto,
   prezzoCliente,
   calcolaOrdine,

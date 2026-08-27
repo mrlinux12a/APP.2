@@ -13,6 +13,9 @@ const richieste = require('./src/richieste');
 const notifiche = require('./src/notifiche');
 const ddt = require('./src/ddt');
 const geo = require('./src/geo');
+const anagrafiche = require('./src/anagrafiche');
+const consegna = require('./src/consegna');
+const { ArchivioSqlite } = require('./src/sessioni');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -24,10 +27,16 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(
   session({
+    store: new ArchivioSqlite(), // su file, così un riavvio non scollega nessuno
     secret: process.env.SESSION_SECRET || 'minuteria-mvp-demo-secret',
     resave: false,
     saveUninitialized: false,
-    cookie: { maxAge: 1000 * 60 * 60 * 12 }, // 12 ore
+    rolling: true, // ogni visita rinnova la scadenza: chi usa l'app resta dentro
+    cookie: {
+      maxAge: 1000 * 60 * 60 * 24 * 30, // 30 giorni
+      httpOnly: true,
+      sameSite: 'lax',
+    },
   })
 );
 
@@ -107,7 +116,74 @@ app.get('/', (req, res) => {
 
 app.get('/login', (req, res) => {
   if (req.session.user) return res.redirect('/');
-  res.render('login', { errore: null });
+  res.render('login', { titolo: 'Accedi', errore: null, scheda: 'accedi' });
+});
+
+// ---------- Registrazione cliente ----------
+
+function distributoriSelezionabili() {
+  return db
+    .prepare('SELECT id, nome, filiale, zona FROM distributors WHERE attivo = 1 ORDER BY nome')
+    .all();
+}
+
+app.get('/registrati', (req, res) => {
+  if (req.session.user) return res.redirect('/');
+  res.render('registrati', {
+    titolo: 'Crea la tua anagrafica',
+    distributori: distributoriSelezionabili(),
+    tipi: anagrafiche.TIPI_SOGGETTO,
+    dati: {},
+    scelti: [],
+    errori: [],
+  });
+});
+
+app.post('/registrati', (req, res) => {
+  const scelti = []
+    .concat(req.body.distributori || [])
+    .map((v) => parseInt(v, 10))
+    .filter(Boolean);
+
+  const validi = new Set(distributoriSelezionabili().map((d) => d.id));
+  const distributoriScelti = scelti.filter((id) => validi.has(id));
+  const errori = anagrafiche.validaIscrizione(req.body, distributoriScelti);
+
+  if (errori.length) {
+    return res.status(400).render('registrati', {
+      titolo: 'Crea la tua anagrafica',
+      distributori: distributoriSelezionabili(),
+      tipi: anagrafiche.TIPI_SOGGETTO,
+      dati: req.body,
+      scelti: distributoriScelti,
+      errori,
+    });
+  }
+
+  const cliente = anagrafiche.iscriviCliente(req.body, distributoriScelti);
+  req.session.user = {
+    id: cliente.id,
+    ruolo: cliente.ruolo,
+    username: cliente.username,
+    ragione_sociale: cliente.ragione_sociale,
+    zona: cliente.zona,
+    distributor_id: null,
+  };
+  res.redirect('/profilo?benvenuto=1');
+});
+
+// ---------- Profilo del cliente ----------
+
+app.get('/profilo', requireRole('cliente'), (req, res) => {
+  const cliente = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
+  res.render('profilo', {
+    titolo: 'La mia anagrafica',
+    cliente,
+    legami: anagrafiche.legamiDelCliente(cliente.id),
+    tipi: anagrafiche.TIPI_SOGGETTO,
+    benvenuto: req.query.benvenuto === '1',
+    indirizzoCliente: ddt.indirizzoCompleto(cliente),
+  });
 });
 
 app.post('/login', (req, res) => {
@@ -152,10 +228,40 @@ app.get('/home', requireRole('cliente'), (req, res) => {
     )
     .all(req.session.user.id);
 
+  // Punti vendita da mostrare sulla mappa della home insieme alla posizione del cliente.
+  const punti = db
+    .prepare(
+      `SELECT s.geo_lat AS lat, s.geo_lng AS lng, s.nome, s.indirizzo, s.cap, s.citta, s.telefono,
+              d.nome AS insegna
+         FROM store_locations s
+         JOIN distributors d ON d.id = s.distributor_id
+        WHERE s.attivo = 1 AND s.geo_lat IS NOT NULL AND d.attivo = 1`
+    )
+    .all()
+    .map((p) => ({ ...p, indirizzo: `${p.indirizzo}, ${p.cap} ${p.citta}` }));
+
+  // Pezzi ordinati più spesso: si riordinano con un tocco, senza rinavigare il catalogo.
+  const frequenti = db
+    .prepare(
+      `SELECT oi.product_id, oi.nome_snapshot, oi.codice_snapshot,
+              SUM(oi.quantita) AS pezzi, COUNT(DISTINCT o.id) AS volte,
+              p.attivo, p.misura
+         FROM order_items oi
+         JOIN orders o ON o.id = oi.order_id
+         JOIN products p ON p.id = oi.product_id
+        WHERE o.cliente_id = ? AND p.attivo = 1
+        GROUP BY oi.product_id
+        ORDER BY volte DESC, pezzi DESC
+        LIMIT 6`
+    )
+    .all(req.session.user.id);
+
   res.render('home', {
     titolo: 'Ordini Minuteria',
-    macro: catalogo.macroCategorie(),
-    marchi: catalogo.marchi(),
+    inEvidenza: catalogo.categorieInEvidenza(),
+    altre: catalogo.altreCategorie(),
+    frequenti,
+    punti,
     inCorso,
     ultimiOrdini,
   });
@@ -186,7 +292,8 @@ app.get('/api/cerca', requireRole('cliente'), (req, res) => {
     macroSlug: req.query.macro || null,
     brandSlug: req.query.marchio || null,
     famiglia: req.query.famiglia || null,
-    gruppo: req.query.gruppo || null,
+    sotto: req.query.sotto || null,
+    misura: req.query.misura || null,
     limite: 60,
   };
   const risultati = q.length >= 2 ? catalogo.cercaProdotti(q, ambito) : [];
@@ -212,18 +319,68 @@ app.get('/categoria/:slug', requireRole('cliente'), (req, res) => {
   const macro = catalogo.macroCategoria(req.params.slug);
   if (!macro) return res.status(404).render('errore', { titolo: 'Non trovata', messaggio: 'Categoria non trovata.' });
 
-  const gruppi = catalogo.gruppiPerMacro(macro.slug);
-  const gruppo = req.query.gruppo || (gruppi.length === 1 ? gruppi[0].nome : null);
+  const sottocategorie = catalogo.sottocategorieDi(macro.slug);
+  const sottoSlug = req.query.sotto || (sottocategorie.length === 1 ? sottocategorie[0].slug : null);
+  const sotto = sottoSlug ? catalogo.sottocategoria(macro.slug, sottoSlug) : null;
+  const misura = req.query.misura || null;
+  const marchio = req.query.marchio || null;
   const q = (req.query.q || '').trim();
 
   // Con una ricerca attiva l'elenco è quello dei risultati, senza paginazione.
   const elenco = q
-    ? { righe: catalogo.cercaProdotti(q, { macroSlug: macro.slug, gruppo, limite: 60 }), ricerca: true }
-    : gruppo
-    ? catalogo.prodottiDelGruppo(macro.slug, gruppo, req.query.p)
+    ? {
+        righe: catalogo.cercaProdotti(q, { macroSlug: macro.slug, sotto: sottoSlug, limite: 60 }),
+        ricerca: true,
+      }
+    : sottoSlug
+    ? catalogo.prodottiDellaCategoria(macro.slug, { sotto: sottoSlug, misura, marchio, pagina: req.query.p })
     : null;
 
-  res.render('categoria', { titolo: macro.nome, macro, gruppi, gruppo, q, elenco });
+  res.render('categoria', {
+    titolo: macro.nome,
+    macro,
+    sottocategorie,
+    sotto,
+    sottoSlug,
+    // La misura è il primo filtro utile in cantiere; il marchio viene dopo.
+    misure: sottoSlug ? catalogo.misureDisponibili({ macroSlug: macro.slug, sotto: sottoSlug }) : [],
+    misura,
+    marchi: sottoSlug ? catalogo.marchiNellaCategoria({ macroSlug: macro.slug, sotto: sottoSlug }) : [],
+    marchio,
+    q,
+    elenco,
+  });
+});
+
+// ---------- Punti vendita sulla mappa ----------
+
+app.get('/punti-vendita', requireLogin, (req, res) => {
+  const punti = db
+    .prepare(
+      `SELECT s.*, d.nome AS distributore, d.zona
+         FROM store_locations s
+         JOIN distributors d ON d.id = s.distributor_id
+        WHERE s.attivo = 1 AND s.geo_lat IS NOT NULL
+        ORDER BY d.nome, s.nome`
+    )
+    .all();
+
+  const mia = geo.statoUtente(req.session.user.id);
+  const conDistanza = punti.map((p) => {
+    const km = mia.consenso ? geo.distanzaKm({ lat: mia.lat, lng: mia.lng }, { lat: p.geo_lat, lng: p.geo_lng }) : null;
+    return { ...p, km, distanza: geo.formattaDistanza(km) };
+  });
+  // Con la posizione condivisa l'elenco parte dal punto vendita più vicino.
+  if (mia.consenso) conDistanza.sort((a, b) => (a.km === null ? 1 : b.km === null ? -1 : a.km - b.km));
+
+  const insegne = [...new Set(punti.map((p) => p.distributore))];
+
+  res.render('punti_vendita', {
+    titolo: 'Punti vendita',
+    punti: conDistanza,
+    insegne,
+    citta: [...new Set(punti.map((p) => p.citta))],
+  });
 });
 
 // ---------- Cliente: marchi ----------
@@ -259,12 +416,29 @@ app.get('/marchi/:slug', requireRole('cliente'), (req, res) => {
 
 app.post('/carrello', requireRole('cliente'), (req, res) => {
   aggiornaCarrelloDaForm(req, req.body.modo === 'imposta' ? 'imposta' : 'aggiungi');
-  if (req.body.azione === 'procedi') return inviaRichiesta(req, res);
+  // "Procedi" non manda più la richiesta: porta al riepilogo, dove si conferma.
+  if (req.body.azione === 'procedi') return res.redirect('/carrello');
   return res.redirect(req.body.ritorno || '/carrello');
 });
 
+// Riepilogo prima di procedere: articoli, quantità, prezzi, totale e conferma finale.
 app.get('/carrello', requireRole('cliente'), (req, res) => {
-  res.render('carrello', { titolo: 'Materiale selezionato', righe: righeCarrello(req) });
+  const righe = righeCarrello(req);
+  const totali = pricing.calcolaOrdine(righe);
+  const minimo = pricing.getOrdineMinimo();
+  const spedizione = pricing.getSpedizioneFissa();
+
+  res.render('carrello', {
+    titolo: 'Riepilogo',
+    righe,
+    totali,
+    minimo,
+    spedizione,
+    // La soglia si misura sulla sola merce: la spedizione si somma dopo.
+    mancaAlMinimo: pricing.round2(Math.max(0, minimo - totali.totale_finale)),
+    raggiunto: totali.totale_finale >= minimo,
+    ivaPct: pricing.getIvaPct(),
+  });
 });
 
 app.post('/carrello/svuota', requireRole('cliente'), (req, res) => {
@@ -282,6 +456,19 @@ app.post('/richieste', requireRole('cliente'), (req, res) => {
 
 function inviaRichiesta(req, res) {
   const righe = righeCarrello(req);
+
+  // L'ordine minimo si misura sulla merce già maggiorata, spedizione esclusa.
+  const totali = pricing.calcolaOrdine(righe);
+  const minimo = pricing.getOrdineMinimo();
+  if (righe.length && totali.totale_finale < minimo) {
+    return res.status(400).render('errore', {
+      titolo: 'Ordine minimo non raggiunto',
+      messaggio: `L'ordine minimo è di € ${pricing.euro(minimo)} di merce (IVA esclusa). Ti mancano € ${pricing.euro(minimo - totali.totale_finale)}.`,
+      link: '/carrello',
+      linkTesto: 'Torna al riepilogo',
+    });
+  }
+
   if (!righe.length) {
     return res.status(400).render('errore', {
       titolo: 'Nessun materiale',
@@ -315,9 +502,17 @@ app.get('/richieste/:id', requireRole('cliente'), (req, res) => {
   };
 
   if (richiesta.stato === 'in_attesa') return res.render('richiesta_attesa', dati);
+
+  const offerte = richieste.offerte(richiesta.id);
+  const piuVeloce = richieste.offertaPiuVeloce(richiesta.id);
   return res.render('richiesta_offerte', {
     ...dati,
-    offerte: richieste.offerte(richiesta.id),
+    offerte,
+    // Con più di un'offerta scatta la finestra di 5 minuti per scegliere.
+    secondiScelta: offerte.length > 1 ? richieste.secondiPerScegliere(richiesta) : null,
+    minutiScelta: pricing.getFinestraSceltaMinuti(),
+    idPiuVeloce: piuVeloce ? piuVeloce.distributor_id : null,
+    consegna,
   });
 });
 
@@ -404,13 +599,24 @@ app.post('/ordini', requireRole('cliente'), (req, res) => {
     });
   }
 
-  const modalita = req.body.modalita === 'ritiro' ? 'ritiro' : 'consegna_mezzo_grossista';
-  const note = (req.body.note || '').trim();
-  const cliente = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
+  const orderId = creaOrdineDaOfferta(richiesta, distributorId, risposta, {
+    modalita: req.body.modalita,
+    note: req.body.note,
+    destinazione: req.body.destinazione,
+  });
+  res.redirect('/ordini/' + orderId + '?nuovo=1');
+});
+
+// Creazione dell'ordine a partire da un'offerta confermata: la usano sia la scelta
+// manuale del cliente sia l'assegnazione automatica allo scadere dei 5 minuti.
+function creaOrdineDaOfferta(richiesta, distributorId, risposta, opzioni = {}) {
+  const modalita = opzioni.modalita === 'ritiro' ? 'ritiro' : 'consegna_mezzo_grossista';
+  const note = (opzioni.note || '').trim();
+  const cliente = db.prepare('SELECT * FROM users WHERE id = ?').get(richiesta.cliente_id);
   const destinazione =
     modalita === 'ritiro'
       ? 'Ritiro al banco'
-      : (req.body.destinazione || '').trim() || cliente.indirizzo_consegna || ddt.indirizzoCompleto(cliente);
+      : (opzioni.destinazione || '').trim() || cliente.indirizzo_consegna || ddt.indirizzoCompleto(cliente);
   const { totali } = richieste.calcolaOfferta(richiesta.id, distributorId, { modalita });
 
   const insertOrder = db.prepare(
@@ -432,7 +638,7 @@ app.post('/ordini', requireRole('cliente'), (req, res) => {
 
   const creaOrdine = db.transaction(() => {
     const info = insertOrder.run(
-      req.session.user.id,
+      richiesta.cliente_id,
       modalita,
       note,
       totali.totale_netto,
@@ -466,12 +672,44 @@ app.post('/ordini', requireRole('cliente'), (req, res) => {
   const distributore = db.prepare('SELECT * FROM distributors WHERE id = ?').get(distributorId);
   notifiche.notificaDistributore(distributorId, {
     titolo: 'Nuovo ordine da preparare',
-    testo: `${req.session.user.ragione_sociale} ha scelto ${distributore.nome} — ordine #${orderId}.`,
+    testo: `${cliente.ragione_sociale} ha scelto ${distributore.nome} — ordine #${orderId}.`,
     link: '/distributore/ordini/' + orderId,
+    categoria: 'ordini',
+    sottostato: 'in_approvazione',
+    order_id: orderId,
   });
 
-  res.redirect('/ordini/' + orderId + '?nuovo=1');
-});
+  // La richiesta confermata non resta una richiesta: diventa un ordine, e la notifica
+  // del cliente lo dice esplicitamente.
+  notifiche.notifica(richiesta.cliente_id, {
+    titolo: opzioni.automatico ? 'Ordine assegnato automaticamente' : 'Ordine inviato',
+    testo: opzioni.automatico
+      ? `Non hai scelto entro i 5 minuti: l'ordine #${orderId} è andato a ${distributore.nome}, il più veloce.`
+      : `Ordine #${orderId} inviato a ${distributore.nome}.`,
+    link: '/ordini/' + orderId,
+    categoria: 'ordini',
+    sottostato: 'in_approvazione',
+    order_id: orderId,
+  });
+
+  return orderId;
+}
+
+// Allo scadere dei 5 minuti senza scelta, l'ordine va al distributore più veloce.
+function assegnaOffertePerScadenza() {
+  richieste.sceltePerScadenza().forEach((r) => {
+    const richiesta = richieste.getRichiesta(r.id);
+    const migliore = richieste.offertaPiuVeloce(r.id);
+    if (!richiesta || !migliore) return;
+
+    db.prepare('UPDATE requests SET assegnata_auto = 1 WHERE id = ?').run(r.id);
+    try {
+      creaOrdineDaOfferta(richiesta, migliore.distributor_id, migliore, { automatico: true });
+    } catch (err) {
+      console.error(`Assegnazione automatica fallita per la richiesta ${r.id}:`, err.message);
+    }
+  });
+}
 
 app.get('/ordini', requireRole('cliente'), (req, res) => {
   const ordini = db
@@ -518,10 +756,24 @@ app.get('/ordini/:id', requireLogin, (req, res) => {
 // ---------- Notifiche ----------
 
 app.get('/notifiche', requireLogin, (req, res) => {
-  const elenco = notifiche.elenco(req.session.user.id);
+  const categoria = notifiche.CATEGORIE[req.query.categoria] ? req.query.categoria : null;
+  const sottostato = req.query.sottostato || null;
+
+  const elenco = notifiche.elenco(req.session.user.id, { categoria, sottostato });
+  const conteggi = notifiche.conteggiPerCategoria(req.session.user.id);
+  const sottostati = categoria ? notifiche.conteggiPerSottostato(req.session.user.id, categoria) : [];
+
   notifiche.segnaLette(req.session.user.id);
   res.locals.notificheNonLette = 0; // appena lette: la campanella non deve restare accesa
-  res.render('notifiche', { titolo: 'Notifiche', elenco });
+  res.render('notifiche', {
+    titolo: 'Notifiche',
+    elenco,
+    categorie: notifiche.CATEGORIE,
+    conteggi,
+    sottostati,
+    categoria,
+    sottostato,
+  });
 });
 
 // Notifiche non ancora mostrate: app.js le trasforma in notifica push del browser.
@@ -643,6 +895,9 @@ function contatoriBanco(distributorId) {
     inPreparazione: q(
       `SELECT COUNT(*) AS n FROM orders WHERE distributor_id = ? AND stato = 'in_evasione'`
     ),
+    daApprovare: q(
+      `SELECT COUNT(*) AS n FROM client_distributors WHERE distributor_id = ? AND stato = 'in_attesa'`
+    ),
   };
 }
 
@@ -750,6 +1005,92 @@ app.post('/distributore/richieste/:id/rispondi', requireRole('distributore'), (r
 
   const base = '/distributore/richieste/' + req.params.id;
   res.redirect(esitoRisposta.ok ? base : base + '?errore=' + encodeURIComponent(esitoRisposta.errore));
+});
+
+// ---------- Distributore: anagrafiche clienti da approvare ----------
+
+app.get('/distributore/clienti', requireRole('distributore'), (req, res) => {
+  const elenco = anagrafiche.clientiDelDistributore(req.session.user.distributor_id);
+  res.render('distributore_clienti', {
+    titolo: 'Clienti',
+    daApprovare: elenco.filter((c) => c.stato === 'in_attesa'),
+    approvati: elenco.filter((c) => c.stato === 'approvato'),
+    rifiutati: elenco.filter((c) => c.stato === 'rifiutato'),
+    tipi: anagrafiche.TIPI_SOGGETTO,
+  });
+});
+
+app.get('/distributore/clienti/:id', requireRole('distributore'), (req, res) => {
+  const distributorId = req.session.user.distributor_id;
+  const cliente = db.prepare(`SELECT * FROM users WHERE id = ? AND ruolo = 'cliente'`).get(req.params.id);
+  const rapporto = cliente ? anagrafiche.legame(distributorId, cliente.id) : null;
+  if (!cliente || !rapporto) {
+    return res.status(404).render('errore', {
+      titolo: 'Non trovato',
+      messaggio: 'Questo cliente non ti ha indicato come distributore di riferimento.',
+      link: '/distributore/clienti',
+      linkTesto: 'Torna ai clienti',
+    });
+  }
+
+  res.render('distributore_cliente', {
+    titolo: cliente.ragione_sociale,
+    cliente,
+    rapporto,
+    tipi: anagrafiche.TIPI_SOGGETTO,
+    indirizzoCliente: ddt.indirizzoCompleto(cliente),
+    regole: anagrafiche.regoleSconto(distributorId, cliente.id),
+    marchi: catalogo.marchi(),
+    macro: catalogo.macroCategorie(),
+    famiglie: catalogo.marchi().flatMap((m) =>
+      catalogo.famiglieDelMarchio(m.slug).map((f) => ({ ...f, marchio: m.nome, marchio_slug: m.slug }))
+    ),
+    salvato: req.query.salvato === '1',
+  });
+});
+
+app.post('/distributore/clienti/:id/decidi', requireRole('distributore'), (req, res) => {
+  const esito = anagrafiche.decidi(req.session.user.distributor_id, parseInt(req.params.id, 10), {
+    approva: req.body.azione === 'approva',
+    codiceCliente: req.body.codice_cliente,
+    note: req.body.note,
+  });
+  if (!esito.ok) {
+    return res.status(400).render('errore', { titolo: 'Non riuscito', messaggio: esito.errore });
+  }
+  res.redirect('/distributore/clienti/' + req.params.id);
+});
+
+// Sconti per ambito: i campi arrivano come sconto_<ambito>_<chiave>.
+app.post('/distributore/clienti/:id/sconti', requireRole('distributore'), (req, res) => {
+  const distributorId = req.session.user.distributor_id;
+  const clienteId = parseInt(req.params.id, 10);
+  if (!anagrafiche.legame(distributorId, clienteId)) {
+    return res.status(403).render('errore', { titolo: 'Accesso negato', messaggio: 'Cliente non tuo.' });
+  }
+
+  // I campi arrivano come sconto<n>_<ambito>_<chiave>: raggruppiamo i 5 scaglioni.
+  const perRegola = new Map();
+  for (const [campo, valore] of Object.entries(req.body)) {
+    const m = campo.match(/^sconto([1-5])_(marchio|macro|famiglia)_(.*)$/);
+    if (!m) continue;
+    const chiaveRegola = m[2] + '|' + m[3];
+    if (!perRegola.has(chiaveRegola)) perRegola.set(chiaveRegola, [null, null, null, null, null]);
+    perRegola.get(chiaveRegola)[Number(m[1]) - 1] = valore;
+  }
+
+  perRegola.forEach((scaglioni, chiaveRegola) => {
+    const taglio = chiaveRegola.indexOf('|');
+    anagrafiche.salvaRegola(
+      distributorId,
+      clienteId,
+      chiaveRegola.slice(0, taglio),
+      chiaveRegola.slice(taglio + 1),
+      scaglioni
+    );
+  });
+
+  res.redirect('/distributore/clienti/' + clienteId + '?salvato=1');
 });
 
 // ---------- Distributore: ordini ricevuti, preparazione e bolla ----------
@@ -915,9 +1256,12 @@ app.get('/agente/ordini', requireRole('agente'), (req, res) => {
 // Le richieste scadono anche se nessuno sta guardando una pagina: così la notifica
 // "nessuna conferma" arriva comunque allo scadere dei 10 minuti.
 richieste.aggiornaScadenzeAperte();
+assegnaOffertePerScadenza();
 setInterval(() => {
   try {
     richieste.aggiornaScadenzeAperte();
+    // Passati i 5 minuti senza scelta, l'ordine va al distributore più veloce.
+    assegnaOffertePerScadenza();
   } catch (err) {
     console.error('Errore nel controllo scadenze:', err.message);
   }

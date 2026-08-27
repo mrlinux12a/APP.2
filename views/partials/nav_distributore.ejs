@@ -8,6 +8,10 @@
       <span class="ico">📦</span>Ordini
       <% if (contatori && contatori.daPreparare > 0) { %><span class="pallino"><%= contatori.daPreparare %></span><% } %>
     </a>
+    <a href="/distributore/clienti" class="<%= attivo === 'clienti' ? 'attivo' : '' %>">
+      <span class="ico">👥</span>Clienti
+      <% if (contatori && contatori.daApprovare > 0) { %><span class="pallino"><%= contatori.daApprovare %></span><% } %>
+    </a>
     <a href="/notifiche" class="<%= attivo === 'notifiche' ? 'attivo' : '' %>">
       <span class="ico">🔔</span>Notifiche
       <% if (notificheNonLette > 0) { %><span class="pallino"><%= notificheNonLette %></span><% } %>

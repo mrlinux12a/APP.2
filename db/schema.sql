@@ -228,3 +228,86 @@ CREATE TABLE IF NOT EXISTS client_discounts (
   aggiornato_il TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE (distributor_id, cliente_id)
 );
+
+-- Punti vendita (banchi/filiali) dei distributori, con posizione sulla mappa.
+CREATE TABLE IF NOT EXISTS store_locations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  distributor_id INTEGER NOT NULL REFERENCES distributors(id),
+  nome TEXT NOT NULL,
+  indirizzo TEXT NOT NULL,
+  cap TEXT NOT NULL DEFAULT '',
+  citta TEXT NOT NULL DEFAULT '',
+  provincia TEXT NOT NULL DEFAULT '',
+  telefono TEXT NOT NULL DEFAULT '',
+  email TEXT NOT NULL DEFAULT '',
+  geo_lat REAL,
+  geo_lng REAL,
+  geocodifica TEXT NOT NULL DEFAULT '',
+  attivo INTEGER NOT NULL DEFAULT 1,
+  UNIQUE (distributor_id, nome)
+);
+
+CREATE INDEX IF NOT EXISTS idx_store_locations_citta ON store_locations(citta);
+
+-- ============================================================
+-- Blocco 5 — Registrazione cliente, approvazione del distributore
+-- e sconti per linea di prodotto / categoria.
+-- ============================================================
+
+-- Quali distributori il cliente ha indicato come suoi referenti, e se l'hanno approvato.
+-- Finché non c'è almeno un'approvazione il cliente non può inviare richieste a quel banco.
+CREATE TABLE IF NOT EXISTS client_distributors (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  cliente_id INTEGER NOT NULL REFERENCES users(id),
+  distributor_id INTEGER NOT NULL REFERENCES distributors(id),
+  stato TEXT NOT NULL DEFAULT 'in_attesa'
+    CHECK (stato IN ('in_attesa', 'approvato', 'rifiutato')),
+  codice_cliente TEXT NOT NULL DEFAULT '',
+  note TEXT NOT NULL DEFAULT '',
+  richiesto_il TEXT NOT NULL DEFAULT (datetime('now')),
+  deciso_il TEXT,
+  UNIQUE (cliente_id, distributor_id)
+);
+
+-- Sconti concordati per cliente, per ambito: generale, marchio, categoria merceologica
+-- o famiglia di prodotto del marchio. Vince sempre la regola più specifica.
+CREATE TABLE IF NOT EXISTS client_discount_rules (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  distributor_id INTEGER NOT NULL REFERENCES distributors(id),
+  cliente_id INTEGER NOT NULL REFERENCES users(id),
+  ambito TEXT NOT NULL CHECK (ambito IN ('generale', 'marchio', 'macro', 'famiglia')),
+  chiave TEXT NOT NULL DEFAULT '',
+  sconto_pct REAL NOT NULL,
+  aggiornato_il TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (distributor_id, cliente_id, ambito, chiave)
+);
+
+CREATE INDEX IF NOT EXISTS idx_client_distributors_dist ON client_distributors(distributor_id, stato);
+CREATE INDEX IF NOT EXISTS idx_discount_rules ON client_discount_rules(distributor_id, cliente_id);
+
+-- ============================================================
+-- Blocco 6 — Tassonomia per frequenza d'uso: sottocategorie e misure.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS sottocategorie (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  macro_slug TEXT NOT NULL,
+  slug TEXT NOT NULL,
+  nome TEXT NOT NULL,
+  keywords TEXT NOT NULL DEFAULT '',
+  misure TEXT NOT NULL DEFAULT '',
+  ordine INTEGER NOT NULL DEFAULT 0,
+  UNIQUE (macro_slug, slug)
+);
+
+CREATE INDEX IF NOT EXISTS idx_sottocategorie_macro ON sottocategorie(macro_slug);
+
+INSERT OR IGNORE INTO config (chiave, valore) VALUES ('finestra_scelta_min', '5');
+INSERT OR IGNORE INTO config (chiave, valore) VALUES ('ordine_minimo', '33');
+INSERT OR IGNORE INTO config (chiave, valore) VALUES ('spedizione_fissa', '10');
+INSERT OR IGNORE INTO config (chiave, valore) VALUES ('velocita_media_kmh', '25');
+
+INSERT OR IGNORE INTO config (chiave, valore) VALUES ('finestra_scelta_min', '5');
+INSERT OR IGNORE INTO config (chiave, valore) VALUES ('ordine_minimo', '33');
+INSERT OR IGNORE INTO config (chiave, valore) VALUES ('spedizione_fissa', '10');
+INSERT OR IGNORE INTO config (chiave, valore) VALUES ('velocita_media_kmh', '25');

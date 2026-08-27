@@ -341,7 +341,44 @@
     }
 
     // Consenso già dato in una sessione precedente: riprendiamo senza nuovi popup.
-    if (box.dataset.consenso === '1') avviaWatch();
+    if (box.dataset.consenso === '1') {
+      avviaWatch();
+    } else if (supportata) {
+      // Prima volta: la posizione si attiva appena si entra nell'app. Il permesso lo
+      // chiede comunque il browser; se è già stato negato non insistiamo.
+      const chiedi = function () {
+        scriviStato('Sto cercando la tua posizione...');
+        navigator.geolocation.getCurrentPosition(
+          function (pos) {
+            ultimoInvio = 0;
+            invia(pos);
+            segnaAttiva(true);
+            avviaWatch();
+          },
+          function (err) {
+            scriviStato(
+              err.code === err.PERMISSION_DENIED
+                ? 'Permesso negato: nessuna posizione è stata registrata.'
+                : 'Posizione non disponibile in questo momento.'
+            );
+            segnaAttiva(false);
+          },
+          { enableHighAccuracy: true, timeout: 20000 }
+        );
+      };
+
+      if (navigator.permissions && navigator.permissions.query) {
+        navigator.permissions
+          .query({ name: 'geolocation' })
+          .then(function (p) {
+            if (p.state !== 'denied') chiedi();
+            else scriviStato('Permesso bloccato nelle impostazioni del browser.');
+          })
+          .catch(chiedi);
+      } else {
+        chiedi();
+      }
+    }
   }
 
   // ---------- Banco: condivisione della posizione del mezzo per un ordine ----------
@@ -447,4 +484,119 @@
   }
 
   tutteLeRighe().forEach(ricalcola);
+})();
+
+/* Nome utente: si scrive tutto attaccato, quindi spazi e maiuscole spariscono da soli. */
+(function () {
+  'use strict';
+  const campo = document.querySelector('[data-utente]');
+  if (!campo) return;
+
+  campo.addEventListener('input', function () {
+    const posizione = campo.selectionStart;
+    const prima = campo.value;
+    const dopo = prima
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9._-]/g, '');
+    if (dopo !== prima) {
+      campo.value = dopo;
+      const scarto = prima.length - dopo.length;
+      campo.setSelectionRange(Math.max(0, posizione - scarto), Math.max(0, posizione - scarto));
+    }
+  });
+})();
+
+/* Sconti a scalare: mostra lo sconto effettivo mentre il banco scrive gli scaglioni. */
+(function () {
+  'use strict';
+
+  const righe = document.querySelectorAll('[data-riga-sconti]');
+  if (!righe.length) return;
+
+  function calcola(riga) {
+    const campi = riga.querySelectorAll('[data-scaglione]');
+    let residuo = 1;
+    let almenoUno = false;
+
+    campi.forEach(function (c) {
+      const n = parseFloat(String(c.value).replace(',', '.'));
+      if (Number.isFinite(n) && n > 0) {
+        residuo *= 1 - Math.min(90, n) / 100;
+        almenoUno = true;
+      }
+    });
+
+    const box = riga.querySelector('[data-effettivo]');
+    const valore = riga.querySelector('[data-valore-effettivo]');
+    if (!box || !valore) return;
+
+    if (!almenoUno) {
+      box.setAttribute('hidden', '');
+      return;
+    }
+    valore.textContent = String(Math.round((1 - residuo) * 1000) / 10).replace('.', ',');
+    box.removeAttribute('hidden');
+  }
+
+  righe.forEach(function (riga) {
+    riga.addEventListener('input', function (e) {
+      if (e.target.matches('[data-scaglione]')) calcola(riga);
+    });
+    calcola(riga);
+  });
+})();
+
+/* Menu account in alto a destra: dentro ci sta anche l'uscita. */
+(function () {
+  'use strict';
+
+  const menu = document.querySelector('[data-menu-account]');
+  if (!menu) return;
+
+  const bottone = menu.querySelector('[data-menu-apri]');
+  const tendina = menu.querySelector('[data-menu-tendina]');
+  if (!bottone || !tendina) return;
+
+  function apri(aperto) {
+    if (aperto) tendina.removeAttribute('hidden');
+    else tendina.setAttribute('hidden', '');
+    bottone.setAttribute('aria-expanded', aperto ? 'true' : 'false');
+  }
+
+  bottone.addEventListener('click', function (e) {
+    e.stopPropagation();
+    apri(tendina.hasAttribute('hidden'));
+  });
+
+  document.addEventListener('click', function (e) {
+    if (!menu.contains(e.target)) apri(false);
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') apri(false);
+  });
+})();
+
+/* Finestra di 5 minuti per scegliere il distributore: countdown e ricarica alla scadenza. */
+(function () {
+  'use strict';
+
+  const box = document.querySelector('[data-scelta]');
+  if (!box) return;
+
+  let secondi = parseInt(box.dataset.secondi, 10) || 0;
+  const orologio = document.getElementById('countdown-scelta');
+
+  setInterval(function () {
+    secondi = Math.max(0, secondi - 1);
+    if (orologio) {
+      const m = Math.floor(secondi / 60);
+      const s = secondi % 60;
+      orologio.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+    }
+    // Scaduto: il server assegna al più veloce, ricarichiamo per mostrare l'esito.
+    if (secondi === 0) window.setTimeout(function () { window.location.reload(); }, 3000);
+  }, 1000);
 })();

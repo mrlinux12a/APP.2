@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="1">
+  <div class="app">
+    <%- include('partials/appbar', { titolo, intestazione: 'Clienti', indietro: '/distributore' }) %>
+
+    <div class="contenuto">
+      <div class="sezione-titolo">Da approvare</div>
+      <% if (!daApprovare.length) { %>
+        <div class="vuoto"><span class="emoji">✅</span>Nessuna anagrafica in attesa.</div>
+      <% } else { %>
+        <div class="card card-fitta">
+          <% daApprovare.forEach(function (c) { %>
+            <a class="riga-lista" href="/distributore/clienti/<%= c.cliente_id %>">
+              <span class="icona">🆕</span>
+              <span class="corpo">
+                <span class="etichetta"><%= c.ragione_sociale %></span>
+                <span class="dettaglio">
+                  <%= tipi[c.tipo_soggetto] || '' %> · P. IVA <%= c.partita_iva || '—' %>
+                </span>
+                <span class="dettaglio">
+                  <%= c.citta %> (<%= c.provincia %>) · iscritto <%= fmt.dataOra(c.richiesto_il) %>
+                </span>
+              </span>
+              <span class="stato-badge stato-in_attesa">Verifica</span>
+            </a>
+          <% }); %>
+        </div>
+        <p class="nota">
+          Approva solo le anagrafiche che riconosci come tuoi clienti: da lì in poi possono
+          inviarti richieste e vedere le condizioni che imposti.
+        </p>
+      <% } %>
+
+      <div class="sezione-titolo">Clienti approvati</div>
+      <% if (!approvati.length) { %>
+        <div class="vuoto"><span class="emoji">👥</span>Ancora nessun cliente approvato.</div>
+      <% } else { %>
+        <div class="card card-fitta">
+          <% approvati.forEach(function (c) { %>
+            <a class="riga-lista" href="/distributore/clienti/<%= c.cliente_id %>">
+              <span class="icona">🏢</span>
+              <span class="corpo">
+                <span class="etichetta"><%= c.ragione_sociale %></span>
+                <span class="dettaglio">
+                  <%= c.codice_cliente ? 'Cod. ' + c.codice_cliente + ' · ' : '' %><%= c.citta %> (<%= c.provincia %>)
+                </span>
+              </span>
+              <span class="freccia">›</span>
+            </a>
+          <% }); %>
+        </div>
+      <% } %>
+
+      <% if (rifiutati.length) { %>
+        <div class="sezione-titolo">Non riconosciuti</div>
+        <div class="card card-fitta">
+          <% rifiutati.forEach(function (c) { %>
+            <a class="riga-lista" href="/distributore/clienti/<%= c.cliente_id %>">
+              <span class="icona">🚫</span>
+              <span class="corpo">
+                <span class="etichetta"><%= c.ragione_sociale %></span>
+                <span class="dettaglio">P. IVA <%= c.partita_iva || '—' %></span>
+              </span>
+              <span class="stato-badge stato-non_disponibile">Rifiutato</span>
+            </a>
+          <% }); %>
+        </div>
+      <% } %>
+    </div>
+  </div>
+
+  <%- include('partials/nav_distributore', { attivo: 'clienti' }) %>
+  <script src="/app.js" defer></script>
+</body>
+</html>

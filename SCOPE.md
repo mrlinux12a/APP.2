@@ -52,6 +52,31 @@ Aggiornato al 26/08/2026 (vista cliente mobile con richiesta di disponibilità m
 - **Geolocalizzazione su mappa** (Leaflet servito in locale, tasselli OpenStreetMap) in tutte le
   schermate che mostrano una posizione.
 
+- **Registrazione self-service del cliente** con tutti i dati di fatturazione, scelta dei
+  distributori di riferimento e approvazione da parte del banco prima di poter ordinare.
+- **Sconti per ambito** concordati dal banco col singolo cliente: linea di prodotto, marchio,
+  categoria merceologica o generale, con precedenza dalla regola più precisa.
+- **Punti vendita sulla mappa**: 12 banchi di AFIS, BOREA, CAMBIELLI e FIDRA a Genova, con
+  indirizzi dai siti ufficiali e coordinate da Nominatim.
+- **Posizione del cliente chiesta all'avvio**, con mappa dei punti vendita più vicini in home.
+
+- **Catalogo per frequenza d'uso**: 14 categorie con sottocategorie, parole chiave e
+  misure; home con Raccorderia, Valvolame e Minuteria in evidenza e "Cosa ti serve?" sopra
+  la ricerca.
+- **Gerarchia categoria → sottocategoria → marchio**: il marchio è un filtro dentro la
+  categoria, non il livello principale.
+- **Filtro per misura** come primo filtro dell'elenco, marca come filtro secondario.
+- **Riordino in un tocco** dei pezzi ordinati più spesso.
+- **Riepilogo prima di procedere**: la richiesta parte solo dopo conferma esplicita.
+- **Ordine minimo di € 33** di merce più € 10 di spedizione che non fa soglia.
+- **Finestra di 5 minuti** per scegliere fra più offerte; scaduta, l'ordine va da solo al
+  distributore con la consegna stimata più veloce (partenza dichiarata + tragitto).
+- **Centro notifiche raggruppato** per Ordini / Richieste / Approvazioni con sottostati;
+  una richiesta confermata diventa un ordine e si sposta nella categoria Ordini.
+- **Sconti a scalare su 5 colonne** (40+10+5 = 48,7%) per marchio, categoria e linea.
+- **Sessioni su database**: un riavvio del server non scollega più nessuno.
+- **Menu account** in alto a destra, con dentro l'uscita.
+
 ## Da costruire (prossimi passi)
 
 - **Metodi di pagamento in app** — oggi il riepilogo dice "alle condizioni concordate con il
@@ -76,9 +101,16 @@ Aggiornato al 26/08/2026 (vista cliente mobile con richiesta di disponibilità m
 - **Estrazione dati** per le metriche del pilot (clienti attivi/mese, tempo medio
   richiesta→conferma, tasso di conferma per distributore).
 
+- **Ricerca per foto del pezzo**: richiede un modello di riconoscimento immagini, oggi
+  assente. Va deciso se introdurre un servizio esterno.
+- **Tempo di percorrenza reale**: la consegna stimata usa la distanza in linea d'aria
+  corretta di un fattore strada e una velocità media (config `velocita_media_kmh`). Per il
+  tempo vero serve un servizio di routing, con la dipendenza esterna che comporta.
+- **Listini di raccorderia, valvolame e minuteria**: sono le categorie in cima alla home
+  ma oggi contengono solo i pochi articoli demo. Servono i listini veri.
+
 ## Volutamente fuori scope (non va costruito senza deciderlo insieme)
 
-- Registrazione self-service dei clienti.
 - App nativa iOS/Android (oggi è un'app web pensata per il telefono).
 - Notifiche push a telefono spento / service worker: le notifiche arrivano mentre l'app è aperta
   in una scheda del browser.
@@ -92,6 +124,11 @@ Aggiornato al 26/08/2026 (vista cliente mobile con richiesta di disponibilità m
   mano su `db/seed.js` o direttamente sul DB.
 
 ## Scelte di scope già confermate con l'utente
+
+- 27/08/2026 — **La registrazione self-service entra nello scope** (era esclusa): il cliente
+  crea l'anagrafica e sono i distributori indicati a verificarla approvandola.
+- 27/08/2026 — **La posizione si attiva all'apertura dell'app**, non più solo su pulsante: il
+  consenso resta quello del browser e la revoca cancella le coordinate.
 
 - 26/08/2026 — **Disponibilità parziale ammessa**: il banco può confermare meno pezzi di quelli
   richiesti; il cliente vede l'offerta marcata "parziale" con l'elenco di ciò che manca e decide

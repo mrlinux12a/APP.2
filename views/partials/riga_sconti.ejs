@@ -1,0 +1,31 @@
+<%
+  // Una riga di sconti a scalare: cinque campi in fila con il simbolo % accanto.
+  const eff = effettivo(ambito, chiave);
+%>
+<div class="riga-sconti" data-riga-sconti>
+  <div class="riga-sconti-testa">
+    <span class="icona"><%= icona %></span>
+    <span class="corpo">
+      <span class="etichetta"><%= titolo %></span>
+      <span class="dettaglio"><%= dettaglio %></span>
+    </span>
+    <span class="sconto-effettivo" data-effettivo<%- eff === null ? ' hidden' : '' %>>
+      <span data-valore-effettivo><%= eff === null ? '' : String(eff).replace('.', ',') %></span>%
+    </span>
+  </div>
+  <div class="scaglioni">
+    <% [1, 2, 3, 4, 5].forEach(function (n) { %>
+      <label class="scaglione">
+        <span class="numero">Sconto <%= n %></span>
+        <span class="campo">
+          <input type="number" name="sconto<%= n %>_<%= ambito %>_<%= chiave %>"
+                 min="0" max="90" step="0.5" inputmode="decimal" placeholder="—"
+                 value="<%= scaglione(ambito, chiave, n) %>"
+                 data-scaglione
+                 aria-label="Sconto <%= n %> per <%= titolo %>">
+          <span class="segno">%</span>
+        </span>
+      </label>
+    <% }); %>
+  </div>
+</div>

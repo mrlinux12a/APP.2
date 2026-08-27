@@ -7,7 +7,7 @@ const PER_PAGINA = 40;
 // le valvole; scrivendo "toshiba estia" escono le pompe di calore ESTIA.
 function cercaProdotti(
   query,
-  { macroSlug = null, brandSlug = null, famiglia = null, gruppo = null, limite = 100 } = {}
+  { macroSlug = null, brandSlug = null, famiglia = null, sotto = null, misura = null, limite = 100 } = {}
 ) {
   const termini = String(query || '')
     .toLowerCase()
@@ -32,9 +32,13 @@ function cercaProdotti(
     where.push('p.famiglia = ?');
     params.push(famiglia);
   }
-  if (gruppo) {
-    where.push(`IFNULL(NULLIF(p.categoria, ''), 'Altro') = ?`);
-    params.push(gruppo);
+  if (sotto) {
+    where.push('p.sottocategoria = ?');
+    params.push(sotto);
+  }
+  if (misura) {
+    where.push('p.misura = ?');
+    params.push(misura);
   }
 
   for (const t of termini) {
@@ -74,27 +78,95 @@ function macroCategorie() {
     .prepare(
       `SELECT m.*, (SELECT COUNT(*) FROM products p WHERE p.macro_slug = m.slug AND p.attivo = 1) AS n_prodotti
          FROM macro_categorie m
-        ORDER BY m.ordine, m.nome`
+        ORDER BY m.priorita, m.ordine, m.nome`
     )
     .all();
 }
 
-function macroCategoria(slug) {
-  return db.prepare('SELECT * FROM macro_categorie WHERE slug = ?').get(slug);
+// Le categorie che in cantiere si cercano più spesso: vanno in cima alla home.
+function categorieInEvidenza() {
+  return macroCategorie().filter((m) => m.in_evidenza === 1);
 }
 
-// Sottocategorie di una macro, con il numero di prodotti: con listini da migliaia di
-// articoli si sceglie prima il gruppo, poi si sfogliano i prodotti.
-function gruppiPerMacro(slug) {
+function altreCategorie() {
+  return macroCategorie().filter((m) => m.in_evidenza !== 1 && m.n_prodotti > 0);
+}
+
+// ---------- Sottocategorie e misure ----------
+
+function sottocategorieDi(macroSlug) {
   return db
     .prepare(
-      `SELECT IFNULL(NULLIF(categoria, ''), 'Altro') AS nome, COUNT(*) AS n
-         FROM products
-        WHERE attivo = 1 AND macro_slug = ?
-        GROUP BY IFNULL(NULLIF(categoria, ''), 'Altro')
-        ORDER BY nome`
+      `SELECT s.*, (SELECT COUNT(*) FROM products p
+                     WHERE p.macro_slug = s.macro_slug AND p.sottocategoria = s.slug AND p.attivo = 1) AS n
+         FROM sottocategorie s
+        WHERE s.macro_slug = ?
+        ORDER BY s.ordine, s.nome`
     )
-    .all(slug);
+    .all(macroSlug)
+    .filter((s) => s.n > 0);
+}
+
+function sottocategoria(macroSlug, slug) {
+  return db
+    .prepare('SELECT * FROM sottocategorie WHERE macro_slug = ? AND slug = ?')
+    .get(macroSlug, slug);
+}
+
+// Misure realmente presenti fra i prodotti di un elenco: è il primo filtro che serve
+// a un installatore, prima ancora della marca.
+function misureDisponibili({ macroSlug = null, sotto = null, brandSlug = null } = {}) {
+  const where = ["p.attivo = 1", "p.misura <> ''"];
+  const params = [];
+  if (macroSlug) {
+    where.push('p.macro_slug = ?');
+    params.push(macroSlug);
+  }
+  if (sotto) {
+    where.push('p.sottocategoria = ?');
+    params.push(sotto);
+  }
+  if (brandSlug) {
+    where.push('p.brand_slug = ?');
+    params.push(brandSlug);
+  }
+  return db
+    .prepare(
+      `SELECT p.misura, COUNT(*) AS n FROM products p
+        WHERE ${where.join(' AND ')}
+        GROUP BY p.misura
+        ORDER BY n DESC, p.misura
+        LIMIT 24`
+    )
+    .all(...params);
+}
+
+// Marchi presenti dentro una categoria: la categoria è il livello principale,
+// il marchio è un filtro che sta sotto.
+function marchiNellaCategoria({ macroSlug = null, sotto = null } = {}) {
+  const where = ["p.attivo = 1", "p.brand_slug <> ''"];
+  const params = [];
+  if (macroSlug) {
+    where.push('p.macro_slug = ?');
+    params.push(macroSlug);
+  }
+  if (sotto) {
+    where.push('p.sottocategoria = ?');
+    params.push(sotto);
+  }
+  return db
+    .prepare(
+      `SELECT b.slug, b.nome, b.colore, b.iniziali, COUNT(*) AS n
+         FROM products p JOIN brands b ON b.slug = p.brand_slug
+        WHERE ${where.join(' AND ')}
+        GROUP BY b.slug, b.nome, b.colore, b.iniziali
+        ORDER BY n DESC`
+    )
+    .all(...params);
+}
+
+function macroCategoria(slug) {
+  return db.prepare('SELECT * FROM macro_categorie WHERE slug = ?').get(slug);
 }
 
 // ---------- Elenchi paginati ----------
@@ -123,12 +195,23 @@ function paginato({ where, params, pagina = 1, perPagina = PER_PAGINA }) {
   return { righe, totale, pagina: p, pagine, perPagina };
 }
 
-function prodottiDelGruppo(macroSlug, gruppo, pagina) {
-  return paginato({
-    where: `p.attivo = 1 AND p.macro_slug = ? AND IFNULL(NULLIF(p.categoria, ''), 'Altro') = ?`,
-    params: [macroSlug, gruppo],
-    pagina,
-  });
+// Prodotti di una categoria, filtrabili per sottocategoria, misura e marchio.
+function prodottiDellaCategoria(macroSlug, { sotto = null, misura = null, marchio = null, pagina = 1 } = {}) {
+  const where = ['p.attivo = 1', 'p.macro_slug = ?'];
+  const params = [macroSlug];
+  if (sotto) {
+    where.push('p.sottocategoria = ?');
+    params.push(sotto);
+  }
+  if (misura) {
+    where.push('p.misura = ?');
+    params.push(misura);
+  }
+  if (marchio) {
+    where.push('p.brand_slug = ?');
+    params.push(marchio);
+  }
+  return paginato({ where: where.join(' AND '), params, pagina });
 }
 
 // ---------- Marchi ----------
@@ -186,9 +269,14 @@ module.exports = {
   PER_PAGINA,
   cercaProdotti,
   macroCategorie,
+  categorieInEvidenza,
+  altreCategorie,
   macroCategoria,
-  gruppiPerMacro,
-  prodottiDelGruppo,
+  sottocategorieDi,
+  sottocategoria,
+  misureDisponibili,
+  marchiNellaCategoria,
+  prodottiDellaCategoria,
   marchi,
   marchio,
   famiglieDelMarchio,

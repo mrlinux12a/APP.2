@@ -1,23 +1,43 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <%- include('partials/head', { titolo: 'Accedi — Ordini Minuteria' }) %>
+  <%- include('partials/app_head', { titolo: 'Ordini Minuteria' }) %>
 </head>
-<body>
-  <div class="login-wrapper">
-    <h1>Ordini Minuteria</h1>
+<body data-loggato="0">
+  <div class="ingresso">
+    <div class="ingresso-testata">
+      <div class="ingresso-marchio">Ordini Minuteria</div>
+      <p>
+        Materiale termoidraulico dai distributori della tua zona: chiedi la disponibilità
+        al banco, confronta tempi e prezzi, ordina.
+      </p>
+    </div>
+
     <div class="card">
-      <% if (errore) { %>
-        <div class="errore"><%= errore %></div>
-      <% } %>
+      <div class="schede">
+        <a href="/login" class="attiva">Accedi</a>
+        <a href="/registrati">Registrati</a>
+      </div>
+
+      <% if (errore) { %><div class="errore"><%= errore %></div><% } %>
+
       <form method="POST" action="/login">
         <label for="username">Utente</label>
-        <input type="text" id="username" name="username" autocomplete="username" required>
+        <input type="text" id="username" name="username" autocomplete="username"
+               autocapitalize="none" required>
+
         <label for="password">Password</label>
         <input type="password" id="password" name="password" autocomplete="current-password" required>
-        <button class="btn btn-primary" type="submit" style="width:100%">Accedi</button>
+
+        <button class="btn btn-primary btn-blocco" type="submit">Accedi</button>
       </form>
+
+      <p class="nota" style="margin-bottom:0;">
+        Non hai ancora un'anagrafica? <a href="/registrati">Registra la tua impresa</a>:
+        i distributori che indichi dovranno confermare che sei loro cliente.
+      </p>
     </div>
   </div>
+  <script src="/app.js" defer></script>
 </body>
 </html>

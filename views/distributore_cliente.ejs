@@ -1,0 +1,190 @@
+<%
+  // Regola di sconto già impostata per un certo ambito/chiave, se c'è.
+  function regola(ambito, chiave) {
+    return regole.find(function (x) { return x.ambito === ambito && x.chiave === (chiave || ''); });
+  }
+  // Valore di uno dei cinque scaglioni a scalare.
+  function scaglione(ambito, chiave, n) {
+    const r = regola(ambito, chiave);
+    if (!r) return '';
+    const v = r['sconto' + n];
+    // Le regole salvate prima delle 5 colonne avevano un valore unico.
+    if (v === null || v === undefined) return n === 1 && !r.sconto1 && r.sconto_pct ? r.sconto_pct : '';
+    return v;
+  }
+  function effettivo(ambito, chiave) {
+    const r = regola(ambito, chiave);
+    return r ? r.sconto_pct : null;
+  }
+%>
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="1">
+  <div class="app">
+    <%- include('partials/appbar', {
+          titolo, intestazione: cliente.ragione_sociale, indietro: '/distributore/clienti' }) %>
+
+    <div class="contenuto">
+      <% if (salvato) { %>
+        <div class="avviso avviso-ok">Sconti salvati: valgono dalla prossima richiesta.</div>
+      <% } %>
+
+      <div class="card card-fitta">
+        <div class="riga-lista">
+          <span class="icona">🏢</span>
+          <span class="corpo">
+            <span class="etichetta"><%= cliente.ragione_sociale %></span>
+            <span class="dettaglio">
+              <%= tipi[cliente.tipo_soggetto] || '—' %><% if (cliente.referente) { %> · <%= cliente.referente %><% } %>
+            </span>
+          </span>
+          <span class="stato-badge stato-<%= rapporto.stato === 'approvato' ? 'confermato' : (rapporto.stato === 'rifiutato' ? 'non_disponibile' : 'in_attesa') %>">
+            <%= rapporto.stato === 'approvato' ? 'Approvato' : (rapporto.stato === 'rifiutato' ? 'Rifiutato' : 'Da verificare') %>
+          </span>
+        </div>
+        <div class="riga-lista">
+          <span class="icona">🧾</span>
+          <span class="corpo">
+            <span class="etichetta">P. IVA <%= cliente.partita_iva || '—' %></span>
+            <span class="dettaglio">
+              C.F. <%= cliente.codice_fiscale || '—' %><% if (cliente.sdi_pec) { %> · SDI/PEC <%= cliente.sdi_pec %><% } %>
+            </span>
+          </span>
+        </div>
+        <div class="riga-lista">
+          <span class="icona">📍</span>
+          <span class="corpo">
+            <span class="etichetta">Sede legale</span>
+            <span class="dettaglio"><%= indirizzoCliente || '—' %></span>
+          </span>
+        </div>
+        <% if (cliente.indirizzo_consegna) { %>
+          <div class="riga-lista">
+            <span class="icona">🚩</span>
+            <span class="corpo">
+              <span class="etichetta">Consegna abituale</span>
+              <span class="dettaglio"><%= cliente.indirizzo_consegna %></span>
+            </span>
+          </div>
+        <% } %>
+        <a class="riga-lista" href="tel:<%= (cliente.telefono || '').replace(/\s/g, '') %>">
+          <span class="icona">📞</span>
+          <span class="corpo">
+            <span class="etichetta"><%= cliente.telefono || '—' %></span>
+            <span class="dettaglio"><%= cliente.email || '—' %></span>
+          </span>
+          <span class="freccia">›</span>
+        </a>
+        <div class="riga-lista">
+          <span class="icona">🕒</span>
+          <span class="corpo">
+            <span class="etichetta">Iscritto il <%= fmt.dataOra(rapporto.richiesto_il) %></span>
+            <% if (rapporto.deciso_il) { %>
+              <span class="dettaglio">Deciso il <%= fmt.dataOra(rapporto.deciso_il) %></span>
+            <% } %>
+          </span>
+        </div>
+      </div>
+
+      <% if (rapporto.stato === 'in_attesa') { %>
+        <div class="sezione-titolo">È un tuo cliente?</div>
+        <form method="POST" action="/distributore/clienti/<%= cliente.id %>/decidi">
+          <div class="card">
+            <label for="codice_cliente">Codice cliente nel tuo gestionale (opzionale)</label>
+            <input type="text" id="codice_cliente" name="codice_cliente" placeholder="Es. 004512">
+            <label for="note">Note interne (opzionale)</label>
+            <textarea id="note" name="note" rows="2"></textarea>
+          </div>
+          <button class="btn btn-verde btn-blocco" type="submit" name="azione" value="approva">
+            Sì, è un mio cliente: approva
+          </button>
+          <button class="btn btn-rosso btn-blocco" type="submit" name="azione" value="rifiuta"
+                  style="margin-top:10px;">
+            Non lo riconosco: rifiuta
+          </button>
+        </form>
+
+      <% } else if (rapporto.stato === 'rifiutato') { %>
+        <div class="avviso avviso-attenzione">
+          Hai rifiutato questa anagrafica<% if (rapporto.note) { %>: <%= rapporto.note %><% } %>.
+        </div>
+        <form method="POST" action="/distributore/clienti/<%= cliente.id %>/decidi">
+          <input type="hidden" name="codice_cliente" value="<%= rapporto.codice_cliente %>">
+          <button class="btn btn-chiaro btn-blocco" type="submit" name="azione" value="approva">
+            Ripensaci: approva l'anagrafica
+          </button>
+        </form>
+
+      <% } else { %>
+        <div class="avviso avviso-ok">
+          Cliente approvato<% if (rapporto.codice_cliente) { %> — codice <strong><%= rapporto.codice_cliente %></strong><% } %>.
+          Può inviarti richieste di disponibilità.
+        </div>
+
+        <div class="sezione-titolo">Sconti concordati</div>
+        <p class="nota" style="margin-top:0;">
+          Sconti <strong>a scalare</strong>: 40+10+5 non fa 55, fa 48,7% — ogni sconto si applica
+          sul residuo del precedente. Vale sempre la regola più precisa: linea di prodotto, poi
+          marchio, poi categoria merceologica. Dove non metti nulla resta lo sconto Base del tuo
+          listino, e puoi comunque ritoccare i prezzi riga per riga quando rispondi.
+        </p>
+
+        <form method="POST" action="/distributore/clienti/<%= cliente.id %>/sconti">
+          <div class="sezione-titolo">Per categoria merceologica</div>
+          <div class="card card-fitta">
+            <% macro.forEach(function (m) { %>
+              <%- include('partials/riga_sconti', {
+                    ambito: 'macro', chiave: m.slug, icona: m.icona,
+                    titolo: m.nome, dettaglio: m.n_prodotti + ' prodotti',
+                    scaglione: scaglione, effettivo: effettivo
+                  }) %>
+            <% }); %>
+          </div>
+
+          <% if (marchi.length) { %>
+            <div class="sezione-titolo">Per marchio</div>
+            <div class="card card-fitta">
+              <% marchi.forEach(function (b) { %>
+                <%- include('partials/riga_sconti', {
+                      ambito: 'marchio', chiave: b.slug, icona: '🏷',
+                      titolo: b.nome, dettaglio: b.n_prodotti + ' articoli',
+                      scaglione: scaglione, effettivo: effettivo
+                    }) %>
+              <% }); %>
+            </div>
+          <% } %>
+
+          <% if (famiglie.length) { %>
+            <div class="sezione-titolo">Per linea di prodotto</div>
+            <div class="card card-fitta">
+              <% famiglie.forEach(function (f) { %>
+                <%- include('partials/riga_sconti', {
+                      ambito: 'famiglia', chiave: f.marchio_slug + ':' + f.codice, icona: '📁',
+                      titolo: f.codice + ' · ' + f.marchio,
+                      dettaglio: f.nome + ' — ' + f.n_prodotti + ' articoli',
+                      scaglione: scaglione, effettivo: effettivo
+                    }) %>
+              <% }); %>
+            </div>
+          <% } %>
+
+          <p class="nota">Svuota i campi di una riga per togliere la regola e tornare a quella più generale.</p>
+
+          <div class="barra-azione">
+            <div class="interno">
+              <a class="btn btn-chiaro" href="/distributore/clienti">Chiudi</a>
+              <button class="btn btn-primary" type="submit" style="flex:1;">Salva gli sconti</button>
+            </div>
+          </div>
+        </form>
+      <% } %>
+    </div>
+  </div>
+
+  <%- include('partials/nav_distributore', { attivo: 'clienti' }) %>
+  <script src="/app.js" defer></script>
+</body>
+</html>

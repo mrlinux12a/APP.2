@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="1">
+  <div class="app">
+    <%- include('partials/appbar', { titolo, intestazione: 'Punti vendita', indietro: '/' }) %>
+
+    <div class="contenuto">
+      <p class="sottotitolo">
+        <%= punti.length %> banchi delle insegne <%= insegne.join(', ') %> —
+        <%= citta.join(', ') %>.
+      </p>
+
+      <div class="card" style="padding:8px;">
+        <div class="mappa mappa-grande mappa-attiva" data-mappa-punti
+             data-punti="<%= encodeURIComponent(JSON.stringify(punti.map(function (p) {
+               return {
+                 lat: p.geo_lat, lng: p.geo_lng, nome: p.nome, insegna: p.distributore,
+                 indirizzo: p.indirizzo + ', ' + p.cap + ' ' + p.citta, telefono: p.telefono
+               };
+             }))) %>"
+             role="img" aria-label="Mappa dei punti vendita dei distributori"></div>
+        <div class="geo-legenda legenda-insegne">
+          <% insegne.forEach(function (i, k) { %>
+            <span class="insegna-<%= k %>"><%= i %></span>
+          <% }); %>
+        </div>
+      </div>
+
+      <% if (!geo.consenso) { %>
+        <div class="avviso avviso-info">
+          Attiva la posizione nella home per vedere quanto dista ogni banco e ordinare
+          l'elenco dal più vicino.
+        </div>
+      <% } %>
+
+      <% insegne.forEach(function (insegna) { %>
+        <div class="sezione-titolo"><%= insegna %></div>
+        <div class="card card-fitta">
+          <% punti.filter(function (p) { return p.distributore === insegna; }).forEach(function (p) { %>
+            <div class="riga-lista">
+              <span class="icona">🏪</span>
+              <span class="corpo">
+                <span class="etichetta"><%= p.nome %></span>
+                <span class="dettaglio"><%= p.indirizzo %> — <%= p.cap %> <%= p.citta %> (<%= p.provincia %>)</span>
+                <% if (p.telefono) { %><span class="dettaglio">☎ <%= p.telefono %></span><% } %>
+              </span>
+              <% if (p.distanza) { %><span class="stato-badge stato-in_attesa"><%= p.distanza %></span><% } %>
+            </div>
+          <% }); %>
+        </div>
+      <% }); %>
+
+      <p class="nota">
+        Indirizzi presi dai siti ufficiali delle insegne. Le posizioni sono ricavate dagli
+        indirizzi con OpenStreetMap: due punti (Borea Staglieno e l'Atelier Cambielli) sono
+        collocati sulla via e non sul civico esatto.
+      </p>
+    </div>
+  </div>
+
+  <% if (currentUser.ruolo === 'cliente') { %>
+    <%- include('partials/nav', { attivo: '' }) %>
+  <% } else if (currentUser.ruolo === 'distributore') { %>
+    <%- include('partials/nav_distributore', { attivo: '' }) %>
+  <% } %>
+  <script src="/app.js" defer></script>
+  <script src="/mappa.js" defer></script>
+</body>
+</html>

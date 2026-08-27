@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="1">
+  <div class="app">
+    <%- include('partials/appbar', { titolo, intestazione: 'La mia anagrafica', indietro: '/home' }) %>
+
+    <div class="contenuto">
+      <% if (benvenuto) { %>
+        <div class="avviso avviso-ok">
+          <strong>Anagrafica creata.</strong> I distributori che hai scelto devono confermare
+          che sei loro cliente: ti arriva una notifica appena rispondono.
+        </div>
+      <% } %>
+
+      <% if (cliente.stato_anagrafica === 'in_attesa') { %>
+        <div class="avviso avviso-attenzione">
+          Nessun distributore ti ha ancora approvato: puoi sfogliare il catalogo, ma non
+          inviare richieste di disponibilità.
+        </div>
+      <% } %>
+
+      <div class="sezione-titolo">Distributori di riferimento</div>
+      <div class="card card-fitta">
+        <% legami.forEach(function (l) { %>
+          <div class="riga-lista">
+            <span class="icona">🏪</span>
+            <span class="corpo">
+              <span class="etichetta"><%= l.distributore %></span>
+              <span class="dettaglio">
+                <%= l.filiale %>
+                <% if (l.stato === 'approvato' && l.codice_cliente) { %>
+                  · codice cliente <%= l.codice_cliente %>
+                <% } %>
+              </span>
+              <% if (l.note) { %><span class="dettaglio">Nota: <%= l.note %></span><% } %>
+            </span>
+            <span class="stato-badge stato-<%= l.stato === 'approvato' ? 'confermato' : (l.stato === 'rifiutato' ? 'non_disponibile' : 'in_attesa') %>">
+              <%= l.stato === 'approvato' ? 'Approvato' : (l.stato === 'rifiutato' ? 'Non riconosciuto' : 'In attesa') %>
+            </span>
+          </div>
+        <% }); %>
+        <% if (!legami.length) { %>
+          <div class="riga-lista"><span class="corpo">Nessun distributore indicato.</span></div>
+        <% } %>
+      </div>
+
+      <div class="sezione-titolo">Dati di fatturazione</div>
+      <div class="card card-fitta">
+        <div class="riga-lista">
+          <span class="icona">🏢</span>
+          <span class="corpo">
+            <span class="etichetta"><%= cliente.ragione_sociale %></span>
+            <span class="dettaglio">
+              <%= tipi[cliente.tipo_soggetto] || '—' %><% if (cliente.referente) { %> · <%= cliente.referente %><% } %>
+            </span>
+          </span>
+        </div>
+        <div class="riga-lista">
+          <span class="icona">🧾</span>
+          <span class="corpo">
+            <span class="etichetta">P. IVA <%= cliente.partita_iva || '—' %></span>
+            <span class="dettaglio">
+              C.F. <%= cliente.codice_fiscale || '—' %><% if (cliente.sdi_pec) { %> · SDI/PEC <%= cliente.sdi_pec %><% } %>
+            </span>
+          </span>
+        </div>
+        <div class="riga-lista">
+          <span class="icona">📍</span>
+          <span class="corpo">
+            <span class="etichetta">Sede legale</span>
+            <span class="dettaglio"><%= indirizzoCliente || '—' %></span>
+          </span>
+        </div>
+        <div class="riga-lista">
+          <span class="icona">🚩</span>
+          <span class="corpo">
+            <span class="etichetta">Consegna abituale</span>
+            <span class="dettaglio"><%= cliente.indirizzo_consegna || 'Come sede legale' %></span>
+          </span>
+        </div>
+        <div class="riga-lista">
+          <span class="icona">📞</span>
+          <span class="corpo">
+            <span class="etichetta"><%= cliente.telefono || '—' %></span>
+            <span class="dettaglio"><%= cliente.email || '—' %></span>
+          </span>
+        </div>
+      </div>
+
+      <p class="nota">
+        Per correggere i dati di fatturazione scrivi al distributore o all'agente: la modifica
+        dall'app non è ancora prevista.
+      </p>    </div>
+  </div>
+
+  <%- include('partials/nav', { attivo: '' }) %>
+  <script src="/app.js" defer></script>
+</body>
+</html>

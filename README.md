@@ -33,6 +33,75 @@ non un errore.
 Queste credenziali sono solo per il test interno: vanno cambiate prima di far provare l'app ai
 clienti pilota (per ora si aggiornano a mano nel DB o rilanciando `db/seed.js` con altri dati).
 
+## Come è organizzato il catalogo
+
+Le categorie sono ordinate per **frequenza d'uso in cantiere**, non per struttura di
+magazzino: chi apre l'app è un professionista che cerca un pezzo in fretta. In home
+compaiono per prime **Raccorderia, Valvolame e Minuteria**; il resto sta sotto
+"Altre categorie".
+
+La gerarchia è **categoria → sottocategoria → marchio**: il marchio è un filtro
+facoltativo dentro la categoria, mai il punto di partenza. Dentro una sottocategoria il
+primo filtro è la **misura** (1/2", 16mm, DN25...), estratta dalle descrizioni.
+
+La tassonomia sta in `db/tassonomia.js` (14 categorie con parole chiave e misure) e si
+applica al catalogo con:
+
+```
+node db/riclassifica.js
+```
+
+Va rilanciato dopo ogni import di listino: assegna a ogni articolo categoria,
+sottocategoria e misura.
+
+## Ordine minimo e spedizione
+
+Ordine minimo **€ 33** di merce, calcolata sui prezzi già maggiorati del servizio e IVA
+esclusa. La **spedizione di € 10** si somma dopo e non concorre a raggiungere la soglia.
+Entrambi i valori stanno in `config` (`ordine_minimo`, `spedizione_fissa`).
+
+## Registrazione e approvazione
+
+La pagina di ingresso ha due schede: **Accedi** e **Registrati**.
+
+Chi si registra compila l'anagrafica completa della propria impresa o ditta individuale —
+ragione sociale, referente, **partita IVA, codice fiscale, sede legale, CAP, città, provincia,
+codice SDI o PEC**, indirizzo di consegna abituale, contatti — e sceglie i **distributori di
+riferimento** fra quelli attivi.
+
+Ai banchi scelti arriva la notifica *"Nuova anagrafica da approvare"*. Il distributore apre la
+scheda del cliente, vede tutti i dati fiscali e decide: **approva** (indicando il proprio codice
+cliente) o **rifiuta** se non lo riconosce. Finché nessuno approva, il cliente può sfogliare il
+catalogo ma non inviare richieste; le richieste vanno **solo ai banchi che lo hanno approvato**.
+
+Approvato il cliente, il banco imposta gli **sconti concordati** per ambito:
+
+| Ambito | Esempio | Precedenza |
+|---|---|---|
+| Linea di prodotto | TOSHIBA · RAS | 1ª (vince) |
+| Marchio | TOSHIBA | 2ª |
+| Categoria merceologica | Condizionamento | 3ª |
+| Generale | tutto il catalogo | 4ª |
+
+Vale sempre la regola più precisa; dove non c'è nessuna regola resta lo sconto Base del listino
+del banco. Svuotando un campo la regola sparisce. Questi sconti precompilano il modulo di
+risposta, dove il banco può comunque ritoccare riga per riga.
+
+## Punti vendita sulla mappa
+
+`/punti-vendita` mostra i banchi dei distributori su mappa, un colore per insegna, con elenco
+per insegna e distanza da te se hai condiviso la posizione. Al momento sono caricati i **12
+punti vendita di Genova** di AFIS, BOREA, CAMBIELLI e FIDRA, con indirizzi presi dai siti
+ufficiali e coordinate ricavate con Nominatim/OpenStreetMap:
+
+```
+node db/geocodifica.js          # geocodifica i punti nuovi
+node db/geocodifica.js --tutti  # rigeocodifica tutto
+```
+
+Gli indirizzi stanno in `db/punti_vendita.js`: per aggiungere altre città basta estendere
+quell'elenco e rilanciare lo script.
+
 ## Il flusso, passo per passo
 
 **Cliente** (telefono)
@@ -47,7 +116,9 @@ clienti pilota (per ora si aggiornano a mano nel DB o rilanciando `db/seed.js` c
    funziona anche senza JavaScript (la barra è un normale form GET).
 3. **Scelta del materiale** — dalla categoria si impostano le quantità e si preme **Procedi**
    (oppure "Aggiungi e continua a scegliere" per pescare da più categorie).
-4. **Attesa** — la richiesta parte verso i distributori della zona del cliente che trattano
+4. **Riepilogo** — "Procedi" non manda niente: mostra prima articoli, quantità, prezzi e
+   totale. La richiesta parte solo dopo **Conferma e chiedi disponibilità**.
+5. **Attesa** — la richiesta parte verso i distributori della zona del cliente che trattano
    *tutti* i prodotti richiesti. Hanno **10 minuti** per confermare la disponibilità al banco.
    Il cliente vede un countdown e riceve una notifica appena arriva una risposta: può chiudere
    la schermata.
@@ -145,8 +216,9 @@ esplicito: finché non si preme *Attiva la posizione in tempo reale* non viene r
 coordinata. Dopo il consenso l'app usa `watchPosition` e invia al massimo un aggiornamento ogni
 10 secondi.
 
-- **Cliente** — la posizione serve a calcolare la distanza dal banco e a seguire il mezzo in
-  consegna.
+- **Cliente** — la posizione viene chiesta al browser **appena si apre l'app**: la home mostra
+  subito la mappa con dove sei e gli otto punti vendita più vicini, con la distanza di ognuno.
+  Se il permesso è già stato negato l'app non insiste.
 - **Distributore** — la posizione del banco/mezzo permette al cliente di seguire la consegna:
   si condivide per singolo ordine con *Condividi la posizione del mezzo*.
 - **Revoca** — *Disattiva e cancella la posizione* spegne il consenso, cancella davvero le

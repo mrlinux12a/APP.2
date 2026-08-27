@@ -1,3 +1,13 @@
+<%
+  function filtro(cambio) {
+    const stato = { categoria, sottostato };
+    Object.keys(cambio).forEach(function (k) { stato[k] = cambio[k]; });
+    const parti = Object.keys(stato)
+      .filter(function (k) { return stato[k]; })
+      .map(function (k) { return k + '=' + encodeURIComponent(stato[k]); });
+    return '/notifiche' + (parti.length ? '?' + parti.join('&') : '');
+  }
+%>
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -8,32 +18,71 @@
     <%- include('partials/appbar', { titolo, intestazione: 'Notifiche', indietro: '/' }) %>
 
     <div class="contenuto">
-      <button class="btn btn-chiaro btn-blocco" type="button" data-abilita-notifiche>
+      <div class="chip-riga">
+        <a class="chip <%= categoria ? '' : 'attivo' %>" href="/notifiche">Tutte</a>
+        <% Object.keys(categorie).forEach(function (k) { %>
+          <% if (conteggi[k]) { %>
+            <a class="chip <%= categoria === k ? 'attivo' : '' %>"
+               href="<%= filtro({ categoria: k, sottostato: null }) %>">
+              <%= categorie[k].icona %> <%= categorie[k].nome %> · <%= conteggi[k].n %>
+            </a>
+          <% } %>
+        <% }); %>
+      </div>
+
+      <% if (categoria && sottostati.length) { %>
+        <div class="chip-riga">
+          <a class="chip piccolo <%= sottostato ? '' : 'attivo' %>"
+             href="<%= filtro({ sottostato: null }) %>">Tutti gli stati</a>
+          <% sottostati.forEach(function (s) { %>
+            <a class="chip piccolo <%= sottostato === s.sottostato ? 'attivo' : '' %>"
+               href="<%= filtro({ sottostato: s.sottostato }) %>">
+              <%= categorie[categoria].sottostati[s.sottostato] || s.sottostato %> · <%= s.n %>
+            </a>
+          <% }); %>
+        </div>
+      <% } %>
+
+      <button class="btn btn-chiaro btn-blocco" type="button" data-abilita-notifiche
+              style="margin:10px 0;">
         Attiva le notifiche sul telefono
       </button>
 
       <% if (!elenco.length) { %>
-        <div class="vuoto"><span class="emoji">🔕</span>Nessuna notifica per ora.</div>
+        <div class="vuoto"><span class="emoji">🔕</span>Nessuna notifica in questa vista.</div>
       <% } else { %>
-        <div class="card card-fitta" style="margin-top:12px;">
+        <div class="card card-fitta">
           <% elenco.forEach(function (n) { %>
             <a class="riga-lista" href="<%= n.link || '#' %>">
-              <span class="icona"><%= n.letta ? '📩' : '🔔' %></span>
+              <span class="icona"><%= (categorie[n.categoria] || categorie.generale).icona %></span>
               <span class="corpo">
                 <span class="etichetta"><%= n.titolo %></span>
                 <span class="dettaglio"><%= n.testo %></span>
                 <span class="dettaglio"><%= fmt.dataOra(n.creato_il) %></span>
               </span>
-              <% if (n.link) { %><span class="freccia">›</span><% } %>
+              <% if (n.sottostato && categorie[n.categoria] && categorie[n.categoria].sottostati[n.sottostato]) { %>
+                <span class="stato-badge stato-<%= n.sottostato %>">
+                  <%= categorie[n.categoria].sottostati[n.sottostato] %>
+                </span>
+              <% } else if (n.link) { %>
+                <span class="freccia">›</span>
+              <% } %>
             </a>
           <% }); %>
         </div>
       <% } %>
+
+      <p class="nota">
+        Quando un distributore conferma una richiesta, quella richiesta diventa un ordine:
+        la trovi sotto <strong>Ordini</strong>, non più fra le richieste.
+      </p>
     </div>
   </div>
 
   <% if (currentUser.ruolo === 'cliente') { %>
     <%- include('partials/nav', { attivo: '' }) %>
+  <% } else if (currentUser.ruolo === 'distributore') { %>
+    <%- include('partials/nav_distributore', { attivo: 'notifiche' }) %>
   <% } %>
   <script src="/app.js" defer></script>
 </body>

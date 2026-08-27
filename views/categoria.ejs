@@ -1,3 +1,14 @@
+<%
+  // Costruisce un link mantenendo i filtri attivi e cambiandone uno solo.
+  function conFiltri(cambio) {
+    const stato = { sotto: sottoSlug, misura, marchio };
+    Object.keys(cambio).forEach(function (k) { stato[k] = cambio[k]; });
+    const parti = Object.keys(stato)
+      .filter(function (k) { return stato[k]; })
+      .map(function (k) { return k + '=' + encodeURIComponent(stato[k]); });
+    return '/categoria/' + macro.slug + (parti.length ? '?' + parti.join('&') : '');
+  }
+%>
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -7,31 +18,31 @@
   <div class="app">
     <%- include('partials/appbar', {
           titolo,
-          indietro: (elenco && gruppi.length > 1) || q ? '/categoria/' + macro.slug : '/home'
+          indietro: sottoSlug || q ? '/categoria/' + macro.slug : '/home'
         }) %>
 
     <div class="contenuto" style="padding-bottom:0;">
       <%- include('partials/barra_ricerca', {
             azione: '/categoria/' + macro.slug,
             q,
-            ambito: { macro: macro.slug, gruppo: gruppo || '' },
-            segnaposto: gruppo ? 'Cerca in ' + gruppo : 'Cerca in ' + macro.nome
+            ambito: { macro: macro.slug, sotto: sottoSlug || '' },
+            segnaposto: sotto ? 'Cerca in ' + sotto.nome : 'Cerca in ' + macro.nome
           }) %>
     </div>
 
     <% if (!elenco) { %>
       <div class="contenuto" style="padding-top:0;">
         <p class="sottotitolo"><%= macro.descrizione %></p>
-        <% if (!gruppi.length) { %>
+        <% if (!sottocategorie.length) { %>
           <div class="vuoto"><span class="emoji">📭</span>Nessun prodotto in questa categoria.</div>
         <% } else { %>
           <div class="card card-fitta">
-            <% gruppi.forEach(function (g) { %>
-              <a class="riga-lista" href="/categoria/<%= macro.slug %>?gruppo=<%= encodeURIComponent(g.nome) %>">
+            <% sottocategorie.forEach(function (s) { %>
+              <a class="riga-lista" href="<%= conFiltri({ sotto: s.slug, misura: null, marchio: null }) %>">
                 <span class="icona">📁</span>
                 <span class="corpo">
-                  <span class="etichetta"><%= g.nome %></span>
-                  <span class="dettaglio"><%= g.n %> prodotti</span>
+                  <span class="etichetta"><%= s.nome %></span>
+                  <span class="dettaglio"><%= s.n %> articoli</span>
                 </span>
                 <span class="freccia">›</span>
               </a>
@@ -42,20 +53,42 @@
 
     <% } else { %>
       <form method="POST" action="/carrello">
-        <input type="hidden" name="ritorno"
-               value="/categoria/<%= macro.slug %>?gruppo=<%= encodeURIComponent(gruppo || '') %>&p=<%= elenco.pagina || 1 %>">
+        <input type="hidden" name="ritorno" value="<%= conFiltri({}) %>">
         <div class="contenuto" style="padding-top:0;">
+
+          <% if (!q && misure.length) { %>
+            <div class="filtro-titolo">Misura</div>
+            <div class="chip-riga">
+              <a class="chip <%= misura ? '' : 'attivo' %>" href="<%= conFiltri({ misura: null }) %>">Tutte</a>
+              <% misure.forEach(function (m) { %>
+                <a class="chip <%= misura === m.misura ? 'attivo' : '' %>"
+                   href="<%= conFiltri({ misura: m.misura }) %>"><%= m.misura %></a>
+              <% }); %>
+            </div>
+          <% } %>
+
+          <% if (!q && marchi.length > 1) { %>
+            <div class="filtro-titolo">Marchio <span class="secondario">(facoltativo)</span></div>
+            <div class="chip-riga">
+              <a class="chip <%= marchio ? '' : 'attivo' %>" href="<%= conFiltri({ marchio: null }) %>">Tutti</a>
+              <% marchi.forEach(function (b) { %>
+                <a class="chip <%= marchio === b.slug ? 'attivo' : '' %>"
+                   href="<%= conFiltri({ marchio: b.slug }) %>"><%= b.nome %> · <%= b.n %></a>
+              <% }); %>
+            </div>
+          <% } %>
+
           <p class="sottotitolo">
             <% if (elenco.ricerca) { %>
-              <strong><%= elenco.righe.length %></strong> risultati per «<%= q %>»<% if (gruppo) { %> in <%= gruppo %><% } %>
+              <strong><%= elenco.righe.length %></strong> risultati per «<%= q %>»
             <% } else { %>
-              <strong><%= gruppo %></strong> — <%= elenco.totale %> prodotti
+              <strong><%= sotto ? sotto.nome : macro.nome %></strong> — <%= elenco.totale %> articoli
             <% } %>
           </p>
 
           <div id="risultati">
             <% if (!elenco.righe.length) { %>
-              <div class="vuoto"><span class="emoji">🤷</span>Nessun prodotto trovato.</div>
+              <div class="vuoto"><span class="emoji">🤷</span>Nessun articolo con questi filtri.</div>
             <% } else { %>
               <div class="card card-fitta">
                 <% elenco.righe.forEach(function (p) { %>
@@ -67,16 +100,12 @@
 
           <% if (!elenco.ricerca) { %>
             <div data-paginazione>
-              <%- include('partials/paginazione', {
-                    elenco,
-                    base: '/categoria/' + macro.slug + '?gruppo=' + encodeURIComponent(gruppo)
-                  }) %>
+              <%- include('partials/paginazione', { elenco, base: conFiltri({}) + (conFiltri({}).indexOf('?') === -1 ? '?' : '') }) %>
             </div>
           <% } %>
 
           <p class="nota">
-            Prezzi IVA esclusa. La disponibilità viene chiesta al banco del distributore quando
-            premi Procedi: hanno 10 minuti per confermare.
+            Prezzi IVA esclusa. La disponibilità la chiedi al banco dal riepilogo, dopo Procedi.
           </p>
         </div>
 

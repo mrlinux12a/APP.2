@@ -54,25 +54,81 @@
     let mappa = null;
     let segno = null;
     let cerchio = null;
+    let viciniDisegnati = false;
+
+    // Punti vendita da mostrare insieme alla posizione dell'utente.
+    let vicini = [];
+    try {
+      vicini = JSON.parse(decodeURIComponent(nodoGeo.dataset.vicini || '[]')) || [];
+    } catch (e) {
+      vicini = [];
+    }
+
+    function distanzaKm(a, b) {
+      const R = 6371;
+      const rad = function (g) { return (g * Math.PI) / 180; };
+      const dLat = rad(b.lat - a.lat);
+      const dLng = rad(b.lng - a.lng);
+      const h =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      return 2 * R * Math.asin(Math.sqrt(h));
+    }
+
+    function formatta(km) {
+      return km < 1 ? Math.round(km * 1000) + ' m' : km.toFixed(1).replace('.', ',') + ' km';
+    }
+
+    // I punti vendita più vicini alla posizione appena rilevata.
+    function disegnaVicini(L, lat, lng) {
+      if (viciniDisegnati || !vicini.length) return;
+      viciniDisegnati = true;
+
+      const ordinati = vicini
+        .map(function (p) { return { ...p, km: distanzaKm({ lat: lat, lng: lng }, p) }; })
+        .sort(function (a, b) { return a.km - b.km; });
+
+      const daMostrare = ordinati.slice(0, 8);
+      const confini = [[lat, lng]];
+
+      daMostrare.forEach(function (p) {
+        L.marker([p.lat, p.lng], { icon: pallino(L, '#e0912f') })
+          .addTo(mappa)
+          .bindPopup(
+            '<strong>' + p.insegna + '</strong><br>' + p.nome + '<br>' + p.indirizzo +
+              '<br>a ' + formatta(p.km) + ' da te'
+          );
+        confini.push([p.lat, p.lng]);
+      });
+
+      // Inquadratura sui tre più vicini, così la mappa non parte troppo larga.
+      mappa.fitBounds(L.latLngBounds(confini.slice(0, 4)).pad(0.3));
+
+      const legenda = document.querySelector('[data-geo-vicini]');
+      if (legenda) legenda.removeAttribute('hidden');
+    }
 
     function mostra(lat, lng, precisione) {
       caricaLeaflet()
         .then(function (L) {
           if (!mappa) {
             mappa = base(L, nodoGeo, 15);
-            segno = L.marker([lat, lng], { icon: pallino(L, '#1d4e89') }).addTo(mappa);
+            segno = L.marker([lat, lng], { icon: pallino(L, '#1d4e89') })
+              .addTo(mappa)
+              .bindPopup('Sei qui');
             cerchio = L.circle([lat, lng], {
               radius: precisione || 40,
               color: '#1d4e89',
               weight: 1,
               fillOpacity: 0.12,
             }).addTo(mappa);
+            mappa.setView([lat, lng], 15);
           } else {
             segno.setLatLng([lat, lng]);
             cerchio.setLatLng([lat, lng]).setRadius(precisione || 40);
           }
-          mappa.setView([lat, lng], Math.max(mappa.getZoom() || 0, 15));
           nodoGeo.classList.add('mappa-attiva');
+          disegnaVicini(L, lat, lng);
           setTimeout(function () { mappa.invalidateSize(); }, 60);
         })
         .catch(function () {
@@ -126,6 +182,61 @@
         });
     } else {
       messaggio(nodoPunto, 'Posizione non condivisa dal cliente.');
+    }
+  }
+
+  // ---------- Mappa di tutti i punti vendita ----------
+
+  const nodoPunti = document.querySelector('[data-mappa-punti]');
+  if (nodoPunti) {
+    let elenco = [];
+    try {
+      elenco = JSON.parse(decodeURIComponent(nodoPunti.dataset.punti || '[]'));
+    } catch (e) {
+      elenco = [];
+    }
+
+    if (!elenco.length) {
+      messaggio(nodoPunti, 'Nessun punto vendita con posizione nota.');
+    } else {
+      // Un colore per insegna, così sulla mappa si distinguono a colpo d'occhio.
+      const COLORI = ['#1d4e89', '#e0912f', '#2e7d32', '#8e24aa', '#c62828', '#00838f'];
+      const insegne = [];
+      elenco.forEach(function (p) {
+        if (insegne.indexOf(p.insegna) === -1) insegne.push(p.insegna);
+      });
+
+      caricaLeaflet()
+        .then(function (L) {
+          const mappa = base(L, nodoPunti, 12);
+          const coordinate = [];
+
+          elenco.forEach(function (p) {
+            const colore = COLORI[insegne.indexOf(p.insegna) % COLORI.length];
+            L.marker([p.lat, p.lng], { icon: pallino(L, colore) })
+              .addTo(mappa)
+              .bindPopup(
+                '<strong>' + p.insegna + '</strong><br>' + p.nome + '<br>' + p.indirizzo +
+                  (p.telefono ? '<br>☎ ' + p.telefono : '')
+              );
+            coordinate.push([p.lat, p.lng]);
+          });
+
+          mappa.fitBounds(L.latLngBounds(coordinate).pad(0.15));
+          setTimeout(function () { mappa.invalidateSize(); }, 60);
+
+          // Stessi colori nella legenda sotto la mappa.
+          const legenda = document.querySelector('.legenda-insegne');
+          if (legenda) {
+            insegne.forEach(function (nome, i) {
+              const voce = legenda.querySelector('.insegna-' + i);
+              if (voce) voce.style.setProperty('--colore-insegna', COLORI[i % COLORI.length]);
+            });
+          }
+        })
+        .catch(function () {
+          messaggio(nodoPunti, 'Mappa non disponibile (serve la connessione a internet).');
+        });
     }
   }
 

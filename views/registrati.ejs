@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="0">
+  <div class="ingresso ingresso-largo">
+    <div class="ingresso-testata">
+      <div class="ingresso-marchio">Ordini Minuteria</div>
+      <p>Crea l'anagrafica della tua impresa. I dati servono anche per la fatturazione.</p>
+    </div>
+
+    <div class="card">
+      <div class="schede">
+        <a href="/login">Accedi</a>
+        <a href="/registrati" class="attiva">Registrati</a>
+      </div>
+
+      <% if (errori.length) { %>
+        <div class="errore">
+          <strong>Controlla questi punti:</strong>
+          <ul style="margin:6px 0 0; padding-left:18px;">
+            <% errori.forEach(function (e) { %><li><%= e %></li><% }); %>
+          </ul>
+        </div>
+      <% } %>
+
+      <form method="POST" action="/registrati">
+        <div class="sezione-titolo" style="margin-top:0;">Chi sei</div>
+        <label>Forma giuridica</label>
+        <div class="scelta-modalita" style="margin-bottom:12px;">
+          <% Object.keys(tipi).forEach(function (k) { %>
+            <label class="scelta-radio <%= dati.tipo_soggetto === k ? 'attiva' : '' %>">
+              <input type="radio" name="tipo_soggetto" value="<%= k %>"
+                     <%= dati.tipo_soggetto === k ? 'checked' : '' %> required>
+              <%= tipi[k] %>
+            </label>
+          <% }); %>
+        </div>
+
+        <label for="ragione_sociale">Ragione sociale / denominazione *</label>
+        <input type="text" id="ragione_sociale" name="ragione_sociale" required
+               value="<%= dati.ragione_sociale || '' %>">
+
+        <label for="referente">Referente (nome e cognome)</label>
+        <input type="text" id="referente" name="referente" value="<%= dati.referente || '' %>">
+
+        <div class="sezione-titolo">Dati per la fatturazione</div>
+
+        <label for="partita_iva">Partita IVA *</label>
+        <input type="text" id="partita_iva" name="partita_iva" inputmode="numeric"
+               placeholder="11 cifre" value="<%= dati.partita_iva || '' %>" required>
+
+        <label for="codice_fiscale">Codice fiscale</label>
+        <input type="text" id="codice_fiscale" name="codice_fiscale" autocapitalize="characters"
+               value="<%= dati.codice_fiscale || '' %>">
+
+        <label for="indirizzo">Indirizzo della sede legale *</label>
+        <input type="text" id="indirizzo" name="indirizzo" placeholder="Via e numero civico"
+               value="<%= dati.indirizzo || '' %>" required>
+
+        <div class="riga-campi">
+          <div>
+            <label for="cap">CAP *</label>
+            <input type="text" id="cap" name="cap" inputmode="numeric" maxlength="5"
+                   value="<%= dati.cap || '' %>" required>
+          </div>
+          <div style="flex:2;">
+            <label for="citta">Città *</label>
+            <input type="text" id="citta" name="citta" value="<%= dati.citta || '' %>" required>
+          </div>
+          <div>
+            <label for="provincia">Prov. *</label>
+            <input type="text" id="provincia" name="provincia" maxlength="2"
+                   autocapitalize="characters" value="<%= dati.provincia || '' %>" required>
+          </div>
+        </div>
+
+        <label for="sdi_pec">Codice SDI o PEC per la fattura elettronica</label>
+        <input type="text" id="sdi_pec" name="sdi_pec" value="<%= dati.sdi_pec || '' %>">
+
+        <label for="indirizzo_consegna">Indirizzo di consegna abituale</label>
+        <input type="text" id="indirizzo_consegna" name="indirizzo_consegna"
+               placeholder="Se diverso dalla sede: cantiere, magazzino..."
+               value="<%= dati.indirizzo_consegna || '' %>">
+
+        <div class="sezione-titolo">Contatti</div>
+
+        <label for="email">Email *</label>
+        <input type="email" id="email" name="email" autocapitalize="none"
+               value="<%= dati.email || '' %>" required>
+
+        <label for="telefono">Telefono *</label>
+        <input type="tel" id="telefono" name="telefono" value="<%= dati.telefono || '' %>" required>
+
+        <div class="sezione-titolo">I tuoi distributori di riferimento</div>
+        <p class="nota" style="margin-top:0;">
+          Scegli i banchi con cui lavori: riceveranno la richiesta di confermare che sei loro
+          cliente. Finché non ti approvano non potrai inviare loro ordini.
+        </p>
+        <div class="card card-fitta" style="margin-bottom:12px;">
+          <% distributori.forEach(function (d) { %>
+            <label class="riga-lista riga-scelta">
+              <input type="checkbox" name="distributori" value="<%= d.id %>"
+                     <%= scelti.indexOf(d.id) !== -1 ? 'checked' : '' %>>
+              <span class="corpo">
+                <span class="etichetta"><%= d.nome %></span>
+                <span class="dettaglio"><%= d.filiale %> · zona <%= d.zona %></span>
+              </span>
+            </label>
+          <% }); %>
+        </div>
+
+        <div class="sezione-titolo">Credenziali di accesso</div>
+
+        <label for="username">Nome utente *</label>
+        <input type="text" id="username" name="username" autocapitalize="none"
+               autocomplete="username" spellcheck="false" data-utente
+               pattern="[A-Za-z0-9._-]{3,30}"
+               placeholder="tutto attaccato, es. rossimpianti"
+               value="<%= dati.username || '' %>" required>
+        <p class="nota" style="margin:-6px 0 12px;">
+          Scrivilo <strong>tutto attaccato</strong>, senza spazi: solo lettere, numeri,
+          punto o trattino. Gli spazi vengono tolti da soli.
+        </p>
+
+        <label for="password">Password * (almeno 8 caratteri)</label>
+        <input type="password" id="password" name="password" autocomplete="new-password" required>
+
+        <label for="password2">Ripeti la password *</label>
+        <input type="password" id="password2" name="password2" autocomplete="new-password" required>
+
+        <button class="btn btn-primary btn-blocco" type="submit">Crea l'anagrafica</button>
+        <p class="nota" style="margin-bottom:0;">
+          I campi con * sono obbligatori. I dati fiscali vengono usati per intestare bolle e
+          fatture, e vengono mostrati ai distributori che indichi qui sopra.
+        </p>
+      </form>
+    </div>
+  </div>
+  <script src="/app.js" defer></script>
+</body>
+</html>
