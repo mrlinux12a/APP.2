@@ -590,6 +590,48 @@ app.post('/richieste/:id/annulla', requireRole('cliente'), (req, res) => {
   res.redirect('/home');
 });
 
+// Elimina richiesta (cliente) — globale: sparisce anche per tutti i distributori (da confermare + storico)
+app.post('/richieste/:id/elimina', requireRole('cliente'), (req, res) => {
+  const richiesta = db.prepare('SELECT * FROM requests WHERE id = ?').get(req.params.id);
+  if (!richiesta || richiesta.cliente_id !== req.session.user.id) {
+    return res.status(404).render('errore', { titolo: 'Non trovata', messaggio: 'Richiesta non trovata.' });
+  }
+  const elimina = db.transaction(() => {
+    if (richiesta.order_id) {
+      db.prepare('UPDATE requests SET order_id = NULL WHERE id = ?').run(richiesta.id);
+      db.prepare('DELETE FROM order_items WHERE order_id = ?').run(richiesta.order_id);
+      db.prepare('DELETE FROM orders WHERE id = ?').run(richiesta.order_id);
+    }
+    const rids = db.prepare('SELECT id FROM request_responses WHERE request_id = ?').all(richiesta.id).map(r => r.id);
+    for (const rid of rids) db.prepare('DELETE FROM request_response_items WHERE response_id = ?').run(rid);
+    db.prepare('DELETE FROM request_responses WHERE request_id = ?').run(richiesta.id);
+    db.prepare('DELETE FROM request_items WHERE request_id = ?').run(richiesta.id);
+    db.prepare('DELETE FROM requests WHERE id = ?').run(richiesta.id);
+  });
+  elimina();
+  res.redirect('/home');
+});
+
+// Elimina richiesta (distributore) — locale: sparisce solo dal suo banco (da confermare + storico)
+app.post('/distributore/richieste/:id/elimina', requireRole('distributore'), (req, res) => {
+  const richiesta = db.prepare('SELECT * FROM requests WHERE id = ?').get(req.params.id);
+  const risposta = richiesta ? db.prepare('SELECT * FROM request_responses WHERE request_id = ? AND distributor_id = ?').get(richiesta.id, req.session.user.distributor_id) : null;
+  if (!richiesta || !risposta) return res.status(404).render('errore', { titolo: 'Non trovata', messaggio: 'Richiesta non trovata.' });
+  // se la richiesta è già ordinata su altro banco, elimina solo la propria risposta
+  // se è l'unica risposta rimasta e non è ordinata, elimina anche la richiesta vuota
+  const elimina = db.transaction(() => {
+    db.prepare('DELETE FROM request_response_items WHERE response_id = ?').run(risposta.id);
+    db.prepare('DELETE FROM request_responses WHERE id = ?').run(risposta.id);
+    const rimaste = db.prepare('SELECT COUNT(*) n FROM request_responses WHERE request_id = ?').get(richiesta.id).n;
+    if (rimaste === 0 && richiesta.stato !== 'ordinata') {
+      db.prepare('DELETE FROM request_items WHERE request_id = ?').run(richiesta.id);
+      db.prepare('DELETE FROM requests WHERE id = ?').run(richiesta.id);
+    }
+  });
+  elimina();
+  res.redirect('/distributore');
+});
+
 // Riepilogo ordine con il distributore scelto.
 app.get('/richieste/:id/offerta/:distributorId', requireRole('cliente'), (req, res) => {
   const richiesta = richieste.aggiornaScadenza(req.params.id);
@@ -801,6 +843,36 @@ app.get('/ordini/:id', requireLogin, (req, res) => {
     nuovo: req.query.nuovo === '1',
     ivaPct: pricing.getIvaPct(),
   });
+});
+
+// Elimina ordine (cliente) — globale
+app.post('/ordini/:id/elimina', requireRole('cliente'), (req, res) => {
+  const ordine = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+  if (!ordine || ordine.cliente_id !== req.session.user.id) {
+    return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Ordine non trovato.' });
+  }
+  const elimina = db.transaction(() => {
+    if (ordine.request_id) db.prepare('UPDATE requests SET order_id = NULL, stato = ? WHERE id = ?').run('annullata', ordine.request_id);
+    db.prepare('DELETE FROM order_items WHERE order_id = ?').run(ordine.id);
+    db.prepare('DELETE FROM orders WHERE id = ?').run(ordine.id);
+  });
+  elimina();
+  res.redirect('/ordini');
+});
+
+// Elimina ordine (distributore) — globale
+app.post('/distributore/ordini/:id/elimina', requireRole('distributore'), (req, res) => {
+  const ordine = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+  if (!ordine || ordine.distributor_id !== req.session.user.distributor_id) {
+    return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Ordine non trovato.' });
+  }
+  const elimina = db.transaction(() => {
+    if (ordine.request_id) db.prepare('UPDATE requests SET order_id = NULL, stato = ? WHERE id = ?').run('annullata', ordine.request_id);
+    db.prepare('DELETE FROM order_items WHERE order_id = ?').run(ordine.id);
+    db.prepare('DELETE FROM orders WHERE id = ?').run(ordine.id);
+  });
+  elimina();
+  res.redirect('/distributore/ordini');
 });
 
 // ---------- Notifiche ----------

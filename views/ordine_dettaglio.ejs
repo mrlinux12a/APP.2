@@ -160,6 +160,14 @@
 
       <% if (currentUser.ruolo === 'cliente') { %>
         <a class="btn btn-primary btn-blocco" href="/home">Nuovo ordine</a>
+        <form method="POST" action="/ordini/<%= ordine.id %>/elimina" onsubmit="return confirm('Eliminare definitivamente questo ordine?')">
+          <button class="btn btn-rosso btn-blocco" type="submit" style="margin-top:8px;">Elimina ordine</button>
+        </form>
+      <% } %>
+      <% if (currentUser.ruolo === 'distributore') { %>
+        <form method="POST" action="/distributore/ordini/<%= ordine.id %>/elimina" onsubmit="return confirm('Eliminare definitivamente questo ordine?')">
+          <button class="btn btn-rosso btn-blocco" type="submit" style="margin-top:8px;">Elimina ordine</button>
+        </form>
       <% } %>
     </div>
   </div>

@@ -332,7 +332,7 @@ function rispondi(
 
   // Il tempo di consegna non può precedere quello di partenza.
   const partenza = Math.max(0, parseInt(partenza_ore, 10) || 0);
-  const consegna = Math.max(partenza, parseInt(consegna_ore, 10) || partenza || 24);
+  const consegnaOre = Math.max(partenza, parseInt(consegna_ore, 10) || partenza || 24);
 
   const profilo =
     scontoCliente === null || String(scontoCliente).trim() === ''
@@ -349,7 +349,7 @@ function rispondi(
       esito,
       esito === 'confermato' ? copertura : 'totale',
       esito === 'confermato' ? partenza : null,
-      esito === 'confermato' ? consegna : null,
+      esito === 'confermato' ? consegnaOre : null,
       note || null,
       esito === 'confermato' && !prezzoRichiesto ? profilo : null,
       risposta.id

@@ -54,7 +54,10 @@
       </div>
 
       <form method="POST" action="/richieste/<%= richiesta.id %>/annulla">
-        <button class="btn btn-rosso btn-blocco" type="submit">Annulla la richiesta</button>
+        <button class="btn btn-chiaro btn-blocco" type="submit">Annulla la richiesta</button>
+      </form>
+      <form method="POST" action="/richieste/<%= richiesta.id %>/elimina" onsubmit="return confirm('Eliminare definitivamente? Sparirà anche per i venditori.')">
+        <button class="btn btn-rosso btn-blocco" type="submit" style="margin-top:8px;">Elimina definitivamente</button>
       </form>
     </div>
   </div>
