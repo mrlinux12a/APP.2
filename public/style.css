@@ -1216,16 +1216,14 @@ th { color: var(--grigio); font-weight: 600; }
 }
 
 @media (min-width: 720px) {
-  .app { max-width: 860px; }
+  .app { max-width: 860px; padding-bottom: calc(62px + 62px + 16px); }
   .barra-carrello .interno { max-width: 860px; }
   .navbar .interno { max-width: 860px; justify-content: center; gap: 28px; }
   .carrello-layout { grid-template-columns: 1.6fr 0.9fr; align-items: start; }
   .carrello-riepilogo { position: sticky; top: 64px; }
   .prodotto { padding: 16px 18px; gap: 16px; }
-  .barra-carrello { bottom: 0; }
+  .barra-carrello { bottom: 62px; }
   body { background: #eef2f6; }
-  .navbar { position: static; border-top: none; border-bottom: 1px solid var(--bordo); margin-bottom: 12px; }
-  .app { padding-bottom: 16px; }
 }
 
 /* geo mappa nascosta per ora — posizione richiesta all'ingresso ma non mostrata */
