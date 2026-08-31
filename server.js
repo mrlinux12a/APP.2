@@ -349,6 +349,7 @@ app.get('/categoria/:slug', requireRole('cliente'), (req, res) => {
     marchio,
     q,
     elenco,
+    carrello: getCarrello(req),
   });
 });
 
@@ -409,10 +410,59 @@ app.get('/marchi/:slug', requireRole('cliente'), (req, res) => {
     ? catalogo.prodottiDelMarchio(marca.slug, codice, req.query.p)
     : null;
 
-  res.render('marchio', { titolo: marca.nome, marca, famiglie, famiglia, q, elenco });
+  res.render('marchio', { titolo: marca.nome, marca, famiglie, famiglia, q, elenco, carrello: getCarrello(req) });
 });
 
 // ---------- Cliente: carrello ----------
+
+// API carrello per aggiunta asincrona (nuovo flusso: Aggiungi -> reset stepper -> mini-card)
+app.get('/api/carrello', requireRole('cliente'), (req, res) => {
+  const carrello = getCarrello(req);
+  const righe = righeCarrello(req);
+  const totali = pricing.calcolaOrdine(righe);
+  res.json({ carrello, pezzi: contaCarrello(req), totale_finale: totali.totale_finale });
+});
+
+app.post('/api/carrello/aggiungi', requireRole('cliente'), (req, res) => {
+  const id = parseInt(req.body.id || req.body.product_id, 10);
+  const qty = Math.max(0, parseInt(req.body.qty || req.body.quantita, 10) || 0);
+  if (!id || !qty) return res.status(400).json({ ok: false, errore: 'Quantità non valida.' });
+  const prodotto = db.prepare('SELECT id FROM products WHERE id = ? AND attivo = 1').get(id);
+  if (!prodotto) return res.status(404).json({ ok: false, errore: 'Prodotto non trovato.' });
+  const carrello = getCarrello(req);
+  carrello[id] = (carrello[id] || 0) + qty;
+  const pezzi = contaCarrello(req);
+  res.json({ ok: true, carrello, pezzi, prodottoQty: carrello[id] });
+});
+
+app.post('/api/carrello/aggiungi-batch', requireRole('cliente'), (req, res) => {
+  const items = Array.isArray(req.body.items) ? req.body.items : [];
+  if (!items.length) return res.status(400).json({ ok: false, errore: 'Nessun articolo.' });
+  const carrello = getCarrello(req);
+  const aggiornati = {};
+  items.forEach(({ id, qty }) => {
+    const pid = parseInt(id, 10);
+    const q = Math.max(0, parseInt(qty, 10) || 0);
+    if (!pid || !q) return;
+    const prodotto = db.prepare('SELECT id FROM products WHERE id = ? AND attivo = 1').get(pid);
+    if (!prodotto) return;
+    carrello[pid] = (carrello[pid] || 0) + q;
+    aggiornati[pid] = carrello[pid];
+  });
+  res.json({ ok: true, carrello, pezzi: contaCarrello(req), aggiornati });
+});
+
+app.post('/api/carrello/imposta', requireRole('cliente'), (req, res) => {
+  const id = parseInt(req.body.id, 10);
+  const qty = Math.max(0, parseInt(req.body.qty, 10) || 0);
+  if (!id) return res.status(400).json({ ok: false });
+  const carrello = getCarrello(req);
+  if (qty > 0) carrello[id] = qty;
+  else delete carrello[id];
+  const righe = righeCarrello(req);
+  const totali = pricing.calcolaOrdine(righe);
+  res.json({ ok: true, carrello, pezzi: contaCarrello(req), totali, righe: righe.length });
+});
 
 app.post('/carrello', requireRole('cliente'), (req, res) => {
   aggiornaCarrelloDaForm(req, req.body.modo === 'imposta' ? 'imposta' : 'aggiungi');

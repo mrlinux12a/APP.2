@@ -3,7 +3,7 @@
 <head>
   <%- include('partials/app_head', { titolo }) %>
 </head>
-<body data-loggato="1"<%- elenco ? ' class="con-azione"' : '' %>>
+<body data-loggato="1">
   <div class="app">
     <%- include('partials/appbar', {
           titolo,
@@ -53,9 +53,7 @@
             <span class="icona">🏷</span>
             <span class="corpo">
               <span class="etichetta">Sconto Base configurato: <%= marca.sconto_default_pct %>%</span>
-              <span class="dettaglio">
-                Valore di configurazione: ogni banco applica poi le proprie condizioni
-              </span>
+              <span class="dettaglio">Valore di configurazione: ogni banco applica poi le proprie condizioni</span>
             </span>
           </div>
         </div>
@@ -81,51 +79,60 @@
       </div>
 
     <% } else { %>
-      <form method="POST" action="/carrello">
-        <input type="hidden" name="ritorno"
-               value="/marchi/<%= marca.slug %>?famiglia=<%= encodeURIComponent(famiglia ? famiglia.codice : '') %>&p=<%= elenco.pagina || 1 %>">
-        <div class="contenuto" style="padding-top:0;">
-          <p class="sottotitolo">
-            <% if (elenco.ricerca) { %>
-              <strong><%= elenco.righe.length %></strong> risultati per «<%= q %>»<% if (famiglia) { %> in <%= famiglia.codice %><% } %>
-            <% } else { %>
-              <strong><%= famiglia.nome %></strong> — <%= elenco.totale %> articoli
-            <% } %>
-          </p>
+      <div class="contenuto" style="padding-top:0;">
+        <p class="sottotitolo">
+          <% if (elenco.ricerca) { %>
+            <strong><%= elenco.righe.length %></strong> risultati per «<%= q %>»<% if (famiglia) { %> in <%= famiglia.codice %><% } %>
+          <% } else { %>
+            <strong><%= famiglia.nome %></strong> — <%= elenco.totale %> articoli
+          <% } %>
+        </p>
 
-          <div id="risultati">
-            <% if (!elenco.righe.length) { %>
-              <div class="vuoto"><span class="emoji">🤷</span>Nessun articolo trovato.</div>
-            <% } else { %>
-              <div class="card card-fitta">
-                <% elenco.righe.forEach(function (p) { %>
-                  <%- include('partials/prodotto', { p }) %>
-                <% }); %>
-              </div>
-            <% } %>
-          </div>
-
-          <% if (!elenco.ricerca) { %>
-            <div data-paginazione>
-              <%- include('partials/paginazione', {
-                    elenco,
-                    base: '/marchi/' + marca.slug + '?famiglia=' + encodeURIComponent(famiglia.codice)
-                  }) %>
+        <div id="risultati">
+          <% if (!elenco.righe.length) { %>
+            <div class="vuoto"><span class="emoji">🤷</span>Nessun articolo trovato.</div>
+          <% } else { %>
+            <div class="card card-fitta">
+              <% elenco.righe.forEach(function (p) { %>
+                <%- include('partials/prodotto', { p, carrello }) %>
+              <% }); %>
             </div>
           <% } %>
-
-          <p class="nota">
-            Prezzi IVA esclusa, contributo RAEE a parte. La disponibilità la conferma il banco
-            del distributore entro 10 minuti da quando premi Procedi.
-          </p>
         </div>
 
-        <%- include('partials/barra_procedi') %>
-      </form>
+        <% if (!elenco.ricerca) { %>
+          <div data-paginazione>
+            <%- include('partials/paginazione', {
+                  elenco,
+                  base: '/marchi/' + marca.slug + '?famiglia=' + encodeURIComponent(famiglia.codice)
+                }) %>
+          </div>
+        <% } %>
+
+        <p class="nota">
+          Prezzi IVA esclusa, contributo RAEE a parte. La disponibilità la conferma il banco
+          del distributore entro 10 minuti da quando premi Procedi.
+        </p>
+      </div>
+
+      <div class="barra-carrello" data-barra-carrello <%= carrelloPezzi ? '' : 'hidden' %>>
+        <div class="interno">
+          <div class="barra-carrello-testo">
+            <span data-pendenti-wrap hidden><strong data-pendenti>0</strong> selezionati</span>
+            <span data-sep-pendenti hidden> · </span>
+            <span data-carrello-wrap <%= carrelloPezzi ? '' : 'hidden' %>><strong data-carrello-conta><%= carrelloPezzi %></strong> nel carrello</span>
+            <span data-carrello-vuoto <%= carrelloPezzi ? 'hidden' : '' %>>Nessun pezzo nel carrello</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-primary" type="button" data-aggiungi-tutti disabled>Aggiungi</button>
+            <a class="btn btn-chiaro" href="/carrello" data-vai-carrello <%= carrelloPezzi ? '' : 'hidden' %>>Vai al carrello</a>
+          </div>
+        </div>
+      </div>
     <% } %>
   </div>
 
-  <% if (!elenco) { %><%- include('partials/nav', { attivo: 'home' }) %><% } %>
+  <%- include('partials/nav', { attivo: 'home' }) %>
   <script src="/app.js" defer></script>
 </body>
 </html>

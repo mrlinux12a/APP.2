@@ -3,113 +3,124 @@
 <head>
   <%- include('partials/app_head', { titolo }) %>
 </head>
-<body data-loggato="1"<%- righe.length ? ' class="con-azione"' : '' %>>
+<body data-loggato="1">
   <div class="app">
-    <%- include('partials/appbar', { titolo, intestazione: 'Riepilogo', indietro: '/home' }) %>
+    <%- include('partials/appbar', { titolo, intestazione: 'Carrello', indietro: '/home' }) %>
 
     <% if (!righe.length) { %>
       <div class="contenuto">
         <div class="vuoto">
-          <span class="emoji">🧾</span>
-          Non hai ancora selezionato materiale.
+          <span class="emoji">🛒</span>
+          Il carrello è vuoto.
+          <div style="margin-top:6px;font-size:0.9rem;">Aggiungi articoli dalle categorie o dalla ricerca.</div>
         </div>
-        <a class="btn btn-primary btn-blocco" href="/home">Cerca un pezzo</a>
+        <a class="btn btn-primary btn-blocco" href="/home">Vai al catalogo</a>
+        <a class="btn btn-chiaro btn-blocco" href="/cerca" style="margin-top:8px;">Cerca un pezzo</a>
       </div>
     <% } else { %>
-      <form method="POST" action="/carrello">
-        <input type="hidden" name="modo" value="imposta">
-        <input type="hidden" name="ritorno" value="/carrello">
-        <div class="contenuto">
-          <p class="sottotitolo">
-            Controlla quantità e prezzi: la richiesta parte solo dopo la conferma qui sotto.
-          </p>
+      <div class="contenuto">
+        <p class="sottotitolo">
+          <strong><%= carrelloPezzi %> pezzi</strong> nel carrello — controlla le quantità prima di chiedere la disponibilità.
+        </p>
 
-          <div class="card card-fitta">
-            <% righe.forEach(function (r) { %>
-              <div class="prodotto">
-                <div class="info">
-                  <div class="nome">
-                    <% if (r.prodotto.brand_slug) { %><span class="marchio-tag" style="--marchio:#1d4e89"><%= r.prodotto.brand_slug.toUpperCase() %></span><% } %>
-                    <%= r.prodotto.nome %>
+        <div class="carrello-layout">
+          <div class="carrello-articoli">
+            <form method="POST" action="/carrello" id="form-carrello">
+              <input type="hidden" name="modo" value="imposta">
+              <input type="hidden" name="ritorno" value="/carrello">
+              <div class="card card-fitta">
+                <% righe.forEach(function (r) { %>
+                  <div class="prodotto prodotto-carrello" data-riga="<%= r.prodotto.id %>">
+                    <div class="info">
+                      <div class="nome">
+                        <% if (r.prodotto.brand_slug) { %><span class="marchio-tag" style="--marchio:#1d4e89"><%= r.prodotto.brand_slug.toUpperCase() %></span><% } %>
+                        <%= r.prodotto.nome %>
+                      </div>
+                      <div class="meta">
+                        Cod. <%= r.prodotto.codice %><% if (r.prodotto.misura) { %> · <%= r.prodotto.misura %><% } %><% if (r.prodotto.categoria) { %> · <%= r.prodotto.categoria %><% } %>
+                      </div>
+                      <div class="prezzo">
+                        € <%= euro(prezzoCliente(r.prodotto)) %> <span class="iva">+ IVA · cad.</span>
+                        <strong style="margin-left:6px;">€ <%= euro(prezzoCliente(r.prodotto) * r.quantita) %></strong>
+                      </div>
+                    </div>
+                    <div class="prodotto-azioni prodotto-azioni-carrello">
+                      <div class="stepper" data-stepper-carrello="<%= r.prodotto.id %>">
+                        <button type="button" data-passo-carrello="-1" aria-label="Togli">−</button>
+                        <input type="number" min="0" step="1" inputmode="numeric"
+                               name="quantita_<%= r.prodotto.id %>" value="<%= r.quantita %>"
+                               data-qta-carrello-input="<%= r.prodotto.id %>"
+                               aria-label="Quantità <%= r.prodotto.nome %>">
+                        <button type="button" data-passo-carrello="1" aria-label="Aggiungi">+</button>
+                      </div>
+                      <button type="button" class="link-rimuovi" data-rimuovi="<%= r.prodotto.id %>">Rimuovi</button>
+                    </div>
                   </div>
-                  <div class="meta">
-                    Cod. <%= r.prodotto.codice %><% if (r.prodotto.misura) { %> · <%= r.prodotto.misura %><% } %>
-                  </div>
-                  <div class="prezzo">
-                    € <%= euro(prezzoCliente(r.prodotto)) %> <span class="iva">+ IVA · cad.</span>
-                    <strong style="margin-left:6px;">€ <%= euro(prezzoCliente(r.prodotto) * r.quantita) %></strong>
-                  </div>
-                </div>
-                <div class="stepper">
-                  <button type="button" data-passo="-1" aria-label="Togli">−</button>
-                  <input type="number" min="0" step="1" inputmode="numeric"
-                         name="quantita_<%= r.prodotto.id %>" value="<%= r.quantita %>"
-                         aria-label="Quantità <%= r.prodotto.nome %>">
-                  <button type="button" data-passo="1" aria-label="Aggiungi">+</button>
-                </div>
+                <% }); %>
               </div>
-            <% }); %>
+
+              <div style="display:flex;gap:8px;margin-top:10px;">
+                <button class="btn btn-chiaro" type="submit" name="azione" value="aggiorna" style="flex:1;">
+                  Aggiorna quantità
+                </button>
+                <button class="btn btn-rosso" type="submit" form="form-svuota" style="flex:1;">Svuota carrello</button>
+              </div>
+            </form>
+            <form method="POST" action="/carrello/svuota" id="form-svuota"></form>
           </div>
 
-          <button class="btn btn-chiaro btn-blocco" type="submit" name="azione" value="aggiorna">
-            Aggiorna quantità
-          </button>
-
-          <div class="card" style="margin-top:12px;">
-            <div class="riepilogo-riga">
-              <span class="voce">Merce (IVA esclusa)</span>
-              <span>€ <%= euro(totali.totale_finale) %></span>
-            </div>
-            <% if (totali.contributo_raee > 0) { %>
+          <div class="carrello-riepilogo">
+            <div class="card">
               <div class="riepilogo-riga">
-                <span class="voce">Contributo RAEE</span>
-                <span>€ <%= euro(totali.contributo_raee) %></span>
+                <span class="voce">Merce (IVA esclusa)</span>
+                <span>€ <%= euro(totali.totale_finale) %></span>
               </div>
+              <% if (totali.contributo_raee > 0) { %>
+                <div class="riepilogo-riga">
+                  <span class="voce">Contributo RAEE</span>
+                  <span>€ <%= euro(totali.contributo_raee) %></span>
+                </div>
+              <% } %>
+              <div class="riepilogo-riga">
+                <span class="voce">Spedizione</span>
+                <span>€ <%= euro(spedizione) %></span>
+              </div>
+              <div class="riepilogo-riga forte">
+                <span class="voce">Totale stimato + IVA</span>
+                <span>€ <%= euro(totali.totale_finale + totali.contributo_raee + spedizione) %></span>
+              </div>
+            </div>
+
+            <% if (!raggiunto) { %>
+              <div class="avviso avviso-attenzione">
+                <strong>Ordine minimo € <%= euro(minimo) %></strong> di merce, IVA e spedizione escluse.
+                Ti mancano <strong>€ <%= euro(mancaAlMinimo) %></strong>.
+              </div>
+            <% } else { %>
+              <p class="nota">
+                Ordine minimo di € <%= euro(minimo) %> raggiunto. La spedizione di
+                € <%= euro(spedizione) %> si aggiunge al totale e non conta per la soglia.
+                Il prezzo definitivo lo conferma il distributore.
+              </p>
             <% } %>
-            <div class="riepilogo-riga">
-              <span class="voce">Spedizione</span>
-              <span>€ <%= euro(spedizione) %></span>
-            </div>
-            <div class="riepilogo-riga forte">
-              <span class="voce">Totale stimato + IVA</span>
-              <span>€ <%= euro(totali.totale_finale + totali.contributo_raee + spedizione) %></span>
-            </div>
-          </div>
 
-          <% if (!raggiunto) { %>
-            <div class="avviso avviso-attenzione">
-              <strong>Ordine minimo € <%= euro(minimo) %></strong> di merce, IVA e spedizione escluse.
-              Ti mancano <strong>€ <%= euro(mancaAlMinimo) %></strong>.
-            </div>
-          <% } else { %>
-            <p class="nota">
-              Ordine minimo di € <%= euro(minimo) %> raggiunto. La spedizione di
-              € <%= euro(spedizione) %> si aggiunge al totale e non conta per la soglia.
-              Il prezzo definitivo lo conferma il distributore.
-            </p>
-          <% } %>
-        </div>
-      </form>
+            <form method="POST" action="/richieste" id="form-invia">
+              <button class="btn btn-primary btn-blocco" type="submit" <%= raggiunto ? '' : 'disabled' %> style="padding:16px;font-size:1.05rem;">
+                Conferma e chiedi disponibilità
+              </button>
+              <p class="nota" style="text-align:center;margin-top:8px;">
+                Invierai la richiesta ai distributori della tua zona. Rispondono entro 10 minuti.
+              </p>
+            </form>
 
-      <form method="POST" action="/carrello/svuota" id="svuota"></form>
-
-      <form method="POST" action="/richieste">
-        <div class="barra-azione">
-          <div class="interno">
-            <div style="flex:1">
-              <div class="conteggio"><%= carrelloPezzi %> pezzi · € <%= euro(totali.totale_finale) %> + IVA</div>
-              <button type="submit" form="svuota" class="svuota-link">Svuota</button>
-            </div>
-            <button class="btn btn-primary" type="submit" <%- raggiunto ? '' : 'disabled' %>>
-              Conferma e chiedi disponibilità
-            </button>
+            <a class="btn btn-chiaro btn-blocco" href="/home" style="margin-top:8px;">Continua a scegliere</a>
           </div>
         </div>
-      </form>
+      </div>
     <% } %>
   </div>
 
-  <% if (!righe.length) { %><%- include('partials/nav', { attivo: '' }) %><% } %>
+  <%- include('partials/nav', { attivo: 'carrello' }) %>
   <script src="/app.js" defer></script>
 </body>
 </html>

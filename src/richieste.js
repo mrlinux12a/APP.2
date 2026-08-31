@@ -50,36 +50,12 @@ function secondiRimasti(richiesta) {
 
 // ---------- Distributori candidati ----------
 
-// Sono i rivenditori attivi della zona che trattano TUTTI i prodotti richiesti:
-// solo loro possono confermare l'intera richiesta al banco.
+// Tutti i distributori attivi registrati: ogni richiesta dell'installatore arriva a tutti.
 function distributoriCandidati(productIds, zona, clienteId = null) {
   if (!productIds.length) return [];
-  const placeholders = productIds.map(() => '?').join(',');
-
-  // Se il cliente ha un'anagrafica approvata, la richiesta va solo ai banchi che lo hanno
-  // riconosciuto come proprio cliente.
-  const soloApprovati = clienteId
-    ? `AND EXISTS (
-         SELECT 1 FROM client_distributors cd
-          WHERE cd.distributor_id = d.id AND cd.cliente_id = ? AND cd.stato = 'approvato'
-       )`
-    : '';
-  const paramsCliente = clienteId ? [clienteId] : [];
-
   return db
-    .prepare(
-      `SELECT d.*
-         FROM distributors d
-        WHERE d.attivo = 1 AND d.zona = ?
-          ${soloApprovati}
-          AND (
-            SELECT COUNT(DISTINCT dp.product_id)
-              FROM distributor_products dp
-             WHERE dp.distributor_id = d.id AND dp.product_id IN (${placeholders})
-          ) = ?
-        ORDER BY d.nome`
-    )
-    .all(zona, ...paramsCliente, ...productIds, productIds.length);
+    .prepare(`SELECT * FROM distributors WHERE attivo = 1 ORDER BY nome`)
+    .all();
 }
 
 // ---------- Creazione ----------
@@ -88,8 +64,46 @@ function distributoriCandidati(productIds, zona, clienteId = null) {
 // Da qui parte la finestra di 10 minuti entro cui devono rispondere.
 function creaRichiesta(cliente, righeCarrello) {
   const productIds = righeCarrello.map((r) => r.prodotto.id);
-  const candidati = distributoriCandidati(productIds, cliente.zona, cliente.id);
+  let candidati = distributoriCandidati(productIds, cliente.zona, cliente.id);
   const minuti = getFinestraMinuti();
+
+  // Fallback furbo: se per qualsiasi motivo non c'è nessun candidato (DB vuoto,
+  // filtro zona, import incompleto), manda comunque a TUTTI i banchi attivi.
+  if (!candidati.length) {
+    try {
+      candidati = db.prepare(`SELECT * FROM distributors WHERE attivo = 1 ORDER BY nome`).all();
+      console.log(`[richieste] fallback broadcast: ${candidati.length} distributori per cliente ${cliente.id} zona=${cliente.zona}`);
+    } catch (e) { console.error('[richieste] fallback fallito', e.message); }
+  }
+
+  // Assicura che ogni prodotto della richiesta abbia un listino per ogni distributore
+  // candidato: così il calcolo prezzo non sparisce anche se l'import non ha popolato
+  // distributor_products. Usa il prezzo del prodotto come base.
+  if (candidati.length && productIds.length) {
+    try {
+      const mancanti = db.prepare(`
+        SELECT p.id, p.prezzo_listino, p.sconto_base_pct
+          FROM products p
+         WHERE p.id IN (${productIds.map(()=>'?').join(',')})
+           AND NOT EXISTS (
+             SELECT 1 FROM distributor_products dp
+              WHERE dp.distributor_id = ? AND dp.product_id = p.id
+           )
+      `);
+      const ins = db.prepare(`INSERT INTO distributor_products (distributor_id, product_id, prezzo_listino, sconto_base_pct) VALUES (?,?,?,?) ON CONFLICT(distributor_id, product_id) DO NOTHING`);
+      const ensure = db.transaction(() => {
+        for (const d of candidati) {
+          for (const pid of productIds) {
+            const rows = db.prepare(`SELECT prezzo_listino, sconto_base_pct FROM products WHERE id = ?`).get(pid);
+            if (!rows) continue;
+            // inserisce solo se manca
+            ins.run(d.id, pid, rows.prezzo_listino, rows.sconto_base_pct);
+          }
+        }
+      });
+      ensure();
+    } catch (e) { console.error('[richieste] ensure listino fallito', e.message); }
+  }
 
   const crea = db.transaction(() => {
     const info = db
@@ -446,11 +460,12 @@ function righeDistributore(requestId, distributorId) {
     .prepare(
       `SELECT ri.product_id, ri.quantita AS quantita_richiesta,
               p.codice, p.nome, p.categoria, p.brand_slug, p.famiglia, p.macro_slug, p.raee,
-              dp.prezzo_listino, dp.sconto_base_pct AS sconto_listino_pct,
+              COALESCE(dp.prezzo_listino, p.prezzo_listino) AS prezzo_listino,
+              COALESCE(dp.sconto_base_pct, p.sconto_base_pct) AS sconto_listino_pct,
               rri.quantita_disponibile, rri.sconto_riga_pct
          FROM request_items ri
          JOIN products p ON p.id = ri.product_id
-         JOIN distributor_products dp
+         LEFT JOIN distributor_products dp
            ON dp.product_id = ri.product_id AND dp.distributor_id = ?
          LEFT JOIN request_response_items rri
            ON rri.product_id = ri.product_id AND rri.response_id = ?

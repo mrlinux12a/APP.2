@@ -3,42 +3,175 @@
 (function () {
   'use strict';
 
-  // ---------- Selettore quantità (+ / -) ----------
-
-  // Il contatore della barra in fondo: pezzi già nel carrello (data-conteggio)
-  // più quelli appena scelti in questa pagina.
-  function aggiornaBarra() {
-    const barra = document.querySelector('[data-conteggio]');
-    if (!barra) return;
-    const base = parseInt(barra.dataset.conteggio, 10) || 0;
-    let pezziPagina = 0;
-    document.querySelectorAll('input[data-qta]').forEach(function (i) {
-      pezziPagina += Math.max(0, parseInt(i.value, 10) || 0);
-    });
-    const totale = base + pezziPagina;
-    barra.textContent = totale
-      ? totale + (totale === 1 ? ' pezzo selezionato' : ' pezzi selezionati')
-      : 'Nessun materiale selezionato';
-    const bottone = document.querySelector('[data-procedi]');
-    if (bottone) bottone.disabled = totale === 0;
+  // ---------- Selettore quantità (+ / -) e Aggiungi globale ----------
+  function aggiornaBadgeCarrello(pezzi) {
+    const badge = document.querySelector('[data-nav-badge]');
+    if (badge) {
+      if (pezzi > 0) { badge.textContent = pezzi; badge.removeAttribute('hidden'); }
+      else badge.setAttribute('hidden', '');
+    }
+    const wrap = document.querySelector('[data-carrello-wrap]');
+    const vuoto = document.querySelector('[data-carrello-vuoto]');
+    const conta = document.querySelector('[data-carrello-conta]');
+    const vai = document.querySelector('[data-vai-carrello]');
+    if (conta) conta.textContent = pezzi;
+    if (wrap) { if (pezzi > 0) wrap.removeAttribute('hidden'); else wrap.setAttribute('hidden',''); }
+    if (vuoto) { if (pezzi > 0) vuoto.setAttribute('hidden',''); else vuoto.removeAttribute('hidden'); }
+    if (vai) { if (pezzi > 0) vai.removeAttribute('hidden'); else vai.setAttribute('hidden',''); }
+    ricalcolaBarra();
   }
 
+  function aggiornaMiniCard(prodottoId, qty) {
+    const card = document.querySelector('[data-nel-carrello="' + prodottoId + '"]');
+    if (!card) return;
+    const num = card.querySelector('[data-qta-carrello]');
+    if (num) num.textContent = qty;
+    if (qty > 0) card.removeAttribute('hidden');
+    else card.setAttribute('hidden','');
+  }
+
+  function ricalcolaBarra() {
+    let pendenti = 0;
+    document.querySelectorAll('input[data-qta]').forEach(function (i) {
+      pendenti += Math.max(0, parseInt(i.value, 10) || 0);
+    });
+    const wrap = document.querySelector('[data-pendenti-wrap]');
+    const num = document.querySelector('[data-pendenti]');
+    const sep = document.querySelector('[data-sep-pendenti]');
+    const barra = document.querySelector('[data-barra-carrello]');
+    const btn = document.querySelector('[data-aggiungi-tutti]');
+    const badge = document.querySelector('[data-nav-badge]');
+    const carrelloPezzi = badge && !badge.hasAttribute('hidden') ? parseInt(badge.textContent,10)||0 : 0;
+    // pendenti count
+    if (wrap) { if (pendenti > 0) { wrap.removeAttribute('hidden'); if(num) num.textContent = pendenti; } else wrap.setAttribute('hidden',''); }
+    if (sep) {
+      const carrelloVis = document.querySelector('[data-carrello-wrap]') && !document.querySelector('[data-carrello-wrap]').hasAttribute('hidden');
+      if (pendenti > 0 && carrelloVis) sep.removeAttribute('hidden'); else sep.setAttribute('hidden','');
+    }
+    if (btn) {
+      btn.disabled = pendenti === 0;
+      btn.textContent = pendenti > 0 ? 'Aggiungi (' + pendenti + ')' : 'Aggiungi';
+    }
+    if (barra) {
+      if (pendenti > 0 || carrelloPezzi > 0) barra.removeAttribute('hidden');
+      else barra.setAttribute('hidden','');
+    }
+  }
+
+  // Stepper catalogo (+/-)
   document.addEventListener('click', function (e) {
     const btn = e.target.closest('[data-passo]');
     if (!btn) return;
     e.preventDefault();
-    const input = btn.parentElement.querySelector('input[type="number"]');
+    const stepper = btn.closest('.stepper');
+    const input = stepper ? stepper.querySelector('input[data-qta]') : btn.parentElement.querySelector('input[type="number"]');
     if (!input) return;
     const passo = parseInt(btn.dataset.passo, 10);
     input.value = Math.max(0, (parseInt(input.value, 10) || 0) + passo);
-    aggiornaBarra();
+    ricalcolaBarra();
   });
 
   document.addEventListener('input', function (e) {
-    if (e.target.matches('input[type="number"]')) aggiornaBarra();
+    if (e.target.matches('input[data-qta]')) ricalcolaBarra();
   });
 
-  aggiornaBarra();
+  ricalcolaBarra();
+
+  // Click Aggiungi globale -> raccoglie tutti gli stepper con qty>0 e invia batch
+  document.addEventListener('click', function (e) {
+    const btn = e.target.closest('[data-aggiungi-tutti]');
+    if (!btn) return;
+    e.preventDefault();
+    if (btn.disabled) return;
+    const items = [];
+    document.querySelectorAll('input[data-qta]').forEach(function (inp) {
+      const q = Math.max(0, parseInt(inp.value, 10) || 0);
+      if (q > 0) {
+        const id = inp.getAttribute('data-prodotto-qta');
+        if (id) items.push({ id: id, qty: q });
+      }
+    });
+    if (!items.length) return;
+    btn.disabled = true;
+    const old = btn.textContent;
+    btn.textContent = '…';
+    fetch('/api/carrello/aggiungi-batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: items }),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok) throw new Error(d.errore || 'errore');
+        // reset tutti gli stepper a 0
+        document.querySelectorAll('input[data-qta]').forEach(function (inp) { inp.value = 0; });
+        // aggiorna mini-card per ogni prodotto aggiunto
+        Object.keys(d.aggiornati || {}).forEach(function (pid) { aggiornaMiniCard(pid, d.aggiornati[pid]); });
+        // fallback: se il server non ha rimandato tutti, usa carrello
+        if (d.carrello) Object.keys(d.carrello).forEach(function (pid) { if (!(pid in (d.aggiornati||{}))) aggiornaMiniCard(pid, d.carrello[pid]); });
+        aggiornaBadgeCarrello(d.pezzi);
+        ricalcolaBarra();
+        btn.textContent = 'Aggiunto ✓';
+        setTimeout(function () { ricalcolaBarra(); }, 900);
+      })
+      .catch(function () {
+        btn.textContent = old;
+        btn.disabled = false;
+        window.alert('Non è stato possibile aggiungere al carrello.');
+      });
+  });
+
+  // ---------- Carrello: modifica quantità e rimozione ----------
+  document.addEventListener('click', function (e) {
+    const btn = e.target.closest('[data-passo-carrello]');
+    if (!btn) return;
+    e.preventDefault();
+    const stepper = btn.closest('[data-stepper-carrello]');
+    const id = stepper ? stepper.getAttribute('data-stepper-carrello') : null;
+    const input = document.querySelector('[data-qta-carrello-input="' + id + '"]');
+    if (!input || !id) return;
+    const passo = parseInt(btn.dataset.passoCarrello, 10);
+    const nuovo = Math.max(0, (parseInt(input.value, 10) || 0) + passo);
+    input.value = nuovo;
+    // aggiorna via API
+    fetch('/api/carrello/imposta', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id, qty: nuovo }),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        aggiornaBadgeCarrello(d.pezzi);
+        if (nuovo === 0) {
+          const riga = document.querySelector('[data-riga="' + id + '"]');
+          if (riga) riga.style.opacity = '0.4';
+          // ricarica per ricalcolare totali se a zero
+          setTimeout(function () { window.location.reload(); }, 400);
+        } else {
+          window.location.reload();
+        }
+      })
+      .catch(function () { window.location.reload(); });
+  });
+
+  document.addEventListener('click', function (e) {
+    const btn = e.target.closest('[data-rimuovi]');
+    if (!btn) return;
+    e.preventDefault();
+    const id = btn.getAttribute('data-rimuovi');
+    fetch('/api/carrello/imposta', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id, qty: 0 }),
+    })
+      .then(function () { window.location.reload(); })
+      .catch(function () { window.location.reload(); });
+  });
+
+  document.addEventListener('input', function (e) {
+    if (!e.target.matches('[data-qta-carrello-input]')) return;
+    // l'utente digita: non inviamo subito, lascia il pulsante Aggiorna del form come fallback
+  });
 
   // ---------- Ricerca parziale mentre si digita ----------
 
@@ -69,11 +202,9 @@
       if (q === ultima) return;
       ultima = q;
       if (q.length < 2) {
-        // Torna l'elenco di partenza: in un catalogo di migliaia di articoli è quello
-        // che serve, non un messaggio di aiuto.
         contenitore.innerHTML = contenutoIniziale;
         mostraPaginazione(true);
-        aggiornaBarra();
+        ricalcolaBarra();
         return;
       }
       fetch('/api/cerca?q=' + encodeURIComponent(q) + (ambito ? '&' + ambito : ''))
@@ -105,7 +236,7 @@
             : '';
           const disabilitato = p.disponibilita === 'non_disponibile';
           return (
-            '<div class="prodotto">' +
+            '<div class="prodotto" data-prodotto="' + p.id + '">' +
             '<div class="info">' +
             '<div class="nome">' +
             (p.brand_nome
@@ -120,17 +251,24 @@
             '</div>' +
             (disabilitato
               ? '<div class="meta">non disponibile</div>'
-              : '<div class="stepper">' +
+              : '<div class="prodotto-azioni">' +
+                '<div class="stepper">' +
                 '<button type="button" data-passo="-1" aria-label="Togli">−</button>' +
-                '<input type="number" min="0" step="1" inputmode="numeric" data-qta name="quantita_' + p.id + '" value="0">' +
+                '<input type="number" min="0" step="1" inputmode="numeric" data-qta data-prodotto-qta="' + p.id + '" value="0">' +
                 '<button type="button" data-passo="1" aria-label="Aggiungi">+</button>' +
+                '</div>' +
+                '<div class="mini-carrello" data-nel-carrello="' + p.id + '" hidden><span>Nel carrello: <strong data-qta-carrello="' + p.id + '">0</strong> pz</span></div>' +
                 '</div>') +
             '</div>'
           );
         })
         .join('');
       contenitore.innerHTML = '<div class="card card-fitta">' + html + '</div>';
-      aggiornaBarra();
+      fetch('/api/carrello').then(function (r) { return r.json(); }).then(function (d) {
+        if (!d.carrello) return;
+        Object.keys(d.carrello).forEach(function (id) { aggiornaMiniCard(id, d.carrello[id]); });
+      }).catch(function () {});
+      ricalcolaBarra();
     }
   }
 

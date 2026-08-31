@@ -1136,3 +1136,93 @@ th { color: var(--grigio); font-weight: 600; }
   cursor: pointer;
   font-family: inherit;
 }
+
+/* ---------- Nuovo carrello: prodotto-azioni, Aggiungi, mini-card ---------- */
+.prodotto-azioni {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.prodotto-azioni .stepper { align-self: center; }
+
+.btn-aggiungi {
+  background: var(--blu);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-weight: 700;
+  font-size: 0.82rem;
+  cursor: pointer;
+  min-width: 86px;
+  line-height: 1;
+}
+.btn-aggiungi:disabled { background: #c9d0d8; cursor: default; }
+.btn-aggiungi:active:not(:disabled) { transform: scale(0.97); }
+
+.mini-carrello {
+  font-size: 0.73rem;
+  background: var(--verde-chiaro);
+  color: var(--verde);
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+}
+.mini-carrello[hidden] { display: none !important; }
+
+/* barra che porta al carrello (categoria / ricerca / marchio) */
+.barra-carrello {
+  position: fixed;
+  bottom: 62px;
+  left: 0;
+  right: 0;
+  z-index: 29;
+  background: #fff;
+  border-top: 1px solid var(--bordo);
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  box-shadow: 0 -4px 16px rgba(0,0,0,0.06);
+}
+.barra-carrello[hidden] { display: none !important; }
+.barra-carrello .interno {
+  max-width: 520px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+}
+.barra-carrello-testo { font-size: 0.9rem; color: var(--testo); }
+.barra-carrello-testo strong { color: var(--blu); }
+
+/* pagina carrello: layout responsive */
+.carrello-layout { display: grid; gap: 12px; }
+.prodotto-carrello { align-items: center; }
+.prodotto-azioni-carrello { gap: 4px; }
+.prodotto-azioni-carrello .stepper { background: #fff; }
+.link-rimuovi {
+  background: none;
+  border: none;
+  color: var(--rosso);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 0;
+  font-family: inherit;
+}
+
+@media (min-width: 720px) {
+  .app { max-width: 860px; }
+  .barra-carrello .interno { max-width: 860px; }
+  .navbar .interno { max-width: 860px; justify-content: center; gap: 28px; }
+  .carrello-layout { grid-template-columns: 1.6fr 0.9fr; align-items: start; }
+  .carrello-riepilogo { position: sticky; top: 64px; }
+  .prodotto { padding: 16px 18px; gap: 16px; }
+  .barra-carrello { bottom: 0; }
+  body { background: #eef2f6; }
+  .navbar { position: static; border-top: none; border-bottom: 1px solid var(--bordo); margin-bottom: 12px; }
+  .app { padding-bottom: 16px; }
+}

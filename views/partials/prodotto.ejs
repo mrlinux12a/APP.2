@@ -1,4 +1,5 @@
-<div class="prodotto">
+<% const qtaInCarrello = (typeof carrello !== 'undefined' && carrello && carrello[p.id]) ? carrello[p.id] : 0; %>
+<div class="prodotto" data-prodotto="<%= p.id %>">
   <div class="info">
     <div class="nome">
       <% if (p.brand_nome) { %><span class="marchio-tag" style="--marchio:<%= p.brand_colore %>"><%= p.brand_nome %></span><% } %>
@@ -24,11 +25,16 @@
   <% if (p.disponibilita === 'non_disponibile') { %>
     <div class="meta">non disponibile</div>
   <% } else { %>
-    <div class="stepper">
-      <button type="button" data-passo="-1" aria-label="Togli">−</button>
-      <input type="number" min="0" step="1" inputmode="numeric" data-qta
-             name="quantita_<%= p.id %>" value="0" aria-label="Quantità <%= p.nome %>">
-      <button type="button" data-passo="1" aria-label="Aggiungi">+</button>
+    <div class="prodotto-azioni">
+      <div class="stepper">
+        <button type="button" data-passo="-1" aria-label="Togli">−</button>
+        <input type="number" min="0" step="1" inputmode="numeric" data-qta data-prodotto-qta="<%= p.id %>"
+               value="0" aria-label="Quantità <%= p.nome %>">
+        <button type="button" data-passo="1" aria-label="Aggiungi">+</button>
+      </div>
+      <div class="mini-carrello" data-nel-carrello="<%= p.id %>" <%= qtaInCarrello > 0 ? '' : 'hidden' %>>
+        <span>Nel carrello: <strong data-qta-carrello="<%= p.id %>"><%= qtaInCarrello %></strong> pz</span>
+      </div>
     </div>
   <% } %>
 </div>
