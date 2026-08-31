@@ -40,7 +40,7 @@ a { color: var(--blu); }
   margin: 0 auto;
   min-height: 100%;
   background: var(--sfondo);
-  padding-bottom: calc(var(--barra-bassa) + 16px);
+  padding-bottom: calc(var(--barra-bassa) + 62px + 16px);
 }
 
 .app-largo { max-width: 900px; }
@@ -507,8 +507,9 @@ a { color: var(--blu); }
   font-weight: 700;
 }
 
-/* quando c'è la barra azione, la navbar sta sopra di essa */
-body.con-azione .navbar { display: none; }
+/* navbar sempre visibile, anche con barra carrello */
+body.con-azione .navbar { display: block; }
+.navbar { display: block !important; }
 
 /* ---------- Form ---------- */
 
@@ -1226,3 +1227,6 @@ th { color: var(--grigio); font-weight: 600; }
   .navbar { position: static; border-top: none; border-bottom: 1px solid var(--bordo); margin-bottom: 12px; }
   .app { padding-bottom: 16px; }
 }
+
+/* geo mappa nascosta per ora — posizione richiesta all'ingresso ma non mostrata */
+.mappa, [data-mappa-punto], [data-segui-mappa], [data-segui-legenda], .geo-box { display: none !important; }

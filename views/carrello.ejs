@@ -59,11 +59,8 @@
                 <% }); %>
               </div>
 
-              <div style="display:flex;gap:8px;margin-top:10px;">
-                <button class="btn btn-chiaro" type="submit" name="azione" value="aggiorna" style="flex:1;">
-                  Aggiorna quantità
-                </button>
-                <button class="btn btn-rosso" type="submit" form="form-svuota" style="flex:1;">Svuota carrello</button>
+              <div style="margin-top:10px;">
+                <button class="btn btn-rosso btn-blocco" type="submit" form="form-svuota">Svuota carrello</button>
               </div>
             </form>
             <form method="POST" action="/carrello/svuota" id="form-svuota"></form>

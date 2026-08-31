@@ -5,15 +5,51 @@
 </head>
 <body data-loggato="1">
   <div class="app">
-    <%- include('partials/appbar', { titolo, intestazione: 'I miei ordini', indietro: '/home' }) %>
+    <%- include('partials/appbar', { titolo, intestazione: 'Stato ordini', indietro: '/home' }) %>
 
     <div class="contenuto">
+      <div class="sezione-titolo">Richieste in corso</div>
+      <% if (!richiesteInCorso.length) { %>
+        <div class="card"><p class="nota" style="margin:0;">Nessuna richiesta in attesa. Crea un ordine dal catalogo.</p></div>
+      <% } else { %>
+        <div class="card card-fitta">
+          <% richiesteInCorso.forEach(function (r) { %>
+            <a class="riga-lista" href="/richieste/<%= r.id %>">
+              <span class="icona"><%= r.stato === 'in_attesa' ? '⏳' : '✅' %></span>
+              <span class="corpo">
+                <span class="etichetta">Richiesta #<%= r.id %></span>
+                <span class="dettaglio"><%= r.stato === 'in_attesa' ? 'In attesa dai distributori' : 'Offerte disponibili' %> · <%= fmt.dataOra(r.creato_il) %></span>
+              </span>
+              <span class="freccia">›</span>
+            </a>
+          <% }); %>
+        </div>
+      <% } %>
+
+      <% if (richiesteStorico.length) { %>
+        <details class="altre-categorie" style="margin-top:12px;">
+          <summary>Storico richieste</summary>
+          <div class="card card-fitta">
+            <% richiesteStorico.forEach(function (r) { %>
+              <a class="riga-lista" href="/richieste/<%= r.id %>">
+                <span class="icona">📄</span>
+                <span class="corpo">
+                  <span class="etichetta">Richiesta #<%= r.id %></span>
+                  <span class="dettaglio"><%= r.stato %> · <%= fmt.dataOra(r.creato_il) %></span>
+                </span>
+                <span class="freccia">›</span>
+              </a>
+            <% }); %>
+          </div>
+        </details>
+      <% } %>
+
+      <div class="sezione-titolo" style="margin-top:18px;">Ordini confermati</div>
       <% if (!ordini.length) { %>
         <div class="vuoto">
           <span class="emoji">📦</span>
-          Non hai ancora inviato ordini.
+          Non hai ancora ordini confermati.
         </div>
-        <a class="btn btn-primary btn-blocco" href="/home">Scegli il materiale</a>
       <% } else { %>
         <div class="card card-fitta">
           <% ordini.forEach(function (o) { %>
@@ -31,7 +67,7 @@
             </a>
           <% }); %>
         </div>
-        <p class="nota">Gli importi mostrati sono IVA inclusa.</p>
+        <p class="nota">Gli importi sono IVA inclusa. Tocca un ordine per dettagli e bolla.</p>
       <% } %>
     </div>
   </div>

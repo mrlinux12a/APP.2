@@ -210,60 +210,10 @@ app.post('/logout', (req, res) => {
 // ---------- Cliente: home, ricerca, categorie ----------
 
 app.get('/home', requireRole('cliente'), (req, res) => {
-  richieste.aggiornaScadenzeAperte();
-  const inCorso = db
-    .prepare(
-      `SELECT * FROM requests
-        WHERE cliente_id = ? AND stato IN ('in_attesa', 'con_offerte')
-        ORDER BY id DESC`
-    )
-    .all(req.session.user.id);
-  const ultimiOrdini = db
-    .prepare(
-      `SELECT o.*, d.nome AS distributore_nome
-         FROM orders o
-         LEFT JOIN distributors d ON d.id = o.distributor_id
-        WHERE o.cliente_id = ?
-        ORDER BY o.id DESC LIMIT 3`
-    )
-    .all(req.session.user.id);
-
-  // Punti vendita da mostrare sulla mappa della home insieme alla posizione del cliente.
-  const punti = db
-    .prepare(
-      `SELECT s.geo_lat AS lat, s.geo_lng AS lng, s.nome, s.indirizzo, s.cap, s.citta, s.telefono,
-              d.nome AS insegna
-         FROM store_locations s
-         JOIN distributors d ON d.id = s.distributor_id
-        WHERE s.attivo = 1 AND s.geo_lat IS NOT NULL AND d.attivo = 1`
-    )
-    .all()
-    .map((p) => ({ ...p, indirizzo: `${p.indirizzo}, ${p.cap} ${p.citta}` }));
-
-  // Pezzi ordinati più spesso: si riordinano con un tocco, senza rinavigare il catalogo.
-  const frequenti = db
-    .prepare(
-      `SELECT oi.product_id, oi.nome_snapshot, oi.codice_snapshot,
-              SUM(oi.quantita) AS pezzi, COUNT(DISTINCT o.id) AS volte,
-              p.attivo, p.misura
-         FROM order_items oi
-         JOIN orders o ON o.id = oi.order_id
-         JOIN products p ON p.id = oi.product_id
-        WHERE o.cliente_id = ? AND p.attivo = 1
-        GROUP BY oi.product_id
-        ORDER BY volte DESC, pezzi DESC
-        LIMIT 6`
-    )
-    .all(req.session.user.id);
-
   res.render('home', {
     titolo: 'Ordini Minuteria',
     inEvidenza: catalogo.categorieInEvidenza(),
     altre: catalogo.altreCategorie(),
-    frequenti,
-    punti,
-    inCorso,
-    ultimiOrdini,
   });
 });
 
@@ -804,6 +754,7 @@ function assegnaOffertePerScadenza() {
 }
 
 app.get('/ordini', requireRole('cliente'), (req, res) => {
+  richieste.aggiornaScadenzeAperte();
   const ordini = db
     .prepare(
       `SELECT o.*, d.nome AS distributore_nome
@@ -813,7 +764,13 @@ app.get('/ordini', requireRole('cliente'), (req, res) => {
         ORDER BY o.id DESC`
     )
     .all(req.session.user.id);
-  res.render('ordini_cliente', { titolo: 'I miei ordini', ordini });
+  const richiesteInCorso = db
+    .prepare(`SELECT * FROM requests WHERE cliente_id = ? AND stato IN ('in_attesa','con_offerte') ORDER BY id DESC`)
+    .all(req.session.user.id);
+  const richiesteStorico = db
+    .prepare(`SELECT * FROM requests WHERE cliente_id = ? AND stato IN ('nessuna_offerta','annullata','ordinata') ORDER BY id DESC LIMIT 20`)
+    .all(req.session.user.id);
+  res.render('ordini_cliente', { titolo: 'Stato ordini', ordini, richiesteInCorso, richiesteStorico });
 });
 
 app.get('/ordini/:id', requireLogin, (req, res) => {

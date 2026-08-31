@@ -5,7 +5,7 @@
 </head>
 <body data-loggato="1">
   <div class="app">
-    <%- include('partials/appbar', { titolo, intestazione: 'Ordini Minuteria', indietro: null }) %>
+    <%- include('partials/appbar', { titolo, intestazione: 'Catalogo', indietro: null }) %>
 
     <div class="contenuto">
       <h1 class="domanda">Cosa ti serve?</h1>
@@ -19,52 +19,6 @@
       <p class="nota sotto-ricerca">
         Scrivi anche solo un pezzo di parola o la misura: <strong>valv 3/4</strong> basta.
       </p>
-
-      <% if (carrelloPezzi > 0) { %>
-        <a class="riga-lista card avviso-selezione" href="/carrello">
-          <span class="icona">🧾</span>
-          <span class="corpo">
-            <span class="etichetta"><%= carrelloPezzi %> pezzi selezionati</span>
-            <span class="dettaglio">Vai al riepilogo e chiedi la disponibilità</span>
-          </span>
-          <span class="freccia">›</span>
-        </a>
-      <% } %>
-
-      <% if (frequenti.length) { %>
-        <div class="sezione-titolo">Riordina in un tocco</div>
-        <form method="POST" action="/carrello" class="frequenti">
-          <input type="hidden" name="ritorno" value="/home">
-          <% frequenti.forEach(function (f) { %>
-            <button class="pezzo-frequente" type="submit" name="quantita_<%= f.product_id %>" value="1">
-              <span class="nome"><%= f.nome_snapshot %></span>
-              <span class="meta">
-                Cod. <%= f.codice_snapshot %><% if (f.misura) { %> · <%= f.misura %><% } %>
-                · ordinato <%= f.volte %> <%= f.volte === 1 ? 'volta' : 'volte' %>
-              </span>
-              <span class="aggiungi">+ Aggiungi</span>
-            </button>
-          <% }); %>
-        </form>
-      <% } %>
-
-      <% if (inCorso.length) { %>
-        <div class="sezione-titolo">Richieste in corso</div>
-        <div class="card card-fitta">
-          <% inCorso.forEach(function (r) { %>
-            <a class="riga-lista" href="/richieste/<%= r.id %>">
-              <span class="icona"><%= r.stato === 'in_attesa' ? '⏳' : '✅' %></span>
-              <span class="corpo">
-                <span class="etichetta">Richiesta #<%= r.id %></span>
-                <span class="dettaglio">
-                  <%= r.stato === 'in_attesa' ? 'In attesa di conferma dai distributori' : 'Offerte disponibili: scegli il distributore' %>
-                </span>
-              </span>
-              <span class="freccia">›</span>
-            </a>
-          <% }); %>
-        </div>
-      <% } %>
 
       <div class="sezione-titolo">Le più richieste</div>
       <div class="griglia-evidenza">
@@ -94,46 +48,9 @@
         </div>
       </details>
 
-      <%- include('partials/geolocalizzazione', {
-            ruolo: 'cliente',
-            titoloBox: 'Punti vendita vicino a te',
-            punti,
-            spiegazione: 'La posizione serve a mostrarti i banchi più vicini e a farti seguire il mezzo in consegna. Puoi disattivarla quando vuoi: le coordinate vengono cancellate.'
-          }) %>
-
-      <a class="riga-lista card" href="/punti-vendita">
-        <span class="icona">🗺</span>
-        <span class="corpo">
-          <span class="etichetta">Tutti i punti vendita</span>
-          <span class="dettaglio">Indirizzi e distanze dei banchi in zona</span>
-        </span>
-        <span class="freccia">›</span>
-      </a>
-
-      <% if (ultimiOrdini.length) { %>
-        <div class="sezione-titolo">Ultimi ordini</div>
-        <div class="card card-fitta">
-          <% ultimiOrdini.forEach(function (o) { %>
-            <a class="riga-lista" href="/ordini/<%= o.id %>">
-              <span class="icona">📦</span>
-              <span class="corpo">
-                <span class="etichetta">Ordine #<%= o.id %> — € <%= euro(totaleOrdine(o)) %></span>
-                <span class="dettaglio"><%= o.distributore_nome || 'Grossista' %> · <%= fmt.dataOra(o.creato_il) %></span>
-              </span>
-              <span class="freccia">›</span>
-            </a>
-          <% }); %>
-        </div>
-      <% } %>
-
       <p class="nota">
-        I prezzi in app sono IVA esclusa. La disponibilità viene confermata dal banco del
-        distributore prima di chiudere l'ordine.
+        I prezzi in app sono IVA esclusa. La disponibilità viene confermata dal banco prima di chiudere l'ordine.
       </p>
-
-      <button class="btn btn-chiaro btn-blocco" type="button" data-abilita-notifiche>
-        Attiva le notifiche sul telefono
-      </button>
     </div>
   </div>
 
