@@ -22,7 +22,7 @@
           <% const r = c.richiesta; const step = c.step; %>
           <div class="card card-richiesta" data-card="<%= r.id %>" data-step="<%= step %>">
             <div class="card-richiesta-head">
-              <div class="card-richiesta-id">Richiesta #<%= r.id %> · <%= fmt.dataOra(r.creato_il) %></div>
+              <div class="card-richiesta-id"><%= fmt.dataOra(r.creato_il) %></div>
               <span class="stato-badge stato-<%= r.stato %>"><%= r.stato === 'in_attesa' ? 'In attesa' : (r.stato === 'con_offerte' ? 'Da scegliere' : (r.stato === 'ordinata' ? 'Ordinata' : r.stato)) %></span>
             </div>
             <!-- materiale uno per riga -->
@@ -88,7 +88,7 @@
                 <div class="pannello" data-pannello="3">
                   <% if (c.ordine) { %>
                     <div class="riga-lista" style="padding:8px 0; border:none;">
-                      <span class="icona">📦</span><span class="corpo"><span class="etichetta">Ordine #<%= c.ordine.id %></span><span class="dettaglio"><%= c.ordine.stato %> · <%= fmt.dataOra(c.ordine.creato_il) %></span></span><span class="stato-badge stato-<%= c.ordine.stato %>"><%= c.ordine.stato %></span>
+                      <span class="icona">📦</span><span class="corpo"><span class="etichetta">Ordine</span><span class="dettaglio"><%= c.ordine.stato %> · <%= fmt.dataOra(c.ordine.creato_il) %></span></span><span class="stato-badge stato-<%= c.ordine.stato %>"><%= c.ordine.stato %></span>
                     </div>
                     <div class="riga-lista" style="padding:8px 0; border:none;">
                       <span class="icona">🚚</span><span class="corpo"><span class="etichetta"><%= c.ordine.modalita==='ritiro'?'Ritiro':'Consegna' %></span><span class="dettaglio"><%= c.ordine.destinazione %></span></span>
@@ -113,7 +113,7 @@
               <% const r = c.richiesta; %>
               <div class="card card-richiesta" style="opacity:0.95;">
                 <div class="card-richiesta-head">
-                  <div class="card-richiesta-id">Richiesta #<%= r.id %> · <%= fmt.dataOra(r.creato_il) %></div>
+                  <div class="card-richiesta-id"><%= fmt.dataOra(r.creato_il) %></div>
                   <span class="stato-badge" style="background:var(--rosso-chiaro); color:var(--rosso);">scaduta</span>
                 </div>
                 <div class="card-richiesta-materiale">
@@ -129,13 +129,13 @@
       <% } %>
 
       <% if (ordini.length && cards.length) { %>
-        <div class="sezione-titolo" style="margin-top:18px;">Ordini confermati (storico)</div>
+        <div class="sezione-titolo" style="margin-top:18px;">Ordini confermati</div>
         <div class="card card-fitta">
           <% ordini.forEach(function (o) { %>
             <a class="riga-lista" href="/ordini/<%= o.id %>">
               <span class="icona">📦</span>
               <span class="corpo">
-                <span class="etichetta">Ordine #<%= o.id %> — € <%= euro(totaleOrdine(o)) %></span>
+                <span class="etichetta">Ordine — € <%= euro(totaleOrdine(o)) %></span>
                 <span class="dettaglio"><%= o.distributore_nome || 'Grossista' %> · <%= fmt.dataOra(o.creato_il) %></span>
               </span>
               <span class="stato-badge stato-<%= o.stato %>"><%= o.stato %></span>

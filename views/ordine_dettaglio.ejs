@@ -7,7 +7,7 @@
   <div class="app<%= currentUser.ruolo === 'cliente' ? '' : ' app-largo' %>">
     <%- include('partials/appbar', {
           titolo,
-          intestazione: 'Ordine #' + ordine.id,
+          intestazione: currentUser.ruolo === 'cliente' ? 'Ordine' : 'Ordine #' + ordine.id,
           indietro: currentUser.ruolo === 'agente' ? '/agente/ordini' : (currentUser.ruolo === 'distributore' ? '/distributore' : '/ordini')
         }) %>
 
@@ -22,7 +22,7 @@
         <div class="riga-lista">
           <span class="icona">📦</span>
           <span class="corpo">
-            <span class="etichetta">Ordine #<%= ordine.id %></span>
+            <span class="etichetta"><%= currentUser.ruolo === 'cliente' ? 'Ordine' : 'Ordine #' + ordine.id %></span>
             <span class="dettaglio"><%= fmt.dataOra(ordine.creato_il) %></span>
           </span>
           <span class="stato-badge stato-<%= ordine.stato %>">

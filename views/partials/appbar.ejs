@@ -7,10 +7,12 @@
   <div class="titolo"><%= typeof intestazione !== 'undefined' ? intestazione : titolo %></div>
 
   <div class="azioni-appbar">
-    <a class="icona-btn" href="/notifiche" aria-label="Notifiche">
-      🔔
-      <% if (notificheNonLette > 0) { %><span class="pallino"><%= notificheNonLette %></span><% } %>
-    </a>
+    <% if (!currentUser || currentUser.ruolo !== 'cliente') { %>
+      <a class="icona-btn" href="/notifiche" aria-label="Notifiche">
+        🔔
+        <% if (notificheNonLette > 0) { %><span class="pallino"><%= notificheNonLette %></span><% } %>
+      </a>
+    <% } %>
 
     <% if (currentUser) { %>
       <div class="menu-account" data-menu-account>
@@ -26,14 +28,15 @@
           </div>
           <% if (currentUser.ruolo === 'cliente') { %>
             <a href="/profilo">La mia anagrafica</a>
-            <a href="/ordini">I miei ordini</a>
-            <a href="/punti-vendita">Punti vendita</a>
+            <a href="/ordini">Stato ordini</a>
           <% } else if (currentUser.ruolo === 'distributore') { %>
             <a href="/distributore/clienti">Clienti</a>
             <a href="/distributore/ordini">Ordini da evadere</a>
             <a href="/punti-vendita">Punti vendita</a>
           <% } %>
-          <a href="/notifiche">Notifiche</a>
+          <% if (!currentUser || currentUser.ruolo !== 'cliente') { %>
+            <a href="/notifiche">Notifiche</a>
+          <% } %>
           <form method="POST" action="/logout">
             <button type="submit" class="voce-esci">Esci</button>
           </form>

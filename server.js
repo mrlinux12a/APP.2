@@ -867,6 +867,7 @@ app.post('/distributore/ordini/:id/elimina', requireRole('distributore'), (req, 
 // ---------- Notifiche ----------
 
 app.get('/notifiche', requireLogin, (req, res) => {
+  if (req.session.user.ruolo === 'cliente') return res.redirect('/ordini');
   const categoria = notifiche.CATEGORIE[req.query.categoria] ? req.query.categoria : null;
   const sottostato = req.query.sottostato || null;
 
