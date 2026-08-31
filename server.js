@@ -646,7 +646,7 @@ app.post('/ordini', requireRole('cliente'), (req, res) => {
     note: req.body.note,
     destinazione: req.body.destinazione,
   });
-  res.redirect('/ordini/' + orderId + '?nuovo=1');
+  res.redirect('/ordini');
 });
 
 // Creazione dell'ordine a partire da un'offerta confermata: la usano sia la scelta
@@ -766,11 +766,11 @@ app.get('/ordini', requireRole('cliente'), (req, res) => {
     .all(req.session.user.id);
   // tutte le richieste del cliente, ordinate per creazione (nuove prima)
   const tutte = db
-    .prepare(`SELECT * FROM requests WHERE cliente_id = ? ORDER BY id DESC LIMIT 30`)
+    .prepare(`SELECT * FROM requests WHERE cliente_id = ? ORDER BY id DESC LIMIT 50`)
     .all(req.session.user.id);
 
   // costruisce le card 3-stati: ogni richiesta è una card, l'ordine ne è la continuazione
-  const cards = tutte.map((r) => {
+  const cardsAll = tutte.map((r) => {
     const rAgg = richieste.aggiornaScadenza(r.id) || r;
     const righe = richieste.righeRichiesta(rAgg.id);
     const risposte = richieste.risposteRichiesta(rAgg.id);
@@ -779,9 +779,11 @@ app.get('/ordini', requireRole('cliente'), (req, res) => {
     let ordine = null;
     let secondi = null;
     let secondiScelta = null;
+    let scaduta = false;
     if (rAgg.stato === 'in_attesa') {
       step = 1;
       secondi = richieste.secondiRimasti(rAgg);
+      if (secondi === 0) scaduta = true;
     } else if (rAgg.stato === 'con_offerte') {
       step = 2;
       offerte = richieste.offerte(rAgg.id);
@@ -792,12 +794,15 @@ app.get('/ordini', requireRole('cliente'), (req, res) => {
     } else if (rAgg.stato === 'ordinata') {
       step = 3;
     } else if (rAgg.stato === 'nessuna_offerta' || rAgg.stato === 'annullata') {
-      step = 1;
+      step = 0;
+      scaduta = true;
     }
-    return { richiesta: rAgg, righe, risposte, offerte, ordine, step, secondi, secondiScelta };
+    return { richiesta: rAgg, righe, risposte, offerte, ordine, step, secondi, secondiScelta, scaduta };
   });
+  const cards = cardsAll.filter(c => c.step >= 1 && c.step <= 3 && !c.scaduta);
+  const storico = cardsAll.filter(c => c.scaduta || c.step === 0);
 
-  res.render('ordini_cliente', { titolo: 'Stato ordini', ordini, cards, consegna });
+  res.render('ordini_cliente', { titolo: 'Stato ordini', ordini, cards, storico, consegna });
 });
 
 app.get('/ordini/:id', requireLogin, (req, res) => {
