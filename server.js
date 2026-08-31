@@ -5,6 +5,26 @@ const bcrypt = require('bcryptjs');
 const path = require('path');
 
 const db = require('./db');
+// auto-seed se DB vuoto (dopo clone/pull basta npm start)
+try {
+  const nProd = db.prepare('SELECT COUNT(*) n FROM products').get().n;
+  if (nProd === 0) {
+    console.log('DB vuoto -> eseguo seed automatico...');
+    require('./db/seed');
+  } else {
+    const nDp = db.prepare('SELECT COUNT(*) n FROM distributor_products').get().n;
+    if (nDp === 0) {
+      console.log('Listini vuoti -> popolo distributor_products...');
+      const dists = db.prepare('SELECT id FROM distributors WHERE attivo=1').all();
+      const prods = db.prepare('SELECT id, prezzo_listino, sconto_base_pct FROM products').all();
+      const ins = db.prepare('INSERT INTO distributor_products (distributor_id, product_id, prezzo_listino, sconto_base_pct) VALUES (?,?,?,?) ON CONFLICT DO NOTHING');
+      const tx = db.transaction(() => { for (const d of dists) for (const p of prods) ins.run(d.id, p.id, p.prezzo_listino, p.sconto_base_pct); });
+      tx();
+      console.log(`Listini popolati ${dists.length * prods.length}`);
+    }
+  }
+} catch (e) { console.error('auto-seed fallito', e.message); }
+
 const { requireLogin, requireRole } = require('./src/auth');
 const pricing = require('./src/pricing');
 const format = require('./src/format');
