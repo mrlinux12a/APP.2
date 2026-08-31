@@ -32,21 +32,19 @@
         <% }); %>
       </div>
 
-      <details class="altre-categorie">
-        <summary>Altre categorie</summary>
-        <div class="card card-fitta">
-          <% altre.forEach(function (m) { %>
-            <a class="riga-lista" href="/categoria/<%= m.slug %>">
-              <span class="icona"><%= m.icona %></span>
-              <span class="corpo">
-                <span class="etichetta"><%= m.nome %></span>
-                <span class="dettaglio"><%= m.n_prodotti %> articoli</span>
-              </span>
-              <span class="freccia">›</span>
-            </a>
-          <% }); %>
-        </div>
-      </details>
+      <div class="sezione-titolo">Categorie</div>
+      <div class="card card-fitta">
+        <% altre.forEach(function (m) { %>
+          <a class="riga-lista" href="/categoria/<%= m.slug %>">
+            <span class="icona"><%= m.icona %></span>
+            <span class="corpo">
+              <span class="etichetta"><%= m.nome %></span>
+              <span class="dettaglio"><%= m.n_prodotti %> articoli</span>
+            </span>
+            <span class="freccia">›</span>
+          </a>
+        <% }); %>
+      </div>
 
       <p class="nota">
         I prezzi in app sono IVA esclusa. La disponibilità viene confermata dal banco prima di chiudere l'ordine.
