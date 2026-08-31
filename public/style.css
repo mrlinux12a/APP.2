@@ -1230,3 +1230,21 @@ th { color: var(--grigio); font-weight: 600; }
 
 /* geo mappa nascosta per ora — posizione richiesta all'ingresso ma non mostrata */
 .mappa, [data-mappa-punto], [data-segui-mappa], [data-segui-legenda], .geo-box { display: none !important; }
+
+/* Stato ordini — card 3 stati */
+.card-richiesta { padding: 14px; margin-bottom: 12px; }
+.card-richiesta-head { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.card-richiesta-id { font-weight:700; font-size:0.92rem; }
+.card-richiesta-materiale { font-size:0.82rem; color:var(--grigio); margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.stepper-3 { display:flex; align-items:center; gap:4px; margin:14px 0 6px; }
+.stepper-3 .step { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; background:none; border:none; cursor:pointer; padding:4px 2px; border-radius:8px; }
+.stepper-3 .step:disabled { opacity:0.45; cursor:default; }
+.stepper-3 .pallino { width:30px; height:30px; border-radius:50%; background:#fff; border:2px solid var(--bordo); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:0.85rem; color:var(--grigio); }
+.stepper-3 .step.attivo .pallino { background:var(--blu); color:#fff; border-color:var(--blu); }
+.stepper-3 .step.corrente .pallino { box-shadow:0 0 0 4px var(--blu-chiaro); }
+.stepper-3 .etichetta { font-size:0.68rem; color:var(--grigio); font-weight:600; text-align:center; line-height:1.1; }
+.stepper-3 .step.attivo .etichetta { color:var(--blu); }
+.stepper-3 .linea { flex:1; height:3px; background:var(--bordo); border-radius:2px; margin:0 -2px; }
+.stepper-3 .linea.piena { background:var(--blu); }
+.pannelli .pannello { background:var(--sfondo); border:1px solid var(--bordo); border-radius:10px; padding:12px; }
+.pannello-titolo { font-weight:700; font-size:0.95rem; }

@@ -738,3 +738,37 @@
     if (secondi === 0) window.setTimeout(function () { window.location.reload(); }, 3000);
   }, 1000);
 })();
+
+/* Stato ordini — stepper 3 stati cliccabile + countdown per ogni card */
+(function () {
+  'use strict';
+  document.querySelectorAll('[data-card]').forEach(function (card) {
+    const stepper = card.querySelector('[data-stepper]');
+    if (!stepper) return;
+    const pannelli = card.querySelectorAll('[data-pannello]');
+    stepper.querySelectorAll('[data-step-btn]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (btn.disabled) return;
+        const n = btn.getAttribute('data-step-btn');
+        pannelli.forEach(function (p) {
+          if (p.getAttribute('data-pannello') === n) p.removeAttribute('hidden');
+          else p.setAttribute('hidden','');
+        });
+        stepper.querySelectorAll('[data-step-btn]').forEach(function (b) {
+          b.classList.toggle('corrente', b.getAttribute('data-step-btn') === n);
+        });
+      });
+    });
+    // countdown per pannello 1 (se presente)
+    const cd = card.querySelector('[data-countdown]');
+    if (cd) {
+      let sec = parseInt(cd.getAttribute('data-secondi'),10) || 0;
+      setInterval(function () {
+        sec = Math.max(0, sec - 1);
+        const m = Math.floor(sec/60), s = sec%60;
+        cd.textContent = String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+        if (sec===0) setTimeout(function(){ window.location.reload(); }, 2500);
+      }, 1000);
+    }
+  });
+})();

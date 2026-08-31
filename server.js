@@ -764,13 +764,40 @@ app.get('/ordini', requireRole('cliente'), (req, res) => {
         ORDER BY o.id DESC`
     )
     .all(req.session.user.id);
-  const richiesteInCorso = db
-    .prepare(`SELECT * FROM requests WHERE cliente_id = ? AND stato IN ('in_attesa','con_offerte') ORDER BY id DESC`)
+  // tutte le richieste del cliente, ordinate per creazione (nuove prima)
+  const tutte = db
+    .prepare(`SELECT * FROM requests WHERE cliente_id = ? ORDER BY id DESC LIMIT 30`)
     .all(req.session.user.id);
-  const richiesteStorico = db
-    .prepare(`SELECT * FROM requests WHERE cliente_id = ? AND stato IN ('nessuna_offerta','annullata','ordinata') ORDER BY id DESC LIMIT 20`)
-    .all(req.session.user.id);
-  res.render('ordini_cliente', { titolo: 'Stato ordini', ordini, richiesteInCorso, richiesteStorico });
+
+  // costruisce le card 3-stati: ogni richiesta è una card, l'ordine ne è la continuazione
+  const cards = tutte.map((r) => {
+    const rAgg = richieste.aggiornaScadenza(r.id) || r;
+    const righe = richieste.righeRichiesta(rAgg.id);
+    const risposte = richieste.risposteRichiesta(rAgg.id);
+    let step = 1;
+    let offerte = [];
+    let ordine = null;
+    let secondi = null;
+    let secondiScelta = null;
+    if (rAgg.stato === 'in_attesa') {
+      step = 1;
+      secondi = richieste.secondiRimasti(rAgg);
+    } else if (rAgg.stato === 'con_offerte') {
+      step = 2;
+      offerte = richieste.offerte(rAgg.id);
+      secondiScelta = offerte.length > 1 ? richieste.secondiPerScegliere(rAgg) : null;
+    } else if (rAgg.stato === 'ordinata' && rAgg.order_id) {
+      step = 3;
+      ordine = db.prepare('SELECT * FROM orders WHERE id = ?').get(rAgg.order_id);
+    } else if (rAgg.stato === 'ordinata') {
+      step = 3;
+    } else if (rAgg.stato === 'nessuna_offerta' || rAgg.stato === 'annullata') {
+      step = 1;
+    }
+    return { richiesta: rAgg, righe, risposte, offerte, ordine, step, secondi, secondiScelta };
+  });
+
+  res.render('ordini_cliente', { titolo: 'Stato ordini', ordini, cards, consegna });
 });
 
 app.get('/ordini/:id', requireLogin, (req, res) => {
