@@ -194,4 +194,23 @@ db.transaction = function (fn) {
   };
 };
 
+// compat pg: ensureInit no-op async, prepare async wrapper
+db.ensureInit = async () => {};
+const _origPrepare = db.prepare.bind(db);
+db.prepare = (sql) => {
+  const stmt = _origPrepare(sql);
+  return {
+    get: async (...p) => stmt.get(...p),
+    all: async (...p) => stmt.all(...p),
+    run: async (...p) => stmt.run(...p),
+  };
+};
+const _origExec = db.exec.bind(db);
+db.exec = async (sql, ...p) => _origExec(sql, ...p);
+const _origTrans = db.transaction.bind(db);
+db.transaction = (fn) => {
+  const tx = _origTrans(fn);
+  return async (...a) => tx(...a);
+};
+
 module.exports = db;

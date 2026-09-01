@@ -9,7 +9,12 @@ const DURATA_PREDEFINITA = 1000 * 60 * 60 * 24 * 30; // 30 giorni
 class ArchivioSqlite extends session.Store {
   constructor() {
     super();
-    this.pulisci();
+    // crea tabella session se manca (per sqlite e postgres)
+    const isPg = !!process.env.DATABASE_URL;
+    const createSql = isPg
+      ? `CREATE TABLE IF NOT EXISTS session (sid VARCHAR PRIMARY KEY, sess JSON NOT NULL, expire TIMESTAMP NOT NULL)`
+      : `CREATE TABLE IF NOT EXISTS session (sid TEXT PRIMARY KEY, sess TEXT NOT NULL, expire TEXT NOT NULL)`;
+    db.exec(createSql).catch(()=>{}).finally(()=> this.pulisci());
     this.timer = setInterval(() => this.pulisci(), 60 * 60 * 1000);
     if (this.timer.unref) this.timer.unref();
   }
@@ -22,11 +27,12 @@ class ArchivioSqlite extends session.Store {
   }
 
   get(sid, callback) {
-    db.prepare('SELECT sess FROM session WHERE sid = ? AND expire > NOW()').get(sid)
+    const isPg = !!process.env.DATABASE_URL;
+    const sql = isPg ? 'SELECT sess FROM session WHERE sid = ? AND expire > NOW()' : "SELECT sess FROM session WHERE sid = ? AND expire > datetime('now')";
+    db.prepare(sql).get(sid)
       .then(row => {
         if (!row) return callback(null, null);
         const sess = row.sess;
-        // pg may return json object or string
         if (typeof sess === 'string') {
           try { return callback(null, JSON.parse(sess)); } catch (e) { return callback(e); }
         }
@@ -37,12 +43,12 @@ class ArchivioSqlite extends session.Store {
 
   set(sid, sess, callback) {
     const expire = this.scadenza(sess);
-    // Use JSON stringify for pg JSON column
     const sessJson = JSON.stringify(sess);
-    db.prepare(
-      `INSERT INTO session (sid, sess, expire) VALUES (?, ?, ?)
-       ON CONFLICT(sid) DO UPDATE SET sess = EXCLUDED.sess, expire = EXCLUDED.expire`
-    ).run(sid, sessJson, expire)
+    const isPg = !!process.env.DATABASE_URL;
+    const sql = isPg
+      ? `INSERT INTO session (sid, sess, expire) VALUES (?, ?, ?) ON CONFLICT(sid) DO UPDATE SET sess = EXCLUDED.sess, expire = EXCLUDED.expire`
+      : `INSERT INTO session (sid, sess, expire) VALUES (?, ?, ?) ON CONFLICT(sid) DO UPDATE SET sess = excluded.sess, expire = excluded.expire`;
+    db.prepare(sql).run(sid, sessJson, expire)
       .then(() => callback(null))
       .catch(err => callback(err));
   }
@@ -62,7 +68,9 @@ class ArchivioSqlite extends session.Store {
   }
 
   pulisci() {
-    db.prepare('DELETE FROM session WHERE expire < NOW()').run().catch(() => {});
+    const isPg = !!process.env.DATABASE_URL;
+    const sql = isPg ? 'DELETE FROM session WHERE expire < NOW()' : "DELETE FROM session WHERE expire < datetime('now')";
+    db.prepare(sql).run().catch(() => {});
   }
 }
 
