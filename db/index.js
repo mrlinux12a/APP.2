@@ -1,197 +1,182 @@
-const path = require('path');
+const { Pool } = require('pg');
 const fs = require('fs');
-const { DatabaseSync } = require('node:sqlite');
+const path = require('path');
 
-// Usa il modulo SQLite integrato in Node.js (>= 22.5): nessuna dipendenza nativa da compilare,
-// più semplice da installare su qualsiasi hosting/ambiente per un MVP come questo.
-const DB_PATH = path.join(__dirname, 'minuteria.db');
-const db = new DatabaseSync(DB_PATH);
-db.exec('PRAGMA journal_mode = WAL');
-db.exec('PRAGMA foreign_keys = ON');
+const DATABASE_URL = process.env.DATABASE_URL || 'postgres://minuteria:minuteria@localhost:5432/minuteria';
 
-const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
-db.exec(schema);
+const isSupabase = DATABASE_URL.includes('supabase.co');
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  ssl: isSupabase ? { rejectUnauthorized: false } : false,
+});
 
-// ---------- Migrazioni leggere ----------
-// schema.sql usa CREATE TABLE IF NOT EXISTS: sulle tabelle già esistenti le colonne nuove
-// non verrebbero aggiunte. Qui allineiamo un DB creato con una versione precedente.
-
-function colonneDi(tabella) {
-  return db.prepare(`PRAGMA table_info(${tabella})`).all().map((c) => c.name);
+function toPg(sql) {
+  let s = sql;
+  // sqlite -> pg translations
+  s = s.replace(/datetime\('now',\s*'\+'\s*\|\|\s*\?\s*\|\|\s*'\s*minutes'\)/g, "NOW() + (? * INTERVAL '1 minute')");
+  s = s.replace(/datetime\('now',\s*'\+'\s*\|\|\s*\?\s*\|\|\s*'\s*minutes'\)/gi, "NOW() + (? * INTERVAL '1 minute')");
+  s = s.replace(/datetime\('now'\)/g, 'NOW()');
+  s = s.replace(/strftime\('%Y',\s*'now'\)/g, 'EXTRACT(YEAR FROM NOW())');
+  s = s.replace(/CAST\(\(julianday\(r\.scade_il\) - julianday\('now'\)\) \* 86400 AS INTEGER\)/g, 'EXTRACT(EPOCH FROM (r.scade_il - NOW()))::int');
+  s = s.replace(/CAST\(\(julianday\(\?\) - julianday\('now'\)\) \* 86400 AS INTEGER\)/g, "EXTRACT(EPOCH FROM (?::timestamp - NOW()))::int");
+  s = s.replace(/julianday\('now'\)/g, 'NOW()');
+  s = s.replace(/julianday\(([^)]+)\)/g, '$1');
+  s = s.replace(/\bIFNULL\(/g, 'COALESCE(');
+  // handle @named params and ?
+  // We will replace ? with $n later, but need to handle mixed
+  return s;
 }
 
-function aggiungiColonna(tabella, colonna, ddl) {
-  if (!colonneDi(tabella).includes(colonna)) {
-    db.exec(`ALTER TABLE ${tabella} ADD COLUMN ${colonna} ${ddl}`);
+function prepare(sql) {
+  // keep original for named detection
+  const translated = toPg(sql);
+  // detect named params @xxx
+  const named = [];
+  let m;
+  const re = /@(\w+)/g;
+  while ((m = re.exec(translated)) !== null) named.push(m[1]);
+  let pgSql;
+  if (named.length) {
+    let idx = 0;
+    pgSql = translated.replace(/@\w+/g, () => `$${++idx}`);
+    // also replace remaining ? with $n continuing count
+    pgSql = pgSql.replace(/\?/g, () => `$${++idx}`);
+    return {
+      get: async (...params) => {
+        let arr;
+        if (params.length === 1 && params[0] && typeof params[0] === 'object' && !Array.isArray(params[0]) && named.length) {
+          const obj = params[0];
+          arr = named.map(k => obj[k] ?? obj['@'+k]);
+          // if there are extra ? params after named, they would be in same object? not needed
+        } else {
+          // positional: flatten if single object with no named? fallback
+          arr = params;
+          if (params.length===1 && typeof params[0]==='object' && !Array.isArray(params[0]) && !named.length) {
+            // shouldn't happen
+            arr = Object.values(params[0]);
+          }
+        }
+        const res = await pool.query(pgSql, arr);
+        return res.rows[0] || null;
+      },
+      all: async (...params) => {
+        let arr;
+        if (params.length === 1 && params[0] && typeof params[0] === 'object' && !Array.isArray(params[0]) && named.length) {
+          const obj = params[0];
+          arr = named.map(k => obj[k] ?? obj['@'+k]);
+        } else {
+          arr = params;
+        }
+        const res = await pool.query(pgSql, arr);
+        return res.rows;
+      },
+      run: async (...params) => {
+        let arr;
+        if (params.length === 1 && params[0] && typeof params[0] === 'object' && !Array.isArray(params[0]) && named.length) {
+          const obj = params[0];
+          arr = named.map(k => obj[k]);
+          // also handle extra positional after
+          if (params.length>1) arr = arr.concat(params.slice(1));
+        } else {
+          arr = params;
+          // handle case where object passed with @ keys but we already handled
+        }
+        let q = pgSql;
+        const isInsert = /^\s*INSERT/i.test(q) && !/RETURNING/i.test(q);
+        if (isInsert) q += ' RETURNING id';
+        const res = await pool.query(q, arr);
+        const row = res.rows[0];
+        return { lastInsertRowid: row ? row.id : null, lastInsertId: row ? row.id : null, changes: res.rowCount, rowCount: res.rowCount };
+      },
+    };
   }
+  // positional only
+  let i=0;
+  let pgSql2 = translated.replace(/\?/g, () => `$${++i}`);
+  return {
+    get: async (...params) => {
+      const res = await pool.query(pgSql2, params);
+      return res.rows[0] || null;
+    },
+    all: async (...params) => {
+      const res = await pool.query(pgSql2, params);
+      return res.rows;
+    },
+    run: async (...params) => {
+      let q = pgSql2;
+      const isInsert = /^\s*INSERT/i.test(q) && !/RETURNING/i.test(q);
+      if (isInsert) q += ' RETURNING id';
+      const res = await pool.query(q, params);
+      const row = res.rows[0];
+      return { lastInsertRowid: row ? row.id : null, lastInsertId: row ? row.id : null, changes: res.rowCount, rowCount: res.rowCount };
+    },
+  };
 }
 
-aggiungiColonna('products', 'macro_slug', "TEXT NOT NULL DEFAULT 'minuteria'");
-aggiungiColonna('users', 'distributor_id', 'INTEGER');
-aggiungiColonna('users', 'zona', "TEXT NOT NULL DEFAULT 'Genova'");
-aggiungiColonna('orders', 'request_id', 'INTEGER');
-aggiungiColonna('orders', 'distributor_id', 'INTEGER');
-aggiungiColonna('orders', 'consegna_ore', 'INTEGER');
-aggiungiColonna('orders', 'costo_consegna', 'REAL NOT NULL DEFAULT 0');
-aggiungiColonna('orders', 'iva', 'REAL NOT NULL DEFAULT 0');
-aggiungiColonna('orders', 'totale_ivato', 'REAL NOT NULL DEFAULT 0');
-aggiungiColonna('order_items', 'prezzo_unitario_cliente', 'REAL NOT NULL DEFAULT 0');
-aggiungiColonna('order_items', 'subtotale_cliente', 'REAL NOT NULL DEFAULT 0');
-
-// Anagrafica completa del cliente: serve per intestare la bolla / DDT.
-aggiungiColonna('users', 'partita_iva', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('users', 'codice_fiscale', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('users', 'indirizzo', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('users', 'cap', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('users', 'citta', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('users', 'provincia', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('users', 'sdi_pec', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('users', 'indirizzo_consegna', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('users', 'referente', "TEXT NOT NULL DEFAULT ''");
-
-// Anagrafica del distributore: mittente del DDT.
-aggiungiColonna('distributors', 'ragione_sociale', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('distributors', 'partita_iva', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('distributors', 'indirizzo', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('distributors', 'cap', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('distributors', 'citta', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('distributors', 'provincia', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('distributors', 'telefono', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('distributors', 'email', "TEXT NOT NULL DEFAULT ''");
-
-// Risposta del banco: tempo di partenza e copertura (totale o parziale).
-aggiungiColonna('request_responses', 'partenza_ore', 'INTEGER');
-aggiungiColonna('request_responses', 'copertura', "TEXT NOT NULL DEFAULT 'totale'");
-
-// Ordine: partenza stimata, destinazione merce e dati della bolla / DDT.
-aggiungiColonna('orders', 'partenza_ore', 'INTEGER');
-aggiungiColonna('orders', 'destinazione', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('orders', 'ddt_numero', 'TEXT');
-aggiungiColonna('orders', 'ddt_data', 'TEXT');
-aggiungiColonna('orders', 'ddt_colli', 'INTEGER');
-aggiungiColonna('orders', 'ddt_aspetto', "TEXT NOT NULL DEFAULT 'Colli'");
-aggiungiColonna('orders', 'ddt_trasporto', "TEXT NOT NULL DEFAULT 'mittente'");
-aggiungiColonna('orders', 'ddt_causale', "TEXT NOT NULL DEFAULT 'Vendita'");
-aggiungiColonna('orders', 'ddt_note', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('orders', 'preso_in_carico_il', 'TEXT');
-
-// Geolocalizzazione: attiva solo con consenso esplicito, revocabile in qualsiasi momento.
-aggiungiColonna('users', 'geo_consenso', 'INTEGER NOT NULL DEFAULT 0');
-aggiungiColonna('users', 'geo_lat', 'REAL');
-aggiungiColonna('users', 'geo_lng', 'REAL');
-aggiungiColonna('users', 'geo_precisione', 'REAL');
-aggiungiColonna('users', 'geo_aggiornata_il', 'TEXT');
-aggiungiColonna('distributors', 'geo_lat', 'REAL');
-aggiungiColonna('distributors', 'geo_lng', 'REAL');
-aggiungiColonna('orders', 'tracciamento_attivo', 'INTEGER NOT NULL DEFAULT 0');
-aggiungiColonna('orders', 'geo_lat_consegna', 'REAL');
-aggiungiColonna('orders', 'geo_lng_consegna', 'REAL');
-
-// Marchi e dati di listino del produttore (EAN, RAEE, F-GAS...).
-aggiungiColonna('products', 'brand_slug', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('products', 'famiglia', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('products', 'ean', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('products', 'raee', 'REAL NOT NULL DEFAULT 0');
-aggiungiColonna('products', 'cat_raee', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('products', 'refrigerante', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('products', 'fgas_kg', 'REAL');
-aggiungiColonna('products', 'gwp', 'REAL');
-
-// Sconto deciso dal banco sulla singola riga: se valorizzato sostituisce lo sconto Base
-// del distributore per quel prodotto, solo per quella richiesta.
-aggiungiColonna('request_response_items', 'sconto_riga_pct', 'REAL');
-aggiungiColonna('request_responses', 'sconto_cliente_pct', 'REAL');
-
-// Sconti a scalare: nel settore si scrivono come 40+10+5, non come un unico valore.
-// sconto_pct resta come sconto effettivo calcolato, per non rompere i dati esistenti.
-['sconto1', 'sconto2', 'sconto3', 'sconto4', 'sconto5'].forEach((c) =>
-  aggiungiColonna('client_discount_rules', c, 'REAL')
-);
-
-// Centro notifiche raggruppato: categoria, sottostato e ordine collegato.
-aggiungiColonna('notifications', 'categoria', "TEXT NOT NULL DEFAULT 'generale'");
-aggiungiColonna('notifications', 'sottostato', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('notifications', 'order_id', 'INTEGER');
-
-// Finestra di 5 minuti per scegliere fra più offerte, e assegnazione automatica.
-aggiungiColonna('requests', 'scelta_scade_il', 'TEXT');
-aggiungiColonna('requests', 'assegnata_auto', 'INTEGER NOT NULL DEFAULT 0');
-aggiungiColonna('request_responses', 'consegna_minuti_stimati', 'INTEGER');
-
-// Classificazione per frequenza d'uso: sottocategoria e misura del prodotto.
-aggiungiColonna('products', 'sottocategoria', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('products', 'misura', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('macro_categorie', 'priorita', 'INTEGER NOT NULL DEFAULT 99');
-aggiungiColonna('macro_categorie', 'in_evidenza', 'INTEGER NOT NULL DEFAULT 0');
-
-// Lo sconto unico di anagrafica non esiste più: ogni marchio ha condizioni sue.
-// Le regole 'generale' rimaste da prima non verrebbero comunque più applicate.
-db.exec(`DELETE FROM client_discount_rules WHERE ambito = 'generale'`);
-
-// Anagrafica cliente creata in autonomia: forma giuridica e stato dell'iscrizione.
-aggiungiColonna('users', 'tipo_soggetto', "TEXT NOT NULL DEFAULT 'impresa'");
-aggiungiColonna('users', 'stato_anagrafica', "TEXT NOT NULL DEFAULT 'attivo'");
-aggiungiColonna('users', 'iscritto_il', 'TEXT');
-
-// Il contributo RAEE è escluso dai prezzi di listino: viaggia come voce separata.
-aggiungiColonna('orders', 'contributo_raee', 'REAL NOT NULL DEFAULT 0');
-aggiungiColonna('order_items', 'raee_unitario', 'REAL NOT NULL DEFAULT 0');
-aggiungiColonna('order_items', 'raee_riga', 'REAL NOT NULL DEFAULT 0');
-
-// Il CHECK sul ruolo nasceva con solo ('cliente','agente'): va riscritto per accettare
-// anche 'distributore'. In SQLite un CHECK si cambia solo ricreando la tabella.
-const usersDdl = db
-  .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'`)
-  .get();
-if (usersDdl && !usersDdl.sql.includes("'distributore'")) {
-  db.exec('PRAGMA foreign_keys = OFF');
-  db.exec(`
-    BEGIN;
-    CREATE TABLE users_nuova (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      ruolo TEXT NOT NULL CHECK (ruolo IN ('cliente', 'agente', 'distributore')),
-      username TEXT NOT NULL UNIQUE,
-      password_hash TEXT NOT NULL,
-      ragione_sociale TEXT NOT NULL,
-      email TEXT,
-      telefono TEXT,
-      attivo INTEGER NOT NULL DEFAULT 1,
-      creato_il TEXT NOT NULL DEFAULT (datetime('now')),
-      distributor_id INTEGER,
-      zona TEXT NOT NULL DEFAULT 'Genova'
-    );
-    INSERT INTO users_nuova
-      (id, ruolo, username, password_hash, ragione_sociale, email, telefono, attivo, creato_il, distributor_id, zona)
-      SELECT id, ruolo, username, password_hash, ragione_sociale, email, telefono, attivo, creato_il, distributor_id, zona
-      FROM users;
-    DROP TABLE users;
-    ALTER TABLE users_nuova RENAME TO users;
-    COMMIT;
-  `);
-  db.exec('PRAGMA foreign_keys = ON');
+async function exec(sql) {
+  if (/^\s*PRAGMA/i.test(sql.trim())) return;
+  const pgSql = toPg(sql);
+  await pool.query(pgSql);
 }
 
-// Gli indici sulle colonne aggiunte per migrazione vanno creati dopo le ALTER,
-// non dentro schema.sql: su un DB vecchio la colonna non esiste ancora.
-db.exec(`
-  CREATE INDEX IF NOT EXISTS idx_products_brand ON products(brand_slug);
-  CREATE INDEX IF NOT EXISTS idx_products_famiglia ON products(brand_slug, famiglia);
-`);
+let inited = false;
+async function ensureInit() {
+  if (inited) return;
+  const schemaPath = path.join(__dirname, 'schema.pg.sql');
+  const schema = fs.readFileSync(schemaPath, 'utf8');
+  try {
+    await pool.query(schema);
+  } catch (e) {
+    if (!e.message.includes('already exists')) console.error('schema error', e.message);
+  }
+  inited = true;
+}
 
-// Piccolo helper per eseguire più operazioni in una transazione (BEGIN/COMMIT/ROLLBACK),
-// equivalente minimale a db.transaction() di better-sqlite3.
-db.transaction = function (fn) {
-  return function (...args) {
-    db.exec('BEGIN');
+// avvia init in background (non blocca require)
+ensureInit().catch(e => console.error('db init failed', e.message));
+
+function transaction(fn) {
+  return async (...args) => {
+    const client = await pool.connect();
+    const origQuery = pool.query.bind(pool);
     try {
-      const result = fn(...args);
-      db.exec('COMMIT');
+      await client.query('BEGIN');
+      pool.query = client.query.bind(client);
+      const result = await fn(...args);
+      await client.query('COMMIT');
       return result;
-    } catch (err) {
-      db.exec('ROLLBACK');
-      throw err;
+    } catch (e) {
+      try { await client.query('ROLLBACK'); } catch {}
+      throw e;
+    } finally {
+      pool.query = origQuery;
+      client.release();
     }
   };
+}
+
+const db = {
+  prepare,
+  exec,
+  query: (sql, params=[]) => pool.query(toPg(sql).replace(/\?/g, (()=>{let i=0; return ()=>`$${++i}`})()), params),
+  get: async (sql, ...p) => {
+    await ensureInit();
+    const prep = prepare(sql);
+    return prep.get(...p);
+  },
+  all: async (sql, ...p) => {
+    await ensureInit();
+    const prep = prepare(sql);
+    return prep.all(...p);
+  },
+  run: async (sql, ...p) => {
+    await ensureInit();
+    const prep = prepare(sql);
+    return prep.run(...p);
+  },
+  transaction,
+  pool,
+  ensureInit,
 };
 
 module.exports = db;
