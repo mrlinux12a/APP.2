@@ -36,24 +36,24 @@ const CATEGORIE = {
   generale: { nome: 'Altro', icona: '🔔', sottostati: {} },
 };
 
-function notifica(userId, { titolo, testo, link = null, categoria = 'generale', sottostato = '', order_id = null }) {
-  db.prepare(
+async function notifica(userId, { titolo, testo, link = null, categoria = 'generale', sottostato = '', order_id = null }) {
+  await db.prepare(
     `INSERT INTO notifications (user_id, titolo, testo, link, categoria, sottostato, order_id)
      VALUES (?, ?, ?, ?, ?, ?, ?)`
   ).run(userId, titolo, testo, link, CATEGORIE[categoria] ? categoria : 'generale', sottostato, order_id);
 }
 
-function notificaDistributore(distributorId, payload) {
-  const utenti = db
+async function notificaDistributore(distributorId, payload) {
+  const utenti = await db
     .prepare(`SELECT id FROM users WHERE distributor_id = ? AND attivo = 1`)
     .all(distributorId);
-  utenti.forEach((u) => notifica(u.id, payload));
+  for (const u of utenti) await notifica(u.id, payload);
 }
 
 // Una richiesta confermata non resta una richiesta: quando diventa ordine, le sue
 // notifiche si spostano nella categoria Ordini invece di restare doppie.
-function spostaInOrdini(userId, requestId, orderId) {
-  db.prepare(
+async function spostaInOrdini(userId, requestId, orderId) {
+  await db.prepare(
     `UPDATE notifications
         SET categoria = 'ordini', sottostato = 'in_approvazione', order_id = ?
       WHERE user_id = ? AND categoria = 'richieste' AND link = ?`
@@ -61,11 +61,11 @@ function spostaInOrdini(userId, requestId, orderId) {
 }
 
 // Aggiorna il sottostato delle notifiche già emesse per un ordine (spedito, consegnato...).
-function aggiornaStatoOrdine(orderId, sottostato) {
-  db.prepare(`UPDATE notifications SET sottostato = ? WHERE order_id = ?`).run(sottostato, orderId);
+async function aggiornaStatoOrdine(orderId, sottostato) {
+  await db.prepare(`UPDATE notifications SET sottostato = ? WHERE order_id = ?`).run(sottostato, orderId);
 }
 
-function elenco(userId, { categoria = null, sottostato = null, limite = 100 } = {}) {
+async function elenco(userId, { categoria = null, sottostato = null, limite = 100 } = {}) {
   const where = ['user_id = ?'];
   const params = [userId];
   if (categoria && CATEGORIE[categoria]) {
@@ -82,8 +82,8 @@ function elenco(userId, { categoria = null, sottostato = null, limite = 100 } = 
 }
 
 // Quante notifiche per categoria: serve ai filtri in cima al centro notifiche.
-function conteggiPerCategoria(userId) {
-  const righe = db
+async function conteggiPerCategoria(userId) {
+  const righe = await db
     .prepare(
       `SELECT categoria, COUNT(*) AS n, SUM(CASE WHEN letta = 0 THEN 1 ELSE 0 END) AS non_lette
          FROM notifications WHERE user_id = ? GROUP BY categoria`
@@ -91,12 +91,12 @@ function conteggiPerCategoria(userId) {
     .all(userId);
   const mappa = {};
   righe.forEach((r) => {
-    mappa[r.categoria] = { n: r.n, non_lette: r.non_lette };
+    mappa[r.categoria] = { n: Number(r.n), non_lette: Number(r.non_lette) };
   });
   return mappa;
 }
 
-function conteggiPerSottostato(userId, categoria) {
+async function conteggiPerSottostato(userId, categoria) {
   return db
     .prepare(
       `SELECT sottostato, COUNT(*) AS n FROM notifications
@@ -106,31 +106,31 @@ function conteggiPerSottostato(userId, categoria) {
     .all(userId, categoria);
 }
 
-function nonLette(userId) {
-  const row = db
+async function nonLette(userId) {
+  const row = await db
     .prepare(`SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND letta = 0`)
     .get(userId);
-  return row ? row.n : 0;
+  return row ? Number(row.n) : 0;
 }
 
 // Notifiche non ancora mostrate come push dal browser; le marca come mostrate.
-function daMostrare(userId) {
-  const righe = db
+async function daMostrare(userId) {
+  const righe = await db
     .prepare(
       `SELECT id, titolo, testo, link FROM notifications
         WHERE user_id = ? AND notificata = 0 ORDER BY id`
     )
     .all(userId);
   if (righe.length) {
-    db.prepare(
+    await db.prepare(
       `UPDATE notifications SET notificata = 1 WHERE user_id = ? AND notificata = 0`
     ).run(userId);
   }
   return righe;
 }
 
-function segnaLette(userId) {
-  db.prepare(`UPDATE notifications SET letta = 1 WHERE user_id = ?`).run(userId);
+async function segnaLette(userId) {
+  await db.prepare(`UPDATE notifications SET letta = 1 WHERE user_id = ?`).run(userId);
 }
 
 module.exports = {

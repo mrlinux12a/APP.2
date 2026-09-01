@@ -4,35 +4,35 @@ function round2(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-function getConfigNum(chiave, fallback) {
-  const row = db.prepare('SELECT valore FROM config WHERE chiave = ?').get(chiave);
+async function getConfigNum(chiave, fallback) {
+  const row = await db.prepare('SELECT valore FROM config WHERE chiave = ?').get(chiave);
   return row ? parseFloat(row.valore) : fallback;
 }
 
-function getServizioPct() {
+async function getServizioPct() {
   return getConfigNum('servizio_pct', 10);
 }
 
-function getIvaPct() {
+async function getIvaPct() {
   return getConfigNum('iva_pct', 22);
 }
 
-function getFinestraMinuti() {
+async function getFinestraMinuti() {
   return getConfigNum('finestra_conferma_min', 10);
 }
 
 // Minuti che il cliente ha per scegliere fra più distributori che hanno confermato.
-function getFinestraSceltaMinuti() {
+async function getFinestraSceltaMinuti() {
   return getConfigNum('finestra_scelta_min', 5);
 }
 
 // Ordine minimo, calcolato sui prezzi già maggiorati del servizio e IVA esclusa.
-function getOrdineMinimo() {
+async function getOrdineMinimo() {
   return getConfigNum('ordine_minimo', 33);
 }
 
 // Spedizione fissa: si somma dopo, non concorre a raggiungere il minimo.
-function getSpedizioneFissa() {
+async function getSpedizioneFissa() {
   return getConfigNum('spedizione_fissa', 10);
 }
 
@@ -43,8 +43,9 @@ function prezzoNetto({ prezzo_listino, sconto_base_pct }) {
 
 // Prezzo esposto al cliente: netto + 10% di servizio. È IVA esclusa: in interfaccia
 // va sempre accompagnato da "+ IVA".
-function prezzoCliente(riga) {
-  return round2(prezzoNetto(riga) * (1 + getServizioPct() / 100));
+async function prezzoCliente(riga) {
+  const pct = await getServizioPct();
+  return round2(prezzoNetto(riga) * (1 + pct / 100));
 }
 
 // Formattazione in euro, formato italiano (1.234,56).
@@ -57,10 +58,12 @@ function euro(n) {
 // serve solo che abbia codice, nome, prezzo_listino e sconto_base_pct.
 // `prodotto.raee` (opzionale) è il contributo RAEE unitario: i listini dei produttori lo
 // dichiarano escluso dal prezzo, quindi viaggia come voce separata.
-function calcolaOrdine(righeCarrello, { costoConsegna = 0 } = {}) {
+async function calcolaOrdine(righeCarrello, { costoConsegna = 0 } = {}) {
+  const servizioPct = await getServizioPct();
+  const ivaPct = await getIvaPct();
   const righe = righeCarrello.map(({ prodotto, quantita }) => {
     const prezzo_netto_unitario = prezzoNetto(prodotto);
-    const prezzo_unitario_cliente = prezzoCliente(prodotto);
+    const prezzo_unitario_cliente = round2(prezzo_netto_unitario * (1 + servizioPct / 100));
     const raee_unitario = round2(prodotto.raee || 0);
     return {
       product_id: prodotto.id,
@@ -83,7 +86,7 @@ function calcolaOrdine(righeCarrello, { costoConsegna = 0 } = {}) {
   const contributo_raee = round2(righe.reduce((acc, r) => acc + r.raee_riga, 0));
   const costo_consegna = round2(costoConsegna || 0);
   const imponibile = round2(merce_cliente + contributo_raee + costo_consegna);
-  const iva = round2(imponibile * (getIvaPct() / 100));
+  const iva = round2(imponibile * (ivaPct / 100));
   const totale_ivato = round2(imponibile + iva);
 
   return {

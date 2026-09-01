@@ -5,15 +5,15 @@ const db = require('../db');
 // destinatario e intestatario il cliente con la sua anagrafica completa.
 
 // Progressivo per distributore e per anno, assegnato una sola volta per ordine.
-function prossimoNumero(distributorId, anno) {
-  db.prepare(
+async function prossimoNumero(distributorId, anno) {
+  await db.prepare(
     `INSERT INTO ddt_counters (distributor_id, anno, ultimo) VALUES (?, ?, 0)
      ON CONFLICT(distributor_id, anno) DO NOTHING`
   ).run(distributorId, anno);
-  db.prepare(
+  await db.prepare(
     'UPDATE ddt_counters SET ultimo = ultimo + 1 WHERE distributor_id = ? AND anno = ?'
   ).run(distributorId, anno);
-  const row = db
+  const row = await db
     .prepare('SELECT ultimo FROM ddt_counters WHERE distributor_id = ? AND anno = ?')
     .get(distributorId, anno);
   return `${row.ultimo}/${anno}`;
@@ -21,20 +21,19 @@ function prossimoNumero(distributorId, anno) {
 
 // Emette la bolla e segna la merce come partita. Idempotente: se il DDT esiste già
 // non viene rinumerato.
-function emetti(ordine, { colli, aspetto, trasporto, causale, note }) {
+async function emetti(ordine, { colli, aspetto, trasporto, causale, note }) {
   if (ordine.ddt_numero) return ordine.ddt_numero;
 
-  const anno = Number(
-    db.prepare("SELECT strftime('%Y', 'now') AS a").get().a
-  );
+  const row = await db.prepare("SELECT EXTRACT(YEAR FROM NOW())::int AS a").get();
+  const anno = Number(row.a);
 
-  const esegui = db.transaction(() => {
-    const numero = prossimoNumero(ordine.distributor_id, anno);
-    db.prepare(
+  const esegui = db.transaction(async () => {
+    const numero = await prossimoNumero(ordine.distributor_id, anno);
+    await db.prepare(
       `UPDATE orders
-          SET ddt_numero = ?, ddt_data = datetime('now'), ddt_colli = ?, ddt_aspetto = ?,
+          SET ddt_numero = ?, ddt_data = NOW(), ddt_colli = ?, ddt_aspetto = ?,
               ddt_trasporto = ?, ddt_causale = ?, ddt_note = ?,
-              stato = 'evaso', evaso_il = datetime('now')
+              stato = 'evaso', evaso_il = NOW()
         WHERE id = ?`
     ).run(
       numero,
@@ -52,15 +51,15 @@ function emetti(ordine, { colli, aspetto, trasporto, causale, note }) {
 }
 
 // Tutti i dati che servono a stampare la bolla.
-function documento(orderId) {
-  const ordine = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+async function documento(orderId) {
+  const ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
   if (!ordine) return null;
 
-  const cliente = db.prepare('SELECT * FROM users WHERE id = ?').get(ordine.cliente_id);
+  const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(ordine.cliente_id);
   const distributore = ordine.distributor_id
-    ? db.prepare('SELECT * FROM distributors WHERE id = ?').get(ordine.distributor_id)
+    ? await db.prepare('SELECT * FROM distributors WHERE id = ?').get(ordine.distributor_id)
     : null;
-  const righe = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(ordine.id);
+  const righe = await db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(ordine.id);
 
   const colli = ordine.ddt_colli || Math.max(1, Math.ceil(righe.length / 3));
   const pezzi = righe.reduce((acc, r) => acc + r.quantita, 0);

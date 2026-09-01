@@ -1,6 +1,5 @@
 const db = require('../db');
 const bcrypt = require('bcryptjs');
-const { notifica, notificaDistributore } = require('./notifiche');
 
 // Registrazione dei clienti, approvazione da parte dei distributori indicati come
 // referenti e sconti concordati per ambito (generale, marchio, categoria, famiglia).
@@ -27,7 +26,7 @@ function normalizzaUtente(v) {
 
 // Controlli volutamente leggeri: bloccano gli errori di battitura, non fanno le veci
 // di una verifica fiscale vera (quella la fa il distributore approvando l'anagrafica).
-function validaIscrizione(dati, distributoriScelti) {
+async function validaIscrizione(dati, distributoriScelti) {
   const errori = [];
   const obbligatori = [
     ['ragione_sociale', 'la ragione sociale'],
@@ -69,8 +68,9 @@ function validaIscrizione(dati, distributoriScelti) {
       'Il nome utente può avere da 3 a 30 caratteri: solo lettere, numeri, punto, trattino o trattino basso.'
     );
   }
-  if (utente && db.prepare('SELECT id FROM users WHERE username = ?').get(utente)) {
-    errori.push('Questo nome utente è già in uso.');
+  if (utente) {
+    const exists = await db.prepare('SELECT id FROM users WHERE username = ?').get(utente);
+    if (exists) errori.push('Questo nome utente è già in uso.');
   }
 
   const pwd = String(dati.password || '');
@@ -84,62 +84,64 @@ function validaIscrizione(dati, distributoriScelti) {
 
 // ---------- Iscrizione ----------
 
-function iscriviCliente(dati, distributoriScelti) {
+async function iscriviCliente(dati, distributoriScelti) {
   const utente = normalizzaUtente(dati.username);
 
-  const crea = db.transaction(() => {
-    const info = db
+  const crea = db.transaction(async () => {
+    const info = await db
       .prepare(
         `INSERT INTO users
            (ruolo, username, password_hash, ragione_sociale, email, telefono, zona,
             partita_iva, codice_fiscale, indirizzo, cap, citta, provincia, sdi_pec,
             indirizzo_consegna, referente, tipo_soggetto, stato_anagrafica, iscritto_il)
-         VALUES ('cliente', @username, @password_hash, @ragione_sociale, @email, @telefono, @zona,
-                 @partita_iva, @codice_fiscale, @indirizzo, @cap, @citta, @provincia, @sdi_pec,
-                 @indirizzo_consegna, @referente, @tipo_soggetto, 'in_attesa', datetime('now'))`
+         VALUES (?, ?, ?, ?, ?, ?, ?,
+                 ?, ?, ?, ?, ?, ?, ?,
+                 ?, ?, ?, 'in_attesa', NOW())`
       )
-      .run({
-        username: utente,
-        password_hash: bcrypt.hashSync(String(dati.password), 10),
-        ragione_sociale: pulisci(dati.ragione_sociale),
-        email: pulisci(dati.email),
-        telefono: pulisci(dati.telefono),
-        zona: pulisci(dati.citta) || 'Genova',
-        partita_iva: pulisci(dati.partita_iva).replace(/\s/g, '').toUpperCase(),
-        codice_fiscale: pulisci(dati.codice_fiscale).replace(/\s/g, '').toUpperCase(),
-        indirizzo: pulisci(dati.indirizzo),
-        cap: pulisci(dati.cap),
-        citta: pulisci(dati.citta),
-        provincia: pulisci(dati.provincia).toUpperCase().slice(0, 2),
-        sdi_pec: pulisci(dati.sdi_pec),
-        indirizzo_consegna: pulisci(dati.indirizzo_consegna),
-        referente: pulisci(dati.referente),
-        tipo_soggetto: dati.tipo_soggetto,
-      });
+      .run(
+        'cliente',
+        utente,
+        bcrypt.hashSync(String(dati.password), 10),
+        pulisci(dati.ragione_sociale),
+        pulisci(dati.email),
+        pulisci(dati.telefono),
+        pulisci(dati.citta) || 'Genova',
+        pulisci(dati.partita_iva).replace(/\s/g, '').toUpperCase(),
+        pulisci(dati.codice_fiscale).replace(/\s/g, '').toUpperCase(),
+        pulisci(dati.indirizzo),
+        pulisci(dati.cap),
+        pulisci(dati.citta),
+        pulisci(dati.provincia).toUpperCase().slice(0, 2),
+        pulisci(dati.sdi_pec),
+        pulisci(dati.indirizzo_consegna),
+        pulisci(dati.referente),
+        dati.tipo_soggetto
+      );
 
     const clienteId = Number(info.lastInsertRowid);
     const insLegame = db.prepare(
       `INSERT INTO client_distributors (cliente_id, distributor_id, stato) VALUES (?, ?, 'in_attesa')`
     );
-    distributoriScelti.forEach((id) => insLegame.run(clienteId, id));
+    for (const id of distributoriScelti) await insLegame.run(clienteId, id);
     return clienteId;
   });
 
-  const clienteId = crea();
-  const cliente = db.prepare('SELECT * FROM users WHERE id = ?').get(clienteId);
+  const clienteId = await crea();
+  const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(clienteId);
+  const { notifica, notificaDistributore } = require('./notifiche');
 
   // Ogni distributore indicato riceve la richiesta di approvazione.
-  distributoriScelti.forEach((id) =>
-    notificaDistributore(id, {
+  for (const id of distributoriScelti) {
+    await notificaDistributore(id, {
       categoria: 'approvazioni',
       sottostato: 'in_sospeso',
       titolo: 'Nuova anagrafica da approvare',
       testo: `${cliente.ragione_sociale} (P. IVA ${cliente.partita_iva}) ti ha indicato come distributore di riferimento.`,
       link: '/distributore/clienti/' + clienteId,
-    })
-  );
+    });
+  }
 
-  notifica(clienteId, {
+  await notifica(clienteId, {
     categoria: 'approvazioni',
     sottostato: 'in_sospeso',
     titolo: 'Iscrizione inviata',
@@ -152,7 +154,7 @@ function iscriviCliente(dati, distributoriScelti) {
 
 // ---------- Legami cliente ↔ distributore ----------
 
-function legamiDelCliente(clienteId) {
+async function legamiDelCliente(clienteId) {
   return db
     .prepare(
       `SELECT cd.*, d.nome AS distributore, d.filiale
@@ -164,7 +166,7 @@ function legamiDelCliente(clienteId) {
     .all(clienteId);
 }
 
-function clientiDelDistributore(distributorId) {
+async function clientiDelDistributore(distributorId) {
   return db
     .prepare(
       `SELECT cd.*, u.id AS cliente_id, u.ragione_sociale, u.partita_iva, u.citta, u.provincia,
@@ -178,37 +180,39 @@ function clientiDelDistributore(distributorId) {
     .all(distributorId);
 }
 
-function legame(distributorId, clienteId) {
+async function legame(distributorId, clienteId) {
   return db
     .prepare('SELECT * FROM client_distributors WHERE distributor_id = ? AND cliente_id = ?')
     .get(distributorId, clienteId);
 }
 
 // Il distributore conferma (o nega) che l'anagrafica sia davvero un suo cliente.
-function decidi(distributorId, clienteId, { approva, codiceCliente = '', note = '' }) {
-  const attuale = legame(distributorId, clienteId);
+async function decidi(distributorId, clienteId, { approva, codiceCliente = '', note = '' }) {
+  const attuale = await legame(distributorId, clienteId);
   if (!attuale) return { ok: false, errore: 'Questo cliente non ti ha indicato come referente.' };
 
   const stato = approva ? 'approvato' : 'rifiutato';
-  db.prepare(
+  await db.prepare(
     `UPDATE client_distributors
-        SET stato = ?, codice_cliente = ?, note = ?, deciso_il = datetime('now')
+        SET stato = ?, codice_cliente = ?, note = ?, deciso_il = NOW()
       WHERE id = ?`
   ).run(stato, pulisci(codiceCliente), pulisci(note), attuale.id);
 
   // Basta un'approvazione per rendere operativa l'anagrafica.
-  const approvazioni = db
+  const row = await db
     .prepare(
       `SELECT COUNT(*) AS n FROM client_distributors WHERE cliente_id = ? AND stato = 'approvato'`
     )
-    .get(clienteId).n;
-  db.prepare('UPDATE users SET stato_anagrafica = ? WHERE id = ?').run(
+    .get(clienteId);
+  const approvazioni = row ? Number(row.n) : 0;
+  await db.prepare('UPDATE users SET stato_anagrafica = ? WHERE id = ?').run(
     approvazioni > 0 ? 'attivo' : 'in_attesa',
     clienteId
   );
 
-  const distributore = db.prepare('SELECT nome FROM distributors WHERE id = ?').get(distributorId);
-  notifica(clienteId, {
+  const distributore = await db.prepare('SELECT nome FROM distributors WHERE id = ?').get(distributorId);
+  const { notifica } = require('./notifiche');
+  await notifica(clienteId, {
     categoria: 'approvazioni',
     sottostato: approva ? 'confermata' : 'negata',
     titolo: approva ? 'Anagrafica approvata' : 'Anagrafica non riconosciuta',
@@ -222,20 +226,20 @@ function decidi(distributorId, clienteId, { approva, codiceCliente = '', note = 
 }
 
 // Distributori che hanno approvato il cliente: sono gli unici a cui può ordinare.
-function distributoriApprovati(clienteId) {
-  return db
+async function distributoriApprovati(clienteId) {
+  const rows = await db
     .prepare(
       `SELECT d.* FROM client_distributors cd
          JOIN distributors d ON d.id = cd.distributor_id
         WHERE cd.cliente_id = ? AND cd.stato = 'approvato' AND d.attivo = 1`
     )
-    .all(clienteId)
-    .map((d) => d.id);
+    .all(clienteId);
+  return rows.map((d) => d.id);
 }
 
 // ---------- Sconti per ambito ----------
 
-function regoleSconto(distributorId, clienteId) {
+async function regoleSconto(distributorId, clienteId) {
   return db
     .prepare(
       `SELECT * FROM client_discount_rules
@@ -265,13 +269,13 @@ function formattaScalare(regola) {
   return parti.length ? parti.join('+') : String(regola.sconto_pct).replace('.', ',');
 }
 
-function salvaRegola(distributorId, clienteId, ambito, chiave, scaglioni) {
+async function salvaRegola(distributorId, clienteId, ambito, chiave, scaglioni) {
   const chiavePulita = pulisci(chiave);
   const effettivo = scontoEffettivo(scaglioni);
 
   // Tutti i campi vuoti: la regola sparisce e torna a valere quella più generale.
   if (effettivo === null) {
-    db.prepare(
+    await db.prepare(
       `DELETE FROM client_discount_rules
         WHERE distributor_id = ? AND cliente_id = ? AND ambito = ? AND chiave = ?`
     ).run(distributorId, clienteId, ambito, chiavePulita);
@@ -283,14 +287,14 @@ function salvaRegola(distributorId, clienteId, ambito, chiave, scaglioni) {
     return Number.isFinite(n) && n > 0 ? Math.round(Math.min(90, n) * 10) / 10 : null;
   });
 
-  db.prepare(
+  await db.prepare(
     `INSERT INTO client_discount_rules
        (distributor_id, cliente_id, ambito, chiave, sconto_pct, sconto1, sconto2, sconto3, sconto4, sconto5)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(distributor_id, cliente_id, ambito, chiave) DO UPDATE SET
        sconto_pct = excluded.sconto_pct, sconto1 = excluded.sconto1, sconto2 = excluded.sconto2,
        sconto3 = excluded.sconto3, sconto4 = excluded.sconto4, sconto5 = excluded.sconto5,
-       aggiornato_il = datetime('now')`
+       aggiornato_il = NOW()`
   ).run(distributorId, clienteId, ambito, chiavePulita, effettivo, s[0], s[1], s[2], s[3], s[4]);
   return effettivo;
 }

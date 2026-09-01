@@ -1,16 +1,13 @@
 const db = require('../db');
 const { calcolaOrdine, getFinestraMinuti, getFinestraSceltaMinuti, round2 } = require('./pricing');
-const consegna = require('./consegna');
-const { notifica, notificaDistributore } = require('./notifiche');
-const anagrafiche = require('./anagrafiche');
 
 // ---------- Lettura ----------
 
-function getRichiesta(id) {
+async function getRichiesta(id) {
   return db.prepare('SELECT * FROM requests WHERE id = ?').get(id);
 }
 
-function righeRichiesta(requestId) {
+async function righeRichiesta(requestId) {
   return db
     .prepare(
       `SELECT ri.*, p.codice, p.nome, p.categoria
@@ -22,7 +19,7 @@ function righeRichiesta(requestId) {
     .all(requestId);
 }
 
-function risposteRichiesta(requestId) {
+async function risposteRichiesta(requestId) {
   return db
     .prepare(
       `SELECT rr.*, d.nome AS distributore_nome, d.filiale, d.zona, d.costo_consegna
@@ -34,24 +31,24 @@ function risposteRichiesta(requestId) {
     .all(requestId);
 }
 
-function getRisposta(requestId, distributorId) {
+async function getRisposta(requestId, distributorId) {
   return db
     .prepare('SELECT * FROM request_responses WHERE request_id = ? AND distributor_id = ?')
     .get(requestId, distributorId);
 }
 
 // Secondi che mancano alla scadenza della finestra di conferma (0 se gia' scaduta).
-function secondiRimasti(richiesta) {
-  const row = db
-    .prepare(`SELECT CAST((julianday(?) - julianday('now')) * 86400 AS INTEGER) AS s`)
+async function secondiRimasti(richiesta) {
+  const row = await db
+    .prepare(`SELECT EXTRACT(EPOCH FROM (?::timestamp - NOW()))::int AS s`)
     .get(richiesta.scade_il);
-  return Math.max(0, row ? row.s : 0);
+  return Math.max(0, row ? Number(row.s) : 0);
 }
 
 // ---------- Distributori candidati ----------
 
 // Tutti i distributori attivi registrati: ogni richiesta dell'installatore arriva a tutti.
-function distributoriCandidati(productIds, zona, clienteId = null) {
+async function distributoriCandidati(productIds, zona, clienteId = null) {
   if (!productIds.length) return [];
   return db
     .prepare(`SELECT * FROM distributors WHERE attivo = 1 ORDER BY nome`)
@@ -62,16 +59,16 @@ function distributoriCandidati(productIds, zona, clienteId = null) {
 
 // Crea la richiesta di disponibilita' e manda la notifica ai distributori della zona.
 // Da qui parte la finestra di 10 minuti entro cui devono rispondere.
-function creaRichiesta(cliente, righeCarrello) {
+async function creaRichiesta(cliente, righeCarrello) {
   const productIds = righeCarrello.map((r) => r.prodotto.id);
-  let candidati = distributoriCandidati(productIds, cliente.zona, cliente.id);
-  const minuti = getFinestraMinuti();
+  let candidati = await distributoriCandidati(productIds, cliente.zona, cliente.id);
+  const minuti = await getFinestraMinuti();
 
   // Fallback furbo: se per qualsiasi motivo non c'è nessun candidato (DB vuoto,
   // filtro zona, import incompleto), manda comunque a TUTTI i banchi attivi.
   if (!candidati.length) {
     try {
-      candidati = db.prepare(`SELECT * FROM distributors WHERE attivo = 1 ORDER BY nome`).all();
+      candidati = await db.prepare(`SELECT * FROM distributors WHERE attivo = 1 ORDER BY nome`).all();
       console.log(`[richieste] fallback broadcast: ${candidati.length} distributori per cliente ${cliente.id} zona=${cliente.zona}`);
     } catch (e) { console.error('[richieste] fallback fallito', e.message); }
   }
@@ -81,35 +78,25 @@ function creaRichiesta(cliente, righeCarrello) {
   // distributor_products. Usa il prezzo del prodotto come base.
   if (candidati.length && productIds.length) {
     try {
-      const mancanti = db.prepare(`
-        SELECT p.id, p.prezzo_listino, p.sconto_base_pct
-          FROM products p
-         WHERE p.id IN (${productIds.map(()=>'?').join(',')})
-           AND NOT EXISTS (
-             SELECT 1 FROM distributor_products dp
-              WHERE dp.distributor_id = ? AND dp.product_id = p.id
-           )
-      `);
       const ins = db.prepare(`INSERT INTO distributor_products (distributor_id, product_id, prezzo_listino, sconto_base_pct) VALUES (?,?,?,?) ON CONFLICT(distributor_id, product_id) DO NOTHING`);
-      const ensure = db.transaction(() => {
+      const ensure = db.transaction(async () => {
         for (const d of candidati) {
           for (const pid of productIds) {
-            const rows = db.prepare(`SELECT prezzo_listino, sconto_base_pct FROM products WHERE id = ?`).get(pid);
+            const rows = await db.prepare(`SELECT prezzo_listino, sconto_base_pct FROM products WHERE id = ?`).get(pid);
             if (!rows) continue;
-            // inserisce solo se manca
-            ins.run(d.id, pid, rows.prezzo_listino, rows.sconto_base_pct);
+            await ins.run(d.id, pid, rows.prezzo_listino, rows.sconto_base_pct);
           }
         }
       });
-      ensure();
+      await ensure();
     } catch (e) { console.error('[richieste] ensure listino fallito', e.message); }
   }
 
-  const crea = db.transaction(() => {
-    const info = db
+  const crea = db.transaction(async () => {
+    const info = await db
       .prepare(
         `INSERT INTO requests (cliente_id, zona, stato, scade_il)
-         VALUES (?, ?, ?, datetime('now', '+' || ? || ' minutes'))`
+         VALUES (?, ?, ?, NOW() + (? * INTERVAL '1 minute'))`
       )
       .run(cliente.id, cliente.zona, candidati.length ? 'in_attesa' : 'nessuna_offerta', minuti);
     const requestId = Number(info.lastInsertRowid);
@@ -117,31 +104,32 @@ function creaRichiesta(cliente, righeCarrello) {
     const insItem = db.prepare(
       `INSERT INTO request_items (request_id, product_id, quantita) VALUES (?, ?, ?)`
     );
-    righeCarrello.forEach(({ prodotto, quantita }) => insItem.run(requestId, prodotto.id, quantita));
+    for (const { prodotto, quantita } of righeCarrello) await insItem.run(requestId, prodotto.id, quantita);
 
     const insRisposta = db.prepare(
       `INSERT INTO request_responses (request_id, distributor_id, esito) VALUES (?, ?, 'in_attesa')`
     );
-    candidati.forEach((d) => insRisposta.run(requestId, d.id));
+    for (const d of candidati) await insRisposta.run(requestId, d.id);
 
     return requestId;
   });
 
-  const requestId = crea();
+  const requestId = await crea();
 
   const nArticoli = righeCarrello.reduce((acc, r) => acc + r.quantita, 0);
-  candidati.forEach((d) =>
-    notificaDistributore(d.id, {
+  const { notificaDistributore, notifica } = require('./notifiche');
+  for (const d of candidati) {
+    await notificaDistributore(d.id, {
       titolo: 'Nuova richiesta di disponibilità',
       testo: `${cliente.ragione_sociale} — ${nArticoli} pz. Hai ${minuti} minuti per confermare.`,
       link: `/distributore/richieste/${requestId}`,
       categoria: 'richieste',
       sottostato: 'inviata',
-    })
-  );
+    });
+  }
 
   if (!candidati.length) {
-    notifica(cliente.id, {
+    await notifica(cliente.id, {
       titolo: 'Nessun distributore in zona',
       testo: 'Nessun rivenditore della tua zona tratta tutti i prodotti richiesti.',
       link: `/richieste/${requestId}`,
@@ -155,44 +143,47 @@ function creaRichiesta(cliente, righeCarrello) {
 
 // La non risposta NON e' una disponibilita': allo scadere dei 10 minuti le risposte rimaste
 // in attesa diventano 'scaduto' e la richiesta si chiude con le sole conferme arrivate.
-function aggiornaScadenza(requestId) {
-  const richiesta = getRichiesta(requestId);
+async function aggiornaScadenza(requestId) {
+  const richiesta = await getRichiesta(requestId);
   if (!richiesta) return null;
   // 'con_offerte' resta aperta fino allo scadere: anche gli altri distributori possono
   // ancora confermare, così il cliente ha più offerte da confrontare.
   if (richiesta.stato !== 'in_attesa' && richiesta.stato !== 'con_offerte') return richiesta;
-  if (secondiRimasti(richiesta) > 0) return richiesta;
+  if ((await secondiRimasti(richiesta)) > 0) return richiesta;
 
-  const inSospeso = db
+  const rowInSospeso = await db
     .prepare(
       `SELECT COUNT(*) AS n FROM request_responses WHERE request_id = ? AND esito = 'in_attesa'`
     )
-    .get(requestId).n;
+    .get(requestId);
+  const inSospeso = rowInSospeso ? Number(rowInSospeso.n) : 0;
   if (richiesta.stato === 'con_offerte' && inSospeso === 0) return richiesta;
 
-  const chiudi = db.transaction(() => {
-    db.prepare(
-      `UPDATE request_responses SET esito = 'scaduto', risposto_il = datetime('now')
+  const chiudi = db.transaction(async () => {
+    await db.prepare(
+      `UPDATE request_responses SET esito = 'scaduto', risposto_il = NOW()
         WHERE request_id = ? AND esito = 'in_attesa'`
     ).run(requestId);
 
-    const conferme = db
+    const rowConf = await db
       .prepare(
         `SELECT COUNT(*) AS n FROM request_responses WHERE request_id = ? AND esito = 'confermato'`
       )
-      .get(requestId).n;
+      .get(requestId);
+    const conferme = rowConf ? Number(rowConf.n) : 0;
 
-    db.prepare(`UPDATE requests SET stato = ? WHERE id = ?`).run(
+    await db.prepare(`UPDATE requests SET stato = ? WHERE id = ?`).run(
       conferme > 0 ? 'con_offerte' : 'nessuna_offerta',
       requestId
     );
     return conferme;
   });
 
-  const conferme = chiudi();
+  const conferme = await chiudi();
   // Se il cliente era già stato avvisato delle offerte, non lo avvisiamo una seconda volta.
   if (richiesta.stato === 'con_offerte') return getRichiesta(requestId);
-  notifica(richiesta.cliente_id, {
+  const { notifica } = require('./notifiche');
+  await notifica(richiesta.cliente_id, {
     titolo: conferme > 0 ? 'Offerte disponibili' : 'Nessuna conferma ricevuta',
     testo:
       conferme > 0
@@ -206,52 +197,52 @@ function aggiornaScadenza(requestId) {
 }
 
 // Secondi che restano al cliente per scegliere fra più offerte confermate.
-function secondiPerScegliere(richiesta) {
+async function secondiPerScegliere(richiesta) {
   if (!richiesta || !richiesta.scelta_scade_il) return null;
-  const row = db
-    .prepare(`SELECT CAST((julianday(?) - julianday('now')) * 86400 AS INTEGER) AS s`)
+  const row = await db
+    .prepare(`SELECT EXTRACT(EPOCH FROM (?::timestamp - NOW()))::int AS s`)
     .get(richiesta.scelta_scade_il);
-  return Math.max(0, row ? row.s : 0);
+  return Math.max(0, row ? Number(row.s) : 0);
 }
 
 // Offerta più veloce: vince il tempo di consegna stimato più basso.
-function offertaPiuVeloce(requestId) {
+async function offertaPiuVeloce(requestId) {
   return db
     .prepare(
       `SELECT rr.*, d.nome AS distributore_nome
          FROM request_responses rr
          JOIN distributors d ON d.id = rr.distributor_id
         WHERE rr.request_id = ? AND rr.esito = 'confermato'
-        ORDER BY IFNULL(rr.consegna_minuti_stimati, rr.consegna_ore * 60) ASC, rr.risposto_il ASC
+        ORDER BY COALESCE(rr.consegna_minuti_stimati, rr.consegna_ore * 60) ASC, rr.risposto_il ASC
         LIMIT 1`
     )
     .get(requestId);
 }
 
 // Passata utile all'avvio e a ogni tanto: chiude tutte le richieste ormai scadute.
-function aggiornaScadenzeAperte() {
-  const aperte = db
+async function aggiornaScadenzeAperte() {
+  const aperte = await db
     .prepare(
       `SELECT id FROM requests
-        WHERE stato IN ('in_attesa', 'con_offerte') AND scade_il <= datetime('now')`
+        WHERE stato IN ('in_attesa', 'con_offerte') AND scade_il <= NOW()`
     )
     .all();
-  aperte.forEach((r) => aggiornaScadenza(r.id));
+  for (const r of aperte) await aggiornaScadenza(r.id);
   return aperte.length;
 }
 
 // Richieste con offerte pronte e finestra di scelta scaduta: si assegnano da sole.
 // Restituisce l'elenco delle richieste da chiudere automaticamente, l'ordine vero lo
 // crea server.js perché condivide il codice con l'ordine scelto a mano.
-function sceltePerScadenza() {
+async function sceltePerScadenza() {
   return db
     .prepare(
       `SELECT id, cliente_id FROM requests
         WHERE stato = 'con_offerte'
           AND assegnata_auto = 0
           AND scelta_scade_il IS NOT NULL
-          AND scelta_scade_il <= datetime('now')
-          AND scade_il <= datetime('now')`
+          AND scelta_scade_il <= NOW()
+          AND scade_il <= NOW()`
     )
     .all();
 }
@@ -261,7 +252,7 @@ function sceltePerScadenza() {
 // `righe` è una mappa { product_id: quantita_disponibile } compilata al banco.
 // Da lì si deduce l'esito: tutto coperto = conferma totale, qualcosa in meno = conferma
 // parziale, niente disponibile = rifiuto per indisponibilità merce.
-function rispondi(
+async function rispondi(
   requestId,
   distributorId,
   {
@@ -278,7 +269,7 @@ function rispondi(
     salvaScontoCliente = false,
   }
 ) {
-  const richiesta = aggiornaScadenza(requestId);
+  const richiesta = await aggiornaScadenza(requestId);
   if (!richiesta) return { ok: false, errore: 'Richiesta non trovata.' };
   if (richiesta.stato === 'ordinata') {
     return { ok: false, errore: 'Il cliente ha già chiuso l’ordine con un altro distributore.' };
@@ -286,19 +277,18 @@ function rispondi(
   if (richiesta.stato === 'annullata') {
     return { ok: false, errore: 'Il cliente ha annullato la richiesta.' };
   }
-  if (secondiRimasti(richiesta) <= 0) {
+  if ((await secondiRimasti(richiesta)) <= 0) {
     return { ok: false, errore: 'La finestra di 10 minuti è chiusa: non è più possibile rispondere.' };
   }
 
-  const risposta = getRisposta(requestId, distributorId);
+  const risposta = await getRisposta(requestId, distributorId);
   if (!risposta) return { ok: false, errore: 'Richiesta non assegnata a questo distributore.' };
   if (risposta.esito !== 'in_attesa') return { ok: false, errore: 'Hai già risposto a questa richiesta.' };
 
   // Sconto standard del banco su ogni prodotto: è il riferimento sia per il "prezzo di
   // richiesta" sia per capire se il banco ha applicato una condizione migliore.
-  const standard = new Map(
-    righeDistributore(requestId, distributorId).map((r) => [r.product_id, r.sconto_standard_pct])
-  );
+  const righeDist = await righeDistributore(requestId, distributorId);
+  const standard = new Map(righeDist.map((r) => [r.product_id, r.sconto_standard_pct]));
 
   function scontoApplicato(productId) {
     if (prezzoRichiesto) return null; // nessuna modifica: resta lo sconto Base del listino
@@ -310,7 +300,7 @@ function rispondi(
     return pulito === standard.get(productId) ? null : pulito;
   }
 
-  const richieste_ = righeRichiesta(requestId);
+  const richieste_ = await righeRichiesta(requestId);
   const coperture = richieste_.map((r) => {
     const chiesta = r.quantita;
     const disponibile = rifiuta
@@ -339,11 +329,11 @@ function rispondi(
       ? null
       : Math.round(Math.min(90, Math.max(0, parseFloat(String(scontoCliente).replace(',', '.')) || 0)) * 10) / 10;
 
-  const salva = db.transaction(() => {
-    db.prepare(
+  const salva = db.transaction(async () => {
+    await db.prepare(
       `UPDATE request_responses
           SET esito = ?, copertura = ?, partenza_ore = ?, consegna_ore = ?, note = ?,
-              sconto_cliente_pct = ?, risposto_il = datetime('now')
+              sconto_cliente_pct = ?, risposto_il = NOW()
         WHERE id = ?`
     ).run(
       esito,
@@ -355,58 +345,60 @@ function rispondi(
       risposta.id
     );
 
-    db.prepare('DELETE FROM request_response_items WHERE response_id = ?').run(risposta.id);
+    await db.prepare('DELETE FROM request_response_items WHERE response_id = ?').run(risposta.id);
     const ins = db.prepare(
       `INSERT INTO request_response_items
          (response_id, product_id, quantita_richiesta, quantita_disponibile, sconto_riga_pct)
        VALUES (?, ?, ?, ?, ?)`
     );
-    coperture.forEach((r) =>
-      ins.run(risposta.id, r.product_id, r.quantita_richiesta, r.quantita_disponibile, r.sconto_riga_pct)
-    );
+    for (const r of coperture)
+      await ins.run(risposta.id, r.product_id, r.quantita_richiesta, r.quantita_disponibile, r.sconto_riga_pct);
 
     // Sconto concordato con questo cliente: resta in anagrafica e precompila le prossime
     // richieste dello stesso cliente a questo banco.
     if (salvaScontoCliente && profilo !== null && esito === 'confermato') {
-      db.prepare(
+      await db.prepare(
         `INSERT INTO client_discounts (distributor_id, cliente_id, sconto_pct, aggiornato_il)
-         VALUES (?, ?, ?, datetime('now'))
+         VALUES (?, ?, ?, NOW())
          ON CONFLICT(distributor_id, cliente_id) DO UPDATE SET
-           sconto_pct = excluded.sconto_pct, aggiornato_il = datetime('now')`
+           sconto_pct = excluded.sconto_pct, aggiornato_il = NOW()`
       ).run(distributorId, richiesta.cliente_id, profilo);
     }
   });
-  salva();
+  await salva();
 
   // Il totale dell'offerta si calcola sulle quantità davvero disponibili.
   if (esito === 'confermato') {
-    const { totali } = calcolaOfferta(requestId, distributorId);
-    db.prepare('UPDATE request_responses SET totale = ? WHERE id = ?').run(
+    const { totali } = await calcolaOfferta(requestId, distributorId);
+    await db.prepare('UPDATE request_responses SET totale = ? WHERE id = ?').run(
       totali.totale_ivato,
       risposta.id
     );
   }
 
-  const distributore = db.prepare('SELECT * FROM distributors WHERE id = ?').get(distributorId);
+  const distributore = await db.prepare('SELECT * FROM distributors WHERE id = ?').get(distributorId);
+  const consegna = require('./consegna');
+  const { notifica } = require('./notifiche');
 
   if (esito === 'confermato') {
     // Il tempo di consegna vero è partenza dichiarata + tragitto fino al cliente.
-    const stima = consegna.minutiStimati(distributorId, richiesta.cliente_id, partenza);
-    db.prepare('UPDATE request_responses SET consegna_minuti_stimati = ? WHERE id = ?').run(
+    const stima = await consegna.minutiStimati(distributorId, richiesta.cliente_id, partenza);
+    await db.prepare('UPDATE request_responses SET consegna_minuti_stimati = ? WHERE id = ?').run(
       stima.minuti,
       risposta.id
     );
 
     // Alla prima conferma la richiesta ha gia' almeno un'offerta valida: parte la
     // finestra di 5 minuti entro cui il cliente sceglie, altrimenti si assegna da sola.
-    db.prepare(
+    const finestraScelta = await getFinestraSceltaMinuti();
+    await db.prepare(
       `UPDATE requests
           SET stato = 'con_offerte',
-              scelta_scade_il = datetime('now', '+' || ? || ' minutes')
+              scelta_scade_il = NOW() + (? * INTERVAL '1 minute')
         WHERE id = ? AND stato = 'in_attesa'`
-    ).run(getFinestraSceltaMinuti(), requestId);
+    ).run(finestraScelta, requestId);
     const mancanti = coperture.filter((r) => r.quantita_disponibile < r.quantita_richiesta).length;
-    notifica(richiesta.cliente_id, {
+    await notifica(richiesta.cliente_id, {
       titolo: copertura === 'totale' ? 'Disponibilità confermata' : 'Disponibilità parziale',
       testo:
         copertura === 'totale'
@@ -416,22 +408,24 @@ function rispondi(
       categoria: 'richieste',
     });
   } else {
-    const restano = db
+    const rowRest = await db
       .prepare(
         `SELECT COUNT(*) AS n FROM request_responses WHERE request_id = ? AND esito = 'in_attesa'`
       )
-      .get(requestId).n;
-    const conferme = db
+      .get(requestId);
+    const restano = rowRest ? Number(rowRest.n) : 0;
+    const rowConf = await db
       .prepare(
         `SELECT COUNT(*) AS n FROM request_responses WHERE request_id = ? AND esito = 'confermato'`
       )
-      .get(requestId).n;
+      .get(requestId);
+    const conferme = rowConf ? Number(rowConf.n) : 0;
     if (restano === 0 && richiesta.stato === 'in_attesa') {
-      db.prepare(`UPDATE requests SET stato = ? WHERE id = ? AND stato = 'in_attesa'`).run(
+      await db.prepare(`UPDATE requests SET stato = ? WHERE id = ? AND stato = 'in_attesa'`).run(
         conferme > 0 ? 'con_offerte' : 'nessuna_offerta',
         requestId
       );
-      notifica(richiesta.cliente_id, {
+      await notifica(richiesta.cliente_id, {
         titolo: conferme > 0 ? 'Offerte disponibili' : 'Materiale non disponibile',
         testo:
           conferme > 0
@@ -450,13 +444,14 @@ function rispondi(
 
 // Righe della richiesta viste con il listino di un distributore. Se il banco ha già
 // risposto, la quantità è quella che ha dichiarato disponibile.
-function righeDistributore(requestId, distributorId) {
-  const risposta = getRisposta(requestId, distributorId);
-  const richiesta = db.prepare('SELECT cliente_id FROM requests WHERE id = ?').get(requestId);
+async function righeDistributore(requestId, distributorId) {
+  const risposta = await getRisposta(requestId, distributorId);
+  const richiesta = await db.prepare('SELECT cliente_id FROM requests WHERE id = ?').get(requestId);
   // Sconti concordati in anagrafica con questo cliente (generale, marchio, categoria, famiglia).
-  const regole = richiesta ? anagrafiche.regoleSconto(distributorId, richiesta.cliente_id) : [];
+  const anagrafiche = require('./anagrafiche');
+  const regole = richiesta ? await anagrafiche.regoleSconto(distributorId, richiesta.cliente_id) : [];
 
-  return db
+  const rows = await db
     .prepare(
       `SELECT ri.product_id, ri.quantita AS quantita_richiesta,
               p.codice, p.nome, p.categoria, p.brand_slug, p.famiglia, p.macro_slug, p.raee,
@@ -472,8 +467,8 @@ function righeDistributore(requestId, distributorId) {
         WHERE ri.request_id = ?
         ORDER BY p.categoria, p.nome`
     )
-    .all(distributorId, risposta ? risposta.id : -1, requestId)
-    .map((r) => {
+    .all(distributorId, risposta ? risposta.id : -1, requestId);
+  return rows.map((r) => {
       // Ordine di precedenza: sconto deciso ora sulla riga → sconto in anagrafica per
       // famiglia/marchio/categoria → sconto Base del listino del banco.
       const daAnagrafica = anagrafiche.scontoPerProdotto(regole, r);
@@ -491,9 +486,9 @@ function righeDistributore(requestId, distributorId) {
 }
 
 // Righe e totali della richiesta calcolati sul listino del singolo distributore.
-function calcolaOfferta(requestId, distributorId, { modalita = 'consegna_mezzo_grossista' } = {}) {
-  const distributore = db.prepare('SELECT * FROM distributors WHERE id = ?').get(distributorId);
-  const righe = righeDistributore(requestId, distributorId);
+async function calcolaOfferta(requestId, distributorId, { modalita = 'consegna_mezzo_grossista' } = {}) {
+  const distributore = await db.prepare('SELECT * FROM distributors WHERE id = ?').get(distributorId);
+  const righe = await righeDistributore(requestId, distributorId);
 
   const carrello = righe
     .filter((r) => r.quantita > 0)
@@ -520,14 +515,14 @@ function calcolaOfferta(requestId, distributorId, { modalita = 'consegna_mezzo_g
     }));
 
   const costoConsegna = modalita === 'ritiro' ? 0 : distributore.costo_consegna;
-  const totali = calcolaOrdine(carrello, { costoConsegna });
+  const totali = await calcolaOrdine(carrello, { costoConsegna });
   return { distributore, righe, carrello, mancanti, totali };
 }
 
 // Tutte le offerte confermate per una richiesta, ordinate dalla più conveniente.
 // Le offerte complete vengono prima di quelle parziali, a parità di convenienza.
-function offerte(requestId, { modalita = 'consegna_mezzo_grossista' } = {}) {
-  const conferme = db
+async function offerte(requestId, { modalita = 'consegna_mezzo_grossista' } = {}) {
+  const conferme = await db
     .prepare(
       `SELECT rr.*, d.nome AS distributore_nome, d.filiale, d.costo_consegna
          FROM request_responses rr
@@ -536,33 +531,33 @@ function offerte(requestId, { modalita = 'consegna_mezzo_grossista' } = {}) {
     )
     .all(requestId);
 
-  return conferme
-    .map((c) => {
-      const { distributore, totali, mancanti, carrello } = calcolaOfferta(requestId, c.distributor_id, {
-        modalita,
-      });
-      return {
-        distributore,
-        copertura: c.copertura,
-        partenza_ore: c.partenza_ore,
-        consegna_ore: c.consegna_ore,
-        consegna_minuti_stimati: c.consegna_minuti_stimati,
-        note: c.note,
-        risposto_il: c.risposto_il,
-        mancanti,
-        n_articoli: carrello.length,
-        totali,
-      };
-    })
-    .sort((a, b) => {
+  const withTotals = [];
+  for (const c of conferme) {
+    const { distributore, totali, mancanti, carrello } = await calcolaOfferta(requestId, c.distributor_id, {
+      modalita,
+    });
+    withTotals.push({
+      distributore,
+      copertura: c.copertura,
+      partenza_ore: c.partenza_ore,
+      consegna_ore: c.consegna_ore,
+      consegna_minuti_stimati: c.consegna_minuti_stimati,
+      note: c.note,
+      risposto_il: c.risposto_il,
+      mancanti,
+      n_articoli: carrello.length,
+      totali,
+    });
+  }
+  return withTotals.sort((a, b) => {
       if (a.copertura !== b.copertura) return a.copertura === 'totale' ? -1 : 1;
       return a.totali.totale_ivato - b.totali.totale_ivato;
     });
 }
 
 // Sconto concordato tra un banco e un cliente (0 se non ce n'è uno in anagrafica).
-function scontoCliente(distributorId, clienteId) {
-  const r = db
+async function scontoCliente(distributorId, clienteId) {
+  const r = await db
     .prepare('SELECT sconto_pct, aggiornato_il FROM client_discounts WHERE distributor_id = ? AND cliente_id = ?')
     .get(distributorId, clienteId);
   return r || null;

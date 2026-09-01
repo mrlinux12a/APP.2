@@ -48,6 +48,7 @@ async function geocodifica(query) {
 }
 
 async function principale() {
+  await db.ensureInit();
   const tutti = process.argv.includes('--tutti');
 
   // Allinea l'elenco dei punti vendita al database.
@@ -61,20 +62,19 @@ async function principale() {
   );
 
   let mancanti = 0;
-  punti.forEach((p) => {
-    const d = db.prepare('SELECT id FROM distributors WHERE nome = ?').get(p.distributore);
+  for (const p of punti) {
+    const d = await db.prepare('SELECT id FROM distributors WHERE nome = ?').get(p.distributore);
     if (!d) {
       console.warn(`  ! distributore non trovato nel DB: ${p.distributore} (${p.nome})`);
       mancanti += 1;
-      return;
+      continue;
     }
-    // `distributore` è solo il nome usato nel file: nella query serve l'id.
     const { distributore, ...campi } = p;
-    insPunto.run({ ...campi, distributor_id: d.id });
-  });
+    await insPunto.run({ ...campi, distributor_id: d.id });
+  }
   if (mancanti) console.warn(`  ${mancanti} punti saltati: lancia prima "npm run seed".\n`);
 
-  const daFare = db
+  const daFare = await db
     .prepare(
       `SELECT s.*, d.nome AS distributore
          FROM store_locations s JOIN distributors d ON d.id = s.distributor_id
@@ -108,7 +108,7 @@ async function principale() {
     }
 
     if (trovato) {
-      aggiorna.run(trovato.lat, trovato.lng, trovato.etichetta, p.id);
+      await aggiorna.run(trovato.lat, trovato.lng, trovato.etichetta, p.id);
       ok += 1;
       const approssimata = usata !== query[0] ? ' (indirizzo approssimato)' : '';
       console.log(
@@ -119,7 +119,7 @@ async function principale() {
     }
   }
 
-  const totali = db
+  const totali = await db
     .prepare(
       `SELECT COUNT(*) AS n, SUM(CASE WHEN geo_lat IS NULL THEN 1 ELSE 0 END) AS senza
          FROM store_locations`

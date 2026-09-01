@@ -57,8 +57,6 @@ function perRegex(testo) {
 }
 
 function costruisciIndice() {
-  // Le categorie in ordine di priorità: la prima parola chiave che combacia vince,
-  // così un pezzo che potrebbe stare in due posti finisce in quello più cercato.
   const voci = [];
   tassonomia
     .slice()
@@ -70,8 +68,6 @@ function costruisciIndice() {
           if (!chiave) return;
           voci.push({
             chiave,
-            // Confronto per parole intere: senza questo "or" pescherebbe dentro
-            // "raccordo" e "ottone", e "vite" dentro "servite".
             re: new RegExp('(^|[^a-z0-9àèéìòù])' + perRegex(chiave) + '($|[^a-z0-9àèéìòù])', 'i'),
             macro: cat.slug,
             sotto: slugifica(sub.nome),
@@ -79,7 +75,6 @@ function costruisciIndice() {
         });
       });
     });
-  // Le chiavi più lunghe sono più specifiche: vanno provate prima.
   return voci.sort((a, b) => b.chiave.length - a.chiave.length);
 }
 
@@ -88,25 +83,27 @@ function classifica(prodotto, indice) {
   const trovato = indice.find((v) => v.re.test(testo));
   if (trovato) return { macro: trovato.macro, sotto: trovato.sotto };
 
-  // Nessuna parola chiave: il pezzo resta comunque raggiungibile sotto la famiglia
-  // del suo listino (es. Riscaldamento > EDEN — Accessori idronici e kit).
   const famiglia = String(prodotto.famiglia || '').toUpperCase();
   const perFamiglia = FAMIGLIE_MARCHIO[famiglia];
   if (perFamiglia) {
-    return { macro: perFamiglia, sotto: slugifica(famiglia), nomeSotto: nomeFamiglia(prodotto), daFamiglia: true };
+    return { macro: perFamiglia, sotto: slugifica(famiglia), nomeSotto: nomeFamigliaSync(prodotto), daFamiglia: true };
   }
 
   return null;
 }
 
-// Nome leggibile della famiglia di listino, per usarla come sottocategoria.
+// sync cache for classifica (will be overridden by async version if needed)
 const nomiFamiglia = new Map();
-function nomeFamiglia(prodotto) {
+function nomeFamigliaSync(prodotto) {
   const chiave = `${prodotto.brand_slug}:${prodotto.famiglia}`;
   if (nomiFamiglia.has(chiave)) return nomiFamiglia.get(chiave);
-  const riga = db
-    .prepare('SELECT nome FROM brand_families WHERE brand_slug = ? AND codice = ?')
-    .get(prodotto.brand_slug, prodotto.famiglia);
+  // fallback sync not available in async mode - return famiglia
+  return prodotto.famiglia;
+}
+async function nomeFamiglia(prodotto) {
+  const chiave = `${prodotto.brand_slug}:${prodotto.famiglia}`;
+  if (nomiFamiglia.has(chiave)) return nomiFamiglia.get(chiave);
+  const riga = await db.prepare('SELECT nome FROM brand_families WHERE brand_slug = ? AND codice = ?').get(prodotto.brand_slug, prodotto.famiglia);
   const nome = riga ? riga.nome : prodotto.famiglia;
   nomiFamiglia.set(chiave, nome);
   return nome;
@@ -114,7 +111,8 @@ function nomeFamiglia(prodotto) {
 
 // ---------- Esecuzione ----------
 
-function principale() {
+async function principale() {
+  await db.ensureInit();
   const insMacro = db.prepare(
     `INSERT INTO macro_categorie (slug, nome, icona, descrizione, ordine, priorita, in_evidenza)
      VALUES (@slug, @nome, @icona, @descrizione, @priorita, @priorita, @in_evidenza)
@@ -130,9 +128,9 @@ function principale() {
        ordine = excluded.ordine`
   );
 
-  const carica = db.transaction(() => {
-    tassonomia.forEach((cat) => {
-      insMacro.run({
+  const carica = db.transaction(async () => {
+    for (const cat of tassonomia) {
+      await insMacro.run({
         slug: cat.slug,
         nome: cat.nome,
         icona: cat.icona,
@@ -140,27 +138,24 @@ function principale() {
         priorita: cat.priorita,
         in_evidenza: cat.inEvidenza ? 1 : 0,
       });
-      cat.sottocategorie.forEach((sub, i) => {
-        insSotto.run({
+      let i=0;
+      for (const sub of cat.sottocategorie) {
+        await insSotto.run({
           macro_slug: cat.slug,
           slug: slugifica(sub.nome),
           nome: sub.nome,
           keywords: sub.keywords.join('|'),
           misure: (sub.misure || []).join('|'),
-          ordine: i,
+          ordine: i++,
         });
-      });
-    });
+      }
+    }
   });
-  carica();
+  await carica();
 
   const indice = costruisciIndice();
-  const prodotti = db
-    .prepare('SELECT id, nome, categoria, famiglia, brand_slug FROM products')
-    .all();
-  const aggiorna = db.prepare(
-    'UPDATE products SET macro_slug = ?, sottocategoria = ?, misura = ? WHERE id = ?'
-  );
+  const prodotti = await db.prepare('SELECT id, nome, categoria, famiglia, brand_slug FROM products').all();
+  const aggiorna = db.prepare('UPDATE products SET macro_slug = ?, sottocategoria = ?, misura = ? WHERE id = ?');
 
   const conteggi = {};
   let perKeyword = 0;
@@ -168,10 +163,14 @@ function principale() {
   let senzaSotto = 0;
   const sottoDaFamiglia = new Map();
 
-  const applica = db.transaction(() => {
-    prodotti.forEach((p) => {
-      const esito = classifica(p, indice);
-      const macro = esito ? esito.macro : 'minuteria'; // il pezzo sfuso finisce in minuteria
+  const applica = db.transaction(async () => {
+    for (const p of prodotti) {
+      let esito = classifica(p, indice);
+      // if esito needs async nomeFamiglia, resolve
+      if (esito && esito.daFamiglia) {
+        esito.nomeSotto = await nomeFamiglia(p);
+      }
+      const macro = esito ? esito.macro : 'minuteria';
       const sotto = esito ? esito.sotto : '';
 
       if (!esito || !esito.sotto) senzaSotto += 1;
@@ -181,15 +180,13 @@ function principale() {
       } else perKeyword += 1;
 
       conteggi[macro] = (conteggi[macro] || 0) + 1;
-      aggiorna.run(macro, sotto, estraiMisura(p.nome), p.id);
-    });
+      await aggiorna.run(macro, sotto, estraiMisura(p.nome), p.id);
+    }
 
-    // Le sottocategorie nate da una famiglia di listino vanno registrate anche loro,
-    // altrimenti l'elenco della categoria non le mostrerebbe.
     let ordine = 50;
-    sottoDaFamiglia.forEach((nome, chiave) => {
+    for (const [chiave, nome] of sottoDaFamiglia) {
       const taglio = chiave.indexOf('|');
-      insSotto.run({
+      await insSotto.run({
         macro_slug: chiave.slice(0, taglio),
         slug: chiave.slice(taglio + 1),
         nome,
@@ -197,19 +194,18 @@ function principale() {
         misure: '',
         ordine: (ordine += 1),
       });
-    });
+    }
   });
-  applica();
+  await applica();
 
-  // Le vecchie categorie non più previste dalla tassonomia restano solo se hanno prodotti.
   const slugValidi = new Set(tassonomia.map((c) => c.slug));
-  db.prepare('SELECT slug FROM macro_categorie')
-    .all()
-    .forEach((m) => {
-      if (slugValidi.has(m.slug)) return;
-      const n = db.prepare('SELECT COUNT(*) AS n FROM products WHERE macro_slug = ?').get(m.slug).n;
-      if (n === 0) db.prepare('DELETE FROM macro_categorie WHERE slug = ?').run(m.slug);
-    });
+  const macros = await db.prepare('SELECT slug FROM macro_categorie').all();
+  for (const m of macros) {
+    if (slugValidi.has(m.slug)) continue;
+    const row = await db.prepare('SELECT COUNT(*) AS n FROM products WHERE macro_slug = ?').get(m.slug);
+    const n = row ? Number(row.n) : 0;
+    if (n === 0) await db.prepare('DELETE FROM macro_categorie WHERE slug = ?').run(m.slug);
+  }
 
   console.log(`Prodotti riclassificati: ${prodotti.length}`);
   console.log(`  per parola chiave: ${perKeyword}`);
@@ -220,8 +216,9 @@ function principale() {
     if (conteggi[c.slug]) console.log(`  ${String(c.priorita).padStart(2)}. ${c.nome.padEnd(28)} ${conteggi[c.slug]}`);
   });
 
-  const conMisura = db.prepare("SELECT COUNT(*) AS n FROM products WHERE misura <> ''").get().n;
+  const row = await db.prepare("SELECT COUNT(*) AS n FROM products WHERE misura <> ''").get();
+  const conMisura = row ? Number(row.n) : 0;
   console.log(`\nProdotti con misura riconosciuta: ${conMisura} / ${prodotti.length}`);
 }
 
-principale();
+principale().catch(e=>{console.error(e);process.exit(1)});

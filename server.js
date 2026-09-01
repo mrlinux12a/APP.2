@@ -6,24 +6,29 @@ const path = require('path');
 
 const db = require('./db');
 // auto-seed se DB vuoto (dopo clone/pull basta npm start)
-try {
-  const nProd = db.prepare('SELECT COUNT(*) n FROM products').get().n;
-  if (nProd === 0) {
-    console.log('DB vuoto -> eseguo seed automatico...');
-    require('./db/seed');
-  } else {
-    const nDp = db.prepare('SELECT COUNT(*) n FROM distributor_products').get().n;
-    if (nDp === 0) {
-      console.log('Listini vuoti -> popolo distributor_products...');
-      const dists = db.prepare('SELECT id FROM distributors WHERE attivo=1').all();
-      const prods = db.prepare('SELECT id, prezzo_listino, sconto_base_pct FROM products').all();
-      const ins = db.prepare('INSERT INTO distributor_products (distributor_id, product_id, prezzo_listino, sconto_base_pct) VALUES (?,?,?,?) ON CONFLICT DO NOTHING');
-      const tx = db.transaction(() => { for (const d of dists) for (const p of prods) ins.run(d.id, p.id, p.prezzo_listino, p.sconto_base_pct); });
-      tx();
-      console.log(`Listini popolati ${dists.length * prods.length}`);
+(async () => {
+  try {
+    await db.ensureInit();
+    const r1 = await db.prepare('SELECT COUNT(*) n FROM products').get();
+    const nProd = r1 ? Number(r1.n) : 0;
+    if (nProd === 0) {
+      console.log('DB vuoto -> eseguo seed automatico...');
+      await require('./db/seed');
+    } else {
+      const r2 = await db.prepare('SELECT COUNT(*) n FROM distributor_products').get();
+      const nDp = r2 ? Number(r2.n) : 0;
+      if (nDp === 0) {
+        console.log('Listini vuoti -> popolo distributor_products...');
+        const dists = await db.prepare('SELECT id FROM distributors WHERE attivo=1').all();
+        const prods = await db.prepare('SELECT id, prezzo_listino, sconto_base_pct FROM products').all();
+        const ins = db.prepare('INSERT INTO distributor_products (distributor_id, product_id, prezzo_listino, sconto_base_pct) VALUES (?,?,?,?) ON CONFLICT DO NOTHING');
+        const tx = db.transaction(async () => { for (const d of dists) for (const p of prods) await ins.run(d.id, p.id, p.prezzo_listino, p.sconto_base_pct); });
+        await tx();
+        console.log(`Listini popolati ${dists.length * prods.length}`);
+      }
     }
-  }
-} catch (e) { console.error('auto-seed fallito', e.message); }
+  } catch (e) { console.error('auto-seed fallito', e.message); }
+})();
 
 const { requireLogin, requireRole } = require('./src/auth');
 const pricing = require('./src/pricing');
@@ -61,7 +66,7 @@ app.use(
 );
 
 // rende disponibili utente, helper e contatori a tutte le viste
-app.use((req, res, next) => {
+app.use(async (req, res, next) => {
   res.locals.currentUser = req.session.user || null;
   res.locals.euro = pricing.euro;
   res.locals.prezzoCliente = pricing.prezzoCliente;
@@ -69,13 +74,13 @@ app.use((req, res, next) => {
   res.locals.totaleOrdine = (o) => (o.totale_ivato > 0 ? o.totale_ivato : o.totale_finale);
   res.locals.fmt = format;
   res.locals.carrelloPezzi = contaCarrello(req);
-  res.locals.notificheNonLette = req.session.user ? notifiche.nonLette(req.session.user.id) : 0;
+  res.locals.notificheNonLette = req.session.user ? await notifiche.nonLette(req.session.user.id) : 0;
   res.locals.testoDisponibilita = TESTO_DISPONIBILITA;
-  res.locals.geo = req.session.user ? geo.statoUtente(req.session.user.id) : { consenso: false };
+  res.locals.geo = req.session.user ? await geo.statoUtente(req.session.user.id) : { consenso: false };
   // I contatori del banco servono alla barra di navigazione di tutte le pagine distributore.
   res.locals.contatori =
     req.session.user && req.session.user.ruolo === 'distributore' && req.session.user.distributor_id
-      ? contatoriBanco(req.session.user.distributor_id)
+      ? await contatoriBanco(req.session.user.distributor_id)
       : null;
   next();
 });
@@ -93,13 +98,12 @@ function contaCarrello(req) {
 }
 
 // Trasforma il carrello di sessione in righe [{prodotto, quantita}] con i dati aggiornati.
-function righeCarrello(req) {
+async function righeCarrello(req) {
   const carrello = getCarrello(req);
   const ids = Object.keys(carrello).map(Number).filter((id) => carrello[id] > 0);
   if (!ids.length) return [];
   const placeholders = ids.map(() => '?').join(',');
-  const prodotti = db
-    .prepare(
+  const prodotti = await db.prepare(
       `SELECT * FROM products WHERE attivo = 1 AND id IN (${placeholders}) ORDER BY macro_slug, categoria, nome`
     )
     .all(...ids);
@@ -127,31 +131,31 @@ function aggiornaCarrelloDaForm(req, modo = 'aggiungi') {
 
 // ---------- Home / Login ----------
 
-app.get('/', (req, res) => {
+app.get('/', async (req, res) => {
   if (!req.session.user) return res.redirect('/login');
   if (req.session.user.ruolo === 'agente') return res.redirect('/agente/ordini');
   if (req.session.user.ruolo === 'distributore') return res.redirect('/distributore');
   return res.redirect('/home');
 });
 
-app.get('/login', (req, res) => {
+app.get('/login', async (req, res) => {
   if (req.session.user) return res.redirect('/');
   res.render('login', { titolo: 'Accedi', errore: null, scheda: 'accedi' });
 });
 
 // ---------- Registrazione cliente ----------
 
-function distributoriSelezionabili() {
+async function distributoriSelezionabili() {
   return db
     .prepare('SELECT id, nome, filiale, zona FROM distributors WHERE attivo = 1 ORDER BY nome')
     .all();
 }
 
-app.get('/registrati', (req, res) => {
+app.get('/registrati', async (req, res) => {
   if (req.session.user) return res.redirect('/');
   res.render('registrati', {
     titolo: 'Crea la tua anagrafica',
-    distributori: distributoriSelezionabili(),
+    distributori: await distributoriSelezionabili(),
     tipi: anagrafiche.TIPI_SOGGETTO,
     dati: {},
     scelti: [],
@@ -159,20 +163,20 @@ app.get('/registrati', (req, res) => {
   });
 });
 
-app.post('/registrati', (req, res) => {
+app.post('/registrati', async (req, res) => {
   const scelti = []
     .concat(req.body.distributori || [])
     .map((v) => parseInt(v, 10))
     .filter(Boolean);
 
-  const validi = new Set(distributoriSelezionabili().map((d) => d.id));
+  const validi = new Set((await distributoriSelezionabili()).map((d) => d.id));
   const distributoriScelti = scelti.filter((id) => validi.has(id));
-  const errori = anagrafiche.validaIscrizione(req.body, distributoriScelti);
+  const errori = await anagrafiche.validaIscrizione(req.body, distributoriScelti);
 
   if (errori.length) {
     return res.status(400).render('registrati', {
       titolo: 'Crea la tua anagrafica',
-      distributori: distributoriSelezionabili(),
+      distributori: await distributoriSelezionabili(),
       tipi: anagrafiche.TIPI_SOGGETTO,
       dati: req.body,
       scelti: distributoriScelti,
@@ -180,7 +184,7 @@ app.post('/registrati', (req, res) => {
     });
   }
 
-  const cliente = anagrafiche.iscriviCliente(req.body, distributoriScelti);
+  const cliente = await anagrafiche.iscriviCliente(req.body, distributoriScelti);
   req.session.user = {
     id: cliente.id,
     ruolo: cliente.ruolo,
@@ -194,21 +198,21 @@ app.post('/registrati', (req, res) => {
 
 // ---------- Profilo del cliente ----------
 
-app.get('/profilo', requireRole('cliente'), (req, res) => {
-  const cliente = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
+app.get('/profilo', requireRole('cliente'), async (req, res) => {
+  const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
   res.render('profilo', {
     titolo: 'La mia anagrafica',
     cliente,
-    legami: anagrafiche.legamiDelCliente(cliente.id),
+    legami: await anagrafiche.legamiDelCliente(cliente.id),
     tipi: anagrafiche.TIPI_SOGGETTO,
     benvenuto: req.query.benvenuto === '1',
     indirizzoCliente: ddt.indirizzoCompleto(cliente),
   });
 });
 
-app.post('/login', (req, res) => {
+app.post('/login', async (req, res) => {
   const { username, password } = req.body;
-  const user = db.prepare('SELECT * FROM users WHERE username = ? AND attivo = 1').get(username);
+  const user = await db.prepare('SELECT * FROM users WHERE username = ? AND attivo = 1').get(username);
   if (!user || !bcrypt.compareSync(password || '', user.password_hash)) {
     return res.render('login', { errore: 'Credenziali non valide.' });
   }
@@ -223,23 +227,23 @@ app.post('/login', (req, res) => {
   res.redirect('/');
 });
 
-app.post('/logout', (req, res) => {
+app.post('/logout', async (req, res) => {
   req.session.destroy(() => res.redirect('/login'));
 });
 
 // ---------- Cliente: home, ricerca, categorie ----------
 
-app.get('/home', requireRole('cliente'), (req, res) => {
+app.get('/home', requireRole('cliente'), async (req, res) => {
   res.render('home', {
     titolo: 'Ordini Minuteria',
-    inEvidenza: catalogo.categorieInEvidenza(),
-    altre: catalogo.altreCategorie(),
+    inEvidenza: await catalogo.categorieInEvidenza(),
+    altre: await catalogo.altreCategorie(),
   });
 });
 
-app.get('/cerca', requireRole('cliente'), (req, res) => {
+app.get('/cerca', requireRole('cliente'), async (req, res) => {
   const q = (req.query.q || '').trim();
-  const risultati = q ? catalogo.cercaProdotti(q) : [];
+  const risultati = q ? await catalogo.cercaProdotti(q) : [];
   res.render('cerca', {
     titolo: 'Cerca',
     q,
@@ -255,7 +259,7 @@ const TESTO_DISPONIBILITA = {
 };
 
 // Ricerca mentre si digita: stessa logica parziale della pagina /cerca.
-app.get('/api/cerca', requireRole('cliente'), (req, res) => {
+app.get('/api/cerca', requireRole('cliente'), async (req, res) => {
   const q = (req.query.q || '').trim();
   // L'ambito arriva dalla pagina che sta cercando: categoria, marchio, famiglia, gruppo.
   const ambito = {
@@ -266,9 +270,10 @@ app.get('/api/cerca', requireRole('cliente'), (req, res) => {
     misura: req.query.misura || null,
     limite: 60,
   };
-  const risultati = q.length >= 2 ? catalogo.cercaProdotti(q, ambito) : [];
-  res.json({
-    risultati: risultati.map((p) => ({
+  const risultati = q.length >= 2 ? await catalogo.cercaProdotti(q, ambito) : [];
+  const risultatiMappati = [];
+  for (const p of risultati) {
+    risultatiMappati.push({
       id: p.id,
       codice: p.codice,
       nome: p.nome,
@@ -280,18 +285,19 @@ app.get('/api/cerca', requireRole('cliente'), (req, res) => {
       disponibilita_testo: TESTO_DISPONIBILITA[p.disponibilita] || p.disponibilita,
       sconto_base_pct: p.sconto_base_pct,
       listino: pricing.euro(p.prezzo_listino),
-      prezzo: pricing.euro(pricing.prezzoCliente(p)),
-    })),
-  });
+      prezzo: pricing.euro(await pricing.prezzoCliente(p)),
+    });
+  }
+  res.json({ risultati: risultatiMappati });
 });
 
-app.get('/categoria/:slug', requireRole('cliente'), (req, res) => {
-  const macro = catalogo.macroCategoria(req.params.slug);
+app.get('/categoria/:slug', requireRole('cliente'), async (req, res) => {
+  const macro = await catalogo.macroCategoria(req.params.slug);
   if (!macro) return res.status(404).render('errore', { titolo: 'Non trovata', messaggio: 'Categoria non trovata.' });
 
-  const sottocategorie = catalogo.sottocategorieDi(macro.slug);
+  const sottocategorie = await catalogo.sottocategorieDi(macro.slug);
   const sottoSlug = req.query.sotto || (sottocategorie.length === 1 ? sottocategorie[0].slug : null);
-  const sotto = sottoSlug ? catalogo.sottocategoria(macro.slug, sottoSlug) : null;
+  const sotto = sottoSlug ? await catalogo.sottocategoria(macro.slug, sottoSlug) : null;
   const misura = req.query.misura || null;
   const marchio = req.query.marchio || null;
   const q = (req.query.q || '').trim();
@@ -299,11 +305,11 @@ app.get('/categoria/:slug', requireRole('cliente'), (req, res) => {
   // Con una ricerca attiva l'elenco è quello dei risultati, senza paginazione.
   const elenco = q
     ? {
-        righe: catalogo.cercaProdotti(q, { macroSlug: macro.slug, sotto: sottoSlug, limite: 60 }),
+        righe: await catalogo.cercaProdotti(q, { macroSlug: macro.slug, sotto: sottoSlug, limite: 60 }),
         ricerca: true,
       }
     : sottoSlug
-    ? catalogo.prodottiDellaCategoria(macro.slug, { sotto: sottoSlug, misura, marchio, pagina: req.query.p })
+    ? await catalogo.prodottiDellaCategoria(macro.slug, { sotto: sottoSlug, misura, marchio, pagina: req.query.p })
     : null;
 
   res.render('categoria', {
@@ -313,9 +319,9 @@ app.get('/categoria/:slug', requireRole('cliente'), (req, res) => {
     sotto,
     sottoSlug,
     // La misura è il primo filtro utile in cantiere; il marchio viene dopo.
-    misure: sottoSlug ? catalogo.misureDisponibili({ macroSlug: macro.slug, sotto: sottoSlug }) : [],
+    misure: sottoSlug ? await catalogo.misureDisponibili({ macroSlug: macro.slug, sotto: sottoSlug }) : [],
     misura,
-    marchi: sottoSlug ? catalogo.marchiNellaCategoria({ macroSlug: macro.slug, sotto: sottoSlug }) : [],
+    marchi: sottoSlug ? await catalogo.marchiNellaCategoria({ macroSlug: macro.slug, sotto: sottoSlug }) : [],
     marchio,
     q,
     elenco,
@@ -325,8 +331,8 @@ app.get('/categoria/:slug', requireRole('cliente'), (req, res) => {
 
 // ---------- Punti vendita sulla mappa ----------
 
-app.get('/punti-vendita', requireLogin, (req, res) => {
-  const punti = db
+app.get('/punti-vendita', requireLogin, async (req, res) => {
+  const punti = await db
     .prepare(
       `SELECT s.*, d.nome AS distributore, d.zona
          FROM store_locations s
@@ -336,7 +342,7 @@ app.get('/punti-vendita', requireLogin, (req, res) => {
     )
     .all();
 
-  const mia = geo.statoUtente(req.session.user.id);
+  const mia = await geo.statoUtente(req.session.user.id);
   const conDistanza = punti.map((p) => {
     const km = mia.consenso ? geo.distanzaKm({ lat: mia.lat, lng: mia.lng }, { lat: p.geo_lat, lng: p.geo_lng }) : null;
     return { ...p, km, distanza: geo.formattaDistanza(km) };
@@ -356,28 +362,28 @@ app.get('/punti-vendita', requireLogin, (req, res) => {
 
 // ---------- Cliente: marchi ----------
 
-app.get('/marchi', requireRole('cliente'), (req, res) => {
-  res.render('marchi', { titolo: 'Marchi', marchi: catalogo.marchi() });
+app.get('/marchi', requireRole('cliente'), async (req, res) => {
+  res.render('marchi', { titolo: 'Marchi', marchi: await catalogo.marchi() });
 });
 
-app.get('/marchi/:slug', requireRole('cliente'), (req, res) => {
-  const marca = catalogo.marchio(req.params.slug);
+app.get('/marchi/:slug', requireRole('cliente'), async (req, res) => {
+  const marca = await catalogo.marchio(req.params.slug);
   if (!marca) return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Marchio non trovato.' });
 
-  const famiglie = catalogo.famiglieDelMarchio(marca.slug);
+  const famiglie = await catalogo.famiglieDelMarchio(marca.slug);
   const codice = req.query.famiglia || null;
-  const famiglia = codice ? catalogo.famigliaDelMarchio(marca.slug, codice) : null;
+  const famiglia = codice ? await catalogo.famigliaDelMarchio(marca.slug, codice) : null;
   const q = (req.query.q || '').trim();
 
   // Cercando dentro un marchio i risultati restano dentro quel marchio (e, se si sta
   // sfogliando una famiglia, dentro quella famiglia).
   const elenco = q
     ? {
-        righe: catalogo.cercaProdotti(q, { brandSlug: marca.slug, famiglia: codice, limite: 60 }),
+        righe: await catalogo.cercaProdotti(q, { brandSlug: marca.slug, famiglia: codice, limite: 60 }),
         ricerca: true,
       }
     : codice
-    ? catalogo.prodottiDelMarchio(marca.slug, codice, req.query.p)
+    ? await catalogo.prodottiDelMarchio(marca.slug, codice, req.query.p)
     : null;
 
   res.render('marchio', { titolo: marca.nome, marca, famiglie, famiglia, q, elenco, carrello: getCarrello(req) });
@@ -386,18 +392,18 @@ app.get('/marchi/:slug', requireRole('cliente'), (req, res) => {
 // ---------- Cliente: carrello ----------
 
 // API carrello per aggiunta asincrona (nuovo flusso: Aggiungi -> reset stepper -> mini-card)
-app.get('/api/carrello', requireRole('cliente'), (req, res) => {
+app.get('/api/carrello', requireRole('cliente'), async (req, res) => {
   const carrello = getCarrello(req);
-  const righe = righeCarrello(req);
-  const totali = pricing.calcolaOrdine(righe);
+  const righe = await righeCarrello(req);
+  const totali = await pricing.calcolaOrdine(righe);
   res.json({ carrello, pezzi: contaCarrello(req), totale_finale: totali.totale_finale });
 });
 
-app.post('/api/carrello/aggiungi', requireRole('cliente'), (req, res) => {
+app.post('/api/carrello/aggiungi', requireRole('cliente'), async (req, res) => {
   const id = parseInt(req.body.id || req.body.product_id, 10);
   const qty = Math.max(0, parseInt(req.body.qty || req.body.quantita, 10) || 0);
   if (!id || !qty) return res.status(400).json({ ok: false, errore: 'Quantità non valida.' });
-  const prodotto = db.prepare('SELECT id FROM products WHERE id = ? AND attivo = 1').get(id);
+  const prodotto = await db.prepare('SELECT id FROM products WHERE id = ? AND attivo = 1').get(id);
   if (!prodotto) return res.status(404).json({ ok: false, errore: 'Prodotto non trovato.' });
   const carrello = getCarrello(req);
   carrello[id] = (carrello[id] || 0) + qty;
@@ -405,36 +411,36 @@ app.post('/api/carrello/aggiungi', requireRole('cliente'), (req, res) => {
   res.json({ ok: true, carrello, pezzi, prodottoQty: carrello[id] });
 });
 
-app.post('/api/carrello/aggiungi-batch', requireRole('cliente'), (req, res) => {
+app.post('/api/carrello/aggiungi-batch', requireRole('cliente'), async (req, res) => {
   const items = Array.isArray(req.body.items) ? req.body.items : [];
   if (!items.length) return res.status(400).json({ ok: false, errore: 'Nessun articolo.' });
   const carrello = getCarrello(req);
   const aggiornati = {};
-  items.forEach(({ id, qty }) => {
+  for (const { id, qty } of items) {
     const pid = parseInt(id, 10);
     const q = Math.max(0, parseInt(qty, 10) || 0);
     if (!pid || !q) return;
-    const prodotto = db.prepare('SELECT id FROM products WHERE id = ? AND attivo = 1').get(pid);
+    const prodotto = await db.prepare('SELECT id FROM products WHERE id = ? AND attivo = 1').get(pid);
     if (!prodotto) return;
     carrello[pid] = (carrello[pid] || 0) + q;
     aggiornati[pid] = carrello[pid];
-  });
+  }
   res.json({ ok: true, carrello, pezzi: contaCarrello(req), aggiornati });
 });
 
-app.post('/api/carrello/imposta', requireRole('cliente'), (req, res) => {
+app.post('/api/carrello/imposta', requireRole('cliente'), async (req, res) => {
   const id = parseInt(req.body.id, 10);
   const qty = Math.max(0, parseInt(req.body.qty, 10) || 0);
   if (!id) return res.status(400).json({ ok: false });
   const carrello = getCarrello(req);
   if (qty > 0) carrello[id] = qty;
   else delete carrello[id];
-  const righe = righeCarrello(req);
-  const totali = pricing.calcolaOrdine(righe);
+  const righe = await righeCarrello(req);
+  const totali = await pricing.calcolaOrdine(righe);
   res.json({ ok: true, carrello, pezzi: contaCarrello(req), totali, righe: righe.length });
 });
 
-app.post('/carrello', requireRole('cliente'), (req, res) => {
+app.post('/carrello', requireRole('cliente'), async (req, res) => {
   aggiornaCarrelloDaForm(req, req.body.modo === 'imposta' ? 'imposta' : 'aggiungi');
   // "Procedi" non manda più la richiesta: porta al riepilogo, dove si conferma.
   if (req.body.azione === 'procedi') return res.redirect('/carrello');
@@ -442,11 +448,11 @@ app.post('/carrello', requireRole('cliente'), (req, res) => {
 });
 
 // Riepilogo prima di procedere: articoli, quantità, prezzi, totale e conferma finale.
-app.get('/carrello', requireRole('cliente'), (req, res) => {
-  const righe = righeCarrello(req);
-  const totali = pricing.calcolaOrdine(righe);
-  const minimo = pricing.getOrdineMinimo();
-  const spedizione = pricing.getSpedizioneFissa();
+app.get('/carrello', requireRole('cliente'), async (req, res) => {
+  const righe = await righeCarrello(req);
+  const totali = await pricing.calcolaOrdine(righe);
+  const minimo = await pricing.getOrdineMinimo();
+  const spedizione = await pricing.getSpedizioneFissa();
 
   res.render('carrello', {
     titolo: 'Riepilogo',
@@ -457,11 +463,11 @@ app.get('/carrello', requireRole('cliente'), (req, res) => {
     // La soglia si misura sulla sola merce: la spedizione si somma dopo.
     mancaAlMinimo: pricing.round2(Math.max(0, minimo - totali.totale_finale)),
     raggiunto: totali.totale_finale >= minimo,
-    ivaPct: pricing.getIvaPct(),
+    ivaPct: await pricing.getIvaPct(),
   });
 });
 
-app.post('/carrello/svuota', requireRole('cliente'), (req, res) => {
+app.post('/carrello/svuota', requireRole('cliente'), async (req, res) => {
   req.session.carrello = {};
   res.redirect('/home');
 });
@@ -469,17 +475,17 @@ app.post('/carrello/svuota', requireRole('cliente'), (req, res) => {
 // ---------- Cliente: richiesta di disponibilità ----------
 
 // "Procedi": manda la richiesta ai distributori della zona e apre la schermata di attesa.
-app.post('/richieste', requireRole('cliente'), (req, res) => {
+app.post('/richieste', requireRole('cliente'), async (req, res) => {
   aggiornaCarrelloDaForm(req, 'aggiungi');
   return inviaRichiesta(req, res);
 });
 
-function inviaRichiesta(req, res) {
-  const righe = righeCarrello(req);
+async function inviaRichiesta(req, res) {
+  const righe = await righeCarrello(req);
 
   // L'ordine minimo si misura sulla merce già maggiorata, spedizione esclusa.
-  const totali = pricing.calcolaOrdine(righe);
-  const minimo = pricing.getOrdineMinimo();
+  const totali = await pricing.calcolaOrdine(righe);
+  const minimo = await pricing.getOrdineMinimo();
   if (righe.length && totali.totale_finale < minimo) {
     return res.status(400).render('errore', {
       titolo: 'Ordine minimo non raggiunto',
@@ -498,14 +504,14 @@ function inviaRichiesta(req, res) {
     });
   }
 
-  const cliente = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
-  const { requestId } = richieste.creaRichiesta(cliente, righe);
+  const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
+  const { requestId } = await richieste.creaRichiesta(cliente, righe);
   req.session.carrello = {};
   res.redirect('/richieste/' + requestId);
 }
 
-app.get('/richieste/:id', requireRole('cliente'), (req, res) => {
-  const richiesta = richieste.aggiornaScadenza(req.params.id);
+app.get('/richieste/:id', requireRole('cliente'), async (req, res) => {
+  const richiesta = await richieste.aggiornaScadenza(req.params.id);
   if (!richiesta || richiesta.cliente_id !== req.session.user.id) {
     return res.status(404).render('errore', { titolo: 'Non trovata', messaggio: 'Richiesta non trovata.' });
   }
@@ -516,99 +522,101 @@ app.get('/richieste/:id', requireRole('cliente'), (req, res) => {
   const dati = {
     titolo: 'Richiesta #' + richiesta.id,
     richiesta,
-    righe: richieste.righeRichiesta(richiesta.id),
-    risposte: richieste.risposteRichiesta(richiesta.id),
-    secondi: richieste.secondiRimasti(richiesta),
+    righe: await richieste.righeRichiesta(richiesta.id),
+    risposte: await richieste.risposteRichiesta(richiesta.id),
+    secondi: await richieste.secondiRimasti(richiesta),
   };
 
   if (richiesta.stato === 'in_attesa') return res.render('richiesta_attesa', dati);
 
-  const offerte = richieste.offerte(richiesta.id);
-  const piuVeloce = richieste.offertaPiuVeloce(richiesta.id);
+  const offerte = await richieste.offerte(richiesta.id);
+  const piuVeloce = await richieste.offertaPiuVeloce(richiesta.id);
   return res.render('richiesta_offerte', {
     ...dati,
     offerte,
     // Con più di un'offerta scatta la finestra di 5 minuti per scegliere.
-    secondiScelta: offerte.length > 1 ? richieste.secondiPerScegliere(richiesta) : null,
-    minutiScelta: pricing.getFinestraSceltaMinuti(),
+    secondiScelta: offerte.length > 1 ? await richieste.secondiPerScegliere(richiesta) : null,
+    minutiScelta: await pricing.getFinestraSceltaMinuti(),
     idPiuVeloce: piuVeloce ? piuVeloce.distributor_id : null,
     consegna,
   });
 });
 
 // Stato della richiesta per la schermata di attesa (polling + notifica push del browser).
-app.get('/api/richieste/:id', requireRole('cliente'), (req, res) => {
-  const richiesta = richieste.aggiornaScadenza(req.params.id);
+app.get('/api/richieste/:id', requireRole('cliente'), async (req, res) => {
+  const richiesta = await richieste.aggiornaScadenza(req.params.id);
   if (!richiesta || richiesta.cliente_id !== req.session.user.id) {
     return res.status(404).json({ errore: 'non trovata' });
   }
-  const risposte = richieste.risposteRichiesta(richiesta.id);
+  const risposte = await richieste.risposteRichiesta(richiesta.id);
   res.json({
     stato: richiesta.stato,
-    secondi: richieste.secondiRimasti(richiesta),
+    secondi: await richieste.secondiRimasti(richiesta),
     conferme: risposte.filter((r) => r.esito === 'confermato').length,
     risposte: risposte.map((r) => ({ nome: r.distributore_nome, esito: r.esito })),
   });
 });
 
-app.post('/richieste/:id/annulla', requireRole('cliente'), (req, res) => {
-  const richiesta = richieste.getRichiesta(req.params.id);
+app.post('/richieste/:id/annulla', requireRole('cliente'), async (req, res) => {
+  const richiesta = await richieste.getRichiesta(req.params.id);
   if (!richiesta || richiesta.cliente_id !== req.session.user.id) return res.redirect('/home');
   if (richiesta.stato !== 'ordinata') {
-    db.prepare(`UPDATE requests SET stato = 'annullata' WHERE id = ?`).run(richiesta.id);
+    await db.prepare(`UPDATE requests SET stato = 'annullata' WHERE id = ?`).run(richiesta.id);
   }
   res.redirect('/home');
 });
 
 // Elimina richiesta (cliente) — globale: sparisce anche per tutti i distributori (da confermare + storico)
-app.post('/richieste/:id/elimina', requireRole('cliente'), (req, res) => {
-  const richiesta = db.prepare('SELECT * FROM requests WHERE id = ?').get(req.params.id);
+app.post('/richieste/:id/elimina', requireRole('cliente'), async (req, res) => {
+  const richiesta = await db.prepare('SELECT * FROM requests WHERE id = ?').get(req.params.id);
   if (!richiesta || richiesta.cliente_id !== req.session.user.id) {
     return res.status(404).render('errore', { titolo: 'Non trovata', messaggio: 'Richiesta non trovata.' });
   }
-  const elimina = db.transaction(() => {
+  const elimina = db.transaction(async () => {
     if (richiesta.order_id) {
-      db.prepare('UPDATE requests SET order_id = NULL WHERE id = ?').run(richiesta.id);
-      db.prepare('DELETE FROM order_items WHERE order_id = ?').run(richiesta.order_id);
-      db.prepare('DELETE FROM orders WHERE id = ?').run(richiesta.order_id);
+      await db.prepare('UPDATE requests SET order_id = NULL WHERE id = ?').run(richiesta.id);
+      await db.prepare('DELETE FROM order_items WHERE order_id = ?').run(richiesta.order_id);
+      await db.prepare('DELETE FROM orders WHERE id = ?').run(richiesta.order_id);
     }
-    const rids = db.prepare('SELECT id FROM request_responses WHERE request_id = ?').all(richiesta.id).map(r => r.id);
-    for (const rid of rids) db.prepare('DELETE FROM request_response_items WHERE response_id = ?').run(rid);
-    db.prepare('DELETE FROM request_responses WHERE request_id = ?').run(richiesta.id);
-    db.prepare('DELETE FROM request_items WHERE request_id = ?').run(richiesta.id);
-    db.prepare('DELETE FROM requests WHERE id = ?').run(richiesta.id);
+    const rows = await db.prepare('SELECT id FROM request_responses WHERE request_id = ?').all(richiesta.id);
+    const rids = rows.map(r => r.id);
+    for (const rid of rids) await db.prepare('DELETE FROM request_response_items WHERE response_id = ?').run(rid);
+    await db.prepare('DELETE FROM request_responses WHERE request_id = ?').run(richiesta.id);
+    await db.prepare('DELETE FROM request_items WHERE request_id = ?').run(richiesta.id);
+    await db.prepare('DELETE FROM requests WHERE id = ?').run(richiesta.id);
   });
-  elimina();
+  await elimina();
   res.redirect('/home');
 });
 
 // Elimina richiesta (distributore) — locale: sparisce solo dal suo banco (da confermare + storico)
-app.post('/distributore/richieste/:id/elimina', requireRole('distributore'), (req, res) => {
-  const richiesta = db.prepare('SELECT * FROM requests WHERE id = ?').get(req.params.id);
-  const risposta = richiesta ? db.prepare('SELECT * FROM request_responses WHERE request_id = ? AND distributor_id = ?').get(richiesta.id, req.session.user.distributor_id) : null;
+app.post('/distributore/richieste/:id/elimina', requireRole('distributore'), async (req, res) => {
+  const richiesta = await db.prepare('SELECT * FROM requests WHERE id = ?').get(req.params.id);
+  const risposta = richiesta ? await db.prepare('SELECT * FROM request_responses WHERE request_id = ? AND distributor_id = ?').get(richiesta.id, req.session.user.distributor_id) : null;
   if (!richiesta || !risposta) return res.status(404).render('errore', { titolo: 'Non trovata', messaggio: 'Richiesta non trovata.' });
   // se la richiesta è già ordinata su altro banco, elimina solo la propria risposta
   // se è l'unica risposta rimasta e non è ordinata, elimina anche la richiesta vuota
-  const elimina = db.transaction(() => {
-    db.prepare('DELETE FROM request_response_items WHERE response_id = ?').run(risposta.id);
-    db.prepare('DELETE FROM request_responses WHERE id = ?').run(risposta.id);
-    const rimaste = db.prepare('SELECT COUNT(*) n FROM request_responses WHERE request_id = ?').get(richiesta.id).n;
+  const elimina = db.transaction(async () => {
+    await db.prepare('DELETE FROM request_response_items WHERE response_id = ?').run(risposta.id);
+    await db.prepare('DELETE FROM request_responses WHERE id = ?').run(risposta.id);
+    const rm = await db.prepare('SELECT COUNT(*) n FROM request_responses WHERE request_id = ?').get(richiesta.id);
+    const rimaste = rm ? Number(rm.n) : 0;
     if (rimaste === 0 && richiesta.stato !== 'ordinata') {
-      db.prepare('DELETE FROM request_items WHERE request_id = ?').run(richiesta.id);
-      db.prepare('DELETE FROM requests WHERE id = ?').run(richiesta.id);
+      await db.prepare('DELETE FROM request_items WHERE request_id = ?').run(richiesta.id);
+      await db.prepare('DELETE FROM requests WHERE id = ?').run(richiesta.id);
     }
   });
-  elimina();
+  await elimina();
   res.redirect('/distributore');
 });
 
 // Riepilogo ordine con il distributore scelto.
-app.get('/richieste/:id/offerta/:distributorId', requireRole('cliente'), (req, res) => {
-  const richiesta = richieste.aggiornaScadenza(req.params.id);
+app.get('/richieste/:id/offerta/:distributorId', requireRole('cliente'), async (req, res) => {
+  const richiesta = await richieste.aggiornaScadenza(req.params.id);
   if (!richiesta || richiesta.cliente_id !== req.session.user.id) {
     return res.status(404).render('errore', { titolo: 'Non trovata', messaggio: 'Richiesta non trovata.' });
   }
-  const risposta = db
+  const risposta = await db
     .prepare(
       `SELECT * FROM request_responses WHERE request_id = ? AND distributor_id = ? AND esito = 'confermato'`
     )
@@ -623,8 +631,8 @@ app.get('/richieste/:id/offerta/:distributorId', requireRole('cliente'), (req, r
   }
 
   const modalita = req.query.modalita === 'ritiro' ? 'ritiro' : 'consegna_mezzo_grossista';
-  const offerta = richieste.calcolaOfferta(richiesta.id, req.params.distributorId, { modalita });
-  const cliente = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
+  const offerta = await richieste.calcolaOfferta(richiesta.id, req.params.distributorId, { modalita });
+  const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
 
   res.render('riepilogo', {
     titolo: "Riepilogo dell'ordine",
@@ -633,21 +641,21 @@ app.get('/richieste/:id/offerta/:distributorId', requireRole('cliente'), (req, r
     offerta,
     modalita,
     cliente,
-    ivaPct: pricing.getIvaPct(),
+    ivaPct: await pricing.getIvaPct(),
   });
 });
 
 // ---------- Cliente: ordine ----------
 
-app.post('/ordini', requireRole('cliente'), (req, res) => {
-  const richiesta = richieste.getRichiesta(req.body.request_id);
+app.post('/ordini', requireRole('cliente'), async (req, res) => {
+  const richiesta = await richieste.getRichiesta(req.body.request_id);
   if (!richiesta || richiesta.cliente_id !== req.session.user.id) {
     return res.status(404).render('errore', { titolo: 'Non trovata', messaggio: 'Richiesta non trovata.' });
   }
   if (richiesta.stato === 'ordinata') return res.redirect('/ordini/' + richiesta.order_id);
 
   const distributorId = parseInt(req.body.distributor_id, 10);
-  const risposta = db
+  const risposta = await db
     .prepare(
       `SELECT * FROM request_responses WHERE request_id = ? AND distributor_id = ? AND esito = 'confermato'`
     )
@@ -661,7 +669,7 @@ app.post('/ordini', requireRole('cliente'), (req, res) => {
     });
   }
 
-  const orderId = creaOrdineDaOfferta(richiesta, distributorId, risposta, {
+  const orderId = await creaOrdineDaOfferta(richiesta, distributorId, risposta, {
     modalita: req.body.modalita,
     note: req.body.note,
     destinazione: req.body.destinazione,
@@ -671,15 +679,15 @@ app.post('/ordini', requireRole('cliente'), (req, res) => {
 
 // Creazione dell'ordine a partire da un'offerta confermata: la usano sia la scelta
 // manuale del cliente sia l'assegnazione automatica allo scadere dei 5 minuti.
-function creaOrdineDaOfferta(richiesta, distributorId, risposta, opzioni = {}) {
+async function creaOrdineDaOfferta(richiesta, distributorId, risposta, opzioni = {}) {
   const modalita = opzioni.modalita === 'ritiro' ? 'ritiro' : 'consegna_mezzo_grossista';
   const note = (opzioni.note || '').trim();
-  const cliente = db.prepare('SELECT * FROM users WHERE id = ?').get(richiesta.cliente_id);
+  const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(richiesta.cliente_id);
   const destinazione =
     modalita === 'ritiro'
       ? 'Ritiro al banco'
       : (opzioni.destinazione || '').trim() || cliente.indirizzo_consegna || ddt.indirizzoCompleto(cliente);
-  const { totali } = richieste.calcolaOfferta(richiesta.id, distributorId, { modalita });
+  const { totali } = await richieste.calcolaOfferta(richiesta.id, distributorId, { modalita });
 
   const insertOrder = db.prepare(
     `INSERT INTO orders
@@ -693,13 +701,13 @@ function creaOrdineDaOfferta(richiesta, distributorId, risposta, opzioni = {}) {
        (order_id, product_id, codice_snapshot, nome_snapshot, quantita, prezzo_listino_snapshot,
         sconto_pct_snapshot, prezzo_netto_unitario, subtotale, prezzo_unitario_cliente,
         subtotale_cliente, raee_unitario, raee_riga)
-     VALUES (@order_id, @product_id, @codice_snapshot, @nome_snapshot, @quantita, @prezzo_listino_snapshot,
-             @sconto_pct_snapshot, @prezzo_netto_unitario, @subtotale, @prezzo_unitario_cliente,
-             @subtotale_cliente, @raee_unitario, @raee_riga)`
+     VALUES (?, ?, ?, ?, ?, ?,
+             ?, ?, ?, ?,
+             ?, ?, ?)`
   );
 
-  const creaOrdine = db.transaction(() => {
-    const info = insertOrder.run(
+  const creaOrdine = db.transaction(async () => {
+    const info = await insertOrder.run(
       richiesta.cliente_id,
       modalita,
       note,
@@ -716,23 +724,23 @@ function creaOrdineDaOfferta(richiesta, distributorId, risposta, opzioni = {}) {
       totali.totale_ivato
     );
     const orderId = Number(info.lastInsertRowid);
-    totali.righe.forEach((riga) => insertItem.run({ order_id: orderId, ...riga }));
-    db.prepare(`UPDATE requests SET stato = 'ordinata', order_id = ? WHERE id = ?`).run(
+    for (const riga of totali.righe) await insertItem.run(orderId, riga.product_id, riga.codice_snapshot, riga.nome_snapshot, riga.quantita, riga.prezzo_listino_snapshot, riga.sconto_pct_snapshot, riga.prezzo_netto_unitario, riga.subtotale, riga.prezzo_unitario_cliente, riga.subtotale_cliente, riga.raee_unitario, riga.raee_riga);
+    await db.prepare(`UPDATE requests SET stato = 'ordinata', order_id = ? WHERE id = ?`).run(
       orderId,
       richiesta.id
     );
     // Chiuso l'ordine, gli altri banchi non devono più poter rispondere.
-    db.prepare(
-      `UPDATE request_responses SET esito = 'scaduto', risposto_il = datetime('now')
+    await db.prepare(
+      `UPDATE request_responses SET esito = 'scaduto', risposto_il = NOW()
         WHERE request_id = ? AND esito = 'in_attesa'`
     ).run(richiesta.id);
     return orderId;
   });
 
-  const orderId = creaOrdine();
+  const orderId = await creaOrdine();
 
-  const distributore = db.prepare('SELECT * FROM distributors WHERE id = ?').get(distributorId);
-  notifiche.notificaDistributore(distributorId, {
+  const distributore = await db.prepare('SELECT * FROM distributors WHERE id = ?').get(distributorId);
+  await notifiche.notificaDistributore(distributorId, {
     titolo: 'Nuovo ordine da preparare',
     testo: `${cliente.ragione_sociale} ha scelto ${distributore.nome} — ordine #${orderId}.`,
     link: '/distributore/ordini/' + orderId,
@@ -743,7 +751,7 @@ function creaOrdineDaOfferta(richiesta, distributorId, risposta, opzioni = {}) {
 
   // La richiesta confermata non resta una richiesta: diventa un ordine, e la notifica
   // del cliente lo dice esplicitamente.
-  notifiche.notifica(richiesta.cliente_id, {
+  await notifiche.notifica(richiesta.cliente_id, {
     titolo: opzioni.automatico ? 'Ordine assegnato automaticamente' : 'Ordine inviato',
     testo: opzioni.automatico
       ? `Non hai scelto entro i 5 minuti: l'ordine #${orderId} è andato a ${distributore.nome}, il più veloce.`
@@ -758,24 +766,25 @@ function creaOrdineDaOfferta(richiesta, distributorId, risposta, opzioni = {}) {
 }
 
 // Allo scadere dei 5 minuti senza scelta, l'ordine va al distributore più veloce.
-function assegnaOffertePerScadenza() {
-  richieste.sceltePerScadenza().forEach((r) => {
-    const richiesta = richieste.getRichiesta(r.id);
-    const migliore = richieste.offertaPiuVeloce(r.id);
+async function assegnaOffertePerScadenza() {
+  const scelte = await richieste.sceltePerScadenza();
+  for (const r of scelte) {
+    const richiesta = await richieste.getRichiesta(r.id);
+    const migliore = await richieste.offertaPiuVeloce(r.id);
     if (!richiesta || !migliore) return;
 
-    db.prepare('UPDATE requests SET assegnata_auto = 1 WHERE id = ?').run(r.id);
+    await db.prepare('UPDATE requests SET assegnata_auto = 1 WHERE id = ?').run(r.id);
     try {
-      creaOrdineDaOfferta(richiesta, migliore.distributor_id, migliore, { automatico: true });
+      await creaOrdineDaOfferta(richiesta, migliore.distributor_id, migliore, { automatico: true });
     } catch (err) {
       console.error(`Assegnazione automatica fallita per la richiesta ${r.id}:`, err.message);
     }
-  });
+  }
 }
 
-app.get('/ordini', requireRole('cliente'), (req, res) => {
-  richieste.aggiornaScadenzeAperte();
-  const ordini = db
+app.get('/ordini', requireRole('cliente'), async (req, res) => {
+  await richieste.aggiornaScadenzeAperte();
+  const ordini = await db
     .prepare(
       `SELECT o.*, d.nome AS distributore_nome
          FROM orders o
@@ -785,15 +794,16 @@ app.get('/ordini', requireRole('cliente'), (req, res) => {
     )
     .all(req.session.user.id);
   // tutte le richieste del cliente, ordinate per creazione (nuove prima)
-  const tutte = db
+  const tutte = await db
     .prepare(`SELECT * FROM requests WHERE cliente_id = ? ORDER BY id DESC LIMIT 50`)
     .all(req.session.user.id);
 
   // costruisce le card 3-stati: ogni richiesta è una card, l'ordine ne è la continuazione
-  const cardsAll = tutte.map((r) => {
-    const rAgg = richieste.aggiornaScadenza(r.id) || r;
-    const righe = richieste.righeRichiesta(rAgg.id);
-    const risposte = richieste.risposteRichiesta(rAgg.id);
+  const cardsAll = [];
+  for (const r of tutte) {
+    const rAgg = (await richieste.aggiornaScadenza(r.id)) || r;
+    const righe = await richieste.righeRichiesta(rAgg.id);
+    const risposte = await richieste.risposteRichiesta(rAgg.id);
     let step = 1;
     let offerte = [];
     let ordine = null;
@@ -802,31 +812,31 @@ app.get('/ordini', requireRole('cliente'), (req, res) => {
     let scaduta = false;
     if (rAgg.stato === 'in_attesa') {
       step = 1;
-      secondi = richieste.secondiRimasti(rAgg);
+      secondi = await richieste.secondiRimasti(rAgg);
       if (secondi === 0) scaduta = true;
     } else if (rAgg.stato === 'con_offerte') {
       step = 2;
-      offerte = richieste.offerte(rAgg.id);
-      secondiScelta = offerte.length > 1 ? richieste.secondiPerScegliere(rAgg) : null;
+      offerte = await richieste.offerte(rAgg.id);
+      secondiScelta = offerte.length > 1 ? await richieste.secondiPerScegliere(rAgg) : null;
     } else if (rAgg.stato === 'ordinata' && rAgg.order_id) {
       step = 3;
-      ordine = db.prepare('SELECT * FROM orders WHERE id = ?').get(rAgg.order_id);
+      ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(rAgg.order_id);
     } else if (rAgg.stato === 'ordinata') {
       step = 3;
     } else if (rAgg.stato === 'nessuna_offerta' || rAgg.stato === 'annullata') {
       step = 0;
       scaduta = true;
     }
-    return { richiesta: rAgg, righe, risposte, offerte, ordine, step, secondi, secondiScelta, scaduta };
-  });
+    cardsAll.push({ richiesta: rAgg, righe, risposte, offerte, ordine, step, secondi, secondiScelta, scaduta });
+  }
   const cards = cardsAll.filter(c => c.step >= 1 && c.step <= 3 && !c.scaduta);
   const storico = cardsAll.filter(c => c.scaduta || c.step === 0);
 
   res.render('ordini_cliente', { titolo: 'Stato ordini', ordini, cards, storico, consegna });
 });
 
-app.get('/ordini/:id', requireLogin, (req, res) => {
-  const ordine = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+app.get('/ordini/:id', requireLogin, async (req, res) => {
+  const ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!ordine) return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Ordine non trovato.' });
 
   // un cliente può vedere solo i propri ordini; l'agente li vede tutti
@@ -837,10 +847,10 @@ app.get('/ordini/:id', requireLogin, (req, res) => {
     return res.status(403).render('errore', { titolo: 'Accesso negato', messaggio: 'Accesso non consentito.' });
   }
 
-  const righe = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(ordine.id);
-  const cliente = db.prepare('SELECT * FROM users WHERE id = ?').get(ordine.cliente_id);
+  const righe = await db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(ordine.id);
+  const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(ordine.cliente_id);
   const distributore = ordine.distributor_id
-    ? db.prepare('SELECT * FROM distributors WHERE id = ?').get(ordine.distributor_id)
+    ? await db.prepare('SELECT * FROM distributors WHERE id = ?').get(ordine.distributor_id)
     : null;
 
   res.render('ordine_dettaglio', {
@@ -850,52 +860,52 @@ app.get('/ordini/:id', requireLogin, (req, res) => {
     cliente,
     distributore,
     nuovo: req.query.nuovo === '1',
-    ivaPct: pricing.getIvaPct(),
+    ivaPct: await pricing.getIvaPct(),
   });
 });
 
 // Elimina ordine (cliente) — globale
-app.post('/ordini/:id/elimina', requireRole('cliente'), (req, res) => {
-  const ordine = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+app.post('/ordini/:id/elimina', requireRole('cliente'), async (req, res) => {
+  const ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!ordine || ordine.cliente_id !== req.session.user.id) {
     return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Ordine non trovato.' });
   }
-  const elimina = db.transaction(() => {
-    if (ordine.request_id) db.prepare('UPDATE requests SET order_id = NULL, stato = ? WHERE id = ?').run('annullata', ordine.request_id);
-    db.prepare('DELETE FROM order_items WHERE order_id = ?').run(ordine.id);
-    db.prepare('DELETE FROM orders WHERE id = ?').run(ordine.id);
+  const elimina = db.transaction(async () => {
+    if (ordine.request_id) await db.prepare('UPDATE requests SET order_id = NULL, stato = ? WHERE id = ?').run('annullata', ordine.request_id);
+    await db.prepare('DELETE FROM order_items WHERE order_id = ?').run(ordine.id);
+    await db.prepare('DELETE FROM orders WHERE id = ?').run(ordine.id);
   });
-  elimina();
+  await elimina();
   res.redirect('/ordini');
 });
 
 // Elimina ordine (distributore) — globale
-app.post('/distributore/ordini/:id/elimina', requireRole('distributore'), (req, res) => {
-  const ordine = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+app.post('/distributore/ordini/:id/elimina', requireRole('distributore'), async (req, res) => {
+  const ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!ordine || ordine.distributor_id !== req.session.user.distributor_id) {
     return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Ordine non trovato.' });
   }
-  const elimina = db.transaction(() => {
-    if (ordine.request_id) db.prepare('UPDATE requests SET order_id = NULL, stato = ? WHERE id = ?').run('annullata', ordine.request_id);
-    db.prepare('DELETE FROM order_items WHERE order_id = ?').run(ordine.id);
-    db.prepare('DELETE FROM orders WHERE id = ?').run(ordine.id);
+  const elimina = db.transaction(async () => {
+    if (ordine.request_id) await db.prepare('UPDATE requests SET order_id = NULL, stato = ? WHERE id = ?').run('annullata', ordine.request_id);
+    await db.prepare('DELETE FROM order_items WHERE order_id = ?').run(ordine.id);
+    await db.prepare('DELETE FROM orders WHERE id = ?').run(ordine.id);
   });
-  elimina();
+  await elimina();
   res.redirect('/distributore/ordini');
 });
 
 // ---------- Notifiche ----------
 
-app.get('/notifiche', requireLogin, (req, res) => {
+app.get('/notifiche', requireLogin, async (req, res) => {
   if (req.session.user.ruolo === 'cliente') return res.redirect('/ordini');
   const categoria = notifiche.CATEGORIE[req.query.categoria] ? req.query.categoria : null;
   const sottostato = req.query.sottostato || null;
 
-  const elenco = notifiche.elenco(req.session.user.id, { categoria, sottostato });
-  const conteggi = notifiche.conteggiPerCategoria(req.session.user.id);
-  const sottostati = categoria ? notifiche.conteggiPerSottostato(req.session.user.id, categoria) : [];
+  const elenco = await notifiche.elenco(req.session.user.id, { categoria, sottostato });
+  const conteggi = await notifiche.conteggiPerCategoria(req.session.user.id);
+  const sottostati = categoria ? await notifiche.conteggiPerSottostato(req.session.user.id, categoria) : [];
 
-  notifiche.segnaLette(req.session.user.id);
+  await notifiche.segnaLette(req.session.user.id);
   res.locals.notificheNonLette = 0; // appena lette: la campanella non deve restare accesa
   res.render('notifiche', {
     titolo: 'Notifiche',
@@ -909,28 +919,28 @@ app.get('/notifiche', requireLogin, (req, res) => {
 });
 
 // Notifiche non ancora mostrate: app.js le trasforma in notifica push del browser.
-app.get('/api/notifiche/push', requireLogin, (req, res) => {
-  res.json({ notifiche: notifiche.daMostrare(req.session.user.id) });
+app.get('/api/notifiche/push', requireLogin, async (req, res) => {
+  res.json({ notifiche: await notifiche.daMostrare(req.session.user.id) });
 });
 
 // ---------- Geolocalizzazione (solo con consenso esplicito) ----------
 
 // Il browser chiede il permesso all'utente; qui arriva la posizione solo dopo che l'ha dato.
-app.post('/api/posizione', requireLogin, (req, res) => {
-  const salvata = geo.salvaPosizione(req.session.user.id, {
+app.post('/api/posizione', requireLogin, async (req, res) => {
+  const salvata = await geo.salvaPosizione(req.session.user.id, {
     lat: req.body.lat,
     lng: req.body.lng,
     precisione: req.body.precisione,
   });
   if (!salvata) return res.status(400).json({ ok: false, errore: 'Coordinate non valide.' });
-  res.json({ ok: true, ...geo.statoUtente(req.session.user.id) });
+  res.json({ ok: true, ...await geo.statoUtente(req.session.user.id) });
 });
 
 // Revoca: spegne il consenso e cancella davvero le coordinate salvate.
-app.post('/api/posizione/revoca', requireLogin, (req, res) => {
-  geo.revoca(req.session.user.id);
+app.post('/api/posizione/revoca', requireLogin, async (req, res) => {
+  await geo.revoca(req.session.user.id);
   if (req.session.user.ruolo === 'distributore' && req.session.user.distributor_id) {
-    db.prepare(
+    await db.prepare(
       `UPDATE orders SET tracciamento_attivo = 0 WHERE distributor_id = ? AND tracciamento_attivo = 1`
     ).run(req.session.user.distributor_id);
   }
@@ -938,20 +948,20 @@ app.post('/api/posizione/revoca', requireLogin, (req, res) => {
 });
 
 // Il banco accende o spegne la condivisione del mezzo per un singolo ordine.
-app.post('/api/ordini/:id/tracciamento', requireRole('distributore'), (req, res) => {
-  const ordine = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+app.post('/api/ordini/:id/tracciamento', requireRole('distributore'), async (req, res) => {
+  const ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!ordine || ordine.distributor_id !== req.session.user.distributor_id) {
     return res.status(404).json({ ok: false });
   }
   const attivo = req.body.attivo ? 1 : 0;
-  if (attivo && !geo.statoUtente(req.session.user.id).consenso) {
+  if (attivo && !(await geo.statoUtente(req.session.user.id)).consenso) {
     return res
       .status(400)
       .json({ ok: false, errore: 'Attiva prima la posizione del banco: serve il tuo consenso.' });
   }
-  db.prepare('UPDATE orders SET tracciamento_attivo = ? WHERE id = ?').run(attivo, ordine.id);
+  await db.prepare('UPDATE orders SET tracciamento_attivo = ? WHERE id = ?').run(attivo, ordine.id);
   if (attivo) {
-    notifiche.notifica(ordine.cliente_id, {
+    await notifiche.notifica(ordine.cliente_id, {
       titolo: 'Consegna in viaggio',
       testo: `Puoi seguire in tempo reale il mezzo che porta l'ordine #${ordine.id}.`,
       link: '/ordini/' + ordine.id,
@@ -961,8 +971,8 @@ app.post('/api/ordini/:id/tracciamento', requireRole('distributore'), (req, res)
 });
 
 // Il cliente segue il mezzo: risponde solo se il banco sta condividendo per quell'ordine.
-app.get('/api/ordini/:id/posizione', requireLogin, (req, res) => {
-  const ordine = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+app.get('/api/ordini/:id/posizione', requireLogin, async (req, res) => {
+  const ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!ordine) return res.status(404).json({ attivo: false });
   const utente = req.session.user;
   const suo =
@@ -973,10 +983,8 @@ app.get('/api/ordini/:id/posizione', requireLogin, (req, res) => {
 
   if (!ordine.tracciamento_attivo || !ordine.distributor_id) return res.json({ attivo: false });
 
-  const distributore = db
-    .prepare('SELECT geo_lat, geo_lng, nome FROM distributors WHERE id = ?')
-    .get(ordine.distributor_id);
-  const cliente = db
+  const distributore = await db.prepare('SELECT geo_lat, geo_lng, nome FROM distributors WHERE id = ?').get(ordine.distributor_id);
+  const cliente = await db
     .prepare('SELECT geo_lat, geo_lng, geo_consenso FROM users WHERE id = ?')
     .get(ordine.cliente_id);
 
@@ -1014,35 +1022,35 @@ function distanzaClienteBanco(cliente, distributore) {
 }
 
 // Riepilogo dei numeri che il banco deve avere sotto gli occhi.
-function contatoriBanco(distributorId) {
-  const q = (sql, ...p) => db.prepare(sql).get(distributorId, ...p).n;
+async function contatoriBanco(distributorId) {
+  const q = async (sql, ...p) => (await db.prepare(sql).get(distributorId, ...p)).n;
   return {
-    daRispondere: q(
+    daRispondere: await q(
       `SELECT COUNT(*) AS n FROM request_responses rr JOIN requests r ON r.id = rr.request_id
-        WHERE rr.distributor_id = ? AND rr.esito = 'in_attesa' AND r.scade_il > datetime('now')`
+        WHERE rr.distributor_id = ? AND rr.esito = 'in_attesa' AND r.scade_il > NOW()`
     ),
-    daPreparare: q(
+    daPreparare: await q(
       `SELECT COUNT(*) AS n FROM orders WHERE distributor_id = ? AND stato = 'inviato'`
     ),
-    inPreparazione: q(
+    inPreparazione: await q(
       `SELECT COUNT(*) AS n FROM orders WHERE distributor_id = ? AND stato = 'in_evasione'`
     ),
-    daApprovare: q(
+    daApprovare: await q(
       `SELECT COUNT(*) AS n FROM client_distributors WHERE distributor_id = ? AND stato = 'in_attesa'`
     ),
   };
 }
 
-app.get('/distributore', requireRole('distributore'), (req, res) => {
-  richieste.aggiornaScadenzeAperte();
-  const distributore = db
+app.get('/distributore', requireRole('distributore'), async (req, res) => {
+  await richieste.aggiornaScadenzeAperte();
+  const distributore = await db
     .prepare('SELECT * FROM distributors WHERE id = ?')
     .get(req.session.user.distributor_id);
 
-  const elenco = db
+  const elenco = await db
     .prepare(
       `SELECT r.*, rr.esito, u.ragione_sociale AS cliente_nome,
-              CAST((julianday(r.scade_il) - julianday('now')) * 86400 AS INTEGER) AS secondi,
+              EXTRACT(EPOCH FROM (r.scade_il - NOW()))::int AS secondi,
               (SELECT SUM(quantita) FROM request_items ri WHERE ri.request_id = r.id) AS pezzi
          FROM request_responses rr
          JOIN requests r ON r.id = rr.request_id
@@ -1056,18 +1064,18 @@ app.get('/distributore', requireRole('distributore'), (req, res) => {
   res.render('distributore_richieste', {
     titolo: 'Richieste al banco',
     distributore,
-    contatori: contatoriBanco(req.session.user.distributor_id),
+    contatori: await contatoriBanco(req.session.user.distributor_id),
     // Aperte finché la finestra non scade, anche se un altro banco ha già confermato.
     daRispondere: elenco.filter((r) => r.esito === 'in_attesa' && r.secondi > 0),
     storico: elenco.filter((r) => !(r.esito === 'in_attesa' && r.secondi > 0)),
   });
 });
 
-app.get('/distributore/richieste/:id', requireRole('distributore'), (req, res) => {
-  const richiesta = richieste.aggiornaScadenza(req.params.id);
+app.get('/distributore/richieste/:id', requireRole('distributore'), async (req, res) => {
+  const richiesta = await richieste.aggiornaScadenza(req.params.id);
   const distributorId = req.session.user.distributor_id;
   const risposta = richiesta
-    ? db
+    ? await db
         .prepare('SELECT * FROM request_responses WHERE request_id = ? AND distributor_id = ?')
         .get(richiesta.id, distributorId)
     : null;
@@ -1075,14 +1083,14 @@ app.get('/distributore/richieste/:id', requireRole('distributore'), (req, res) =
     return res.status(404).render('errore', { titolo: 'Non trovata', messaggio: 'Richiesta non trovata.' });
   }
 
-  const cliente = db.prepare('SELECT * FROM users WHERE id = ?').get(richiesta.cliente_id);
-  const offerta = richieste.calcolaOfferta(richiesta.id, distributorId);
-  const distributore = db.prepare('SELECT * FROM distributors WHERE id = ?').get(distributorId);
+  const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(richiesta.cliente_id);
+  const offerta = await richieste.calcolaOfferta(richiesta.id, distributorId);
+  const distributore = await db.prepare('SELECT * FROM distributors WHERE id = ?').get(distributorId);
   const ordine = richiesta.order_id
-    ? db.prepare('SELECT * FROM orders WHERE id = ?').get(richiesta.order_id)
+    ? await db.prepare('SELECT * FROM orders WHERE id = ?').get(richiesta.order_id)
     : null;
 
-  const secondi = richieste.secondiRimasti(richiesta);
+  const secondi = await richieste.secondiRimasti(richiesta);
   res.render('distributore_dettaglio', {
     titolo: 'Richiesta #' + richiesta.id,
     richiesta,
@@ -1101,15 +1109,15 @@ app.get('/distributore/richieste/:id', requireRole('distributore'), (req, res) =
     indirizzoCliente: ddt.indirizzoCompleto(cliente),
     distanza: distanzaClienteBanco(cliente, distributore),
     // Sconto già concordato con questo cliente: precompila il modulo.
-    scontoCliente: richieste.scontoCliente(distributorId, richiesta.cliente_id),
-    servizioPct: pricing.getServizioPct(),
+    scontoCliente: await richieste.scontoCliente(distributorId, richiesta.cliente_id),
+    servizioPct: await pricing.getServizioPct(),
     errore: req.query.errore || null,
   });
 });
 
 // Il banco risponde riga per riga: campi disp_<product_id> con la quantità che riesce a
 // coprire, più il tempo di partenza e quello di consegna. Il pulsante "rifiuta" azzera tutto.
-app.post('/distributore/richieste/:id/rispondi', requireRole('distributore'), (req, res) => {
+app.post('/distributore/richieste/:id/rispondi', requireRole('distributore'), async (req, res) => {
   const righe = {};
   const sconti = {};
   for (const [chiave, valore] of Object.entries(req.body)) {
@@ -1122,7 +1130,7 @@ app.post('/distributore/richieste/:id/rispondi', requireRole('distributore'), (r
     }
   }
 
-  const esitoRisposta = richieste.rispondi(req.params.id, req.session.user.distributor_id, {
+  const esitoRisposta = await richieste.rispondi(req.params.id, req.session.user.distributor_id, {
     righe,
     sconti,
     rifiuta: req.body.azione === 'rifiuta',
@@ -1141,8 +1149,8 @@ app.post('/distributore/richieste/:id/rispondi', requireRole('distributore'), (r
 
 // ---------- Distributore: anagrafiche clienti da approvare ----------
 
-app.get('/distributore/clienti', requireRole('distributore'), (req, res) => {
-  const elenco = anagrafiche.clientiDelDistributore(req.session.user.distributor_id);
+app.get('/distributore/clienti', requireRole('distributore'), async (req, res) => {
+  const elenco = await anagrafiche.clientiDelDistributore(req.session.user.distributor_id);
   res.render('distributore_clienti', {
     titolo: 'Clienti',
     daApprovare: elenco.filter((c) => c.stato === 'in_attesa'),
@@ -1152,10 +1160,10 @@ app.get('/distributore/clienti', requireRole('distributore'), (req, res) => {
   });
 });
 
-app.get('/distributore/clienti/:id', requireRole('distributore'), (req, res) => {
+app.get('/distributore/clienti/:id', requireRole('distributore'), async (req, res) => {
   const distributorId = req.session.user.distributor_id;
-  const cliente = db.prepare(`SELECT * FROM users WHERE id = ? AND ruolo = 'cliente'`).get(req.params.id);
-  const rapporto = cliente ? anagrafiche.legame(distributorId, cliente.id) : null;
+  const cliente = await db.prepare(`SELECT * FROM users WHERE id = ? AND ruolo = 'cliente'`).get(req.params.id);
+  const rapporto = cliente ? await anagrafiche.legame(distributorId, cliente.id) : null;
   if (!cliente || !rapporto) {
     return res.status(404).render('errore', {
       titolo: 'Non trovato',
@@ -1171,18 +1179,16 @@ app.get('/distributore/clienti/:id', requireRole('distributore'), (req, res) => 
     rapporto,
     tipi: anagrafiche.TIPI_SOGGETTO,
     indirizzoCliente: ddt.indirizzoCompleto(cliente),
-    regole: anagrafiche.regoleSconto(distributorId, cliente.id),
-    marchi: catalogo.marchi(),
-    macro: catalogo.macroCategorie(),
-    famiglie: catalogo.marchi().flatMap((m) =>
-      catalogo.famiglieDelMarchio(m.slug).map((f) => ({ ...f, marchio: m.nome, marchio_slug: m.slug }))
-    ),
+    regole: await anagrafiche.regoleSconto(distributorId, cliente.id),
+    marchi: await catalogo.marchi(),
+     macro: await catalogo.macroCategorie(),
+    famiglie: (await (async () => { const ms = await catalogo.marchi(); const out=[]; for (const m of ms) { const fs = await catalogo.famiglieDelMarchio(m.slug); for (const f of fs) out.push({ ...f, marchio: m.nome, marchio_slug: m.slug }); } return out; })()),
     salvato: req.query.salvato === '1',
   });
 });
 
-app.post('/distributore/clienti/:id/decidi', requireRole('distributore'), (req, res) => {
-  const esito = anagrafiche.decidi(req.session.user.distributor_id, parseInt(req.params.id, 10), {
+app.post('/distributore/clienti/:id/decidi', requireRole('distributore'), async (req, res) => {
+  const esito = await anagrafiche.decidi(req.session.user.distributor_id, parseInt(req.params.id, 10), {
     approva: req.body.azione === 'approva',
     codiceCliente: req.body.codice_cliente,
     note: req.body.note,
@@ -1194,10 +1200,10 @@ app.post('/distributore/clienti/:id/decidi', requireRole('distributore'), (req, 
 });
 
 // Sconti per ambito: i campi arrivano come sconto_<ambito>_<chiave>.
-app.post('/distributore/clienti/:id/sconti', requireRole('distributore'), (req, res) => {
+app.post('/distributore/clienti/:id/sconti', requireRole('distributore'), async (req, res) => {
   const distributorId = req.session.user.distributor_id;
   const clienteId = parseInt(req.params.id, 10);
-  if (!anagrafiche.legame(distributorId, clienteId)) {
+  if (!await anagrafiche.legame(distributorId, clienteId)) {
     return res.status(403).render('errore', { titolo: 'Accesso negato', messaggio: 'Cliente non tuo.' });
   }
 
@@ -1211,24 +1217,24 @@ app.post('/distributore/clienti/:id/sconti', requireRole('distributore'), (req, 
     perRegola.get(chiaveRegola)[Number(m[1]) - 1] = valore;
   }
 
-  perRegola.forEach((scaglioni, chiaveRegola) => {
+  for (const [chiaveRegola, scaglioni] of perRegola) {
     const taglio = chiaveRegola.indexOf('|');
-    anagrafiche.salvaRegola(
+    await anagrafiche.salvaRegola(
       distributorId,
       clienteId,
       chiaveRegola.slice(0, taglio),
       chiaveRegola.slice(taglio + 1),
       scaglioni
     );
-  });
+  }
 
   res.redirect('/distributore/clienti/' + clienteId + '?salvato=1');
 });
 
 // ---------- Distributore: ordini ricevuti, preparazione e bolla ----------
 
-app.get('/distributore/ordini', requireRole('distributore'), (req, res) => {
-  const ordini = db
+app.get('/distributore/ordini', requireRole('distributore'), async (req, res) => {
+  const ordini = await db
     .prepare(
       `SELECT o.*, u.ragione_sociale AS cliente_nome, u.citta AS cliente_citta
          FROM orders o
@@ -1240,34 +1246,34 @@ app.get('/distributore/ordini', requireRole('distributore'), (req, res) => {
 
   res.render('distributore_ordini', {
     titolo: 'Ordini da evadere',
-    contatori: contatoriBanco(req.session.user.distributor_id),
+    contatori: await contatoriBanco(req.session.user.distributor_id),
     ordini,
   });
 });
 
 // Carica un ordine verificando che appartenga al banco loggato.
-function ordineDelBanco(req) {
-  const ordine = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+async function ordineDelBanco(req) {
+  const ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!ordine || ordine.distributor_id !== req.session.user.distributor_id) return null;
   return ordine;
 }
 
-app.get('/distributore/ordini/:id', requireRole('distributore'), (req, res) => {
-  const ordine = ordineDelBanco(req);
+app.get('/distributore/ordini/:id', requireRole('distributore'), async (req, res) => {
+  const ordine = await ordineDelBanco(req);
   if (!ordine) {
     return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Ordine non trovato.' });
   }
 
-  const cliente = db.prepare('SELECT * FROM users WHERE id = ?').get(ordine.cliente_id);
-  const distributore = db
+  const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(ordine.cliente_id);
+  const distributore = await db
     .prepare('SELECT * FROM distributors WHERE id = ?')
     .get(ordine.distributor_id);
-  const righe = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(ordine.id);
+  const righe = await db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(ordine.id);
   const risposta = ordine.request_id
-    ? richieste.getRisposta(ordine.request_id, ordine.distributor_id)
+    ? await richieste.getRisposta(ordine.request_id, ordine.distributor_id)
     : null;
   const mancanti = ordine.request_id
-    ? richieste.calcolaOfferta(ordine.request_id, ordine.distributor_id).mancanti
+    ? await richieste.calcolaOfferta(ordine.request_id, ordine.distributor_id).mancanti
     : [];
 
   res.render('distributore_ordine', {
@@ -1280,21 +1286,21 @@ app.get('/distributore/ordini/:id', requireRole('distributore'), (req, res) => {
     mancanti,
     indirizzoCliente: ddt.indirizzoCompleto(cliente),
     distanza: distanzaClienteBanco(cliente, distributore),
-    ivaPct: pricing.getIvaPct(),
+    ivaPct: await pricing.getIvaPct(),
     errore: req.query.errore || null,
   });
 });
 
-app.post('/distributore/ordini/:id/preparazione', requireRole('distributore'), (req, res) => {
-  const ordine = ordineDelBanco(req);
+app.post('/distributore/ordini/:id/preparazione', requireRole('distributore'), async (req, res) => {
+  const ordine = await ordineDelBanco(req);
   if (!ordine) return res.redirect('/distributore/ordini');
   if (ordine.stato === 'inviato') {
-    db.prepare(
-      `UPDATE orders SET stato = 'in_evasione', in_evasione_il = datetime('now'),
-                         preso_in_carico_il = datetime('now')
+    await db.prepare(
+      `UPDATE orders SET stato = 'in_evasione', in_evasione_il = NOW(),
+                         preso_in_carico_il = NOW()
         WHERE id = ?`
     ).run(ordine.id);
-    notifiche.notifica(ordine.cliente_id, {
+    await notifiche.notifica(ordine.cliente_id, {
       titolo: 'Ordine in preparazione',
       testo: `Il banco sta preparando il tuo ordine #${ordine.id}.`,
       link: '/ordini/' + ordine.id,
@@ -1304,8 +1310,8 @@ app.post('/distributore/ordini/:id/preparazione', requireRole('distributore'), (
 });
 
 // Emissione della bolla / DDT: assegna il numero progressivo e segna la merce partita.
-app.post('/distributore/ordini/:id/ddt', requireRole('distributore'), (req, res) => {
-  const ordine = ordineDelBanco(req);
+app.post('/distributore/ordini/:id/ddt', requireRole('distributore'), async (req, res) => {
+  const ordine = await ordineDelBanco(req);
   if (!ordine) return res.redirect('/distributore/ordini');
   if (ordine.stato === 'inviato') {
     return res.redirect(
@@ -1316,7 +1322,7 @@ app.post('/distributore/ordini/:id/ddt', requireRole('distributore'), (req, res)
     );
   }
 
-  const numero = ddt.emetti(ordine, {
+  const numero = await ddt.emetti(ordine, {
     colli: req.body.colli,
     aspetto: req.body.aspetto,
     trasporto: req.body.trasporto,
@@ -1324,7 +1330,7 @@ app.post('/distributore/ordini/:id/ddt', requireRole('distributore'), (req, res)
     note: req.body.note,
   });
 
-  notifiche.notifica(ordine.cliente_id, {
+  await notifiche.notifica(ordine.cliente_id, {
     titolo: 'Merce in partenza',
     testo: `Ordine #${ordine.id}: emessa la bolla n. ${numero}. Puoi vedere il DDT in app.`,
     link: '/ddt/' + ordine.id,
@@ -1335,8 +1341,8 @@ app.post('/distributore/ordini/:id/ddt', requireRole('distributore'), (req, res)
 
 // ---------- Bolla / DDT ----------
 
-app.get('/ddt/:id', requireLogin, (req, res) => {
-  const documento = ddt.documento(req.params.id);
+app.get('/ddt/:id', requireLogin, async (req, res) => {
+  const documento = await ddt.documento(req.params.id);
   if (!documento) {
     return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Documento non trovato.' });
   }
@@ -1364,14 +1370,14 @@ app.get('/ddt/:id', requireLogin, (req, res) => {
     ...documento,
     indirizzoMittente: ddt.indirizzoCompleto(documento.distributore),
     indirizzoCliente: ddt.indirizzoCompleto(documento.cliente),
-    ivaPct: pricing.getIvaPct(),
+    ivaPct: await pricing.getIvaPct(),
   });
 });
 
 // ---------- Agente: vista ordini ----------
 
-app.get('/agente/ordini', requireRole('agente'), (req, res) => {
-  const ordini = db
+app.get('/agente/ordini', requireRole('agente'), async (req, res) => {
+  const ordini = await db
     .prepare(
       `SELECT o.*, u.ragione_sociale AS cliente_nome, d.nome AS distributore_nome
          FROM orders o
@@ -1387,13 +1393,15 @@ app.get('/agente/ordini', requireRole('agente'), (req, res) => {
 
 // Le richieste scadono anche se nessuno sta guardando una pagina: così la notifica
 // "nessuna conferma" arriva comunque allo scadere dei 10 minuti.
-richieste.aggiornaScadenzeAperte();
-assegnaOffertePerScadenza();
-setInterval(() => {
+(async () => {
+  try { await richieste.aggiornaScadenzeAperte(); } catch {}
+  try { await assegnaOffertePerScadenza(); } catch {}
+})();
+setInterval(async () => {
   try {
-    richieste.aggiornaScadenzeAperte();
+    await richieste.aggiornaScadenzeAperte();
     // Passati i 5 minuti senza scelta, l'ordine va al distributore più veloce.
-    assegnaOffertePerScadenza();
+    await assegnaOffertePerScadenza();
   } catch (err) {
     console.error('Errore nel controllo scadenze:', err.message);
   }

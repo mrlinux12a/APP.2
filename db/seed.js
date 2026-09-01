@@ -10,7 +10,7 @@ const ZONA = 'Genova';
 // ATTENZIONE: partite IVA, codici fiscali e indirizzi qui sotto sono valori di comodo per la
 // demo, non dati reali delle aziende citate. Vanno sostituiti con le anagrafiche vere prima
 // di emettere qualsiasi documento fiscale.
-function upsertUser(u) {
+async function upsertUser(u) {
   const dati = {
     distributor_id: null,
     zona: ZONA,
@@ -29,13 +29,13 @@ function upsertUser(u) {
     password_hash: bcrypt.hashSync(u.password, 10),
   };
   delete dati.password;
-  db.prepare(
+  await db.prepare(
     `INSERT INTO users (ruolo, username, password_hash, ragione_sociale, email, telefono,
                         distributor_id, zona, partita_iva, codice_fiscale, indirizzo, cap,
                         citta, provincia, sdi_pec, indirizzo_consegna, referente)
-     VALUES (@ruolo, @username, @password_hash, @ragione_sociale, @email, @telefono,
-             @distributor_id, @zona, @partita_iva, @codice_fiscale, @indirizzo, @cap,
-             @citta, @provincia, @sdi_pec, @indirizzo_consegna, @referente)
+     VALUES (?, ?, ?, ?, ?, ?,
+             ?, ?, ?, ?, ?, ?,
+             ?, ?, ?, ?, ?)
      ON CONFLICT(username) DO UPDATE SET
        ruolo = excluded.ruolo,
        password_hash = excluded.password_hash,
@@ -53,25 +53,25 @@ function upsertUser(u) {
        sdi_pec = excluded.sdi_pec,
        indirizzo_consegna = excluded.indirizzo_consegna,
        referente = excluded.referente`
-  ).run(dati);
+  ).run(dati.ruolo, dati.username, dati.password_hash, dati.ragione_sociale, dati.email, dati.telefono, dati.distributor_id, dati.zona, dati.partita_iva, dati.codice_fiscale, dati.indirizzo, dati.cap, dati.citta, dati.provincia, dati.sdi_pec, dati.indirizzo_consegna, dati.referente);
 }
 
-function upsertMacro(m) {
-  db.prepare(
+async function upsertMacro(m) {
+  await db.prepare(
     `INSERT INTO macro_categorie (slug, nome, icona, descrizione, ordine)
-     VALUES (@slug, @nome, @icona, @descrizione, @ordine)
+     VALUES (?, ?, ?, ?, ?)
      ON CONFLICT(slug) DO UPDATE SET
        nome = excluded.nome,
        icona = excluded.icona,
        descrizione = excluded.descrizione,
        ordine = excluded.ordine`
-  ).run(m);
+  ).run(m.slug, m.nome, m.icona, m.descrizione, m.ordine);
 }
 
-function upsertProduct(p) {
-  db.prepare(
+async function upsertProduct(p) {
+  await db.prepare(
     `INSERT INTO products (codice, nome, categoria, macro_slug, prezzo_listino, sconto_base_pct, disponibilita)
-     VALUES (@codice, @nome, @categoria, @macro_slug, @prezzo_listino, @sconto_base_pct, @disponibilita)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(codice) DO UPDATE SET
        nome = excluded.nome,
        categoria = excluded.categoria,
@@ -79,18 +79,18 @@ function upsertProduct(p) {
        prezzo_listino = excluded.prezzo_listino,
        sconto_base_pct = excluded.sconto_base_pct,
        disponibilita = excluded.disponibilita,
-       aggiornato_il = datetime('now')`
-  ).run(p);
+       aggiornato_il = NOW()`
+  ).run(p.codice, p.nome, p.categoria, p.macro_slug, p.prezzo_listino, p.sconto_base_pct, p.disponibilita);
 }
 
-function upsertDistributor(d) {
-  db.prepare(
+async function upsertDistributor(d) {
+  await db.prepare(
     `INSERT INTO distributors (nome, filiale, zona, consegna_ore_default, costo_consegna, attivo,
                                ragione_sociale, partita_iva, indirizzo, cap, citta, provincia,
                                telefono, email)
-     VALUES (@nome, @filiale, @zona, @consegna_ore_default, @costo_consegna, 1,
-             @ragione_sociale, @partita_iva, @indirizzo, @cap, @citta, @provincia,
-             @telefono, @email)
+     VALUES (?, ?, ?, ?, ?, 1,
+             ?, ?, ?, ?, ?, ?,
+             ?, ?)
      ON CONFLICT(nome) DO UPDATE SET
        filiale = excluded.filiale,
        zona = excluded.zona,
@@ -105,18 +105,18 @@ function upsertDistributor(d) {
        provincia = excluded.provincia,
        telefono = excluded.telefono,
        email = excluded.email`
-  ).run(d);
+  ).run(d.nome, d.filiale, d.zona, d.consegna_ore_default, d.costo_consegna, d.ragione_sociale, d.partita_iva, d.indirizzo, d.cap, d.citta, d.provincia, d.telefono, d.email);
   return db.prepare('SELECT * FROM distributors WHERE nome = ?').get(d.nome);
 }
 
-function upsertListino({ distributor_id, product_id, prezzo_listino, sconto_base_pct }) {
-  db.prepare(
+async function upsertListino({ distributor_id, product_id, prezzo_listino, sconto_base_pct }) {
+  await db.prepare(
     `INSERT INTO distributor_products (distributor_id, product_id, prezzo_listino, sconto_base_pct)
-     VALUES (@distributor_id, @product_id, @prezzo_listino, @sconto_base_pct)
+     VALUES (?, ?, ?, ?)
      ON CONFLICT(distributor_id, product_id) DO UPDATE SET
        prezzo_listino = excluded.prezzo_listino,
        sconto_base_pct = excluded.sconto_base_pct`
-  ).run({ distributor_id, product_id, prezzo_listino, sconto_base_pct });
+  ).run(distributor_id, product_id, prezzo_listino, sconto_base_pct);
 }
 
 // ---------- Macro categorie merceologiche (home cliente) ----------
@@ -231,110 +231,124 @@ const NON_TRATTATI = {
 
 // ---------- Esecuzione ----------
 
-macro.forEach(upsertMacro);
-prodotti.forEach(upsertProduct);
+async function main() {
+  await db.ensureInit();
+  for (const m of macro) await upsertMacro(m);
+  for (const p of prodotti) await upsertProduct(p);
 
-const distributoriSalvati = distributori.map(upsertDistributor);
+  const distributoriSalvati = [];
+  for (const d of distributori) {
+    const saved = await upsertDistributor(d);
+    distributoriSalvati.push(saved);
+  }
 
-const prodottiDb = db.prepare('SELECT * FROM products').all();
-let righeListino = 0;
-distributoriSalvati.forEach((d, distIdx) => {
-  const esclusi = NON_TRATTATI[d.nome] || [];
-  prodottiDb.forEach((p) => {
-    if (esclusi.includes(p.codice)) return;
-    const bonus = GRIGLIA_SCONTI[p.id % 3][distIdx];
-    const sconto = Math.min(45, Math.round((p.sconto_base_pct + bonus) * 10) / 10);
-    upsertListino({
+  const prodottiDb = await db.prepare('SELECT * FROM products').all();
+  let righeListino = 0;
+  for (let distIdx = 0; distIdx < distributoriSalvati.length; distIdx++) {
+    const d = distributoriSalvati[distIdx];
+    const esclusi = NON_TRATTATI[d.nome] || [];
+    for (const p of prodottiDb) {
+      if (esclusi.includes(p.codice)) continue;
+      const bonus = GRIGLIA_SCONTI[p.id % 3][distIdx];
+      const sconto = Math.min(45, Math.round((p.sconto_base_pct + bonus) * 10) / 10);
+      await upsertListino({
+        distributor_id: d.id,
+        product_id: p.id,
+        prezzo_listino: p.prezzo_listino,
+        sconto_base_pct: sconto,
+      });
+      righeListino += 1;
+    }
+  }
+
+  const utenti = [
+    {
+      ruolo: 'agente', username: 'agente', password: 'agente123',
+      ragione_sociale: 'Grossista Demo — Agente', email: 'agente@example.com',
+    },
+    {
+      ruolo: 'cliente', username: 'rossi', password: 'cliente123',
+      ragione_sociale: 'Rossi Impianti S.r.l.', referente: 'Marco Rossi',
+      email: 'rossi@example.com', telefono: '333 0000001',
+      partita_iva: '02345678911', codice_fiscale: '02345678911',
+      indirizzo: 'Via Tortona 3', cap: '16139', citta: 'Genova', provincia: 'GE',
+      sdi_pec: 'M5UXCR1', indirizzo_consegna: 'Cantiere Via Tortona 3, 16139 Genova (GE)',
+    },
+    {
+      ruolo: 'cliente', username: 'bianchi', password: 'cliente123',
+      ragione_sociale: 'Idraulica Bianchi S.n.c.', referente: 'Luca Bianchi',
+      email: 'bianchi@example.com', telefono: '333 0000002',
+      partita_iva: '02345678912', codice_fiscale: '02345678912',
+      indirizzo: 'Via Canevari 55', cap: '16137', citta: 'Genova', provincia: 'GE',
+      sdi_pec: 'idraulicabianchi@pec.example', indirizzo_consegna: 'Via Canevari 55, 16137 Genova (GE)',
+    },
+    {
+      ruolo: 'cliente', username: 'verdi', password: 'cliente123',
+      ragione_sociale: 'Termoidraulica Verdi S.r.l.', referente: 'Anna Verdi',
+      email: 'verdi@example.com', telefono: '333 0000003',
+      partita_iva: '02345678913', codice_fiscale: '02345678913',
+      indirizzo: 'Via Struppa 210', cap: '16165', citta: 'Genova', provincia: 'GE',
+      sdi_pec: 'KRRH6B9', indirizzo_consegna: 'Magazzino Via Struppa 210, 16165 Genova (GE)',
+    },
+  ];
+
+  // Un profilo operatore per ogni banco distributore. I due richiesti — AFIS e CAMBIELLI —
+  // hanno anche il referente di banco compilato.
+  const REFERENTI_BANCO = {
+    'AFIS SPA': 'Banco AFIS — Spataro',
+    'CAMBIELLI SPA': 'Banco CAMBIELLI — Campi',
+    'BOREA SRL': 'Banco BOREA — Fegino',
+    'FIDRA SPA': 'Banco FIDRA — Pegli',
+  };
+
+  for (const d of distributoriSalvati) {
+    const username = d.nome.split(' ')[0].toLowerCase();
+    utenti.push({
+      ruolo: 'distributore',
+      username,
+      password: 'banco123',
+      ragione_sociale: d.ragione_sociale || d.nome,
+      referente: REFERENTI_BANCO[d.nome] || d.filiale,
+      email: d.email,
+      telefono: d.telefono,
       distributor_id: d.id,
-      product_id: p.id,
-      prezzo_listino: p.prezzo_listino,
-      sconto_base_pct: sconto,
+      partita_iva: d.partita_iva,
+      indirizzo: d.indirizzo,
+      cap: d.cap,
+      citta: d.citta,
+      provincia: d.provincia,
     });
-    righeListino += 1;
-  });
-});
+  }
 
-const utenti = [
-  {
-    ruolo: 'agente', username: 'agente', password: 'agente123',
-    ragione_sociale: 'Grossista Demo — Agente', email: 'agente@example.com',
-  },
-  {
-    ruolo: 'cliente', username: 'rossi', password: 'cliente123',
-    ragione_sociale: 'Rossi Impianti S.r.l.', referente: 'Marco Rossi',
-    email: 'rossi@example.com', telefono: '333 0000001',
-    partita_iva: '02345678911', codice_fiscale: '02345678911',
-    indirizzo: 'Via Tortona 3', cap: '16139', citta: 'Genova', provincia: 'GE',
-    sdi_pec: 'M5UXCR1', indirizzo_consegna: 'Cantiere Via Tortona 3, 16139 Genova (GE)',
-  },
-  {
-    ruolo: 'cliente', username: 'bianchi', password: 'cliente123',
-    ragione_sociale: 'Idraulica Bianchi S.n.c.', referente: 'Luca Bianchi',
-    email: 'bianchi@example.com', telefono: '333 0000002',
-    partita_iva: '02345678912', codice_fiscale: '02345678912',
-    indirizzo: 'Via Canevari 55', cap: '16137', citta: 'Genova', provincia: 'GE',
-    sdi_pec: 'idraulicabianchi@pec.example', indirizzo_consegna: 'Via Canevari 55, 16137 Genova (GE)',
-  },
-  {
-    ruolo: 'cliente', username: 'verdi', password: 'cliente123',
-    ragione_sociale: 'Termoidraulica Verdi S.r.l.', referente: 'Anna Verdi',
-    email: 'verdi@example.com', telefono: '333 0000003',
-    partita_iva: '02345678913', codice_fiscale: '02345678913',
-    indirizzo: 'Via Struppa 210', cap: '16165', citta: 'Genova', provincia: 'GE',
-    sdi_pec: 'KRRH6B9', indirizzo_consegna: 'Magazzino Via Struppa 210, 16165 Genova (GE)',
-  },
-];
+  for (const u of utenti) await upsertUser(u);
 
-// Un profilo operatore per ogni banco distributore. I due richiesti — AFIS e CAMBIELLI —
-// hanno anche il referente di banco compilato.
-const REFERENTI_BANCO = {
-  'AFIS SPA': 'Banco AFIS — Spataro',
-  'CAMBIELLI SPA': 'Banco CAMBIELLI — Campi',
-  'BOREA SRL': 'Banco BOREA — Fegino',
-  'FIDRA SPA': 'Banco FIDRA — Pegli',
-};
-
-distributoriSalvati.forEach((d) => {
-  const username = d.nome.split(' ')[0].toLowerCase();
-  utenti.push({
-    ruolo: 'distributore',
-    username,
-    password: 'banco123',
-    ragione_sociale: d.ragione_sociale || d.nome,
-    referente: REFERENTI_BANCO[d.nome] || d.filiale,
-    email: d.email,
-    telefono: d.telefono,
-    distributor_id: d.id,
-    partita_iva: d.partita_iva,
-    indirizzo: d.indirizzo,
-    cap: d.cap,
-    citta: d.citta,
-    provincia: d.provincia,
-  });
-});
-
-utenti.forEach(upsertUser);
-
-// I clienti demo risultano già approvati da tutti i banchi, altrimenti non potrebbero
-// inviare richieste. Le anagrafiche create dalla registrazione partono da 'in_attesa'.
-const insLegame = db.prepare(
-  `INSERT INTO client_distributors (cliente_id, distributor_id, stato, codice_cliente, deciso_il)
-   VALUES (?, ?, 'approvato', ?, datetime('now'))
-   ON CONFLICT(cliente_id, distributor_id) DO NOTHING`
-);
-let legami = 0;
-db.prepare(`SELECT id, username FROM users WHERE ruolo = 'cliente'`)
-  .all()
-  .forEach((c) => {
-    distributoriSalvati.forEach((d) => {
-      insLegame.run(c.id, d.id, 'DEMO-' + c.username.toUpperCase());
+  // I clienti demo risultano già approvati da tutti i banchi, altrimenti non potrebbero
+  // inviare richieste. Le anagrafiche create dalla registrazione partono da 'in_attesa'.
+  const insLegame = db.prepare(
+    `INSERT INTO client_distributors (cliente_id, distributor_id, stato, codice_cliente, deciso_il)
+     VALUES (?, ?, 'approvato', ?, NOW())
+     ON CONFLICT(cliente_id, distributor_id) DO NOTHING`
+  );
+  let legami = 0;
+  const clienti = await db.prepare(`SELECT id, username FROM users WHERE ruolo = 'cliente'`).all();
+  for (const c of clienti) {
+    for (const d of distributoriSalvati) {
+      await insLegame.run(c.id, d.id, 'DEMO-' + c.username.toUpperCase());
       legami += 1;
-    });
-  });
+    }
+  }
 
-console.log('Seed completato:');
-console.log(`  ${macro.length} macro categorie`);
-console.log(`  ${prodotti.length} prodotti demo`);
-console.log(`  ${distributoriSalvati.length} distributori (${righeListino} righe di listino)`);
-console.log(`  ${legami} legami cliente-distributore (demo: già approvati)`);
-console.log(`  ${utenti.length} utenti (1 agente, 3 clienti, ${distributoriSalvati.length} banchi distributore)`);
+  console.log('Seed completato:');
+  console.log(`  ${macro.length} macro categorie`);
+  console.log(`  ${prodotti.length} prodotti demo`);
+  console.log(`  ${distributoriSalvati.length} distributori (${righeListino} righe di listino)`);
+  console.log(`  ${legami} legami cliente-distributore (demo: già approvati)`);
+  console.log(`  ${utenti.length} utenti (1 agente, 3 clienti, ${distributoriSalvati.length} banchi distributore)`);
+}
+
+if (require.main === module) {
+  main().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); });
+} else {
+  // keep backward compat when required from server.js auto-seed
+  main().catch(e => console.error('seed error', e.message));
+}

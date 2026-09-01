@@ -1,19 +1,8 @@
 const session = require('express-session');
 const db = require('../db');
 
-// Archivio di sessione su SQLite.
-// Quello predefinito di express-session tiene tutto in memoria: a ogni riavvio del
-// server gli utenti si ritrovano scollegati (ed era il motivo per cui l'accesso "non
-// restava"). Qui le sessioni vivono nello stesso file del resto dei dati.
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS sessions (
-    sid TEXT PRIMARY KEY,
-    dati TEXT NOT NULL,
-    scade_il INTEGER NOT NULL
-  );
-  CREATE INDEX IF NOT EXISTS idx_sessions_scadenza ON sessions(scade_il);
-`);
+// Archivio di sessione su Postgres.
+// Usa la tabella "session" creata da schema.pg.sql (connect-pg-simple compatibile).
 
 const DURATA_PREDEFINITA = 1000 * 60 * 60 * 24 * 30; // 30 giorni
 
@@ -21,68 +10,59 @@ class ArchivioSqlite extends session.Store {
   constructor() {
     super();
     this.pulisci();
-    // Una passata di pulizia ogni ora basta e avanza.
     this.timer = setInterval(() => this.pulisci(), 60 * 60 * 1000);
     if (this.timer.unref) this.timer.unref();
   }
 
   scadenza(sess) {
     if (sess && sess.cookie && sess.cookie.expires) {
-      return new Date(sess.cookie.expires).getTime();
+      return new Date(sess.cookie.expires);
     }
-    return Date.now() + DURATA_PREDEFINITA;
+    return new Date(Date.now() + DURATA_PREDEFINITA);
   }
 
   get(sid, callback) {
-    try {
-      const riga = db.prepare('SELECT dati, scade_il FROM sessions WHERE sid = ?').get(sid);
-      if (!riga) return callback(null, null);
-      if (riga.scade_il < Date.now()) {
-        this.destroy(sid, () => {});
-        return callback(null, null);
-      }
-      return callback(null, JSON.parse(riga.dati));
-    } catch (err) {
-      return callback(err);
-    }
+    db.prepare('SELECT sess FROM session WHERE sid = ? AND expire > NOW()').get(sid)
+      .then(row => {
+        if (!row) return callback(null, null);
+        const sess = row.sess;
+        // pg may return json object or string
+        if (typeof sess === 'string') {
+          try { return callback(null, JSON.parse(sess)); } catch (e) { return callback(e); }
+        }
+        return callback(null, sess);
+      })
+      .catch(err => callback(err));
   }
 
   set(sid, sess, callback) {
-    try {
-      db.prepare(
-        `INSERT INTO sessions (sid, dati, scade_il) VALUES (?, ?, ?)
-         ON CONFLICT(sid) DO UPDATE SET dati = excluded.dati, scade_il = excluded.scade_il`
-      ).run(sid, JSON.stringify(sess), this.scadenza(sess));
-      return callback(null);
-    } catch (err) {
-      return callback(err);
-    }
+    const expire = this.scadenza(sess);
+    // Use JSON stringify for pg JSON column
+    const sessJson = JSON.stringify(sess);
+    db.prepare(
+      `INSERT INTO session (sid, sess, expire) VALUES (?, ?, ?)
+       ON CONFLICT(sid) DO UPDATE SET sess = EXCLUDED.sess, expire = EXCLUDED.expire`
+    ).run(sid, sessJson, expire)
+      .then(() => callback(null))
+      .catch(err => callback(err));
   }
 
   touch(sid, sess, callback) {
-    try {
-      db.prepare('UPDATE sessions SET scade_il = ? WHERE sid = ?').run(this.scadenza(sess), sid);
-      return callback(null);
-    } catch (err) {
-      return callback(err);
-    }
+    const expire = this.scadenza(sess);
+    db.prepare('UPDATE session SET expire = ? WHERE sid = ?').run(expire, sid)
+      .then(() => callback(null))
+      .catch(err => callback(err));
   }
 
   destroy(sid, callback) {
-    try {
-      db.prepare('DELETE FROM sessions WHERE sid = ?').run(sid);
-      return callback(null);
-    } catch (err) {
-      return callback(err);
-    }
+    db.prepare('DELETE FROM session WHERE sid = ?').run(sid)
+      .then(() => callback(null))
+      .catch(err => callback(err || null));
+    if (!callback) return;
   }
 
   pulisci() {
-    try {
-      db.prepare('DELETE FROM sessions WHERE scade_il < ?').run(Date.now());
-    } catch (err) {
-      // La pulizia non è critica: se fallisce si riprova al giro dopo.
-    }
+    db.prepare('DELETE FROM session WHERE expire < NOW()').run().catch(() => {});
   }
 }
 

@@ -24,7 +24,6 @@ const MARCHI = {
       listino_aggiornato: 'marzo 2026',
       ordine: 1,
     },
-    // Nome della colonna nel file (gli spazi in coda vengono ignorati) → campo prodotto.
     colonne: {
       codice: 'Codice',
       nome: 'Descrizione',
@@ -37,7 +36,6 @@ const MARCHI = {
       gwp: 'GWP',
       prezzo_listino: 'listino',
     },
-    // Famiglia del listino → categoria di dettaglio e macro categoria dell'app.
     famiglie: {
       RAS: { nome: 'RAS — Split e multisplit residenziali', macro: 'condizionamento', ordine: 1 },
       RAV: { nome: 'RAV — Light Commercial Digital Inverter', macro: 'condizionamento', ordine: 2 },
@@ -49,7 +47,6 @@ const MARCHI = {
   },
 };
 
-// Macro categorie che i listini possono richiedere e che potrebbero non esistere ancora.
 const MACRO_EXTRA = {
   'pompe-calore': {
     slug: 'pompe-calore',
@@ -67,8 +64,6 @@ const MACRO_EXTRA = {
   },
 };
 
-// ---------- Argomenti ----------
-
 function argomenti() {
   const a = {};
   const v = process.argv.slice(2);
@@ -78,23 +73,17 @@ function argomenti() {
   return a;
 }
 
-// ---------- Aiutanti ----------
-
-// I listini scrivono i prezzi come "1,015" o "1.015" con il separatore delle migliaia:
-// vanno letti come 1015, non come 1,015.
 function numero(valore) {
   const s = String(valore === undefined || valore === null ? '' : valore).trim();
   if (!s) return null;
   const pulito = s.replace(/[^\d.,-]/g, '');
   if (!pulito) return null;
-  // Se ci sono sia punto sia virgola, l'ultimo separatore è quello decimale.
   const ultimoPunto = pulito.lastIndexOf('.');
   const ultimaVirgola = pulito.lastIndexOf(',');
   let normalizzato;
   if (ultimoPunto === -1 && ultimaVirgola === -1) {
     normalizzato = pulito;
   } else if (ultimoPunto > ultimaVirgola) {
-    // Il punto è decimale solo se ha 1 o 2 cifre dopo, altrimenti è separatore migliaia.
     const decimali = pulito.length - ultimoPunto - 1;
     normalizzato =
       decimali > 0 && decimali <= 2
@@ -115,17 +104,14 @@ function testo(valore) {
   return String(valore === undefined || valore === null ? '' : valore).trim();
 }
 
-// Sconto per distributore: la convenienza ruota da prodotto a prodotto, come nel seed,
-// così il confronto fra banchi resta realistico.
 const GRIGLIA_SCONTI = [
   [3, 6, 1],
   [5, 2, 3],
   [2, 3, 7],
 ];
 
-// ---------- Importazione ----------
-
-function importa() {
+async function importa() {
+  await db.ensureInit();
   const arg = argomenti();
   const nomeMarchio = (arg.marchio || '').toLowerCase();
   const config = MARCHI[nomeMarchio];
@@ -143,7 +129,6 @@ function importa() {
 
   const wb = XLSX.readFile(path.resolve(arg.file));
   const grezze = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '', raw: false });
-  // Le intestazioni dei listini hanno spesso spazi in coda: normalizziamole.
   const righe = grezze.map((r) => {
     const o = {};
     Object.keys(r).forEach((k) => {
@@ -156,7 +141,7 @@ function importa() {
   console.log(`Marchio: ${config.marchio.nome} — sconto Base applicato: ${scontoDefault}%`);
 
   const m = config.marchio;
-  db.prepare(
+  await db.prepare(
     `INSERT INTO brands (slug, nome, descrizione, colore, iniziali, distributore_ufficiale,
                          listino_nome, listino_aggiornato, ordine, attivo, sconto_default_pct)
      VALUES (@slug, @nome, @descrizione, @colore, @iniziali, @distributore_ufficiale,
@@ -168,15 +153,14 @@ function importa() {
        ordine = excluded.ordine, attivo = 1, sconto_default_pct = excluded.sconto_default_pct`
   ).run({ ...m, sconto_default_pct: scontoDefault });
 
-  // Macro categorie eventualmente mancanti.
   const insMacro = db.prepare(
     `INSERT INTO macro_categorie (slug, nome, icona, descrizione, ordine)
      VALUES (@slug, @nome, @icona, @descrizione, @ordine)
      ON CONFLICT(slug) DO NOTHING`
   );
-  Object.values(config.famiglie).forEach((f) => {
-    if (MACRO_EXTRA[f.macro]) insMacro.run(MACRO_EXTRA[f.macro]);
-  });
+  for (const f of Object.values(config.famiglie)) {
+    if (MACRO_EXTRA[f.macro]) await insMacro.run(MACRO_EXTRA[f.macro]);
+  }
 
   const insFamiglia = db.prepare(
     `INSERT INTO brand_families (brand_slug, codice, nome, ordine)
@@ -196,7 +180,7 @@ function importa() {
        prezzo_listino = excluded.prezzo_listino, sconto_base_pct = excluded.sconto_base_pct,
        brand_slug = excluded.brand_slug, famiglia = excluded.famiglia, ean = excluded.ean,
        raee = excluded.raee, cat_raee = excluded.cat_raee, refrigerante = excluded.refrigerante,
-       fgas_kg = excluded.fgas_kg, gwp = excluded.gwp, aggiornato_il = datetime('now')`
+       fgas_kg = excluded.fgas_kg, gwp = excluded.gwp, aggiornato_il = NOW()`
   );
 
   const col = config.colonne;
@@ -204,8 +188,9 @@ function importa() {
   let importati = 0;
   const scartate = [];
 
-  const caricaProdotti = db.transaction(() => {
-    righe.forEach((r, i) => {
+  const caricaProdotti = db.transaction(async () => {
+    for (let i=0;i<righe.length;i++) {
+      const r = righe[i];
       const codice = testo(r[col.codice]);
       const nome = testo(r[col.nome]);
       const prezzo = numero(r[col.prezzo_listino]);
@@ -213,7 +198,7 @@ function importa() {
 
       if (!codice || !nome || prezzo === null) {
         scartate.push({ riga: i + 2, codice, motivo: !codice ? 'codice mancante' : (!nome ? 'descrizione mancante' : 'listino non leggibile') });
-        return;
+        continue;
       }
 
       const famiglia = config.famiglie[famigliaCod] || {
@@ -223,10 +208,10 @@ function importa() {
       };
       if (famigliaCod && !famiglieViste.has(famigliaCod)) {
         famiglieViste.add(famigliaCod);
-        insFamiglia.run(m.slug, famigliaCod, famiglia.nome, famiglia.ordine);
+        await insFamiglia.run(m.slug, famigliaCod, famiglia.nome, famiglia.ordine);
       }
 
-      insProdotto.run({
+      await insProdotto.run({
         codice,
         nome,
         categoria: famiglia.nome,
@@ -243,15 +228,12 @@ function importa() {
         gwp: numero(r[col.gwp]),
       });
       importati += 1;
-    });
+    }
   });
-  caricaProdotti();
+  await caricaProdotti();
 
-  // Listino per distributore: senza queste righe nessun banco può confermare il marchio.
-  const distributori = db.prepare('SELECT * FROM distributors WHERE attivo = 1 ORDER BY id').all();
-  const prodottiMarchio = db
-    .prepare('SELECT id, prezzo_listino FROM products WHERE brand_slug = ?')
-    .all(m.slug);
+  const distributori = await db.prepare('SELECT * FROM distributors WHERE attivo = 1 ORDER BY id').all();
+  const prodottiMarchio = await db.prepare('SELECT id, prezzo_listino FROM products WHERE brand_slug = ?').all(m.slug);
 
   const insListino = db.prepare(
     `INSERT INTO distributor_products (distributor_id, product_id, prezzo_listino, sconto_base_pct)
@@ -261,17 +243,18 @@ function importa() {
   );
 
   let righeListino = 0;
-  const caricaListini = db.transaction(() => {
-    distributori.forEach((d, distIdx) => {
-      prodottiMarchio.forEach((p) => {
+  const caricaListini = db.transaction(async () => {
+    for (let distIdx=0; distIdx<distributori.length; distIdx++) {
+      const d = distributori[distIdx];
+      for (const p of prodottiMarchio) {
         const bonus = GRIGLIA_SCONTI[p.id % 3][distIdx % 3];
         const sconto = Math.min(60, Math.round((scontoDefault + bonus) * 10) / 10);
-        insListino.run(d.id, p.id, p.prezzo_listino, sconto);
+        await insListino.run(d.id, p.id, p.prezzo_listino, sconto);
         righeListino += 1;
-      });
-    });
+      }
+    }
   });
-  caricaListini();
+  await caricaListini();
 
   console.log(`\nImportati ${importati} prodotti (${famiglieViste.size} famiglie).`);
   console.log(`Listini distributore aggiornati: ${righeListino} righe su ${distributori.length} banchi.`);
@@ -286,4 +269,4 @@ function importa() {
   );
 }
 
-importa();
+importa().catch(e=>{console.error(e);process.exit(1)});

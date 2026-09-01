@@ -5,7 +5,7 @@ const PER_PAGINA = 40;
 // Ricerca "parziale": ogni parola digitata deve comparire, anche solo come frammento,
 // dentro nome / codice / categoria / marchio del prodotto. Scrivendo "valv" escono tutte
 // le valvole; scrivendo "toshiba estia" escono le pompe di calore ESTIA.
-function cercaProdotti(
+async function cercaProdotti(
   query,
   { macroSlug = null, brandSlug = null, famiglia = null, sotto = null, misura = null, limite = 100 } = {}
 ) {
@@ -43,9 +43,9 @@ function cercaProdotti(
 
   for (const t of termini) {
     where.push(
-      `(LOWER(p.nome) LIKE ? OR LOWER(p.codice) LIKE ? OR LOWER(IFNULL(p.categoria, '')) LIKE ?
-        OR LOWER(IFNULL(m.nome, '')) LIKE ? OR LOWER(IFNULL(b.nome, '')) LIKE ?
-        OR LOWER(IFNULL(p.ean, '')) LIKE ?)`
+      `(LOWER(p.nome) LIKE ? OR LOWER(p.codice) LIKE ? OR LOWER(COALESCE(p.categoria, '')) LIKE ?
+        OR LOWER(COALESCE(m.nome, '')) LIKE ? OR LOWER(COALESCE(b.nome, '')) LIKE ?
+        OR LOWER(COALESCE(p.ean, '')) LIKE ?)`
     );
     const like = `%${t}%`;
     params.push(like, like, like, like, like, like);
@@ -73,7 +73,7 @@ function cercaProdotti(
 
 // ---------- Macro categorie ----------
 
-function macroCategorie() {
+async function macroCategorie() {
   return db
     .prepare(
       `SELECT m.*, (SELECT COUNT(*) FROM products p WHERE p.macro_slug = m.slug AND p.attivo = 1) AS n_prodotti
@@ -84,18 +84,20 @@ function macroCategorie() {
 }
 
 // Le categorie che in cantiere si cercano più spesso: vanno in cima alla home.
-function categorieInEvidenza() {
-  return macroCategorie().filter((m) => m.in_evidenza === 1);
+async function categorieInEvidenza() {
+  const cats = await macroCategorie();
+  return cats.filter((m) => m.in_evidenza === 1);
 }
 
-function altreCategorie() {
-  return macroCategorie().filter((m) => m.in_evidenza !== 1 && m.n_prodotti > 0);
+async function altreCategorie() {
+  const cats = await macroCategorie();
+  return cats.filter((m) => m.in_evidenza !== 1 && m.n_prodotti > 0);
 }
 
 // ---------- Sottocategorie e misure ----------
 
-function sottocategorieDi(macroSlug) {
-  return db
+async function sottocategorieDi(macroSlug) {
+  const rows = await db
     .prepare(
       `SELECT s.*, (SELECT COUNT(*) FROM products p
                      WHERE p.macro_slug = s.macro_slug AND p.sottocategoria = s.slug AND p.attivo = 1) AS n
@@ -103,11 +105,11 @@ function sottocategorieDi(macroSlug) {
         WHERE s.macro_slug = ?
         ORDER BY s.ordine, s.nome`
     )
-    .all(macroSlug)
-    .filter((s) => s.n > 0);
+    .all(macroSlug);
+  return rows.filter((s) => s.n > 0);
 }
 
-function sottocategoria(macroSlug, slug) {
+async function sottocategoria(macroSlug, slug) {
   return db
     .prepare('SELECT * FROM sottocategorie WHERE macro_slug = ? AND slug = ?')
     .get(macroSlug, slug);
@@ -115,7 +117,7 @@ function sottocategoria(macroSlug, slug) {
 
 // Misure realmente presenti fra i prodotti di un elenco: è il primo filtro che serve
 // a un installatore, prima ancora della marca.
-function misureDisponibili({ macroSlug = null, sotto = null, brandSlug = null } = {}) {
+async function misureDisponibili({ macroSlug = null, sotto = null, brandSlug = null } = {}) {
   const where = ["p.attivo = 1", "p.misura <> ''"];
   const params = [];
   if (macroSlug) {
@@ -143,7 +145,7 @@ function misureDisponibili({ macroSlug = null, sotto = null, brandSlug = null } 
 
 // Marchi presenti dentro una categoria: la categoria è il livello principale,
 // il marchio è un filtro che sta sotto.
-function marchiNellaCategoria({ macroSlug = null, sotto = null } = {}) {
+async function marchiNellaCategoria({ macroSlug = null, sotto = null } = {}) {
   const where = ["p.attivo = 1", "p.brand_slug <> ''"];
   const params = [];
   if (macroSlug) {
@@ -165,23 +167,24 @@ function marchiNellaCategoria({ macroSlug = null, sotto = null } = {}) {
     .all(...params);
 }
 
-function macroCategoria(slug) {
+async function macroCategoria(slug) {
   return db.prepare('SELECT * FROM macro_categorie WHERE slug = ?').get(slug);
 }
 
 // ---------- Elenchi paginati ----------
 
-function paginato({ where, params, pagina = 1, perPagina = PER_PAGINA }) {
-  const totale = db
+async function paginato({ where, params, pagina = 1, perPagina = PER_PAGINA }) {
+  const row = await db
     .prepare(
       `SELECT COUNT(*) AS n FROM products p WHERE ${where}`
     )
-    .get(...params).n;
+    .get(...params);
+  const totale = row ? Number(row.n) : 0;
 
   const pagine = Math.max(1, Math.ceil(totale / perPagina));
   const p = Math.min(Math.max(1, parseInt(pagina, 10) || 1), pagine);
 
-  const righe = db
+  const righe = await db
     .prepare(
       `SELECT p.*, b.nome AS brand_nome, b.colore AS brand_colore
          FROM products p
@@ -196,7 +199,7 @@ function paginato({ where, params, pagina = 1, perPagina = PER_PAGINA }) {
 }
 
 // Prodotti di una categoria, filtrabili per sottocategoria, misura e marchio.
-function prodottiDellaCategoria(macroSlug, { sotto = null, misura = null, marchio = null, pagina = 1 } = {}) {
+async function prodottiDellaCategoria(macroSlug, { sotto = null, misura = null, marchio = null, pagina = 1 } = {}) {
   const where = ['p.attivo = 1', 'p.macro_slug = ?'];
   const params = [macroSlug];
   if (sotto) {
@@ -216,7 +219,7 @@ function prodottiDellaCategoria(macroSlug, { sotto = null, misura = null, marchi
 
 // ---------- Marchi ----------
 
-function marchi() {
+async function marchi() {
   return db
     .prepare(
       `SELECT b.*, (SELECT COUNT(*) FROM products p WHERE p.brand_slug = b.slug AND p.attivo = 1) AS n_prodotti
@@ -227,11 +230,11 @@ function marchi() {
     .all();
 }
 
-function marchio(slug) {
+async function marchio(slug) {
   return db.prepare('SELECT * FROM brands WHERE slug = ? AND attivo = 1').get(slug);
 }
 
-function famiglieDelMarchio(slug) {
+async function famiglieDelMarchio(slug) {
   return db
     .prepare(
       `SELECT f.*,
@@ -244,13 +247,13 @@ function famiglieDelMarchio(slug) {
     .all(slug);
 }
 
-function famigliaDelMarchio(slug, codice) {
+async function famigliaDelMarchio(slug, codice) {
   return db
     .prepare('SELECT * FROM brand_families WHERE brand_slug = ? AND codice = ?')
     .get(slug, codice);
 }
 
-function prodottiDelMarchio(slug, famiglia, pagina) {
+async function prodottiDelMarchio(slug, famiglia, pagina) {
   if (famiglia) {
     return paginato({
       where: 'p.attivo = 1 AND p.brand_slug = ? AND p.famiglia = ?',

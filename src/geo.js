@@ -4,24 +4,24 @@ const db = require('../db');
 // niente viene registrato finché non preme "Attiva la posizione", e la revoca cancella
 // davvero le coordinate salvate.
 
-function salvaPosizione(userId, { lat, lng, precisione }) {
+async function salvaPosizione(userId, { lat, lng, precisione }) {
   const la = Number(lat);
   const ln = Number(lng);
   if (!Number.isFinite(la) || !Number.isFinite(ln)) return null;
   if (la < -90 || la > 90 || ln < -180 || ln > 180) return null;
 
-  db.prepare(
+  await db.prepare(
     `UPDATE users
         SET geo_consenso = 1, geo_lat = ?, geo_lng = ?, geo_precisione = ?,
-            geo_aggiornata_il = datetime('now')
+            geo_aggiornata_il = NOW()
       WHERE id = ?`
   ).run(la, ln, Number.isFinite(Number(precisione)) ? Number(precisione) : null, userId);
 
   // Il banco eredita la posizione dell'operatore che lo presidia: è quella che il cliente
   // vede muoversi quando la merce è in consegna.
-  const utente = db.prepare('SELECT ruolo, distributor_id FROM users WHERE id = ?').get(userId);
+  const utente = await db.prepare('SELECT ruolo, distributor_id FROM users WHERE id = ?').get(userId);
   if (utente && utente.ruolo === 'distributore' && utente.distributor_id) {
-    db.prepare('UPDATE distributors SET geo_lat = ?, geo_lng = ? WHERE id = ?').run(
+    await db.prepare('UPDATE distributors SET geo_lat = ?, geo_lng = ? WHERE id = ?').run(
       la,
       ln,
       utente.distributor_id
@@ -30,8 +30,8 @@ function salvaPosizione(userId, { lat, lng, precisione }) {
   return { lat: la, lng: ln };
 }
 
-function revoca(userId) {
-  db.prepare(
+async function revoca(userId) {
+  await db.prepare(
     `UPDATE users
         SET geo_consenso = 0, geo_lat = NULL, geo_lng = NULL, geo_precisione = NULL,
             geo_aggiornata_il = NULL
@@ -39,8 +39,8 @@ function revoca(userId) {
   ).run(userId);
 }
 
-function statoUtente(userId) {
-  const u = db
+async function statoUtente(userId) {
+  const u = await db
     .prepare(
       'SELECT geo_consenso, geo_lat, geo_lng, geo_precisione, geo_aggiornata_il FROM users WHERE id = ?'
     )

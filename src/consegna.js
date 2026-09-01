@@ -13,16 +13,16 @@ const geo = require('./geo');
 
 const FATTORE_STRADA = 1.35; // le strade non vanno in linea d'aria
 
-function velocitaMedia() {
-  const row = db.prepare("SELECT valore FROM config WHERE chiave = 'velocita_media_kmh'").get();
+async function velocitaMedia() {
+  const row = await db.prepare("SELECT valore FROM config WHERE chiave = 'velocita_media_kmh'").get();
   const v = row ? parseFloat(row.valore) : 25;
   return Number.isFinite(v) && v > 0 ? v : 25;
 }
 
 // Punto di partenza del distributore: il punto vendita più vicino al cliente, se
 // conosciamo le posizioni; altrimenti la sede del banco.
-function partenzaPiuVicina(distributorId, posizioneCliente) {
-  const punti = db
+async function partenzaPiuVicina(distributorId, posizioneCliente) {
+  const punti = await db
     .prepare(
       `SELECT geo_lat AS lat, geo_lng AS lng, nome FROM store_locations
         WHERE distributor_id = ? AND attivo = 1 AND geo_lat IS NOT NULL`
@@ -30,7 +30,7 @@ function partenzaPiuVicina(distributorId, posizioneCliente) {
     .all(distributorId);
 
   if (!punti.length || !posizioneCliente) {
-    const d = db.prepare('SELECT geo_lat AS lat, geo_lng AS lng FROM distributors WHERE id = ?').get(distributorId);
+    const d = await db.prepare('SELECT geo_lat AS lat, geo_lng AS lng FROM distributors WHERE id = ?').get(distributorId);
     return d && d.lat !== null ? { ...d, nome: '' } : null;
   }
 
@@ -41,14 +41,14 @@ function partenzaPiuVicina(distributorId, posizioneCliente) {
 }
 
 // Minuti stimati fra la partenza dichiarata dal banco e l'arrivo dal cliente.
-function minutiStimati(distributorId, clienteId, partenzaOre) {
+async function minutiStimati(distributorId, clienteId, partenzaOre) {
   const partenzaMinuti = Math.max(0, Math.round((parseFloat(partenzaOre) || 0) * 60));
 
-  const cliente = db
+  const cliente = await db
     .prepare('SELECT geo_lat AS lat, geo_lng AS lng, geo_consenso FROM users WHERE id = ?')
     .get(clienteId);
   const posizione = cliente && cliente.geo_consenso && cliente.lat !== null ? cliente : null;
-  const partenza = partenzaPiuVicina(distributorId, posizione);
+  const partenza = await partenzaPiuVicina(distributorId, posizione);
 
   const km = geo.distanzaKm(posizione, partenza);
   if (km === null) {
@@ -57,7 +57,8 @@ function minutiStimati(distributorId, clienteId, partenzaOre) {
   }
 
   const kmStrada = km * FATTORE_STRADA;
-  const viaggio = Math.max(5, Math.round((kmStrada / velocitaMedia()) * 60));
+  const v = await velocitaMedia();
+  const viaggio = Math.max(5, Math.round((kmStrada / v) * 60));
   return {
     minuti: partenzaMinuti + viaggio,
     km: Math.round(kmStrada * 10) / 10,
