@@ -1,6 +1,4 @@
 const { Pool } = require('pg');
-const fs = require('fs');
-const path = require('path');
 
 const DATABASE_URL = process.env.DATABASE_URL || 'postgres://minuteria:minuteria@localhost:5432/minuteria';
 
@@ -128,21 +126,30 @@ async function exec(sql) {
   await pool.query(pgSql);
 }
 
+// ensureInit() NON applica più lo schema in automatico ad ogni avvio. L'avevamo protetto
+// con un lucchetto (pg_advisory_lock) per evitare che due istanze serverless partite
+// insieme si scontrassero, ma su Supabase in modalità "transaction pooler" (porta 6543)
+// quel lucchetto non è affidabile: ogni comando può finire su una connessione fisica
+// diversa dietro le quinte, quindi non protegge davvero nulla — il deadlock si è
+// ripresentato lo stesso nei test.
+//
+// Lo schema va applicato una volta sola, deliberatamente, con:
+//   node scripts/apply_schema_pg.js
+// non ad ogni richiesta/avvio. Qui resta solo un controllo economico (una SELECT) per
+// intercettare un database vuoto e avvisare, senza mai eseguire DDL in automatico.
 let inited = false;
 async function ensureInit() {
   if (inited) return;
-  const schemaPath = path.join(__dirname, 'schema.sql');
-  const schema = fs.readFileSync(schemaPath, 'utf8');
   try {
-    await pool.query(schema);
+    await pool.query('SELECT 1 FROM config LIMIT 1');
   } catch (e) {
-    if (!e.message.includes('already exists')) console.error('schema error', e.message);
+    console.error(
+      'Schema Postgres non trovato o incompleto. Applicalo una volta con: node scripts/apply_schema_pg.js',
+      e.message
+    );
   }
   inited = true;
 }
-
-// avvia init in background (non blocca require)
-ensureInit().catch(e => console.error('db init failed', e.message));
 
 function transaction(fn) {
   return async (...args) => {
