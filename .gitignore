@@ -2,6 +2,8 @@ node_modules/
 db/minuteria.db
 db/minuteria.db-wal
 db/minuteria.db-shm
+db/supabase_dump.sql
+db/supabase_dump_nt.sql
 .env
 
 # Config locale di anteprima (percorsi assoluti della macchina)

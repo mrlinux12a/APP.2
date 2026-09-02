@@ -10,6 +10,15 @@ const pool = new Pool({
   ssl: isSupabase ? { rejectUnauthorized: false } : false,
 });
 
+// Tabelle senza colonna "id" (chiave primaria naturale): un INSERT su queste tabelle
+// non può chiedere "RETURNING id", altrimenti Postgres dà errore "column id does not exist".
+const TABELLE_SENZA_ID = new Set(['session', 'config', 'macro_categorie', 'brands', 'ddt_counters']);
+
+function tabellaInsert(sql) {
+  const m = sql.match(/^\s*INSERT INTO\s+"?(\w+)"?/i);
+  return m ? m[1] : null;
+}
+
 function toPg(sql) {
   let s = sql;
   // sqlite -> pg translations
@@ -82,7 +91,7 @@ function prepare(sql) {
           // handle case where object passed with @ keys but we already handled
         }
         let q = pgSql;
-        const isInsert = /^\s*INSERT/i.test(q) && !/RETURNING/i.test(q);
+        const isInsert = /^\s*INSERT/i.test(q) && !/RETURNING/i.test(q) && !TABELLE_SENZA_ID.has(tabellaInsert(q));
         if (isInsert) q += ' RETURNING id';
         const res = await pool.query(q, arr);
         const row = res.rows[0];
@@ -104,7 +113,7 @@ function prepare(sql) {
     },
     run: async (...params) => {
       let q = pgSql2;
-      const isInsert = /^\s*INSERT/i.test(q) && !/RETURNING/i.test(q);
+      const isInsert = /^\s*INSERT/i.test(q) && !/RETURNING/i.test(q) && !TABELLE_SENZA_ID.has(tabellaInsert(q));
       if (isInsert) q += ' RETURNING id';
       const res = await pool.query(q, params);
       const row = res.rows[0];

@@ -1,0 +1,670 @@
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:15: NOTIFICA:  la relazione "users" esiste già, saltata
+CREATE TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:30: NOTIFICA:  la relazione "products" esiste già, saltata
+CREATE TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:49: NOTIFICA:  la relazione "orders" esiste già, saltata
+CREATE TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:64: NOTIFICA:  la relazione "order_items" esiste già, saltata
+CREATE TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:69: NOTIFICA:  la relazione "config" esiste già, saltata
+CREATE TABLE
+INSERT 0 0
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:79: NOTIFICA:  la relazione "macro_categorie" esiste già, saltata
+CREATE TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:89: NOTIFICA:  la relazione "distributors" esiste già, saltata
+CREATE TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:98: NOTIFICA:  la relazione "distributor_products" esiste già, saltata
+CREATE TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:109: NOTIFICA:  la relazione "requests" esiste già, saltata
+CREATE TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:116: NOTIFICA:  la relazione "request_items" esiste già, saltata
+CREATE TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:129: NOTIFICA:  la relazione "request_responses" esiste già, saltata
+CREATE TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:140: NOTIFICA:  la relazione "notifications" esiste già, saltata
+CREATE TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:142: NOTIFICA:  la relazione "idx_notifications_user" esiste già, saltata
+CREATE INDEX
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:143: NOTIFICA:  la relazione "idx_request_responses_req" esiste già, saltata
+CREATE INDEX
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:144: NOTIFICA:  la relazione "idx_distributor_products_prod" esiste già, saltata
+CREATE INDEX
+INSERT 0 0
+INSERT 0 0
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:156: NOTIFICA:  la relazione "request_response_items" esiste già, saltata
+CREATE TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:163: NOTIFICA:  la relazione "ddt_counters" esiste già, saltata
+CREATE TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:165: NOTIFICA:  la relazione "idx_response_items" esiste già, saltata
+CREATE INDEX
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:179: NOTIFICA:  la relazione "brands" esiste già, saltata
+CREATE TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:189: NOTIFICA:  la relazione "brand_families" esiste già, saltata
+CREATE TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:199: NOTIFICA:  la relazione "client_discounts" esiste già, saltata
+CREATE TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:216: NOTIFICA:  la relazione "store_locations" esiste già, saltata
+CREATE TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:218: NOTIFICA:  la relazione "idx_store_locations_citta" esiste già, saltata
+CREATE INDEX
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:231: NOTIFICA:  la relazione "client_distributors" esiste già, saltata
+CREATE TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:242: NOTIFICA:  la relazione "client_discount_rules" esiste già, saltata
+CREATE TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:244: NOTIFICA:  la relazione "idx_client_distributors_dist" esiste già, saltata
+CREATE INDEX
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:245: NOTIFICA:  la relazione "idx_discount_rules" esiste già, saltata
+CREATE INDEX
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:256: NOTIFICA:  la relazione "sottocategorie" esiste già, saltata
+CREATE TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:258: NOTIFICA:  la relazione "idx_sottocategorie_macro" esiste già, saltata
+CREATE INDEX
+INSERT 0 0
+INSERT 0 0
+INSERT 0 0
+INSERT 0 0
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:266: NOTIFICA:  la colonna "unita_misura" della relazione "products" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:267: NOTIFICA:  la colonna "marca" della relazione "products" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:268: NOTIFICA:  la colonna "serie" della relazione "products" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:269: NOTIFICA:  la colonna "brand_slug" della relazione "products" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:270: NOTIFICA:  la colonna "famiglia" della relazione "products" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:271: NOTIFICA:  la colonna "ean" della relazione "products" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:272: NOTIFICA:  la colonna "raee" della relazione "products" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:273: NOTIFICA:  la colonna "cat_raee" della relazione "products" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:274: NOTIFICA:  la colonna "refrigerante" della relazione "products" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:275: NOTIFICA:  la colonna "fgas_kg" della relazione "products" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:276: NOTIFICA:  la colonna "gwp" della relazione "products" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:277: NOTIFICA:  la colonna "misura" della relazione "products" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:278: NOTIFICA:  la colonna "partenza_ore" della relazione "request_responses" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:279: NOTIFICA:  la colonna "copertura" della relazione "request_responses" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:280: NOTIFICA:  la colonna "sconto_cliente_pct" della relazione "request_responses" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:281: NOTIFICA:  la colonna "consegna_minuti_stimati" della relazione "request_responses" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:282: NOTIFICA:  la colonna "sconto_riga_pct" della relazione "request_response_items" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:283: NOTIFICA:  la colonna "partenza_ore" della relazione "orders" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:284: NOTIFICA:  la colonna "destinazione" della relazione "orders" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:285: NOTIFICA:  la colonna "ddt_numero" della relazione "orders" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:286: NOTIFICA:  la colonna "ddt_data" della relazione "orders" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:287: NOTIFICA:  la colonna "ddt_colli" della relazione "orders" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:288: NOTIFICA:  la colonna "ddt_aspetto" della relazione "orders" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:289: NOTIFICA:  la colonna "ddt_trasporto" della relazione "orders" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:290: NOTIFICA:  la colonna "ddt_causale" della relazione "orders" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:291: NOTIFICA:  la colonna "ddt_note" della relazione "orders" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:292: NOTIFICA:  la colonna "preso_in_carico_il" della relazione "orders" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:293: NOTIFICA:  la colonna "contributo_raee" della relazione "orders" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:294: NOTIFICA:  la colonna "geo_consenso" della relazione "users" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:295: NOTIFICA:  la colonna "geo_lat" della relazione "users" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:296: NOTIFICA:  la colonna "geo_lng" della relazione "users" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:297: NOTIFICA:  la colonna "geo_precisione" della relazione "users" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:298: NOTIFICA:  la colonna "geo_aggiornata_il" della relazione "users" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:299: NOTIFICA:  la colonna "geo_lat" della relazione "distributors" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:300: NOTIFICA:  la colonna "geo_lng" della relazione "distributors" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:301: NOTIFICA:  la colonna "tracciamento_attivo" della relazione "orders" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:302: NOTIFICA:  la colonna "scelta_scade_il" della relazione "requests" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:303: NOTIFICA:  la colonna "assegnata_auto" della relazione "requests" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:304: NOTIFICA:  la colonna "ragione_sociale" della relazione "distributors" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:305: NOTIFICA:  la colonna "partita_iva" della relazione "distributors" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:306: NOTIFICA:  la colonna "indirizzo" della relazione "distributors" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:307: NOTIFICA:  la colonna "cap" della relazione "distributors" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:308: NOTIFICA:  la colonna "citta" della relazione "distributors" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:309: NOTIFICA:  la colonna "provincia" della relazione "distributors" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:310: NOTIFICA:  la colonna "telefono" della relazione "distributors" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:311: NOTIFICA:  la colonna "email" della relazione "distributors" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:312: NOTIFICA:  la colonna "partita_iva" della relazione "users" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:313: NOTIFICA:  la colonna "codice_fiscale" della relazione "users" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:314: NOTIFICA:  la colonna "indirizzo" della relazione "users" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:315: NOTIFICA:  la colonna "cap" della relazione "users" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:316: NOTIFICA:  la colonna "citta" della relazione "users" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:317: NOTIFICA:  la colonna "provincia" della relazione "users" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:318: NOTIFICA:  la colonna "sdi_pec" della relazione "users" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:319: NOTIFICA:  la colonna "indirizzo_consegna" della relazione "users" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:320: NOTIFICA:  la colonna "referente" della relazione "users" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:321: NOTIFICA:  la colonna "raee_unitario" della relazione "order_items" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:322: NOTIFICA:  la colonna "raee_riga" della relazione "order_items" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:323: NOTIFICA:  la colonna "categoria" della relazione "notifications" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:324: NOTIFICA:  la colonna "sottostato" della relazione "notifications" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:325: NOTIFICA:  la colonna "order_id" della relazione "notifications" esiste già, saltata
+ALTER TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:332: NOTIFICA:  la relazione "session" esiste già, saltata
+CREATE TABLE
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:333: NOTIFICA:  la relazione "idx_session_expire" esiste già, saltata
+CREATE INDEX
+BEGIN
+INSERT 0 0
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:363: ERRORE:  la colonna "priorita" della relazione "macro_categorie" non esiste
+RIGA 1: ...ie" ("slug","nome","icona","descrizione","ordine","priorita"...
+                                                             ^
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:369: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:379: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:882: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:1384: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:1886: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:2388: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:2890: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:3392: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:3894: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:4396: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:4898: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:5400: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:5902: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:6404: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:6906: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:7408: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:7910: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:8412: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:8914: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:9416: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:9918: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:10420: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:10922: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:11424: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:11926: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:12428: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:12930: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:13432: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:13934: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:14436: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:14938: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:15440: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:15942: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:16444: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:16946: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:17448: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:17950: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:18452: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:18954: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:19456: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:19958: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:20460: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:20962: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:21464: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:21966: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:22468: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:22970: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:23472: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:23974: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:24476: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:24978: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:25480: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:25982: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:26484: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:26986: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:27488: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:27990: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:28492: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:28994: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:29496: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:29998: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:30500: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:31002: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:31504: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:32006: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:32508: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:33010: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:33512: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:34014: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:34516: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:35018: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:35520: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:36022: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:36524: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:37026: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:37528: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:38030: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:38532: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:39034: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:39536: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:40038: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:40540: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:41042: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:41544: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:42046: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:42548: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:43050: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:43552: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:44054: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:44556: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:45058: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:45560: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:46062: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:46564: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:47066: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:47568: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:48070: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:48572: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:49074: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:49576: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:50078: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:50580: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:51082: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:51584: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:51768: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:52271: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:52773: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:53275: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:53777: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:54279: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:54781: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:55283: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:55785: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:56287: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:56789: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:57291: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:57793: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:58295: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:58797: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:59299: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:59801: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:60303: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:60805: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:61307: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:61809: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:62311: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:62813: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:63315: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:63817: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:64319: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:64821: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:65323: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:65825: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:66327: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:66829: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:67331: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:67833: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:68335: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:68837: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:69339: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:69841: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:70343: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:70845: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:71347: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:71849: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:72351: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:72853: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:73355: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:73857: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:74359: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:74861: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:75363: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:75865: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:76367: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:76869: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:77371: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:77873: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:78375: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:78877: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:79379: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:79881: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:80383: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:80885: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:81387: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:81889: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:82391: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:82893: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:83395: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:83897: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:84399: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:84901: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:85403: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:85905: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:86407: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:86909: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:87411: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:87913: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:88415: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:88917: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:89419: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:89921: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:90423: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:90925: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:91427: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:91929: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:92431: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:92933: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:93435: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:93937: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:94439: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:94941: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:95443: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:95945: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:96447: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:96949: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:97451: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:97953: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:98455: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:98957: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:99459: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:99961: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:100463: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:100965: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:101467: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:101969: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:102471: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:102973: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:103475: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:103977: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:104479: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:104981: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:105483: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:105985: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:106487: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:106989: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:107491: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:107993: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:108495: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:108997: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:109499: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:110001: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:110503: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:111005: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:111507: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:112009: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:112511: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:113013: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:113515: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:114017: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:114519: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:115021: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:115523: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:116025: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:116527: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:117029: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:117531: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:118033: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:118535: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:119037: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:119539: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:120041: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:120543: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:121045: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:121547: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:122049: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:122551: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:123053: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:123555: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:124057: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:124559: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:125061: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:125563: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:126065: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:126567: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:127069: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:127571: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:128073: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:128575: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:129077: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:129579: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:130081: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:130583: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:131085: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:131587: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:132089: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:132591: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:133093: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:133595: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:134097: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:134599: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:135101: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:135603: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:136105: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:136607: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:137109: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:137611: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:138113: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:138615: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:139117: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:139619: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:140121: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:140623: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:141125: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:141627: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:142129: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:142631: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:143133: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:143635: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:144137: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:144639: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:145141: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:145643: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:146145: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:146647: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:147149: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:147651: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:148153: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:148655: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:149157: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:149659: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:150161: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:150663: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:151165: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:151667: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:152169: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:152671: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:153173: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:153675: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:154177: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:154679: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:155181: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:155683: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:156185: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:156687: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:157189: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:157691: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:158193: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:158695: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:159197: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:159699: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:160201: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:160703: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:161205: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:161707: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:162209: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:162711: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:163213: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:163715: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:164217: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:164719: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:165221: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:165723: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:166225: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:166727: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:167229: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:167731: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:168233: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:168735: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:169237: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:169739: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:170241: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:170743: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:171245: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:171747: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:172249: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:172751: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:173253: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:173755: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:174257: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:174759: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:175261: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:175763: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:176265: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:176767: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:177269: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:177771: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:178273: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:178775: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:179277: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:179779: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:180281: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:180783: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:181285: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:181787: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:182289: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:182791: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:183293: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:183795: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:184297: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:184799: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:185301: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:185803: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:186305: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:186807: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:187309: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:187811: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:188313: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:188815: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:189317: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:189819: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:190321: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:190823: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:191325: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:191827: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:192329: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:192831: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:193333: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:193835: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:194337: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:194839: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:195341: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:195843: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:196345: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:196847: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:197349: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:197851: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:198353: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:198855: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:199357: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:199859: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:200361: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:200863: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:201365: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:201867: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:202369: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:202871: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:203373: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:203875: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:204377: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:204879: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:205381: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:205883: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:205931: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:205962: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:206013: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:206056: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:206070: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:206074: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:206079: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+psql:C:/Users/SAMSUNG/lavoro/APPMINUTERIA/db/supabase_dump.sql:206205: ERRORE:  la transazione corrente è interrotta, i comandi saranno ignorati fino alla fine del blocco della transazione
+ROLLBACK
+ setval 
+--------
+      7
+(1 riga)
+
+ setval 
+--------
+  51246
+(1 riga)
+
+ setval 
+--------
+      9
+(1 riga)
+
+ setval 
+--------
+     14
+(1 riga)
+
+ setval 
+--------
+      3
+(1 riga)
+
+ setval 
+--------
+ 153669
+(1 riga)
+
+ setval 
+--------
+     39
+(1 riga)
+
+ setval 
+--------
+     62
+(1 riga)
+
+ setval 
+--------
+     78
+(1 riga)
+
+ setval 
+--------
+     19
+(1 riga)
+
+ setval 
+--------
+    123
+(1 riga)
+

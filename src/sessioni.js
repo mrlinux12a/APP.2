@@ -26,6 +26,12 @@ class ArchivioSqlite extends session.Store {
     return new Date(Date.now() + DURATA_PREDEFINITA);
   }
 
+  // Formato compatibile con datetime('now') di SQLite ("YYYY-MM-DD HH:MM:SS"), così i
+  // confronti WHERE expire > datetime('now') restano corretti anche testuali.
+  formatoSqlite(date) {
+    return date.toISOString().slice(0, 19).replace('T', ' ');
+  }
+
   get(sid, callback) {
     const isPg = !!process.env.DATABASE_URL;
     const sql = isPg ? 'SELECT sess FROM session WHERE sid = ? AND expire > NOW()' : "SELECT sess FROM session WHERE sid = ? AND expire > datetime('now')";
@@ -42,20 +48,23 @@ class ArchivioSqlite extends session.Store {
   }
 
   set(sid, sess, callback) {
-    const expire = this.scadenza(sess);
-    const sessJson = JSON.stringify(sess);
     const isPg = !!process.env.DATABASE_URL;
+    const expire = this.scadenza(sess);
+    const expireParam = isPg ? expire : this.formatoSqlite(expire);
+    const sessJson = JSON.stringify(sess);
     const sql = isPg
       ? `INSERT INTO session (sid, sess, expire) VALUES (?, ?, ?) ON CONFLICT(sid) DO UPDATE SET sess = EXCLUDED.sess, expire = EXCLUDED.expire`
       : `INSERT INTO session (sid, sess, expire) VALUES (?, ?, ?) ON CONFLICT(sid) DO UPDATE SET sess = excluded.sess, expire = excluded.expire`;
-    db.prepare(sql).run(sid, sessJson, expire)
+    db.prepare(sql).run(sid, sessJson, expireParam)
       .then(() => callback(null))
       .catch(err => callback(err));
   }
 
   touch(sid, sess, callback) {
+    const isPg = !!process.env.DATABASE_URL;
     const expire = this.scadenza(sess);
-    db.prepare('UPDATE session SET expire = ? WHERE sid = ?').run(expire, sid)
+    const expireParam = isPg ? expire : this.formatoSqlite(expire);
+    db.prepare('UPDATE session SET expire = ? WHERE sid = ?').run(expireParam, sid)
       .then(() => callback(null))
       .catch(err => callback(err));
   }
