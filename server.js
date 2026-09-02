@@ -107,7 +107,7 @@ async function righeCarrello(req) {
 // modo 'imposta' (pagina carrello): le quantità sostituiscono, lo zero rimuove la riga.
 function aggiornaCarrelloDaForm(req, modo = 'aggiungi') {
   const carrello = getCarrello(req);
-  for (const [chiave, valore] of Object.entries(req.body)) {
+  for (const [chiave, valore] of Object.entries(req.body || {})) {
     if (!chiave.startsWith('quantita_')) continue;
     const id = parseInt(chiave.slice('quantita_'.length), 10);
     if (!id) continue;
@@ -1112,7 +1112,7 @@ app.get('/distributore/richieste/:id', requireRole('distributore'), async (req, 
 app.post('/distributore/richieste/:id/rispondi', requireRole('distributore'), async (req, res) => {
   const righe = {};
   const sconti = {};
-  for (const [chiave, valore] of Object.entries(req.body)) {
+  for (const [chiave, valore] of Object.entries(req.body || {})) {
     if (chiave.startsWith('disp_')) {
       const id = parseInt(chiave.slice('disp_'.length), 10);
       if (id) righe[id] = parseInt(valore, 10) || 0;
@@ -1201,7 +1201,7 @@ app.post('/distributore/clienti/:id/sconti', requireRole('distributore'), async 
 
   // I campi arrivano come sconto<n>_<ambito>_<chiave>: raggruppiamo i 5 scaglioni.
   const perRegola = new Map();
-  for (const [campo, valore] of Object.entries(req.body)) {
+  for (const [campo, valore] of Object.entries(req.body || {})) {
     const m = campo.match(/^sconto([1-5])_(marchio|macro|famiglia)_(.*)$/);
     if (!m) continue;
     const chiaveRegola = m[2] + '|' + m[3];
