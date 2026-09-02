@@ -14,19 +14,11 @@ const db = require('./db');
     if (nProd === 0) {
       console.log('DB vuoto -> eseguo seed automatico...');
       await require('./db/seed');
-    } else {
-      const r2 = await db.prepare('SELECT COUNT(*) n FROM distributor_products').get();
-      const nDp = r2 ? Number(r2.n) : 0;
-      if (nDp === 0) {
-        console.log('Listini vuoti -> popolo distributor_products...');
-        const dists = await db.prepare('SELECT id FROM distributors WHERE attivo=1').all();
-        const prods = await db.prepare('SELECT id, prezzo_listino, sconto_base_pct FROM products').all();
-        const ins = db.prepare('INSERT INTO distributor_products (distributor_id, product_id, prezzo_listino, sconto_base_pct) VALUES (?,?,?,?) ON CONFLICT DO NOTHING');
-        const tx = db.transaction(async () => { for (const d of dists) for (const p of prods) await ins.run(d.id, p.id, p.prezzo_listino, p.sconto_base_pct); });
-        await tx();
-        console.log(`Listini popolati ${dists.length * prods.length}`);
-      }
     }
+    // Il popolamento di distributor_products (prezzo/sconto per distributore) non è più
+    // automatico: con un catalogo reale da migliaia di articoli, riempirlo con sconto 0%
+    // per tutti sarebbe dato finto, non un listino vero. Va fatto deliberatamente quando
+    // sono disponibili le condizioni reali negoziate con ogni distributore.
   } catch (e) { console.error('auto-seed fallito', e.message); }
 })();
 
