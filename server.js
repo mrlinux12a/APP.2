@@ -445,6 +445,7 @@ app.get('/carrello', requireRole('cliente'), async (req, res) => {
   const totali = await pricing.calcolaOrdine(righe);
   const minimo = await pricing.getOrdineMinimo();
   const spedizione = await pricing.getSpedizioneFissa();
+  const servizioPct = await pricing.getServizioPct();
 
   res.render('carrello', {
     titolo: 'Riepilogo',
@@ -456,6 +457,8 @@ app.get('/carrello', requireRole('cliente'), async (req, res) => {
     mancaAlMinimo: pricing.round2(Math.max(0, minimo - totali.totale_finale)),
     raggiunto: totali.totale_finale >= minimo,
     ivaPct: await pricing.getIvaPct(),
+    // Il template non può fare "await": qui il prezzo è già un numero, non una Promise.
+    prezzoCliente: (riga) => pricing.prezzoClienteConPct(riga, servizioPct),
   });
 });
 
@@ -625,6 +628,7 @@ app.get('/richieste/:id/offerta/:distributorId', requireRole('cliente'), async (
   const modalita = req.query.modalita === 'ritiro' ? 'ritiro' : 'consegna_mezzo_grossista';
   const offerta = await richieste.calcolaOfferta(richiesta.id, req.params.distributorId, { modalita });
   const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
+  const servizioPct = await pricing.getServizioPct();
 
   res.render('riepilogo', {
     titolo: "Riepilogo dell'ordine",
@@ -634,6 +638,8 @@ app.get('/richieste/:id/offerta/:distributorId', requireRole('cliente'), async (
     modalita,
     cliente,
     ivaPct: await pricing.getIvaPct(),
+    // Il template non può fare "await": qui il prezzo è già un numero, non una Promise.
+    prezzoCliente: (riga) => pricing.prezzoClienteConPct(riga, servizioPct),
   });
 });
 
@@ -1083,6 +1089,7 @@ app.get('/distributore/richieste/:id', requireRole('distributore'), async (req, 
     : null;
 
   const secondi = await richieste.secondiRimasti(richiesta);
+  const servizioPct = await pricing.getServizioPct();
   res.render('distributore_dettaglio', {
     titolo: 'Richiesta #' + richiesta.id,
     richiesta,
@@ -1102,7 +1109,9 @@ app.get('/distributore/richieste/:id', requireRole('distributore'), async (req, 
     distanza: distanzaClienteBanco(cliente, distributore),
     // Sconto già concordato con questo cliente: precompila il modulo.
     scontoCliente: await richieste.scontoCliente(distributorId, richiesta.cliente_id),
-    servizioPct: await pricing.getServizioPct(),
+    servizioPct,
+    // Il template non può fare "await": qui il prezzo è già un numero, non una Promise.
+    prezzoCliente: (riga) => pricing.prezzoClienteConPct(riga, servizioPct),
     errore: req.query.errore || null,
   });
 });

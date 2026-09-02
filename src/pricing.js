@@ -45,7 +45,14 @@ function prezzoNetto({ prezzo_listino, sconto_base_pct }) {
 // va sempre accompagnato da "+ IVA".
 async function prezzoCliente(riga) {
   const pct = await getServizioPct();
-  return round2(prezzoNetto(riga) * (1 + pct / 100));
+  return prezzoClienteConPct(riga, pct);
+}
+
+// Versione sincrona per i template EJS (che non possono fare "await" dentro <%= %>):
+// la percentuale di servizio si legge una volta sola per richiesta, poi il calcolo
+// per riga è puro e non tocca il DB.
+function prezzoClienteConPct(riga, servizioPct) {
+  return round2(prezzoNetto(riga) * (1 + servizioPct / 100));
 }
 
 // Formattazione in euro, formato italiano (1.234,56).
@@ -112,5 +119,6 @@ module.exports = {
   getSpedizioneFissa,
   prezzoNetto,
   prezzoCliente,
+  prezzoClienteConPct,
   calcolaOrdine,
 };
