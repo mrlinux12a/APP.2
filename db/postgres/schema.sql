@@ -324,6 +324,21 @@ ALTER TABLE notifications ADD COLUMN IF NOT EXISTS categoria TEXT;
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS sottostato TEXT;
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS order_id INTEGER;
 
+-- colonne trovate mancanti confrontando con lo schema sqlite effettivo (allineamento pre-import)
+ALTER TABLE macro_categorie ADD COLUMN IF NOT EXISTS priorita INTEGER NOT NULL DEFAULT 99;
+ALTER TABLE macro_categorie ADD COLUMN IF NOT EXISTS in_evidenza INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS tipo_soggetto TEXT NOT NULL DEFAULT 'impresa';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS stato_anagrafica TEXT NOT NULL DEFAULT 'attivo';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS iscritto_il TIMESTAMP;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS sottocategoria TEXT NOT NULL DEFAULT '';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS geo_lat_consegna DOUBLE PRECISION;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS geo_lng_consegna DOUBLE PRECISION;
+ALTER TABLE client_discount_rules ADD COLUMN IF NOT EXISTS sconto1 DOUBLE PRECISION;
+ALTER TABLE client_discount_rules ADD COLUMN IF NOT EXISTS sconto2 DOUBLE PRECISION;
+ALTER TABLE client_discount_rules ADD COLUMN IF NOT EXISTS sconto3 DOUBLE PRECISION;
+ALTER TABLE client_discount_rules ADD COLUMN IF NOT EXISTS sconto4 DOUBLE PRECISION;
+ALTER TABLE client_discount_rules ADD COLUMN IF NOT EXISTS sconto5 DOUBLE PRECISION;
+
 -- session store per postgres
 CREATE TABLE IF NOT EXISTS session (
   sid VARCHAR NOT NULL PRIMARY KEY,
