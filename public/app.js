@@ -173,6 +173,58 @@
     // l'utente digita: non inviamo subito, lascia il pulsante Aggiorna del form come fallback
   });
 
+  // ---------- Helper condivisi per costruire una card prodotto da JSON ----------
+  // (usati sia dalla ricerca live sotto, sia dallo scroll infinito delle categorie)
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  function cardProdottoHtml(p) {
+    const barrato = p.sconto_base_pct > 0
+      ? '<span class="barrato">€ ' + p.listino + '</span>'
+      : '';
+    const disabilitato = p.disponibilita === 'non_disponibile';
+    return (
+      '<div class="prodotto" data-prodotto="' + p.id + '">' +
+      '<div class="info">' +
+      '<div class="nome">' +
+      (p.brand_nome
+        ? '<span class="marchio-tag" style="--marchio:' + esc(p.brand_colore || '#1d4e89') + '">' +
+          esc(p.brand_nome) + '</span> '
+        : '') +
+      esc(p.nome) + '</div>' +
+      '<div class="meta">Cod. ' + esc(p.codice) + ' · ' + esc(p.macro_nome || '') +
+      (p.raee ? ' · RAEE € ' + p.raee : '') +
+      ' <span class="badge badge-' + p.disponibilita + '">' + esc(p.disponibilita_testo) + '</span></div>' +
+      '<div class="prezzo">' + barrato + '€ ' + p.prezzo + ' <span class="iva">+ IVA</span></div>' +
+      '</div>' +
+      (disabilitato
+        ? '<div class="meta">non disponibile</div>'
+        : '<div class="prodotto-azioni">' +
+          '<div class="stepper">' +
+          '<button type="button" data-passo="-1" aria-label="Togli">−</button>' +
+          '<input type="number" min="0" step="1" inputmode="numeric" data-qta data-prodotto-qta="' + p.id + '" value="0">' +
+          '<button type="button" data-passo="1" aria-label="Aggiungi">+</button>' +
+          '</div>' +
+          '<div class="mini-carrello" data-nel-carrello="' + p.id + '" hidden><span>Nel carrello: <strong data-qta-carrello="' + p.id + '">0</strong> pz</span></div>' +
+          '</div>') +
+      '</div>'
+    );
+  }
+
+  // Dopo aver inserito nuove card nel DOM: aggancia i loro quantità/mini-carrello e
+  // aggiorna la barra in fondo. Serve sia dopo una sostituzione che dopo un'aggiunta.
+  function risincronizzaCarrelloVisibile() {
+    fetch('/api/carrello').then(function (r) { return r.json(); }).then(function (d) {
+      if (!d.carrello) return;
+      Object.keys(d.carrello).forEach(function (id) { aggiornaMiniCard(id, d.carrello[id]); });
+    }).catch(function () {});
+    ricalcolaBarra();
+  }
+
   // ---------- Ricerca parziale mentre si digita ----------
 
   const campoRicerca = document.querySelector('[data-ricerca]');
@@ -217,60 +269,61 @@
         .catch(function () { /* offline: resta l'ultimo elenco mostrato */ });
     }
 
-    function esc(s) {
-      return String(s).replace(/[&<>"]/g, function (c) {
-        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
-      });
-    }
-
     function disegnaRisultati(risultati) {
       if (!risultati.length) {
         contenitore.innerHTML =
           '<div class="vuoto"><span class="emoji">🤷</span>Nessun prodotto trovato.</div>';
         return;
       }
-      const html = risultati
-        .map(function (p) {
-          const barrato = p.sconto_base_pct > 0
-            ? '<span class="barrato">€ ' + p.listino + '</span>'
-            : '';
-          const disabilitato = p.disponibilita === 'non_disponibile';
-          return (
-            '<div class="prodotto" data-prodotto="' + p.id + '">' +
-            '<div class="info">' +
-            '<div class="nome">' +
-            (p.brand_nome
-              ? '<span class="marchio-tag" style="--marchio:' + esc(p.brand_colore || '#1d4e89') + '">' +
-                esc(p.brand_nome) + '</span> '
-              : '') +
-            esc(p.nome) + '</div>' +
-            '<div class="meta">Cod. ' + esc(p.codice) + ' · ' + esc(p.macro_nome || '') +
-            (p.raee ? ' · RAEE € ' + p.raee : '') +
-            ' <span class="badge badge-' + p.disponibilita + '">' + esc(p.disponibilita_testo) + '</span></div>' +
-            '<div class="prezzo">' + barrato + '€ ' + p.prezzo + ' <span class="iva">+ IVA</span></div>' +
-            '</div>' +
-            (disabilitato
-              ? '<div class="meta">non disponibile</div>'
-              : '<div class="prodotto-azioni">' +
-                '<div class="stepper">' +
-                '<button type="button" data-passo="-1" aria-label="Togli">−</button>' +
-                '<input type="number" min="0" step="1" inputmode="numeric" data-qta data-prodotto-qta="' + p.id + '" value="0">' +
-                '<button type="button" data-passo="1" aria-label="Aggiungi">+</button>' +
-                '</div>' +
-                '<div class="mini-carrello" data-nel-carrello="' + p.id + '" hidden><span>Nel carrello: <strong data-qta-carrello="' + p.id + '">0</strong> pz</span></div>' +
-                '</div>') +
-            '</div>'
-          );
-        })
-        .join('');
-      contenitore.innerHTML = '<div class="card card-fitta">' + html + '</div>';
-      fetch('/api/carrello').then(function (r) { return r.json(); }).then(function (d) {
-        if (!d.carrello) return;
-        Object.keys(d.carrello).forEach(function (id) { aggiornaMiniCard(id, d.carrello[id]); });
-      }).catch(function () {});
-      ricalcolaBarra();
+      contenitore.innerHTML = '<div class="card card-fitta">' + risultati.map(cardProdottoHtml).join('') + '</div>';
+      risincronizzaCarrelloVisibile();
     }
   }
+
+  // ---------- Scroll infinito nelle categorie ----------
+  // La prima pagina arriva già renderizzata dal server (partials/paginazione fa da
+  // fallback se JS non parte); da qui in poi, avvicinandosi al fondo della lista si
+  // carica ed accoda la pagina successiva, senza bisogno di cliccare "Successiva".
+  (function () {
+    const scrollInfinito = document.querySelector('[data-scroll-infinito]');
+    if (!scrollInfinito || !contenitore) return;
+
+    let pagina = parseInt(scrollInfinito.dataset.pagina, 10) || 1;
+    let pagine = parseInt(scrollInfinito.dataset.pagine, 10) || 1;
+    let caricamento = false;
+    const urlBase = scrollInfinito.dataset.url;
+
+    const paginazione = document.querySelector('[data-paginazione]');
+    if (paginazione) paginazione.setAttribute('hidden', ''); // sostituita dallo scroll
+
+    const sentinella = document.createElement('div');
+    sentinella.setAttribute('data-sentinella-scroll', '');
+    scrollInfinito.after(sentinella);
+
+    function caricaProssimaPagina() {
+      if (caricamento || pagina >= pagine) return;
+      caricamento = true;
+      fetch(urlBase + (urlBase.indexOf('?') === -1 ? '?' : '&') + 'pagina=' + (pagina + 1))
+        .then(function (r) { return r.json(); })
+        .then(function (dati) {
+          const cardFitta = contenitore.querySelector('.card-fitta');
+          if (cardFitta && dati.risultati && dati.risultati.length) {
+            cardFitta.insertAdjacentHTML('beforeend', dati.risultati.map(cardProdottoHtml).join(''));
+            risincronizzaCarrelloVisibile();
+          }
+          pagina = dati.pagina || pagina + 1;
+          pagine = dati.pagine || pagine;
+          caricamento = false;
+          if (pagina >= pagine) osservatore.disconnect();
+        })
+        .catch(function () { caricamento = false; });
+    }
+
+    const osservatore = new IntersectionObserver(function (voci) {
+      if (voci[0].isIntersecting) caricaProssimaPagina();
+    }, { rootMargin: '400px' });
+    osservatore.observe(sentinella);
+  })();
 
   // ---------- Schermata di attesa: countdown + polling ----------
 

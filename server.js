@@ -254,6 +254,25 @@ const TESTO_DISPONIBILITA = {
   non_disponibile: 'Non disponibile',
 };
 
+// Un prodotto di catalogo nel formato JSON usato dalla ricerca live e dallo scroll
+// infinito: la percentuale di servizio si passa già calcolata (una volta per richiesta).
+function prodottoJson(p, servizioPct) {
+  return {
+    id: p.id,
+    codice: p.codice,
+    nome: p.nome,
+    macro_nome: p.macro_nome,
+    brand_nome: p.brand_nome,
+    brand_colore: p.brand_colore,
+    raee: p.raee > 0 ? pricing.euro(p.raee) : null,
+    disponibilita: p.disponibilita,
+    disponibilita_testo: TESTO_DISPONIBILITA[p.disponibilita] || p.disponibilita,
+    sconto_base_pct: p.sconto_base_pct,
+    listino: pricing.euro(p.prezzo_listino),
+    prezzo: pricing.euro(pricing.prezzoClienteConPct(p, servizioPct)),
+  };
+}
+
 // Ricerca mentre si digita: stessa logica parziale della pagina /cerca.
 app.get('/api/cerca', requireRole('cliente'), async (req, res) => {
   const q = (req.query.q || '').trim();
@@ -267,24 +286,28 @@ app.get('/api/cerca', requireRole('cliente'), async (req, res) => {
     limite: 60,
   };
   const risultati = q.length >= 2 ? await catalogo.cercaProdotti(q, ambito) : [];
-  const risultatiMappati = [];
-  for (const p of risultati) {
-    risultatiMappati.push({
-      id: p.id,
-      codice: p.codice,
-      nome: p.nome,
-      macro_nome: p.macro_nome,
-      brand_nome: p.brand_nome,
-      brand_colore: p.brand_colore,
-      raee: p.raee > 0 ? pricing.euro(p.raee) : null,
-      disponibilita: p.disponibilita,
-      disponibilita_testo: TESTO_DISPONIBILITA[p.disponibilita] || p.disponibilita,
-      sconto_base_pct: p.sconto_base_pct,
-      listino: pricing.euro(p.prezzo_listino),
-      prezzo: pricing.euro(await pricing.prezzoCliente(p)),
-    });
-  }
-  res.json({ risultati: risultatiMappati });
+  const servizioPct = await pricing.getServizioPct();
+  res.json({ risultati: risultati.map((p) => prodottoJson(p, servizioPct)) });
+});
+
+// Pagina successiva di una categoria/sottocategoria, per lo scroll infinito: stessi
+// filtri di /categoria/:slug, ma restituisce solo i prodotti in JSON da accodare.
+app.get('/api/categoria/:slug/prodotti', requireRole('cliente'), async (req, res) => {
+  const macro = await catalogo.macroCategoria(req.params.slug);
+  if (!macro) return res.status(404).json({ risultati: [] });
+  const elenco = await catalogo.prodottiDellaCategoria(macro.slug, {
+    sotto: req.query.sotto || null,
+    misura: req.query.misura || null,
+    marchio: req.query.marchio || null,
+    pagina: req.query.pagina,
+  });
+  const servizioPct = await pricing.getServizioPct();
+  res.json({
+    risultati: elenco.righe.map((p) => prodottoJson(p, servizioPct)),
+    pagina: elenco.pagina,
+    pagine: elenco.pagine,
+    totale: elenco.totale,
+  });
 });
 
 app.get('/categoria/:slug', requireRole('cliente'), async (req, res) => {
@@ -294,6 +317,9 @@ app.get('/categoria/:slug', requireRole('cliente'), async (req, res) => {
   const sottocategorie = await catalogo.sottocategorieDi(macro.slug);
   const sottoSlug = req.query.sotto || (sottocategorie.length === 1 ? sottocategorie[0].slug : null);
   const sotto = sottoSlug ? await catalogo.sottocategoria(macro.slug, sottoSlug) : null;
+  // Senza sottocategorie censite si sfoglia direttamente tutta la macro categoria,
+  // invece di mostrare un elenco di sottocategorie vuoto.
+  const sfogliaDiretto = sottocategorie.length === 0;
   const misura = req.query.misura || null;
   const marchio = req.query.marchio || null;
   const q = (req.query.q || '').trim();
@@ -304,7 +330,7 @@ app.get('/categoria/:slug', requireRole('cliente'), async (req, res) => {
         righe: await catalogo.cercaProdotti(q, { macroSlug: macro.slug, sotto: sottoSlug, limite: 60 }),
         ricerca: true,
       }
-    : sottoSlug
+    : sottoSlug || sfogliaDiretto
     ? await catalogo.prodottiDellaCategoria(macro.slug, { sotto: sottoSlug, misura, marchio, pagina: req.query.p })
     : null;
 
@@ -315,9 +341,9 @@ app.get('/categoria/:slug', requireRole('cliente'), async (req, res) => {
     sotto,
     sottoSlug,
     // La misura è il primo filtro utile in cantiere; il marchio viene dopo.
-    misure: sottoSlug ? await catalogo.misureDisponibili({ macroSlug: macro.slug, sotto: sottoSlug }) : [],
+    misure: sottoSlug || sfogliaDiretto ? await catalogo.misureDisponibili({ macroSlug: macro.slug, sotto: sottoSlug }) : [],
     misura,
-    marchi: sottoSlug ? await catalogo.marchiNellaCategoria({ macroSlug: macro.slug, sotto: sottoSlug }) : [],
+    marchi: sottoSlug || sfogliaDiretto ? await catalogo.marchiNellaCategoria({ macroSlug: macro.slug, sotto: sottoSlug }) : [],
     marchio,
     q,
     elenco,

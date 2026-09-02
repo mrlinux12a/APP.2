@@ -99,6 +99,17 @@
           <div data-paginazione>
             <%- include('partials/paginazione', { elenco, base: conFiltri({}) + (conFiltri({}).indexOf('?') === -1 ? '?' : '') }) %>
           </div>
+          <%
+            const parametriApi = [];
+            if (sottoSlug) parametriApi.push('sotto=' + encodeURIComponent(sottoSlug));
+            if (misura) parametriApi.push('misura=' + encodeURIComponent(misura));
+            if (marchio) parametriApi.push('marchio=' + encodeURIComponent(marchio));
+          %>
+          <div hidden
+               data-scroll-infinito
+               data-pagina="<%= elenco.pagina %>"
+               data-pagine="<%= elenco.pagine %>"
+               data-url="/api/categoria/<%= macro.slug %>/prodotti<%= parametriApi.length ? '?' + parametriApi.join('&') : '' %>"></div>
         <% } %>
 
         <p class="nota">

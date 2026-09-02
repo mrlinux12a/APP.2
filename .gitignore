@@ -8,3 +8,5 @@ db/supabase_dump_nt.sql
 
 # Config locale di anteprima (percorsi assoluti della macchina)
 .claude/
+.vercel
+.env*
