@@ -43,7 +43,7 @@
                 <span class="etichetta">Richiesta #<%= r.id %> — <%= r.cliente_nome %></span>
                 <span class="dettaglio"><%= r.pezzi %> pz · ricevuta <%= fmt.oraSola(r.creato_il) %></span>
               </span>
-              <span class="stato-badge stato-in_attesa"><%= fmt.mmss(Math.max(0, r.secondi)) %></span>
+              <span class="stato-badge stato-in_attesa" data-countdown-live data-secondi="<%= Math.max(0, r.secondi) %>"><%= fmt.mmss(Math.max(0, r.secondi)) %></span>
             </a>
           <% }); %>
         </div>

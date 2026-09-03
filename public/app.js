@@ -280,6 +280,21 @@
     }
   }
 
+  // ---------- Ricerca dalla home: appena scritte 3 lettere si va ai risultati ----------
+  // (senza dover premere "Cerca" o Invio; su /cerca poi la ricerca è già live mentre si scrive)
+  const campoRicercaHome = document.querySelector('[data-auto-cerca]');
+  if (campoRicercaHome) {
+    let timerHome = null;
+    campoRicercaHome.addEventListener('input', function () {
+      clearTimeout(timerHome);
+      const q = campoRicercaHome.value.trim();
+      if (q.length < 3) return;
+      timerHome = setTimeout(function () {
+        window.location.href = '/cerca?q=' + encodeURIComponent(q);
+      }, 350);
+    });
+  }
+
   // ---------- Scroll infinito nelle categorie ----------
   // La prima pagina arriva già renderizzata dal server (partials/paginazione fa da
   // fallback se JS non parte); da qui in poi, avvicinandosi al fondo della lista si
@@ -823,5 +838,25 @@
         if (sec===0) setTimeout(function(){ window.location.reload(); }, 2500);
       }, 1000);
     }
+  });
+})();
+
+/* Countdown generico: qualsiasi elemento con data-countdown-live si aggiorna da solo
+   ogni secondo (finestra di risposta del banco, elenco richieste, ecc.), invece di
+   restare fermo al valore calcolato dal server al momento del caricamento pagina.
+   Con data-ricarica-a-zero, allo scadere ricarica la pagina per mostrare il nuovo stato. */
+(function () {
+  'use strict';
+  document.querySelectorAll('[data-countdown-live]').forEach(function (el) {
+    let sec = parseInt(el.getAttribute('data-secondi'), 10) || 0;
+    if (sec <= 0) return;
+    const ricarica = el.hasAttribute('data-ricarica-a-zero');
+    setInterval(function () {
+      sec = Math.max(0, sec - 1);
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      el.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+      if (sec === 0 && ricarica) setTimeout(function () { window.location.reload(); }, 2500);
+    }, 1000);
   });
 })();

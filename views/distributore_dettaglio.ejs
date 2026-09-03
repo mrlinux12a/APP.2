@@ -20,7 +20,7 @@
             <span class="etichetta">Ricevuta alle <%= fmt.oraSola(richiesta.creato_il) %></span>
             <span class="dettaglio">
               <% if (apribile) { %>
-                Restano <%= fmt.mmss(secondi) %> per rispondere
+                Restano <span data-countdown-live data-secondi="<%= secondi %>" data-ricarica-a-zero><%= fmt.mmss(secondi) %></span> per rispondere
               <% } else { %>
                 Finestra di conferma chiusa
               <% } %>

@@ -11,7 +11,7 @@
       <h1 class="domanda">Cosa ti serve?</h1>
       <form class="barra-ricerca grande" method="GET" action="/cerca">
         <span class="lente">🔍</span>
-        <input type="search" name="q" enterkeyhint="search"
+        <input type="search" name="q" enterkeyhint="search" data-auto-cerca
                placeholder="Es. valvola sfera 3/4, raccordo 16, guarnizione"
                aria-label="Cerca un pezzo">
         <button type="submit">Cerca</button>
@@ -20,7 +20,6 @@
         Scrivi anche solo un pezzo di parola o la misura: <strong>valv 3/4</strong> basta.
       </p>
 
-      <div class="sezione-titolo">Le più richieste</div>
       <div class="griglia-evidenza">
         <% inEvidenza.forEach(function (m) { %>
           <a class="tessera-grande" href="/categoria/<%= m.slug %>">
