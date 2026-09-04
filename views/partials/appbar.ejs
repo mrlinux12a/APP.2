@@ -15,9 +15,23 @@
     <% } %>
 
     <% if (currentUser) { %>
+      <button class="icona-btn" type="button" data-tema-toggle aria-label="Cambia modalità chiara/scura">
+        <svg data-tema-scuro width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4.2"/>
+          <path d="M12 3v2.2M12 18.8V21M21 12h-2.2M5.2 12H3M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6M18.4 18.4l-1.6-1.6M7.2 7.2 5.6 5.6"/>
+        </svg>
+        <svg data-tema-chiaro hidden width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"/>
+        </svg>
+      </button>
+
       <div class="menu-account" data-menu-account>
-        <button class="icona-btn" type="button" data-menu-apri
-                aria-haspopup="true" aria-expanded="false" aria-label="Menu account">👤</button>
+        <button class="icona-btn icona-account" type="button" data-menu-apri
+                aria-haspopup="true" aria-expanded="false" aria-label="Menu account">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="8" r="3.4"/><path d="M5 19c1.2-3.6 4-5.4 7-5.4s5.8 1.8 7 5.4"/>
+          </svg>
+        </button>
         <div class="tendina" data-menu-tendina hidden>
           <div class="tendina-testata">
             <div class="nome"><%= currentUser.ragione_sociale %></div>
@@ -28,7 +42,7 @@
           </div>
           <% if (currentUser.ruolo === 'cliente') { %>
             <a href="/profilo">La mia anagrafica</a>
-            <a href="/ordini">Stato ordini</a>
+            <a href="/storico">Storico</a>
           <% } else if (currentUser.ruolo === 'distributore') { %>
             <a href="/distributore/clienti">Clienti</a>
             <a href="/distributore/ordini">Ordini da evadere</a>

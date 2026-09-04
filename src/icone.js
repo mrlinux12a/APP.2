@@ -93,9 +93,9 @@ function iconaCategoria(slug) {
 // Icone di ricerca e barra di navigazione: stesso stile, colore fisso per tema
 // (ambra in scuro, nera in chiaro) gestito in CSS via --icona-nav.
 const iconaLente = (
-  '<svg viewBox="0 0 24 24" width="1.12em" height="1.12em" fill="none" stroke="currentColor" ' +
+  '<svg viewBox="0 0 24 24" width="1.22em" height="1.22em" fill="none" stroke="currentColor" ' +
   'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
-  'style="vertical-align:-0.17em" aria-hidden="true">' +
+  'style="vertical-align:-0.2em" aria-hidden="true">' +
   '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.2 15.2l5 5"/>' +
   '</svg>'
 );

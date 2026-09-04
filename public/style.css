@@ -562,6 +562,7 @@ a { color: var(--blu); }
 }
 .navbar a .ico { display: block; font-size: 1.25rem; line-height: 1.2; color: var(--icona-nav); }
 .navbar a.attivo { color: var(--blu); font-weight: 700; }
+:root:not([data-tema="chiaro"]) .navbar a.attivo { color: #ffffff; }
 .navbar a .pallino {
   position: absolute;
   top: 4px;
