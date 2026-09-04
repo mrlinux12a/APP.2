@@ -1,0 +1,2954 @@
+NOMI CHE NASCONDONO PRODOTTI DIVERSI (stesso nome, codici e prezzi diversi)
+Generato il 2026-09-03T16:17:03.269Z
+
+Metodo: se due codici diversi hanno lo stesso nome ESATTO ma prezzi molto
+diversi, sono quasi certamente prodotti diversi (taglie/potenze/modelli
+diversi) — il nome non contiene l'informazione che li distingue davvero.
+Ordinati dal caso più grave (prezzo più diverso) al meno grave.
+
+Totale gruppi con prezzi diversi: 512
+==============================================================================
+
+x2  RAPPORTO PREZZO 56.7  (da €5.49 a €311.27)  [Ricambi]
+   "Valvola Sicurezza"
+     cod 54793807  €5.49
+     cod 59688063  €311.27
+
+x5  RAPPORTO PREZZO 32.0  (da €0.35 a €11.20)  [Ricambi]
+   "Guarnizione"
+     cod 68872155  €0.35
+     cod 12350841  €2.33
+     cod 12708213  €2.75
+     cod 12588199  €5.79
+     cod 12385034  €11.20
+
+x4  RAPPORTO PREZZO 25.1  (da €11.55 a €289.45)  [Ricambi E Accessori]
+   "Rosetta Cromo"
+     cod 53537339  €11.55
+     cod 93842707  €16.10
+     cod 43852110  €39.20
+     cod 12467353  €289.45
+
+x2  RAPPORTO PREZZO 16.7  (da €1.05 a €17.50)  [Ricambi E Accessori]
+   "Inserto A Scatto Confezione 10 Pezzi"
+     cod 96735766  €1.05
+     cod 12451327  €17.50
+
+x2  RAPPORTO PREZZO 11.8  (da €46.79 a €552.40)  [Acqua]
+   "Contatore Acqua Fredda Con Quadrante Bagnato"
+     cod 12749155  €46.79
+     cod 47314916  €552.40
+
+x2  RAPPORTO PREZZO 11.2  (da €1.36 a €15.24)  [Ricambi]
+   "Magnete"
+     cod 90568243  €1.36
+     cod 26570146  €15.24
+
+x3  RAPPORTO PREZZO 10.5  (da €2.82 a €29.75)  [Ricambi]
+   "Set Di Fissaggio"
+     cod 12730836  €2.82
+     cod 12519296  €8.40
+     cod 48075249  €29.75
+
+x10  RAPPORTO PREZZO 9.4  (da €4.55 a €42.70)  [Ricambi E Accessori]
+   "Mousseur Cromo"
+     cod 38233275  €4.55
+     cod 66836123  €7.35
+     cod 12667169  €9.45
+     cod 12876259  €9.80
+     cod 12533481  €12.25
+     cod 12808005  €18.90
+     cod 16173374  €27.65
+     cod 12461362  €34.30
+     cod 12670901  €39.20
+     cod 91694435  €42.70
+
+x18  RAPPORTO PREZZO 9.1  (da €347.00 a €3147.84)  [Residenziale]
+   "Split<comp<h/p"
+     cod 32134386  €347.00
+     cod 11892185  €358.00
+     cod 67599447  €397.00
+     cod 10307652  €477.00
+     cod 97422090  €658.08
+     cod 46150027  €675.00
+     cod 43044126  €762.72
+     cod 61147100  €773.00
+     cod 30607785  €890.88
+     cod 77487451  €890.88
+     cod 18951328  €955.00
+     cod 72483793  €996.00
+     cod 31192225  €1095.36
+     cod 30206583  €1141.44
+     cod 12314128  €1145.76
+     cod 56589131  €1347.36
+     cod 19046772  €2750.88
+     cod 10281764  €3147.84
+
+x3  RAPPORTO PREZZO 8.7  (da €0.35 a €3.04)  [Ricambi]
+   "O-ring"
+     cod 12927087  €0.35
+     cod 27926405  €0.68
+     cod 22789716  €3.04
+
+x21  RAPPORTO PREZZO 7.3  (da €176.00 a €1276.80)  [Residenziale]
+   "Split<no Comp<h/p"
+     cod 34759903  €176.00
+     cod 94467201  €184.00
+     cod 92274255  €222.00
+     cod 56363574  €269.00
+     cod 81420117  €379.00
+     cod 68065427  €450.00
+     cod 48818855  €660.96
+     cod 92421830  €678.72
+     cod 26765866  €695.04
+     cod 39430706  €712.32
+     cod 55854877  €732.00
+     cod 53020108  €765.12
+     cod 12920288  €768.48
+     cod 65181946  €774.24
+     cod 88159498  €795.84
+     cod 91436188  €855.36
+     cod 12920289  €879.36
+     cod 74067095  €961.92
+     cod 55773438  €1152.00
+     cod 58125565  €1186.08
+     cod 82027679  €1276.80
+
+x3  RAPPORTO PREZZO 7.0  (da €700.13 a €4895.59)  [Estia]
+   "Unità Interna Idronica Tipo "estia" Aio Serie 1"
+     cod 99380537  €700.13
+     cod 10488155  €4450.06
+     cod 12821987  €4895.59
+
+x4  RAPPORTO PREZZO 6.4  (da €10.15 a €64.75)  [Ricambi E Accessori]
+   "Telaio Di Supporto"
+     cod 48918347  €10.15
+     cod 12749579  €13.30
+     cod 12585630  €52.85
+     cod 81712527  €64.75
+
+x4  RAPPORTO PREZZO 6.3  (da €2.52 a €15.75)  [Ricambi E Accessori]
+   "Guarnizione Tonda Confezione 10 Pezzi"
+     cod 12450213  €2.52
+     cod 12693407  €7.00
+     cod 25731521  €8.05
+     cod 12066465  €15.75
+
+x2  RAPPORTO PREZZO 5.5  (da €1.09 a €6.00)  [Solar - Fix]
+   "Pmu Morsetto Unico"
+     cod 28434246  €1.09
+     cod 12699326  €6.00
+
+x2  RAPPORTO PREZZO 5.5  (da €20.41 a €111.60)  [Commerciale]
+   "Accappliedfcun-u"
+     cod 42143537  €20.41
+     cod 64011584  €111.60
+
+x2  RAPPORTO PREZZO 5.1  (da €93.45 a €476.70)  [Ricambi E Accessori]
+   "Bocca Cromo"
+     cod 69024875  €93.45
+     cod 80898136  €476.70
+
+x5  RAPPORTO PREZZO 4.9  (da €26.60 a €130.20)  [Ricambi E Accessori]
+   "Doccetta Estraibile Cromo"
+     cod 12524930  €26.60
+     cod 12591792  €57.40
+     cod 12536841  €84.00
+     cod 43623174  €84.00
+     cod 12572681  €130.20
+
+x3  RAPPORTO PREZZO 4.9  (da €6.30 a €30.80)  [Ricambi E Accessori]
+   "Valvola Di Non Ritorno"
+     cod 12434940  €6.30
+     cod 12695417  €12.95
+     cod 58439594  €30.80
+
+x4  RAPPORTO PREZZO 4.7  (da €19.60 a €93.10)  [Ricambi E Accessori]
+   "Doccetta Estraibile Per Miscelatore Lavello Cromo"
+     cod 25574346  €19.60
+     cod 12689799  €38.15
+     cod 12573179  €66.15
+     cod 12391972  €93.10
+
+x5  RAPPORTO PREZZO 4.7  (da €58.28 a €274.97)  [Combustibili]
+   "Regolatore Di Pressione Gpl E Metano Con Filtro"
+     cod 12708804  €58.28
+     cod 73733624  €89.47
+     cod 12649494  €197.81
+     cod 12772580  €197.81
+     cod 12550162  €274.97
+
+x4  RAPPORTO PREZZO 4.3  (da €87.00 a €373.08)  [Monoparete Rigido e Flessibile Plastica]
+   "Ispezione Con Tappo"
+     cod 12697239  €87.00
+     cod 52772641  €261.78
+     cod 12771604  €354.60
+     cod 30015403  €373.08
+
+x2  RAPPORTO PREZZO 4.2  (da €8.40 a €35.00)  [Ricambi E Accessori]
+   "Leva Per Eurosmart Cromo"
+     cod 12573439  €8.40
+     cod 12560037  €35.00
+
+x3  RAPPORTO PREZZO 4.1  (da €5.95 a €24.33)  [Ricambi]
+   "Filtro"
+     cod 12899685  €5.95
+     cod 88756667  €16.45
+     cod 12760197  €24.33
+
+x3  RAPPORTO PREZZO 4.0  (da €85.92 a €347.04)  [Doppia Parete Coiben. Lana Minerale Inox]
+   "Scarico Condensa Verticale"
+     cod 12783658  €85.92
+     cod 12771605  €123.00
+     cod 12807488  €347.04
+
+x13  RAPPORTO PREZZO 3.9  (da €13.70 a €53.80)  [Ricambi]
+   "Termostato"
+     cod 34272046  €13.70
+     cod 16923312  €14.71
+     cod 62673149  €15.38
+     cod 39546831  €19.03
+     cod 19763834  €19.62
+     cod 72734594  €19.62
+     cod 72246205  €20.56
+     cod 78825691  €21.65
+     cod 19104197  €24.20
+     cod 33832213  €30.02
+     cod 12447851  €33.03
+     cod 89218903  €38.99
+     cod 31562118  €53.80
+
+x2  RAPPORTO PREZZO 3.9  (da €92.63 a €357.48)  [Sistemi Di Climatizzazione Radiante]
+   "Pann Radiante Cartongesso"
+     cod 82036422  €92.63
+     cod 94481604  €357.48
+
+x3  RAPPORTO PREZZO 3.8  (da €20.52 a €77.58)  [Doppia Parete Coiben. Lana Minerale Inox]
+   "Fascia Parapioggia"
+     cod 12783085  €20.52
+     cod 12802747  €23.82
+     cod 12847335  €77.58
+
+x3  RAPPORTO PREZZO 3.7  (da €43.03 a €160.02)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø3/4" 0,25m3/h"
+     cod 12496815  €43.03
+     cod 12908549  €103.95
+     cod 68644096  €160.02
+
+x6  RAPPORTO PREZZO 3.5  (da €20.42 a €71.55)  [Ricambi]
+   "Resistenza 1500w 220-240v"
+     cod 62320294  €20.42
+     cod 65236291  €22.86
+     cod 20119404  €23.11
+     cod 81817775  €29.60
+     cod 31989877  €33.31
+     cod 79493606  €71.55
+
+x3  RAPPORTO PREZZO 3.5  (da €79.38 a €275.94)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø1.1/4" 3,25m3/h"
+     cod 32950884  €79.38
+     cod 40134609  €194.67
+     cod 71408020  €275.94
+
+x2  RAPPORTO PREZZO 3.5  (da €79.38 a €275.94)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø1.1/4" 3m3/h"
+     cod 80450356  €79.38
+     cod 83851505  €275.94
+
+x3  RAPPORTO PREZZO 3.5  (da €3.24 a €11.20)  [Ricambi]
+   "Leva"
+     cod 12588201  €3.24
+     cod 12404211  €10.15
+     cod 25355883  €11.20
+
+x3  RAPPORTO PREZZO 3.5  (da €68.04 a €234.99)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø1" 1,6m3/h"
+     cod 12501786  €68.04
+     cod 12419288  €157.50
+     cod 74721684  €234.99
+
+x3  RAPPORTO PREZZO 3.5  (da €68.04 a €234.99)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø1" 1,2m3/h"
+     cod 12501791  €68.04
+     cod 26294933  €157.50
+     cod 12474363  €234.99
+
+x3  RAPPORTO PREZZO 3.5  (da €68.04 a €234.99)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø1" 2m3/h"
+     cod 12501793  €68.04
+     cod 12761623  €157.50
+     cod 12792441  €234.99
+
+x2  RAPPORTO PREZZO 3.4  (da €38.18 a €129.78)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø1/2" 0,25m3/h"
+     cod 12441152  €38.18
+     cod 12619727  €129.78
+
+x2  RAPPORTO PREZZO 3.4  (da €82.95 a €281.40)  [Ricambi E Accessori]
+   "Set Di Guarnizioni"
+     cod 47290361  €82.95
+     cod 56986909  €281.40
+
+x5  RAPPORTO PREZZO 3.4  (da €1058.15 a €3569.59)  [Estia]
+   "Unità Esterna Inverter In Pompa Di Calore Tipo "estia" Serie 1 1f"
+     cod 12747503  €1058.15
+     cod 12747504  €1357.82
+     cod 12747505  €1668.11
+     cod 12747506  €2885.38
+     cod 74854361  €3569.59
+
+x7  RAPPORTO PREZZO 3.3  (da €249.29 a €816.82)  [Residenziale]
+   "Unità Esterna Inverter Pompa Di Calore R32 - "classic""
+     cod 35228349  €249.29
+     cod 61877799  €254.59
+     cod 40281099  €270.50
+     cod 34687008  €299.68
+     cod 73056376  €503.88
+     cod 22474845  €689.52
+     cod 99581202  €816.82
+
+x3  RAPPORTO PREZZO 3.3  (da €24.77 a €80.50)  [Ricambi]
+   "Coperchio"
+     cod 12792687  €24.77
+     cod 12513231  €59.50
+     cod 12846172  €80.50
+
+x2  RAPPORTO PREZZO 3.2  (da €19.95 a €64.75)  [Ricambi E Accessori]
+   "Anello Fissaggio"
+     cod 12778315  €19.95
+     cod 12417176  €64.75
+
+x2  RAPPORTO PREZZO 3.2  (da €2.07 a €6.69)  [Ricambi]
+   "Forcella"
+     cod 12674985  €2.07
+     cod 12382818  €6.69
+
+x3  RAPPORTO PREZZO 3.2  (da €36.78 a €116.76)  [Monoparete Rigido e Flessibile Inox]
+   "Prelievo Fumi"
+     cod 12905065  €36.78
+     cod 12783838  €52.86
+     cod 12824635  €116.76
+
+x3  RAPPORTO PREZZO 3.2  (da €138.84 a €439.32)  [Doppia Parete Coiben. Lana Minerale Inox]
+   "Gbd Elemento Regolabile 260-380 Mm"
+     cod 12892079  €138.84
+     cod 11253645  €153.78
+     cod 12789356  €439.32
+
+x5  RAPPORTO PREZZO 3.1  (da €89.47 a €274.97)  [Combustibili]
+   "Regolatore Di Pressione Per Gas Con Filtro"
+     cod 12373466  €89.47
+     cod 39632333  €89.47
+     cod 12708806  €197.81
+     cod 12708807  €197.81
+     cod 12644274  €274.97
+
+x6  RAPPORTO PREZZO 2.9  (da €27.39 a €80.73)  [Megapress]
+   "Raccordo A T Megapress S Con Sc-contur Acciaio Al Carbonio, Rivestimento Di Zinco-nichel, Estremità A Pressare Femmina, Modello 4318 Omologazione Tedesca Vds Teleriscaldamento Sec. Agfw Fw"
+     cod 12774155  €27.39
+     cod 61335759  €60.02
+     cod 24386399  €63.73
+     cod 60665851  €66.25
+     cod 12865754  €73.49
+     cod 73055676  €80.73
+
+x2  RAPPORTO PREZZO 2.9  (da €104.34 a €304.44)  [Doppia Parete Coiben. Lana Minerale Inox]
+   "Cappa Antivento A Botte"
+     cod 97446361  €104.34
+     cod 58157140  €304.44
+
+x30  RAPPORTO PREZZO 2.9  (da €12556.20 a €36603.72)  [Commerciale]
+   "Small Inverter Chiller R290"
+     cod 99497495  €12556.20
+     cod 34324173  €12823.95
+     cod 11829262  €13101.90
+     cod 27288150  €13499.19
+     cod 40877553  €13679.22
+     cod 76636109  €14081.10
+     cod 51652546  €14398.83
+     cod 50381867  €14729.82
+     cod 44753050  €15036.84
+     cod 36309823  €15828.36
+     cod 40993719  €16746.87
+     cod 23991100  €16847.34
+     cod 68518639  €17733.72
+     cod 45677613  €21222.63
+     cod 40857193  €21330.75
+     cod 55853800  €22188.57
+     cod 65221589  €23516.61
+     cod 69905484  €24754.38
+     cod 19423371  €25308.24
+     cod 52556750  €25381.17
+     cod 13794553  €26565.90
+     cod 24895304  €26716.86
+     cod 28791160  €27677.70
+     cod 34088229  €28918.02
+     cod 83631411  €29131.71
+     cod 97833987  €30439.86
+     cod 17533525  €31428.75
+     cod 72373776  €33081.66
+     cod 40138608  €34776.90
+     cod 44822502  €36603.72
+
+x4  RAPPORTO PREZZO 2.8  (da €18.12 a €51.58)  [Megapress]
+   "Curva A 90° Megapress S Con Sc-contur Acciaio Al Carbonio, Rivestimento Di Zinco-nichel, Estremità A Pressare Femmina, Modello 4316 Omologazione Tedesca Vds Teleriscaldamento Sec. Agfw Fw 5"
+     cod 78619486  €18.12
+     cod 12884309  €27.15
+     cod 62949482  €40.18
+     cod 12644442  €51.58
+
+x5  RAPPORTO PREZZO 2.8  (da €620.16 a €1743.52)  [Light Commercial]
+   "Unità Esterna Inverter In Pompa Di Calore Digital Inverter Serie 1 Con R32"
+     cod 12557140  €620.16
+     cod 22572874  €864.96
+     cod 12557132  €1210.40
+     cod 12557135  €1449.76
+     cod 12557138  €1743.52
+
+x2  RAPPORTO PREZZO 2.8  (da €63.35 a €176.75)  [Ricambi E Accessori]
+   "Cartuccia Termostatica Compatta Ø3/4""
+     cod 12645575  €63.35
+     cod 12718433  €176.75
+
+x11  RAPPORTO PREZZO 2.8  (da €16241.97 a €45246.18)  [Commerciale]
+   "Roof Top 2018 Fc3s"
+     cod 96086660  €16241.97
+     cod 92789610  €18318.18
+     cod 78717566  €18432.93
+     cod 29948054  €25518.87
+     cod 94156094  €27438.00
+     cod 18670060  €28910.88
+     cod 62252675  €33890.01
+     cod 56141216  €35207.34
+     cod 94095015  €40673.52
+     cod 63761679  €42177.51
+     cod 40784127  €45246.18
+
+x11  RAPPORTO PREZZO 2.8  (da €13224.30 a €36813.33)  [Commerciale]
+   "Roof Top 2018 Base"
+     cod 66093446  €13224.30
+     cod 34672669  €14920.05
+     cod 28098928  €15035.82
+     cod 91362045  €19584.51
+     cod 64162881  €21057.90
+     cod 41647611  €22529.76
+     cod 63197599  €26024.28
+     cod 68806056  €27658.83
+     cod 53789089  €33281.58
+     cod 54393889  €34104.21
+     cod 30009133  €36813.33
+
+x2  RAPPORTO PREZZO 2.8  (da €22.51 a €62.17)  [Ricambi]
+   "Calotta"
+     cod 58179880  €22.51
+     cod 18785735  €62.17
+
+x2  RAPPORTO PREZZO 2.7  (da €11.55 a €31.15)  [Ricambi E Accessori]
+   "Cappuccio Di Copertura Confezione 2 Pezzi Cromo"
+     cod 12531503  €11.55
+     cod 76103585  €31.15
+
+x11  RAPPORTO PREZZO 2.7  (da €14256.03 a €38379.54)  [Commerciale]
+   "Roof Top 2018 Fc2s"
+     cod 42653613  €14256.03
+     cod 67480291  €16102.23
+     cod 23877315  €16215.96
+     cod 75420516  €20729.46
+     cod 58534063  €22202.34
+     cod 25706081  €23673.69
+     cod 97412424  €27588.45
+     cod 20776096  €29008.29
+     cod 18629340  €34846.77
+     cod 59077785  €35818.32
+     cod 74536672  €38379.54
+
+x5  RAPPORTO PREZZO 2.7  (da €103.95 a €275.80)  [Ricambi E Accessori]
+   "Rosone Cromo"
+     cod 12823564  €103.95
+     cod 12491092  €113.05
+     cod 67988679  €137.55
+     cod 35263855  €217.35
+     cod 12564629  €275.80
+
+x2  RAPPORTO PREZZO 2.7  (da €61.66 a €163.53)  [Ricambi]
+   "Mantello"
+     cod 59981603  €61.66
+     cod 79570206  €163.53
+
+x5  RAPPORTO PREZZO 2.6  (da €13.87 a €36.38)  [Megapress]
+   "Manicotto Megapress S Con Sc-contur Acciaio Al Carbonio, Rivestimento Di Zinco-nichel, Estremità A Pressare Femmina, Filettature Rp, Modello 4312 Omologazione Tedesca Vds Teleriscaldamento"
+     cod 74565917  €13.87
+     cod 88787705  €18.04
+     cod 32250010  €21.11
+     cod 56552292  €24.86
+     cod 56818778  €36.38
+
+x2  RAPPORTO PREZZO 2.6  (da €16.40 a €42.64)  [Megapress]
+   "Manicotto Di Riduzione Megapress S Con Sc-contur Acciaio Al Carbonio, Rivestimento Di Zinco-nichel, Estremità Maschio, Estremità A Pressare Femmina, Modello 4315.1 Omologazione Tedesca Vds Tel"
+     cod 35213459  €16.40
+     cod 21168469  €42.64
+
+x2  RAPPORTO PREZZO 2.6  (da €5.64 a €14.62)  [Idrotermosanitario]
+   "Raccordo Diritto Intermedio Con O-ring Ø15 Per Rame"
+     cod 12358370  €5.64
+     cod 12475654  €14.62
+
+x2  RAPPORTO PREZZO 2.5  (da €7.35 a €18.50)  [Ricambi]
+   "Flessibile"
+     cod 57517471  €7.35
+     cod 33433324  €18.50
+
+x7  RAPPORTO PREZZO 2.5  (da €167.08 a €419.02)  [Residenziale]
+   "Unità Interna Parete - "r32 Serie Classic""
+     cod 70949798  €167.08
+     cod 25477337  €175.03
+     cod 89294928  €180.34
+     cod 10063929  €214.81
+     cod 56937600  €302.33
+     cod 46578176  €347.41
+     cod 58595031  €419.02
+
+x3  RAPPORTO PREZZO 2.5  (da €11.20 a €27.65)  [Ricambi E Accessori]
+   "Regolatore Getto Cromo"
+     cod 59882857  €11.20
+     cod 36845350  €18.55
+     cod 29628264  €27.65
+
+x2  RAPPORTO PREZZO 2.5  (da €79.38 a €194.67)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø1.1/4" 5m3/h"
+     cod 12515282  €79.38
+     cod 23081472  €194.67
+
+x2  RAPPORTO PREZZO 2.5  (da €79.38 a €194.67)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø1.1/4" 2m3/h"
+     cod 41013154  €79.38
+     cod 12918275  €194.67
+
+x4  RAPPORTO PREZZO 2.4  (da €14.45 a €35.29)  [Acqua]
+   "Raccordo Diritto Per Vasi Di Espansione Aperti"
+     cod 12535609  €14.45
+     cod 12535612  €19.70
+     cod 12535613  €24.62
+     cod 12667722  €35.29
+
+x2  RAPPORTO PREZZO 2.4  (da €24.15 a €58.45)  [Ricambi E Accessori]
+   "Piletta Di Scarico Click Clack Cromo"
+     cod 12667528  €24.15
+     cod 12807774  €58.45
+
+x4  RAPPORTO PREZZO 2.4  (da €15.05 a €36.40)  [Ricambi E Accessori]
+   "Manicotto Cromo"
+     cod 12461617  €15.05
+     cod 12428988  €19.95
+     cod 53360467  €26.25
+     cod 12543587  €36.40
+
+x2  RAPPORTO PREZZO 2.4  (da €43.03 a €103.95)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø3/4" 0,35m3/h"
+     cod 12441145  €43.03
+     cod 94362999  €103.95
+
+x2  RAPPORTO PREZZO 2.4  (da €43.03 a €103.95)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø3/4" 0,15m3/h"
+     cod 12496814  €43.03
+     cod 12644136  €103.95
+
+x2  RAPPORTO PREZZO 2.4  (da €43.03 a €103.95)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø3/4" 0,085m3/h"
+     cod 12865599  €43.03
+     cod 17490125  €103.95
+
+x9  RAPPORTO PREZZO 2.4  (da €11833.00 a €28443.12)  [Commerciale]
+   "Chillersmalla/cewye-cz"
+     cod 84637413  €11833.00
+     cod 36350543  €12661.42
+     cod 52162882  €12681.93
+     cod 89783590  €14286.89
+     cod 13372992  €16097.91
+     cod 55086121  €22095.42
+     cod 99613660  €24572.83
+     cod 20276218  €25614.08
+     cod 52733994  €28443.12
+
+x3  RAPPORTO PREZZO 2.4  (da €4.56 a €10.92)  [Allacciamenti Acqua/Gas]
+   "Kit Bulloneria Zincata Per Flange"
+     cod 20736602  €4.56
+     cod 29789816  €5.62
+     cod 17112971  €10.92
+
+x5  RAPPORTO PREZZO 2.4  (da €696.32 a €1667.36)  [Light Commercial]
+   "Unità Esterna Inverter Pompa Di Calore - Digital Inverter Classic Serie 1 Con R32"
+     cod 59502087  €696.32
+     cod 63223261  €938.40
+     cod 14503789  €1123.36
+     cod 93878026  €1408.96
+     cod 36971486  €1667.36
+
+x5  RAPPORTO PREZZO 2.3  (da €15.56 a €36.38)  [Megapress]
+   "Manicotto Megapress S Con Sc-contur Acciaio Al Carbonio, Rivestimento Di Zinco-nichel, Estremità A Pressare Femmina, Filettatura R, Modello 4311 Omologazione Tedesca Vds Teleriscaldamento S"
+     cod 61183725  €15.56
+     cod 94003055  €18.78
+     cod 94143378  €22.95
+     cod 33061713  €26.92
+     cod 12666491  €36.38
+
+x2  RAPPORTO PREZZO 2.3  (da €5.43 a €12.64)  [Acqua]
+   "Morsetto"
+     cod 12730851  €5.43
+     cod 29928992  €12.64
+
+x2  RAPPORTO PREZZO 2.3  (da €68.04 a €157.50)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø1" 1m3/h"
+     cod 12479014  €68.04
+     cod 80672899  €157.50
+
+x2  RAPPORTO PREZZO 2.3  (da €68.04 a €157.50)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø1" 1,8m3/h"
+     cod 96004914  €68.04
+     cod 19258913  €157.50
+
+x2  RAPPORTO PREZZO 2.3  (da €68.04 a €157.50)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø1" 2,5m3/h"
+     cod 56791640  €68.04
+     cod 24887729  €157.50
+
+x9  RAPPORTO PREZZO 2.3  (da €17.50 a €40.25)  [Ricambi E Accessori]
+   "Mousseur Con Chiave"
+     cod 12468290  €17.50
+     cod 12576950  €18.20
+     cod 30062802  €19.25
+     cod 12649344  €21.35
+     cod 12592112  €22.40
+     cod 12428220  €27.30
+     cod 12718435  €28.70
+     cod 12478784  €36.40
+     cod 18827725  €40.25
+
+x3  RAPPORTO PREZZO 2.3  (da €163.80 a €368.55)  [Ricambi E Accessori]
+   "Elettrovalvola Per Orinatoio"
+     cod 92364409  €163.80
+     cod 12919414  €271.95
+     cod 54472471  €368.55
+
+x4  RAPPORTO PREZZO 2.2  (da €258.96 a €582.18)  [Doppia Parete Coiben. Lana Minerale Inox]
+   "Gbd Gomito A 45"
+     cod 12823360  €258.96
+     cod 12789358  €318.96
+     cod 27605844  €523.08
+     cod 12807497  €582.18
+
+x4  RAPPORTO PREZZO 2.2  (da €18.27 a €40.80)  [Ricambi]
+   "Resistenza 1500w 230v"
+     cod 59595755  €18.27
+     cod 12447850  €32.35
+     cod 70320171  €40.69
+     cod 21538199  €40.80
+
+x2  RAPPORTO PREZZO 2.2  (da €38.18 a €83.79)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø1/2" 0,15m3/h"
+     cod 12524945  €38.18
+     cod 12399001  €83.79
+
+x2  RAPPORTO PREZZO 2.2  (da €38.18 a €83.79)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø1/2" 0,085m3/h"
+     cod 12501250  €38.18
+     cod 39985034  €83.79
+
+x2  RAPPORTO PREZZO 2.2  (da €7.80 a €17.04)  [Monoparete Rigido e Flessibile Inox]
+   "Distanziatore Diam.200"
+     cod 12709474  €7.80
+     cod 12709317  €17.04
+
+x3  RAPPORTO PREZZO 2.2  (da €69.77 a €151.85)  [Elettrico]
+   "Stuoia Scaldante In Metallo Amorfo Ecokaldo 1m2 300w/mq " Idrhaus"
+     cod 92453311  €69.77
+     cod 62465529  €100.14
+     cod 27117127  €151.85
+
+x2  RAPPORTO PREZZO 2.2  (da €243.18 a €528.57)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø2" 7m3/h"
+     cod 65761362  €243.18
+     cod 13095434  €528.57
+
+x2  RAPPORTO PREZZO 2.2  (da €243.18 a €528.57)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø2" 9m3/h"
+     cod 98792835  €243.18
+     cod 60700908  €528.57
+
+x2  RAPPORTO PREZZO 2.2  (da €243.18 a €528.57)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø2" 8m3/h"
+     cod 66087097  €243.18
+     cod 69454400  €528.57
+
+x2  RAPPORTO PREZZO 2.2  (da €83.65 a €180.95)  [Ricambi E Accessori]
+   "Trasformatore"
+     cod 72668308  €83.65
+     cod 46090499  €180.95
+
+x2  RAPPORTO PREZZO 2.2  (da €125.23 a €269.34)  [Project Wind]
+   "Plenum Coibentato In Lamiera Per Samsung Con Flangia 818x220"
+     cod 30427401  €125.23
+     cod 60104186  €269.34
+
+x2  RAPPORTO PREZZO 2.1  (da €16.45 a €35.35)  [Ricambi E Accessori]
+   "Supporto Per Asta Doccia Cromo"
+     cod 75344533  €16.45
+     cod 58868638  €35.35
+
+x2  RAPPORTO PREZZO 2.1  (da €52.50 a €112.70)  [Ricambi E Accessori]
+   "Sifone Lavabo Bottiglia Ø1.1/4" Cromo"
+     cod 12453504  €52.50
+     cod 12419131  €112.70
+
+x13  RAPPORTO PREZZO 2.1  (da €18.90 a €40.25)  [Ricambi E Accessori]
+   "Leva Cromo"
+     cod 24312748  €18.90
+     cod 91638290  €21.00
+     cod 12914535  €24.85
+     cod 12810078  €25.20
+     cod 47627896  €25.20
+     cod 73487628  €26.60
+     cod 87362021  €28.35
+     cod 12786400  €28.70
+     cod 82050508  €31.50
+     cod 12698892  €31.85
+     cod 45668176  €32.55
+     cod 62354810  €37.45
+     cod 69199897  €40.25
+
+x2  RAPPORTO PREZZO 2.1  (da €87.00 a €183.86)  [Combustibili]
+   "Regolatore Di Pressione Gpl E Metano"
+     cod 12417094  €87.00
+     cod 73347992  €183.86
+
+x5  RAPPORTO PREZZO 2.1  (da €21.70 a €45.85)  [Ricambi E Accessori]
+   "Cappuccio Cromo"
+     cod 12428946  €21.70
+     cod 40627094  €22.75
+     cod 65799110  €23.80
+     cod 12486339  €27.30
+     cod 12564630  €45.85
+
+x2  RAPPORTO PREZZO 2.1  (da €65.45 a €138.25)  [Ricambi E Accessori]
+   "Deviatore"
+     cod 12495742  €65.45
+     cod 75819483  €138.25
+
+x3  RAPPORTO PREZZO 2.1  (da €16.10 a €33.95)  [Ricambi E Accessori]
+   "Prolunga Per Fuso"
+     cod 84916900  €16.10
+     cod 75626799  €31.15
+     cod 26113012  €33.95
+
+x7  RAPPORTO PREZZO 2.1  (da €21.96 a €46.26)  [Monoparete Rigido e Flessibile Inox]
+   "Coppella Lana Minerale T600-g90"
+     cod 80597014  €21.96
+     cod 18387639  €23.52
+     cod 66196597  €28.38
+     cod 20807579  €29.52
+     cod 69314049  €32.34
+     cod 44858610  €39.24
+     cod 33138694  €46.26
+
+x2  RAPPORTO PREZZO 2.1  (da €32.49 a €68.30)  [Ricambi]
+   "Pannello Posteriore Dx"
+     cod 90497853  €32.49
+     cod 33718486  €68.30
+
+x7  RAPPORTO PREZZO 2.1  (da €265.20 a €554.27)  [Residenziale]
+   "Unità Interna Parete - "seiya Smart (wifi) R32"
+     cod 74078942  €265.20
+     cod 13609880  €275.81
+     cod 43140808  €281.11
+     cod 22515385  €320.89
+     cod 52046315  €421.67
+     cod 81577245  €474.71
+     cod 21108182  €554.27
+
+x2  RAPPORTO PREZZO 2.1  (da €7.69 a €16.00)  [Idrotermosanitario]
+   "Raccordo Diritto Intermedio Con O-ring Ø18 Per Rame"
+     cod 12348463  €7.69
+     cod 12475655  €16.00
+
+x3  RAPPORTO PREZZO 2.1  (da €11.20 a €23.10)  [Ricambi E Accessori]
+   "Astina A Saltarello Cromo"
+     cod 12473678  €11.20
+     cod 12647353  €20.30
+     cod 12435236  €23.10
+
+x7  RAPPORTO PREZZO 2.0  (da €602.92 a €1235.52)  [Commerciale]
+   "Fancoilno Comp2pipe"
+     cod 38494671  €602.92
+     cod 85556472  €615.90
+     cod 78206550  €762.46
+     cod 30376776  €840.37
+     cod 67592777  €959.10
+     cod 74298197  €1100.09
+     cod 19256729  €1235.52
+
+x2  RAPPORTO PREZZO 2.0  (da €15.00 a €30.71)  [Megapress]
+   "Curva A 90° Megapress S Con Sc-contur Acciaio Al Carbonio, Rivestimento Di Zinco-nichel, Estremità Maschio, Estremità A Pressare Femmina, Modello 4316.1 Omologazione Tedesca Vds Teleriscald"
+     cod 42510987  €15.00
+     cod 84752379  €30.71
+
+x4  RAPPORTO PREZZO 2.0  (da €15.40 a €31.15)  [Ricambi E Accessori]
+   "Cappuccio Di Copertura Cromo"
+     cod 12920034  €15.40
+     cod 11181979  €15.75
+     cod 54194570  €28.70
+     cod 67485395  €31.15
+
+x2  RAPPORTO PREZZO 2.0  (da €15.75 a €31.85)  [Ricambi E Accessori]
+   "Piastra Di Fissaggio"
+     cod 17377584  €15.75
+     cod 41782425  €31.85
+
+x2  RAPPORTO PREZZO 2.0  (da €36.40 a €73.50)  [Ricambi E Accessori]
+   "Cavo Prolunga L.3m"
+     cod 52510646  €36.40
+     cod 74299372  €73.50
+
+x6  RAPPORTO PREZZO 2.0  (da €11.55 a €23.10)  [Ricambi E Accessori]
+   "Set Guarnizioni"
+     cod 32093648  €11.55
+     cod 12392162  €15.40
+     cod 60369575  €20.30
+     cod 12595332  €21.00
+     cod 18976251  €21.00
+     cod 12585631  €23.10
+
+x3  RAPPORTO PREZZO 2.0  (da €147.00 a €292.56)  [Doppia Parete Coiben. Lana Minerale Inox]
+   "Elemento A T 87"
+     cod 12783805  €147.00
+     cod 12811488  €262.44
+     cod 12771606  €292.56
+
+x3  RAPPORTO PREZZO 2.0  (da €1319.20 a €2624.80)  [Light Commercial]
+   "Unità Esterna Inverter Pompa Di Calore - Super Digital Inverter Serie 1 Con R32"
+     cod 12839821  €1319.20
+     cod 12839823  €1849.60
+     cod 34542584  €2624.80
+
+x4  RAPPORTO PREZZO 2.0  (da €1120.80 a €2214.24)  [Residenziale]
+   "Splitcomph/p"
+     cod 30689380  €1120.80
+     cod 94435139  €1337.28
+     cod 26930048  €1844.64
+     cod 59737670  €2214.24
+
+x3  RAPPORTO PREZZO 2.0  (da €2079.17 a €4105.30)  [Estia]
+   "Unità Esterna Inverter In Pompa Di Calore Tipo "estia" Serie 1 3f"
+     cod 91836260  €2079.17
+     cod 69144103  €3315.00
+     cod 18161376  €4105.30
+
+x2  RAPPORTO PREZZO 2.0  (da €36.05 a €71.05)  [Ricambi E Accessori]
+   "Maniglia Controllo Temperatura Cromo"
+     cod 12694420  €36.05
+     cod 12632369  €71.05
+
+x2  RAPPORTO PREZZO 2.0  (da €1.75 a €3.42)  [Raccordi Filettati Bronzo]
+   "Tappo Per: Chiave Quadrata, Bronzo, Bronzo Al Silicio O Lega Di Rame E Silicio, Modello 3290"
+     cod 12360431  €1.75
+     cod 12360433  €3.42
+
+x14  RAPPORTO PREZZO 1.9  (da €18.49 a €35.97)  [Ricambi]
+   "Resistenza 1200w 220-240v"
+     cod 41207829  €18.49
+     cod 93653674  €20.40
+     cod 17894349  €22.84
+     cod 51576125  €23.19
+     cod 51119218  €25.87
+     cod 20020189  €27.57
+     cod 16860579  €27.57
+     cod 31233680  €27.84
+     cod 86630752  €28.15
+     cod 43294259  €30.37
+     cod 64683542  €31.02
+     cod 14150321  €32.55
+     cod 13884946  €33.46
+     cod 30719986  €35.97
+
+x4  RAPPORTO PREZZO 1.9  (da €7003.32 a €13442.07)  [Commerciale]
+   "Roof Top Pompa Calore R410a"
+     cod 60926910  €7003.32
+     cod 11212476  €9533.43
+     cod 36521795  €10962.45
+     cod 97432784  €13442.07
+
+x2  RAPPORTO PREZZO 1.9  (da €3.10 a €5.94)  [Raccordi Filettati Bronzo]
+   "Manicotto Di Riduzione Bronzo, Bronzo Al Silicio O Lega Di Rame E Silicio, Modello 3241 R: ½ Rp: " Cromato"
+     cod 12386187  €3.10
+     cod 12386185  €5.94
+
+x2  RAPPORTO PREZZO 1.9  (da €13.90 a €26.40)  [Condizionamento]
+   "Valvola Di Chiusura Shut-off 1/4" Sae F X 1/4" Sae M " Specifica Per R22 - R134a - R404a - R407c - Idrhaus"
+     cod 12454402  €13.90
+     cod 73493690  €26.40
+
+x2  RAPPORTO PREZZO 1.9  (da €13.90 a €26.40)  [Condizionamento]
+   "Valvola Di Chiusura Shut-off 5/16" Sae F X 5/16" Sae M - Idrhaus"
+     cod 12454403  €13.90
+     cod 95696185  €26.40
+
+x2  RAPPORTO PREZZO 1.9  (da €76.32 a €144.90)  [Monoparete Rigido e Flessibile Inox]
+   "Gbd Ispezione Con Sportello D.130"
+     cod 12639700  €76.32
+     cod 21907942  €144.90
+
+x2  RAPPORTO PREZZO 1.9  (da €65.80 a €124.25)  [Ricambi E Accessori]
+   "Termoelemento Ø1/2" A Cera"
+     cod 12434328  €65.80
+     cod 12427598  €124.25
+
+x3  RAPPORTO PREZZO 1.9  (da €40.25 a €75.60)  [Ricambi E Accessori]
+   "Rosone Quadrato Per Miscelatore Termostatico Cromo"
+     cod 12807416  €40.25
+     cod 12798598  €73.15
+     cod 12852919  €75.60
+
+x4  RAPPORTO PREZZO 1.9  (da €4226.88 a €7923.87)  [Commerciale]
+   "Free Hanging Air Curtain (white)"
+     cod 17859761  €4226.88
+     cod 84766652  €4837.35
+     cod 16710835  €6433.65
+     cod 28615730  €7923.87
+
+x6  RAPPORTO PREZZO 1.8  (da €11.55 a €21.35)  [Ricambi E Accessori]
+   "Gruppo Di Serraggio Astina"
+     cod 44352206  €11.55
+     cod 50033307  €11.90
+     cod 57202979  €12.60
+     cod 95894257  €12.95
+     cod 12418246  €13.30
+     cod 12595915  €21.35
+
+x4  RAPPORTO PREZZO 1.8  (da €267.06 a €493.02)  [Doppia Parete Coiben. Lana Minerale Inox]
+   "Gbd Ispezione Con Tappo"
+     cod 12848913  €267.06
+     cod 12789362  €376.44
+     cod 12795781  €463.98
+     cod 12807489  €493.02
+
+x2  RAPPORTO PREZZO 1.8  (da €136.08 a €249.48)  [Idrotermosanitario]
+   "Valvola Di Zona A Sfera 2vie Motorizzata Ø1" 230v"
+     cod 12388177  €136.08
+     cod 12450636  €249.48
+
+x6  RAPPORTO PREZZO 1.8  (da €416.16 a €761.60)  [Light Commercial]
+   "Unità Interna Parete (telecomando Ir Incluso)"
+     cod 12905503  €416.16
+     cod 12907690  €446.08
+     cod 93010394  €614.72
+     cod 49470885  €658.24
+     cod 64068680  €696.32
+     cod 55714107  €761.60
+
+x4  RAPPORTO PREZZO 1.8  (da €40.32 a €73.62)  [Doppia Parete Coiben. Lana Minerale Inox]
+   "Terminale Conico"
+     cod 33432264  €40.32
+     cod 12834841  €42.12
+     cod 12871509  €52.68
+     cod 12813292  €73.62
+
+x2  RAPPORTO PREZZO 1.8  (da €22.75 a €41.07)  [Ricambi]
+   "Erogatore"
+     cod 12513871  €22.75
+     cod 12891668  €41.07
+
+x2  RAPPORTO PREZZO 1.8  (da €221.76 a €400.05)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø1.1/2" 9m3/h"
+     cod 12675173  €221.76
+     cod 65747727  €400.05
+
+x2  RAPPORTO PREZZO 1.8  (da €221.76 a €400.05)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø1.1/2" 8m3/h"
+     cod 55375615  €221.76
+     cod 13356244  €400.05
+
+x4  RAPPORTO PREZZO 1.8  (da €29.40 a €52.85)  [Ricambi E Accessori]
+   "Maniglia Deviatore Cromo"
+     cod 12513429  €29.40
+     cod 12921564  €47.60
+     cod 68926772  €49.35
+     cod 49922412  €52.85
+
+x3  RAPPORTO PREZZO 1.8  (da €9.01 a €16.07)  [Idrotermosanitario]
+   "Robocal Valvola Sfogo Aria Ottone Ø3/8"m"
+     cod 12348318  €9.01
+     cod 12348319  €10.71
+     cod 12348320  €16.07
+
+x2  RAPPORTO PREZZO 1.8  (da €68.04 a €120.96)  [Idrotermosanitario]
+   "Miscelatore Termostatico Regolabile Ø1/2" 30÷48°c"
+     cod 12610504  €68.04
+     cod 12494558  €120.96
+
+x2  RAPPORTO PREZZO 1.8  (da €68.04 a €120.96)  [Idrotermosanitario]
+   "Miscelatore Termostatico Regolabile Ø1/2" 40÷60°c"
+     cod 12742506  €68.04
+     cod 12494559  €120.96
+
+x2  RAPPORTO PREZZO 1.8  (da €7.92 a €13.98)  [Doppia Parete Coiben. Lana Minerale Inox]
+   "Fascia Sicurezza"
+     cod 12794968  €7.92
+     cod 12393085  €13.98
+
+x2  RAPPORTO PREZZO 1.8  (da €132.30 a €233.10)  [Idrotermosanitario]
+   "Valvola Di Zona A Sfera 2vie Motorizzata Ø1/2" 230v"
+     cod 12388175  €132.30
+     cod 12450071  €233.10
+
+x2  RAPPORTO PREZZO 1.8  (da €132.30 a €233.10)  [Idrotermosanitario]
+   "Valvola Di Zona A Sfera 2vie Motorizzata Ø3/4" 230v"
+     cod 12388176  €132.30
+     cod 12448987  €233.10
+
+x2  RAPPORTO PREZZO 1.7  (da €149.31 a €260.82)  [Idrotermosanitario]
+   "Valvola Di Zona A Sfera 2vie Motorizzata Ø1" 24v"
+     cod 12388181  €149.31
+     cod 12842613  €260.82
+
+x2  RAPPORTO PREZZO 1.7  (da €10.08 a €17.58)  [Idrotermosanitario]
+   "Raccordo Diritto Intermedio Con O-ring Ø22 Per Rame"
+     cod 12521049  €10.08
+     cod 12475656  €17.58
+
+x3  RAPPORTO PREZZO 1.7  (da €2.75 a €4.79)  [Ricambi]
+   "Guarnizione Flangia"
+     cod 36724946  €2.75
+     cod 72492693  €3.25
+     cod 51600420  €4.79
+
+x5  RAPPORTO PREZZO 1.7  (da €17.11 a €29.55)  [Attrezzaura]
+   "Giravite A Scalpello Wera Profilo - Idrhaus"
+     cod 79444904  €17.11
+     cod 17827316  €19.44
+     cod 26550520  €24.11
+     cod 57379362  €27.99
+     cod 15010527  €29.55
+
+x2  RAPPORTO PREZZO 1.7  (da €377.58 a €651.20)  [Climatizzazione]
+   "Ue Mono Ma1-o Nevis 3,5kw R32"
+     cod 93796029  €377.58
+     cod 88761901  €651.20
+
+x7  RAPPORTO PREZZO 1.7  (da €2516.75 a €4314.80)  [Estia]
+   "Unità Idronica Aio 1 Zona Con Resistenza Elettrica Di Backup Da 3kw 1ph"
+     cod 12793203  €2516.75
+     cod 12793204  €2604.26
+     cod 12801356  €2824.38
+     cod 51276717  €3110.80
+     cod 25828579  €3996.56
+     cod 14108665  €4121.21
+     cod 40299528  €4314.80
+
+x2  RAPPORTO PREZZO 1.7  (da €14.70 a €25.20)  [Ricambi E Accessori]
+   "Vitone Ø1/2" Per Rubinetto Incasso"
+     cod 12920373  €14.70
+     cod 12623330  €25.20
+
+x2  RAPPORTO PREZZO 1.7  (da €22.05 a €37.80)  [Ricambi E Accessori]
+   "Maniglia Chiusura Per Valvola Intercettazione Cromo"
+     cod 12905033  €22.05
+     cod 12683453  €37.80
+
+x2  RAPPORTO PREZZO 1.7  (da €144.27 a €245.07)  [Idrotermosanitario]
+   "Valvola Di Zona A Sfera 2vie Motorizzata Ø3/4" 24v"
+     cod 12388180  €144.27
+     cod 12731521  €245.07
+
+x2  RAPPORTO PREZZO 1.7  (da €144.27 a €245.07)  [Idrotermosanitario]
+   "Valvola Di Zona A Sfera 2vie Motorizzata Ø1/2" 24v"
+     cod 12388178  €144.27
+     cod 28643701  €245.07
+
+x4  RAPPORTO PREZZO 1.7  (da €20.11 a €34.08)  [Megapress]
+   "Manicotto Scorrevole Megapress S Con Sc-contur Acciaio Al Carbonio, Rivestimento Di Zinco-nichel, Estremità A Pressare Femmina, Modello 4315.5 Omologazione Tedesca Vds Teleriscaldamento Sec"
+     cod 85144539  €20.11
+     cod 87745115  €25.31
+     cod 91824295  €28.71
+     cod 12865756  €34.08
+
+x3  RAPPORTO PREZZO 1.7  (da €75.60 a €127.89)  [Idrotermosanitario]
+   "Dirtmag Slim Defangatore Con Magnete Ø3/4"mx3/4"f"
+     cod 12565197  €75.60
+     cod 12596470  €107.10
+     cod 12610537  €127.89
+
+x3  RAPPORTO PREZZO 1.7  (da €187.02 a €315.48)  [Doppia Parete Coiben. Lana Minerale Inox]
+   "Elem.a "t" 87 D/p Inox-rame C/lana Min"
+     cod 12422971  €187.02
+     cod 12417554  €208.50
+     cod 12440331  €315.48
+
+x2  RAPPORTO PREZZO 1.7  (da €23.45 a €39.55)  [Ricambi E Accessori]
+   "Maniglia Cromo"
+     cod 27840836  €23.45
+     cod 12641015  €39.55
+
+x2  RAPPORTO PREZZO 1.7  (da €4.16 a €7.01)  [Tubazioni E Raccorderia]
+   "R179e Raccordo Adattatore Per Multistrato Ø3/4"ex16/2mm"
+     cod 19809167  €4.16
+     cod 61594070  €7.01
+
+x2  RAPPORTO PREZZO 1.7  (da €860.00 a €1440.32)  [Accessori Riscaldamento E Clima]
+   "Separatore Idraulico Dn100"
+     cod 12680847  €860.00
+     cod 24755479  €1440.32
+
+x2  RAPPORTO PREZZO 1.7  (da €18.76 a €31.33)  [Rubinetti Sfera Acqua]
+   "Viva 1740 Rubinetto Sfera Con Portagomma Ø3/4" Leva Blu"
+     cod 12467960  €18.76
+     cod 12467961  €31.33
+
+x2  RAPPORTO PREZZO 1.7  (da €1060.80 a €1770.72)  [Light Commercial]
+   "Unità Esterna Inverter In Pompa Di Calore Digital Inverter Serie 1 Con R32 Heavy Protection"
+     cod 37209010  €1060.80
+     cod 34394601  €1770.72
+
+x2  RAPPORTO PREZZO 1.7  (da €58.74 a €97.93)  [Sistemi Di Climatizzazione Radiante]
+   "Pannello Radiante Idro"
+     cod 90947838  €58.74
+     cod 36426155  €97.93
+
+x7  RAPPORTO PREZZO 1.7  (da €723.52 a €1202.24)  [Light Commercial]
+   "Unità Interna Soffitto"
+     cod 59921215  €723.52
+     cod 41014386  €783.36
+     cod 61109360  €864.96
+     cod 34676318  €952.00
+     cod 14210433  €1049.92
+     cod 28409533  €1117.92
+     cod 10230855  €1202.24
+
+x2  RAPPORTO PREZZO 1.7  (da €320.04 a €528.57)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø2" 11m3/h"
+     cod 12889735  €320.04
+     cod 29953492  €528.57
+
+x3  RAPPORTO PREZZO 1.6  (da €4786.35 a €7873.38)  [Commerciale]
+   "Cassette Air Curtain (white)"
+     cod 85859059  €4786.35
+     cod 33963179  €6384.18
+     cod 23257553  €7873.38
+
+x6  RAPPORTO PREZZO 1.6  (da €734.40 a €1207.68)  [Light Commercial]
+   "Unità Interna Canalizzabile Standard"
+     cod 12900615  €734.40
+     cod 12900608  €799.68
+     cod 12900616  €884.00
+     cod 12900617  €990.08
+     cod 12900618  €1156.00
+     cod 12900620  €1207.68
+
+x3  RAPPORTO PREZZO 1.6  (da €15.25 a €25.01)  [Moduli Di Installazione]
+   "Dima Montaggio Per Piastre Di Azionamento Small"
+     cod 12622986  €15.25
+     cod 59933734  €19.52
+     cod 12622550  €25.01
+
+x3  RAPPORTO PREZZO 1.6  (da €21.00 a €34.30)  [Ricambi E Accessori]
+   "Leva Per Eurostyle Cosmo Cromo"
+     cod 12799593  €21.00
+     cod 12462754  €26.60
+     cod 12478898  €34.30
+
+x2  RAPPORTO PREZZO 1.6  (da €114.97 a €185.93)  [Sistemi Di Climatizzazione Radiante]
+   "Pann Radiante In Cartongesso"
+     cod 42103654  €114.97
+     cod 23356088  €185.93
+
+x2  RAPPORTO PREZZO 1.6  (da €4456.62 a €7193.30)  [Ricambi]
+   "Tubo Alettato Rame"
+     cod 61534584  €4456.62
+     cod 36320043  €7193.30
+
+x3  RAPPORTO PREZZO 1.6  (da €183.12 a €295.26)  [Doppia Parete Coiben. Lana Minerale Inox]
+   "Gbd Diritto 190 Mm Utili"
+     cod 12823364  €183.12
+     cod 12789352  €229.68
+     cod 12795743  €295.26
+
+x2  RAPPORTO PREZZO 1.6  (da €697.44 a €1123.68)  [Residenziale]
+   "Split<comp"
+     cod 10723686  €697.44
+     cod 68339644  €1123.68
+
+x2  RAPPORTO PREZZO 1.6  (da €57.74 a €92.87)  [Profipress G]
+   "Valvola A Sfera Per Gas Profipress G Con Sc-contur Fornitura,corpo Di Bronzo, Attacco Di Presa Pressione, Maniglia A Farfalla In Lamiera Di Acciaio Giallo Verniciata A Polvere,o-ring Hnbr,per"
+     cod 74208637  €57.74
+     cod 45910234  €92.87
+
+x2  RAPPORTO PREZZO 1.6  (da €12.12 a €19.44)  [Monoparete Rigido e Flessibile Inox]
+   "Fascia Parapioggia D.80"
+     cod 12375758  €12.12
+     cod 12793188  €19.44
+
+x3  RAPPORTO PREZZO 1.6  (da €2299.28 a €3683.63)  [Estia]
+   "Unità Esterna Inverter In Pompa Di Calore Tipo "estia" Serie 5 - 3ph"
+     cod 12798021  €2299.28
+     cod 12830507  €2943.72
+     cod 12694413  €3683.63
+
+x2  RAPPORTO PREZZO 1.6  (da €78.88 a €125.86)  [Selnova Classic]
+   "Selnova Vaso Wc Scarico Orizzontale Bianco"
+     cod 12615335  €78.88
+     cod 12673671  €125.86
+
+x2  RAPPORTO PREZZO 1.6  (da €264.48 a €419.34)  [One]
+   "One Lavabo Appoggio Arrotondato 50cm Sft Bianco/keratect"
+     cod 19358989  €264.48
+     cod 17682714  €419.34
+
+x2  RAPPORTO PREZZO 1.6  (da €264.48 a €419.34)  [One]
+   "One Lavabo Appoggio Arrotondato 50cm Sfr Sft Bianco/keratect"
+     cod 73123663  €264.48
+     cod 72177465  €419.34
+
+x4  RAPPORTO PREZZO 1.6  (da €354.36 a €561.84)  [Doppia Parete Coiben. Lana Minerale Inox]
+   "Gbd Diritto 940 Mm Utili"
+     cod 12823362  €354.36
+     cod 12789355  €418.32
+     cod 12795777  €514.14
+     cod 12807494  €561.84
+
+x2  RAPPORTO PREZZO 1.6  (da €1316.48 a €2086.24)  [Light Commercial]
+   "Unità Esterna Inverter In Pompa Di Calore Digital Inverter"
+     cod 12900621  €1316.48
+     cod 12718602  €2086.24
+
+x3  RAPPORTO PREZZO 1.6  (da €58.45 a €92.40)  [Ricambi E Accessori]
+   "Deviatore Cromo"
+     cod 12854408  €58.45
+     cod 64295194  €60.55
+     cod 12710981  €92.40
+
+x3  RAPPORTO PREZZO 1.6  (da €26.78 a €42.32)  [Ricambi]
+   "Termostato Elettronico"
+     cod 40829512  €26.78
+     cod 24258631  €34.96
+     cod 54176651  €42.32
+
+x2  RAPPORTO PREZZO 1.6  (da €23.10 a €36.05)  [Ricambi E Accessori]
+   "Pistone"
+     cod 12513232  €23.10
+     cod 98011276  €36.05
+
+x2  RAPPORTO PREZZO 1.6  (da €70.78 a €110.11)  [Profipress G]
+   "Valvola A Sfera Per Gas Profipress G Con Sc-contur Fornitura, Corpo Di Bronzo, Maniglia A Farfalla In Lamiera Di Acciaio Giallo Verniciata A Polvere, Attacco Di Presa Pressione, O-ring Hnbr"
+     cod 19322251  €70.78
+     cod 57758686  €110.11
+
+x2  RAPPORTO PREZZO 1.6  (da €5.49 a €8.54)  [Rubinetti A Squadra]
+   "Rubinetto Squadra Ø1/2"x1/2" Con Rosetta Ø55 Cromo"
+     cod 12742718  €5.49
+     cod 32394320  €8.54
+
+x2  RAPPORTO PREZZO 1.5  (da €83.79 a €129.78)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø1/2" 0,6m3/h"
+     cod 70599792  €83.79
+     cod 86207555  €129.78
+
+x4  RAPPORTO PREZZO 1.5  (da €68.32 a €105.28)  [Ricambi]
+   "Tubo Acciaio Inox D 28 Per 1.0"
+     cod 79321608  €68.32
+     cod 14309522  €82.56
+     cod 59850504  €93.56
+     cod 40001022  €105.28
+
+x2  RAPPORTO PREZZO 1.5  (da €103.95 a €160.02)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø3/4" 0,8m3/h"
+     cod 12416213  €103.95
+     cod 57835232  €160.02
+
+x2  RAPPORTO PREZZO 1.5  (da €103.95 a €160.02)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø3/4" 0,7m3/h"
+     cod 12713186  €103.95
+     cod 12503813  €160.02
+
+x2  RAPPORTO PREZZO 1.5  (da €103.95 a €160.02)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø3/4" 0,6m3/h"
+     cod 60653950  €103.95
+     cod 35603989  €160.02
+
+x2  RAPPORTO PREZZO 1.5  (da €103.95 a €160.02)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø3/4" 1,6m3/h"
+     cod 76307978  €103.95
+     cod 90862012  €160.02
+
+x2  RAPPORTO PREZZO 1.5  (da €68.95 a €105.88)  [Acqua]
+   "Anodo Al Magnesio Filettato A Catena 1"1/4 Ø 21 130 Mm"
+     cod 44752377  €68.95
+     cod 61365969  €105.88
+
+x2  RAPPORTO PREZZO 1.5  (da €22.68 a €34.80)  [Monoparete Rigido e Flessibile Inox]
+   "Fascia Parapioggia D.300"
+     cod 12377066  €22.68
+     cod 12785893  €34.80
+
+x4  RAPPORTO PREZZO 1.5  (da €1618.23 a €2474.52)  [Commerciale]
+   "Ext. Sky Air Seasonal Smart R410a 1ph"
+     cod 62578432  €1618.23
+     cod 95406414  €2077.23
+     cod 29308529  €2254.71
+     cod 94461491  €2474.52
+
+x4  RAPPORTO PREZZO 1.5  (da €5.79 a €8.85)  [Rubinetti A Squadra]
+   "Rubinetto Squadra Ø1/2"x3/8" Con Rosetta Ø55 Cromo"
+     cod 65370712  €5.79
+     cod 12777141  €7.01
+     cod 93308842  €7.63
+     cod 12700196  €8.85
+
+x3  RAPPORTO PREZZO 1.5  (da €2979.60 a €4536.00)  [Riscaldamento]
+   "H Boilergas Wallcond Ho"
+     cod 80698119  €2979.60
+     cod 96845213  €4243.20
+     cod 65157738  €4536.00
+
+x6  RAPPORTO PREZZO 1.5  (da €783.36 a €1191.36)  [Light Commercial]
+   "Unità Interna Cassetta A 4 Vie Standard"
+     cod 43525761  €783.36
+     cod 50287655  €826.88
+     cod 56915309  €913.92
+     cod 43635950  €1049.92
+     cod 87790853  €1085.28
+     cod 50022399  €1191.36
+
+x2  RAPPORTO PREZZO 1.5  (da €63.72 a €96.60)  [Applicazioni Industriale Inox]
+   "Terminale Tronco Smussato"
+     cod 12806257  €63.72
+     cod 12783813  €96.60
+
+x2  RAPPORTO PREZZO 1.5  (da €39.55 a €59.85)  [Ricambi E Accessori]
+   "Mousseur Super Steel"
+     cod 72880509  €39.55
+     cod 39345170  €59.85
+
+x3  RAPPORTO PREZZO 1.5  (da €1297.44 a €1947.52)  [Light Commercial]
+   "Unità Esterna Inverter Pompa Di Calore - Digital Inverter Classic Serie 1 Con R32 - 3ph"
+     cod 37306474  €1297.44
+     cod 99969125  €1482.40
+     cod 63900534  €1947.52
+
+x2  RAPPORTO PREZZO 1.5  (da €147.74 a €220.79)  [Caldaia]
+   "Kit Cassone Copricaldaia Rinnai Bianca"
+     cod 12487431  €147.74
+     cod 12526928  €220.79
+
+x3  RAPPORTO PREZZO 1.5  (da €31.88 a €47.63)  [Megapress]
+   "Curva A 45° Megapress S Con Sc-contur Acciaio Al Carbonio, Rivestimento Di Zinco-nichel, Estremità A Pressare Femmina, Modello 4326 Omologazione Tedesca Vds Teleriscaldamento Sec. Agfw Fw 5"
+     cod 75217118  €31.88
+     cod 30130851  €35.46
+     cod 81296908  €47.63
+
+x2  RAPPORTO PREZZO 1.5  (da €78.40 a €116.20)  [Ricambi E Accessori]
+   "Doccetta Estraibile Per Miscelatore Lavello Super Steel"
+     cod 87453473  €78.40
+     cod 12861658  €116.20
+
+x4  RAPPORTO PREZZO 1.5  (da €146.40 a €216.78)  [Doppia Parete Coiben. Lana Minerale Inox]
+   "Elemento Regolabile 260-380 Mm"
+     cod 12841927  €146.40
+     cod 84823474  €170.10
+     cod 13291291  €178.02
+     cod 72673453  €216.78
+
+x2  RAPPORTO PREZZO 1.5  (da €151.28 a €223.48)  [Ricambi]
+   "Scheda Principale"
+     cod 28985197  €151.28
+     cod 56924674  €223.48
+
+x4  RAPPORTO PREZZO 1.5  (da €111.85 a €165.00)  [Project Wind]
+   "Plenum Coibentato In Lamiera Per Daikin Con Flangia 492x178"
+     cod 12895478  €111.85
+     cod 37306014  €145.09
+     cod 67441078  €158.26
+     cod 12114724  €165.00
+
+x2  RAPPORTO PREZZO 1.5  (da €2787.25 a €4107.95)  [Estia]
+   "Unità Idronica Alta Potenza Con Resistenza Elettrica Di Backup Da 3kw 1ph"
+     cod 12544881  €2787.25
+     cod 12904860  €4107.95
+
+x2  RAPPORTO PREZZO 1.5  (da €1207.68 a €1779.90)  [Commerciale]
+   "Ext. Sky Air Seasonal Classic R410a 1ph"
+     cod 16161048  €1207.68
+     cod 91164441  €1779.90
+
+x2  RAPPORTO PREZZO 1.5  (da €678.00 a €996.75)  [Sistemi di Calore]
+   "Contatore Conteca Easy Ø1.1/2"m"
+     cod 79389067  €678.00
+     cod 12626849  €996.75
+
+x2  RAPPORTO PREZZO 1.5  (da €3.50 a €5.10)  [Condizionamento]
+   "Libretto Impianto Domestico Climatizzazione Invernale/estiva Altre Regioni Italiane"
+     cod 68309778  €3.50
+     cod 57739542  €5.10
+
+x2  RAPPORTO PREZZO 1.5  (da €65.58 a €95.34)  [Doppia Parete Coiben. Lana Minerale Inox]
+   "Gbd Staffa A Parete"
+     cod 12789369  €65.58
+     cod 12795787  €95.34
+
+x2  RAPPORTO PREZZO 1.5  (da €7.09 a €10.30)  [Valvole Radiatori Controllo Terminale]
+   "Detentore Diritto Ø3/8" Attacco Rame"
+     cod 71751586  €7.09
+     cod 87693116  €10.30
+
+x2  RAPPORTO PREZZO 1.5  (da €6.99 a €10.14)  [Idrotermosanitario]
+   "Raccordo Diritto Maschio Con O-ring Ø3/4"x18 Per Rame"
+     cod 12348456  €6.99
+     cod 12402439  €10.14
+
+x2  RAPPORTO PREZZO 1.4  (da €45.15 a €65.45)  [Ricambi E Accessori]
+   "Flessibile Per Miscelatore Con Doccetta Estraibile"
+     cod 12526069  €45.15
+     cod 12842688  €65.45
+
+x3  RAPPORTO PREZZO 1.4  (da €35.46 a €51.30)  [Doppia Parete Coibentato Aria Inox]
+   "Fascia Per 3 Cavi Tiranti"
+     cod 12378199  €35.46
+     cod 12567758  €37.68
+     cod 24662756  €51.30
+
+x2  RAPPORTO PREZZO 1.4  (da €6.58 a €9.48)  [Ricambi]
+   "Cavo Alimentazione"
+     cod 81664311  €6.58
+     cod 35438012  €9.48
+
+x6  RAPPORTO PREZZO 1.4  (da €594.54 a €851.64)  [Attraversamento Tetto]
+   "Attraversamento Tetto Inox 590mm X Mf"
+     cod 12709239  €594.54
+     cod 12709244  €636.60
+     cod 12709512  €672.60
+     cod 50549952  €727.20
+     cod 12709511  €765.24
+     cod 12709235  €851.64
+
+x2  RAPPORTO PREZZO 1.4  (da €7.55 a €10.81)  [Ricambi]
+   "Calottina"
+     cod 64738434  €7.55
+     cod 22369006  €10.81
+
+x2  RAPPORTO PREZZO 1.4  (da €9.80 a €14.00)  [Ricambi E Accessori]
+   "Limitatore Di Portata Con Chiave"
+     cod 66090733  €9.80
+     cod 42596455  €14.00
+
+x2  RAPPORTO PREZZO 1.4  (da €45.97 a €65.66)  [Combustibili]
+   "Cassetta Contatore Gas In Lamiera Zincata H50 L30 P24"
+     cod 23683998  €45.97
+     cod 12532763  €65.66
+
+x2  RAPPORTO PREZZO 1.4  (da €240.66 a €342.09)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Con Valvola Sfera Ø1.1/4" 2,75m3/h"
+     cod 17990705  €240.66
+     cod 12913962  €342.09
+
+x2  RAPPORTO PREZZO 1.4  (da €240.66 a €342.09)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Con Valvola Sfera Ø1.1/4" 2,25m3/h"
+     cod 58505132  €240.66
+     cod 77896152  €342.09
+
+x2  RAPPORTO PREZZO 1.4  (da €194.67 a €275.94)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø1.1/4" 1,2m3/h"
+     cod 12918271  €194.67
+     cod 99663672  €275.94
+
+x2  RAPPORTO PREZZO 1.4  (da €194.67 a €275.94)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø1.1/4" 2,75m3/h"
+     cod 12918272  €194.67
+     cod 21673227  €275.94
+
+x2  RAPPORTO PREZZO 1.4  (da €209.79 a €296.73)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Con Valvola Sfera Ø1" 0,9m3/h"
+     cod 62528551  €209.79
+     cod 12913960  €296.73
+
+x2  RAPPORTO PREZZO 1.4  (da €209.79 a €296.73)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Con Valvola Sfera Ø1" 1m3/h"
+     cod 60146227  €209.79
+     cod 60654536  €296.73
+
+x2  RAPPORTO PREZZO 1.4  (da €51.71 a €73.05)  [Acqua]
+   "Elettrovalvola Normalmente Chiusa On/off 1/2" Per Acqua Senza Bobina Membrana Nbr"
+     cod 80238670  €51.71
+     cod 12889632  €73.05
+
+x2  RAPPORTO PREZZO 1.4  (da €6.98 a €9.85)  [Acqua]
+   "Giunto Estensibile H2o Con Guaina"
+     cod 35932758  €6.98
+     cod 58286129  €9.85
+
+x2  RAPPORTO PREZZO 1.4  (da €9.45 a €13.30)  [Ricambi E Accessori]
+   "Filtro Confezione 2 Pezzi"
+     cod 12439151  €9.45
+     cod 47977352  €13.30
+
+x2  RAPPORTO PREZZO 1.4  (da €128.85 a €181.23)  [Ricambi]
+   "Elettronica Completa"
+     cod 39873296  €128.85
+     cod 12588194  €181.23
+
+x2  RAPPORTO PREZZO 1.4  (da €55.00 a €76.86)  [Moduli Di Installazione]
+   "Rapido Smartbox Corpo Incasso Universale"
+     cod 12815667  €55.00
+     cod 12564964  €76.86
+
+x3  RAPPORTO PREZZO 1.4  (da €845.92 a €1177.76)  [Light Commercial]
+   "Unità Interna Tipo Smart Cassetta A 4 Vie 90x90 (solo Con Super Digital Inverter R32)"
+     cod 12591738  €845.92
+     cod 38261662  €881.28
+     cod 80909554  €1177.76
+
+x2  RAPPORTO PREZZO 1.4  (da €0.44 a €0.61)  [Acqua]
+   "Guarnizione Per Resistenza Scaldabagno Per Acqua"
+     cod 12588362  €0.44
+     cod 66973893  €0.61
+
+x2  RAPPORTO PREZZO 1.4  (da €32.46 a €45.12)  [Doppia Parete Coibentato Aria Inox]
+   "Staffa A Parete Regolabile 50-90 Mm"
+     cod 12709300  €32.46
+     cod 36932912  €45.12
+
+x2  RAPPORTO PREZZO 1.4  (da €352.94 a €485.91)  [Riscaldamento]
+   "Motore Per Valvola A Globo Filettata Motore X Valvola Globo Filettata 230 Vac"
+     cod 35506687  €352.94
+     cod 43479397  €485.91
+
+x4  RAPPORTO PREZZO 1.4  (da €333.60 a €458.40)  [Residenziale]
+   "Sensira Mono"
+     cod 77609766  €333.60
+     cod 91661448  €343.68
+     cod 12436442  €382.08
+     cod 29302535  €458.40
+
+x4  RAPPORTO PREZZO 1.4  (da €333.60 a €458.40)  [Residenziale]
+   "Sensira R32"
+     cod 72925870  €333.60
+     cod 16195774  €343.68
+     cod 36494982  €382.08
+     cod 74774996  €458.40
+
+x3  RAPPORTO PREZZO 1.4  (da €618.54 a €848.82)  [Sistemi Di Sciaquo Per Wc E Orinatoi]
+   "Tectron Skate Dispositivo Elettronico Infrarossi Acciaio Inox Satinato"
+     cod 12726390  €618.54
+     cod 12497474  €631.65
+     cod 12634117  €848.82
+
+x4  RAPPORTO PREZZO 1.4  (da €270.04 a €370.18)  [Riscaldamento]
+   "Valvola Intercettazione Combustibile Filettata 1 Bar"
+     cod 60760194  €270.04
+     cod 52639488  €293.03
+     cod 12798214  €356.23
+     cod 42285204  €370.18
+
+x2  RAPPORTO PREZZO 1.4  (da €36.05 a €49.35)  [Ricambi E Accessori]
+   "Leva Clinica L.170mm Cromo"
+     cod 12591986  €36.05
+     cod 34798750  €49.35
+
+x2  RAPPORTO PREZZO 1.4  (da €1653.77 a €2258.52)  [Riscaldamento]
+   "U.i. P.d.c. Split R290 Monofase"
+     cod 83825668  €1653.77
+     cod 88295383  €2258.52
+
+x2  RAPPORTO PREZZO 1.4  (da €72.00 a €98.00)  [Accessori Riscaldamento E Clima]
+   "Kit Scarico Coassiale Condens Orizzontale Ø80/125 L.1000mm"
+     cod 12682942  €72.00
+     cod 12867762  €98.00
+
+x2  RAPPORTO PREZZO 1.4  (da €59.92 a €81.26)  [Combustibili]
+   "Cassetta Contatore Gas In Lamiera Zincata H60 L45 P24"
+     cod 87642742  €59.92
+     cod 12590663  €81.26
+
+x2  RAPPORTO PREZZO 1.4  (da €10.85 a €14.70)  [Ricambi E Accessori]
+   "Leva Di Azionamento"
+     cod 19878876  €10.85
+     cod 80347938  €14.70
+
+x3  RAPPORTO PREZZO 1.4  (da €108.36 a €146.79)  [Idrotermosanitario]
+   "Riduttore Pressione Ø3/4" Con Manometro 0÷10bar"
+     cod 12521116  €108.36
+     cod 12629144  €123.48
+     cod 12348396  €146.79
+
+x3  RAPPORTO PREZZO 1.4  (da €81.90 a €110.88)  [Idrotermosanitario]
+   "Riduttore Pressione Ø1/2" Con Manometro 0÷10bar"
+     cod 12521115  €81.90
+     cod 12629143  €94.50
+     cod 12348395  €110.88
+
+x2  RAPPORTO PREZZO 1.4  (da €89.22 a €120.54)  [Doppia Parete Coiben. Lana Minerale Inox]
+   "Gbd Supporto Light Con Piastre"
+     cod 71022102  €89.22
+     cod 31377697  €120.54
+
+x3  RAPPORTO PREZZO 1.3  (da €538.36 a €726.65)  [Residenziale]
+   "Unità A Parete - "super Daiseikai 10""
+     cod 58997020  €538.36
+     cod 22430070  €602.00
+     cod 95101688  €726.65
+
+x3  RAPPORTO PREZZO 1.3  (da €936.16 a €1262.35)  [Residenziale]
+   "Unità Esterna Inverter Pompa Di Calore R32 - "super Daiseikai 10""
+     cod 92287280  €936.16
+     cod 90880075  €989.20
+     cod 39316521  €1262.35
+
+x2  RAPPORTO PREZZO 1.3  (da €20.22 a €27.22)  [Attrezzaura]
+   "Forbice Per Elettricista 140 Mm - Idrhaus"
+     cod 12362113  €20.22
+     cod 12768823  €27.22
+
+x2  RAPPORTO PREZZO 1.3  (da €87.57 a €117.81)  [Idrotermosanitario]
+   "Valvola Zona 3vie Ø1" Per Comando 6563/1"
+     cod 12360990  €87.57
+     cod 12360993  €117.81
+
+x3  RAPPORTO PREZZO 1.3  (da €133.56 a €179.55)  [Idrotermosanitario]
+   "Riduttore Pressione Ø1" Con Manometro 0÷10bar"
+     cod 12521117  €133.56
+     cod 12629155  €154.35
+     cod 12348397  €179.55
+
+x2  RAPPORTO PREZZO 1.3  (da €367.03 a €493.00)  [Attrezzaura]
+   "Pettini Serie Di Pettini Da 1/2"- 3/4""
+     cod 95805619  €367.03
+     cod 18432479  €493.00
+
+x2  RAPPORTO PREZZO 1.3  (da €1.83 a €2.46)  [Ricambi]
+   "Leva Alluminio Nera Ø3/4"-1""
+     cod 12427008  €1.83
+     cod 12710792  €2.46
+
+x2  RAPPORTO PREZZO 1.3  (da €80.56 a €107.79)  [Ricambi]
+   "Net Light Gateway"
+     cod 12683831  €80.56
+     cod 19227002  €107.79
+
+x2  RAPPORTO PREZZO 1.3  (da €1.47 a €1.97)  [Ricambi]
+   "Guarnizione X Bacinella Cassetta Inc"
+     cod 12590449  €1.47
+     cod 12456524  €1.97
+
+x2  RAPPORTO PREZZO 1.3  (da €137.34 a €183.33)  [Idrotermosanitario]
+   "Valvola A Sfera 2vie Motorizzata Ø3/4" 230v"
+     cod 12742390  €137.34
+     cod 12444342  €183.33
+
+x3  RAPPORTO PREZZO 1.3  (da €148.28 a €197.45)  [Project Wind]
+   "Plenum Coibentato In Lamiera Per Haier Con Flangia 866x165"
+     cod 17491954  €148.28
+     cod 40385285  €191.57
+     cod 18471203  €197.45
+
+x3  RAPPORTO PREZZO 1.3  (da €15.26 a €20.27)  [Ricambi]
+   "Resistenza 1200w 230v"
+     cod 63881632  €15.26
+     cod 97261696  €18.49
+     cod 80145710  €20.27
+
+x2  RAPPORTO PREZZO 1.3  (da €717.93 a €949.82)  [Commerciale]
+   "Fancoilno Comp4pipe"
+     cod 65366166  €717.93
+     cod 86386630  €949.82
+
+x2  RAPPORTO PREZZO 1.3  (da €45.97 a €60.74)  [Combustibili]
+   "Cassetta Contatore Gas In Lamiera Zincata H40 L30 P24"
+     cod 67749255  €45.97
+     cod 12532759  €60.74
+
+x2  RAPPORTO PREZZO 1.3  (da €33.95 a €44.80)  [Ricambi E Accessori]
+   "Tappo Cromo"
+     cod 28877681  €33.95
+     cod 89297639  €44.80
+
+x2  RAPPORTO PREZZO 1.3  (da €54.17 a €71.41)  [Combustibili]
+   "Cassetta Contatore Gas In Lamiera Zincata H50 L40 P24"
+     cod 12769320  €54.17
+     cod 12532760  €71.41
+
+x2  RAPPORTO PREZZO 1.3  (da €27.09 a €35.29)  [Condizionamento]
+   "Mensola Di Sostegno Premontata Con Livella - Idrhaus"
+     cod 37860670  €27.09
+     cod 12708767  €35.29
+
+x2  RAPPORTO PREZZO 1.3  (da €7.80 a €10.15)  [Ricambi]
+   "Supporto"
+     cod 12648583  €7.80
+     cod 88434778  €10.15
+
+x2  RAPPORTO PREZZO 1.3  (da €221.76 a €288.54)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø1.1/2" 5,50m3/h"
+     cod 73934327  €221.76
+     cod 11854976  €288.54
+
+x3  RAPPORTO PREZZO 1.3  (da €4956.60 a €6436.80)  [Riscaldamento]
+   "Altherma 3 R Mt Outdoor 3x400v+n"
+     cod 62782029  €4956.60
+     cod 66058719  €5718.60
+     cod 65113797  €6436.80
+
+x2  RAPPORTO PREZZO 1.3  (da €26.60 a €34.30)  [Ricambi E Accessori]
+   "Raccordo A Scatto"
+     cod 12398669  €26.60
+     cod 12592443  €34.30
+
+x2  RAPPORTO PREZZO 1.3  (da €756.50 a €972.82)  [Accessori Riscaldamento E Clima]
+   "Separatore Idraulico Dn65"
+     cod 12514587  €756.50
+     cod 12777254  €972.82
+
+x2  RAPPORTO PREZZO 1.3  (da €275.42 a €353.80)  [Sistemi Di Sciaquo Per Wc E Orinatoi]
+   "Tectron Bau E Dispositivo Elettronico Infrarossi Bianco"
+     cod 65393938  €275.42
+     cod 50427857  €353.80
+
+x2  RAPPORTO PREZZO 1.3  (da €68.66 a €88.08)  [Allacciamenti apparecchi]
+   "Sifone Salvaspazio Ø40 Con Piletta Cromato Lucido"
+     cod 20996154  €68.66
+     cod 58574042  €88.08
+
+x2  RAPPORTO PREZZO 1.3  (da €276.57 a €354.69)  [Idrotermosanitario]
+   "Gruppo Caricamento Ø1/2" Con Disconnettore"
+     cod 12610468  €276.57
+     cod 12610484  €354.69
+
+x2  RAPPORTO PREZZO 1.3  (da €38.50 a €49.35)  [Ricambi E Accessori]
+   "Dispositivo Di Regolazione"
+     cod 12810990  €38.50
+     cod 51424710  €49.35
+
+x3  RAPPORTO PREZZO 1.3  (da €2322.88 a €2975.68)  [Light Commercial]
+   "Unità Esterna Inverter In Pompa Di Calore Super Digital Inverter Serie 1 Con R32 3hp"
+     cod 12659685  €2322.88
+     cod 12838663  €2654.72
+     cod 12655179  €2975.68
+
+x3  RAPPORTO PREZZO 1.3  (da €21.36 a €27.27)  [Megapress]
+   "Manicotto Con Battente Megapress S Con Sc-contur Acciaio Al Carbonio, Rivestimento Di Zinco-nichel, Estremità A Pressare Femmina, Modello 4315 Omologazione Tedesca Vds Teleriscaldamento Sec"
+     cod 96957786  €21.36
+     cod 37456145  €23.76
+     cod 12772187  €27.27
+
+x2  RAPPORTO PREZZO 1.3  (da €68.67 a €87.57)  [Idrotermosanitario]
+   "Elettrovalvola Normalmente Aperta 230v Riarmo Manuale Ø1""
+     cod 12554438  €68.67
+     cod 12749229  €87.57
+
+x2  RAPPORTO PREZZO 1.3  (da €4812.60 a €6130.20)  [Riscaldamento]
+   "Altherma 3 R Mt Outdoor 1x230v+n"
+     cod 99348983  €4812.60
+     cod 39804478  €6130.20
+
+x2  RAPPORTO PREZZO 1.3  (da €156.12 a €198.66)  [Doppia Parete Coiben. Lana Minerale Inox]
+   "Gomito A 30gr"
+     cod 45956933  €156.12
+     cod 36106502  €198.66
+
+x2  RAPPORTO PREZZO 1.3  (da €2.41 a €3.06)  [Raccordi Filettati Bronzo]
+   "Manicotto Con Battente Bronzo, Bronzo Al Silicio O Lega Di Rame E Silicio, Modello 3270"
+     cod 12360286  €2.41
+     cod 12360284  €3.06
+
+x2  RAPPORTO PREZZO 1.3  (da €290.67 a €368.75)  [Piastre Di Azionamento]
+   "Tectron Bau E Dispositivo Elettronico Infrarossi Cromo"
+     cod 91630705  €290.67
+     cod 95634043  €368.75
+
+x5  RAPPORTO PREZZO 1.3  (da €1463.36 a €1852.32)  [Light Commercial]
+   "Unità Interna A Colonna"
+     cod 87671220  €1463.36
+     cod 19995862  €1572.16
+     cod 83595474  €1599.36
+     cod 36660846  €1651.04
+     cod 37611979  €1852.32
+
+x2  RAPPORTO PREZZO 1.3  (da €18.88 a €23.80)  [Condizionamento]
+   "Griglia Tonda Pieghevole In Abs Bianca"
+     cod 10380201  €18.88
+     cod 40029065  €23.80
+
+x2  RAPPORTO PREZZO 1.3  (da €1.40 a €1.75)  [Ricambi E Accessori]
+   "Clip"
+     cod 17788536  €1.40
+     cod 14455522  €1.75
+
+x4  RAPPORTO PREZZO 1.2  (da €128.72 a €160.90)  [Project Wind]
+   "Plenum Coibentato In Lamiera Per Daikin Con Flangia 792x178"
+     cod 35451983  €128.72
+     cod 12896531  €139.28
+     cod 71002697  €145.09
+     cod 51885185  €160.90
+
+x3  RAPPORTO PREZZO 1.2  (da €5454.55 a €6781.33)  [Riscaldamento]
+   "Deu.recuper. 035 Base + Serrande"
+     cod 82393203  €5454.55
+     cod 74881622  €5823.10
+     cod 71573479  €6781.33
+
+x2  RAPPORTO PREZZO 1.2  (da €73.71 a €91.35)  [Idrotermosanitario]
+   "Valvola Zona 3vie Ø1/2" Per Comando 6563/1"
+     cod 12360988  €73.71
+     cod 12360991  €91.35
+
+x2  RAPPORTO PREZZO 1.2  (da €73.71 a €91.35)  [Idrotermosanitario]
+   "Valvola Zona 3vie Ø3/4" Per Comando 6563/1"
+     cod 12360989  €73.71
+     cod 12360992  €91.35
+
+x2  RAPPORTO PREZZO 1.2  (da €153.09 a €189.63)  [Idrotermosanitario]
+   "Valvola A Sfera 2vie Motorizzata Ø3/4" 24v"
+     cod 45142000  €153.09
+     cod 12454019  €189.63
+
+x2  RAPPORTO PREZZO 1.2  (da €65.66 a €81.26)  [Combustibili]
+   "Centralina Per Accoppiamento Bombole Gpl 2 Posti"
+     cod 12349336  €65.66
+     cod 12644290  €81.26
+
+x4  RAPPORTO PREZZO 1.2  (da €680.00 a €840.48)  [Light Commercial]
+   "Unità Interna Tipo Canalizzabile Ribassata Serie Hm Sdty R32"
+     cod 30841928  €680.00
+     cod 60584681  €728.96
+     cod 72754553  €775.20
+     cod 17460911  €840.48
+
+x2  RAPPORTO PREZZO 1.2  (da €58.28 a €71.41)  [Acqua]
+   "Collare Di Presa In Ghisa Dn50 (60/68) 3/4" A 1""
+     cod 12588332  €58.28
+     cod 93198670  €71.41
+
+x2  RAPPORTO PREZZO 1.2  (da €71.82 a €87.57)  [Idrotermosanitario]
+   "Elettrovalvola Normalmente Aperta 24v Riarmo Manuale Ø1""
+     cod 12396020  €71.82
+     cod 38188601  €87.57
+
+x2  RAPPORTO PREZZO 1.2  (da €4.16 a €5.07)  [Ricambi]
+   "Leva Alluminio Nera Ø2""
+     cod 12427010  €4.16
+     cod 12585818  €5.07
+
+x3  RAPPORTO PREZZO 1.2  (da €384.30 a €467.46)  [Idrotermosanitario]
+   "Riduttore Pressione Ø1.1/2" Con Manometro 0÷10bar"
+     cod 12558836  €384.30
+     cod 12629157  €415.17
+     cod 12348399  €467.46
+
+x3  RAPPORTO PREZZO 1.2  (da €6.07 a €7.39)  [Acqua]
+   "Giunto Inox Estensibile H2o Mf 1/2"x3/4""
+     cod 58834081  €6.07
+     cod 60832417  €6.53
+     cod 49890849  €7.39
+
+x2  RAPPORTO PREZZO 1.2  (da €9.32 a €11.32)  [Ricambi]
+   "Coperchio Rubinetti"
+     cod 68187104  €9.32
+     cod 29911122  €11.32
+
+x2  RAPPORTO PREZZO 1.2  (da €42.71 a €51.79)  [Idrotermosanitario]
+   "Tee Di Bypass U4 Ø1""
+     cod 11920517  €42.71
+     cod 12610746  €51.79
+
+x2  RAPPORTO PREZZO 1.2  (da €42.71 a €51.79)  [Idrotermosanitario]
+   "Tee Di Bypass U6 Ø1""
+     cod 12348314  €42.71
+     cod 12920061  €51.79
+
+x2  RAPPORTO PREZZO 1.2  (da €42.71 a €51.79)  [Idrotermosanitario]
+   "Tee Di Bypass U8 Ø1""
+     cod 73823051  €42.71
+     cod 12450653  €51.79
+
+x2  RAPPORTO PREZZO 1.2  (da €1547.68 a €1868.64)  [Light Commercial]
+   "Unità Esterna Inverter In Pompa Di Calore Digital Inverter Serie 1 Con R32 3ph"
+     cod 12557137  €1547.68
+     cod 12557139  €1868.64
+
+x2  RAPPORTO PREZZO 1.2  (da €3.10 a €3.74)  [Ricambi]
+   "Leva Alluminio Nera Ø1.1/4"-1.1/2""
+     cod 12427009  €3.10
+     cod 36762946  €3.74
+
+x3  RAPPORTO PREZZO 1.2  (da €712.32 a €858.24)  [Residenziale]
+   "Emura Iii Alpha - Beg, Dcs"
+     cod 90757090  €712.32
+     cod 42932501  €748.80
+     cod 30267662  €858.24
+
+x2  RAPPORTO PREZZO 1.2  (da €9.13 a €10.96)  [Idrotermosanitario]
+   "Raccordo Diritto Maschio Con O-ring Ø3/4"x22 Per Rame"
+     cod 12348457  €9.13
+     cod 12402440  €10.96
+
+x2  RAPPORTO PREZZO 1.2  (da €13.54 a €16.19)  [Idrotermosanitario]
+   "Valvola Sicurezza Ø1/2"f 3bar"
+     cod 12348326  €13.54
+     cod 12741454  €16.19
+
+x2  RAPPORTO PREZZO 1.2  (da €13.54 a €16.19)  [Idrotermosanitario]
+   "Valvola Sicurezza Ø1/2"f 6bar"
+     cod 12348327  €13.54
+     cod 12742443  €16.19
+
+x2  RAPPORTO PREZZO 1.2  (da €13.54 a €16.19)  [Idrotermosanitario]
+   "Valvola Sicurezza Ø1/2"mf 3bar"
+     cod 12521075  €13.54
+     cod 12742445  €16.19
+
+x2  RAPPORTO PREZZO 1.2  (da €13.54 a €16.19)  [Idrotermosanitario]
+   "Valvola Sicurezza Ø1/2"mf 6bar"
+     cod 12521076  €13.54
+     cod 12742444  €16.19
+
+x2  RAPPORTO PREZZO 1.2  (da €13.54 a €16.19)  [Idrotermosanitario]
+   "Valvola Sicurezza Ø1/2"f 7bar"
+     cod 12610755  €13.54
+     cod 12620090  €16.19
+
+x2  RAPPORTO PREZZO 1.2  (da €13.54 a €16.19)  [Idrotermosanitario]
+   "Valvola Sicurezza Ø1/2"mf 7bar"
+     cod 12614453  €13.54
+     cod 12741443  €16.19
+
+x2  RAPPORTO PREZZO 1.2  (da €87.57 a €104.58)  [Idrotermosanitario]
+   "Elettrovalvola Normalmente Chiusa 24v Riarmo Manuale Ø3/4""
+     cod 33502476  €87.57
+     cod 12859214  €104.58
+
+x2  RAPPORTO PREZZO 1.2  (da €633.75 a €755.25)  [Sistemi di Calore]
+   "Contatore Conteca Easy Ø1.1/4"m"
+     cod 19011129  €633.75
+     cod 12629777  €755.25
+
+x2  RAPPORTO PREZZO 1.2  (da €16.95 a €20.16)  [Idrotermosanitario]
+   "Valvola Sicurezza Ø1/2"f 8bar"
+     cod 12384597  €16.95
+     cod 12413611  €20.16
+
+x2  RAPPORTO PREZZO 1.2  (da €16.95 a €20.16)  [Idrotermosanitario]
+   "Valvola Sicurezza Ø1/2"mf 8bar"
+     cod 12521079  €16.95
+     cod 12388193  €20.16
+
+x2  RAPPORTO PREZZO 1.2  (da €16.95 a €20.16)  [Idrotermosanitario]
+   "Valvola Sicurezza Ø1/2"mf 4bar"
+     cod 12436749  €16.95
+     cod 12769705  €20.16
+
+x2  RAPPORTO PREZZO 1.2  (da €16.95 a €20.16)  [Idrotermosanitario]
+   "Valvola Sicurezza Ø1/2"f 3,5bar"
+     cod 12668280  €16.95
+     cod 12484636  €20.16
+
+x2  RAPPORTO PREZZO 1.2  (da €16.95 a €20.16)  [Idrotermosanitario]
+   "Valvola Sicurezza Ø1/2"mf 2,5bar"
+     cod 12646686  €16.95
+     cod 12549577  €20.16
+
+x2  RAPPORTO PREZZO 1.2  (da €16.95 a €20.16)  [Idrotermosanitario]
+   "Valvola Sicurezza Ø1/2"mf 5bar"
+     cod 12678383  €16.95
+     cod 12574503  €20.16
+
+x2  RAPPORTO PREZZO 1.2  (da €16.95 a €20.16)  [Idrotermosanitario]
+   "Valvola Sicurezza Ø1/2"f 2,5bar"
+     cod 12668281  €16.95
+     cod 12472873  €20.16
+
+x2  RAPPORTO PREZZO 1.2  (da €16.95 a €20.16)  [Idrotermosanitario]
+   "Valvola Sicurezza Ø1/2"mf 3,5bar"
+     cod 40267726  €16.95
+     cod 92725680  €20.16
+
+x2  RAPPORTO PREZZO 1.2  (da €108.35 a €128.87)  [Combustibili]
+   "Cassetta Contatore Gas In Acciaio Inox H50 L40 P24"
+     cod 12439733  €108.35
+     cod 12590366  €128.87
+
+x2  RAPPORTO PREZZO 1.2  (da €83.88 a €99.73)  [Rubinetteria Bagno E Accessori]
+   "Eurosmart 23324 Miscelatore Monocomando Lavabo Taglia M Senza Salterello Con Ecojoy Cromo"
+     cod 12466758  €83.88
+     cod 43467215  €99.73
+
+x2  RAPPORTO PREZZO 1.2  (da €76.86 a €91.35)  [Idrotermosanitario]
+   "Riduttore Pressione Ø1/2" Con Attacco Manometro Ø1/4"f"
+     cod 21329180  €76.86
+     cod 12596473  €91.35
+
+x2  RAPPORTO PREZZO 1.2  (da €1065.33 a €1261.89)  [Idrotermosanitario]
+   "Valvola Intercettazione Combustibile 110°c Dn65 5m"
+     cod 12560341  €1065.33
+     cod 85572664  €1261.89
+
+x2  RAPPORTO PREZZO 1.2  (da €58.02 a €68.67)  [Idrotermosanitario]
+   "Elettrovalvola Normalmente Aperta 230v Riarmo Manuale Ø3/4""
+     cod 15000157  €58.02
+     cod 12796931  €68.67
+
+x2  RAPPORTO PREZZO 1.2  (da €38.62 a €45.67)  [Vmc]
+   "Air590 Griglia Fori Circolari Inox Bianco"
+     cod 12751270  €38.62
+     cod 12809949  €45.67
+
+x2  RAPPORTO PREZZO 1.2  (da €1326.15 a €1568.07)  [Idrotermosanitario]
+   "Valvola Intercettazione Combustibile 110°c Dn80 5m"
+     cod 12585580  €1326.15
+     cod 12637945  €1568.07
+
+x2  RAPPORTO PREZZO 1.2  (da €51.79 a €61.17)  [Idrotermosanitario]
+   "Vaso Espansione Saldato 25lt Ø3/4""
+     cod 12454782  €51.79
+     cod 12452828  €61.17
+
+x2  RAPPORTO PREZZO 1.2  (da €2509.80 a €2959.80)  [Riscaldamento]
+   "Ventno Comphrvchrv"
+     cod 78009087  €2509.80
+     cod 80051083  €2959.80
+
+x2  RAPPORTO PREZZO 1.2  (da €3418.46 a €4025.57)  [Riscaldamento]
+   "U.i. All In One R290 Monofase"
+     cod 54742857  €3418.46
+     cod 49691786  €4025.57
+
+x2  RAPPORTO PREZZO 1.2  (da €136.08 a €160.02)  [Idrotermosanitario]
+   "Riduttore Pressione Ø1" Con Attacco Manometro Ø1/4"f"
+     cod 19246437  €136.08
+     cod 12596474  €160.02
+
+x2  RAPPORTO PREZZO 1.2  (da €930.24 a €1093.44)  [Light Commercial]
+   "Recuperatore Di Calore Da 150 Mc/h"
+     cod 15223508  €930.24
+     cod 99588142  €1093.44
+
+x2  RAPPORTO PREZZO 1.2  (da €3670.47 a €4302.87)  [Commerciale]
+   "Sezione Est.p/c Dc Inverter R410a 3ph"
+     cod 17847296  €3670.47
+     cod 91905766  €4302.87
+
+x2  RAPPORTO PREZZO 1.2  (da €52.53 a €61.56)  [Combustibili]
+   "Mensole Per Contatore Gas"
+     cod 12726785  €52.53
+     cod 12709718  €61.56
+
+x2  RAPPORTO PREZZO 1.2  (da €63.20 a €73.87)  [Condizionamento]
+   "Deflettore Per Condizionatori Blowind L690xh50xp250mm"
+     cod 77226496  €63.20
+     cod 77767203  €73.87
+
+x2  RAPPORTO PREZZO 1.2  (da €26.51 a €30.95)  [Megapress]
+   "Manicotto Di Riduzione Megapress S Con Sc-contur Acciaio Al Carbonio, Rivestimento Di Zinco-nichel, Estremità Maschio, Estremità A Pressare Femmina, Modello 4315.1 Omologazione Tedesca Vds Tele"
+     cod 82118800  €26.51
+     cod 22539653  €30.95
+
+x3  RAPPORTO PREZZO 1.2  (da €676.26 a €784.99)  [Residenziale]
+   "Unità A Parete Finitura In Legno - "super Daiseikai 10""
+     cod 87120745  €676.26
+     cod 10710155  €705.43
+     cod 93694485  €784.99
+
+x2  RAPPORTO PREZZO 1.2  (da €11.40 a €13.23)  [Idrotermosanitario]
+   "Gomito Maschio Con O-ring Ø3/4"x22 Per Rame"
+     cod 12446102  €11.40
+     cod 12475659  €13.23
+
+x2  RAPPORTO PREZZO 1.2  (da €170.52 a €196.98)  [Condizionamento]
+   "Rivelatore Domestico Serie H-300 Per Gas Refrigeranti - Applicazione Multi Centr"
+     cod 61243037  €170.52
+     cod 23247371  €196.98
+
+x2  RAPPORTO PREZZO 1.2  (da €2556.25 a €2952.01)  [Sist.Climatizzaz. Aria-Trattamento Aria]
+   "Dew 24-p Ext Deumidificatore Parete Con Mobiletto"
+     cod 78946805  €2556.25
+     cod 37074480  €2952.01
+
+x2  RAPPORTO PREZZO 1.2  (da €620.16 a €715.36)  [Light Commercial]
+   "Unità Esterna Inverter Pompa Di Calore - Digital Inverter Serie 2 Con R32"
+     cod 64546294  €620.16
+     cod 96206709  €715.36
+
+x4  RAPPORTO PREZZO 1.2  (da €753.44 a €867.68)  [Light Commercial]
+   "Unità Interna Cassetta A 4 Vie 60 X 60"
+     cod 66580121  €753.44
+     cod 31610778  €810.56
+     cod 75260462  €867.68
+     cod 96080113  €867.68
+
+x2  RAPPORTO PREZZO 1.2  (da €56.88 a €65.46)  [Doppia Parete Coiben. Lana Minerale Inox]
+   "Diritto 190 Mm Utili"
+     cod 47448127  €56.88
+     cod 50132003  €65.46
+
+x2  RAPPORTO PREZZO 1.2  (da €5.19 a €5.97)  [Idrotermosanitario]
+   "Darcal Raccordo Adattatore Ø3/4"-9÷10x12÷14"
+     cod 12372103  €5.19
+     cod 12706729  €5.97
+
+x2  RAPPORTO PREZZO 1.2  (da €5.19 a €5.97)  [Idrotermosanitario]
+   "Darcal Raccordo Adattatore Ø3/4"-11,5÷12x14÷16"
+     cod 12372105  €5.19
+     cod 12742441  €5.97
+
+x2  RAPPORTO PREZZO 1.2  (da €5.19 a €5.97)  [Idrotermosanitario]
+   "Darcal Raccordo Adattatore Ø3/4"-11,5÷12x16÷18"
+     cod 12395250  €5.19
+     cod 12671580  €5.97
+
+x2  RAPPORTO PREZZO 1.2  (da €5.19 a €5.97)  [Idrotermosanitario]
+   "Darcal Raccordo Adattatore Ø3/4"-9,5÷10x14÷16"
+     cod 12395384  €5.19
+     cod 12909904  €5.97
+
+x2  RAPPORTO PREZZO 1.2  (da €5.19 a €5.97)  [Idrotermosanitario]
+   "Darcal Raccordo Adattatore Ø3/4"-10,5÷11x16÷18"
+     cod 12416065  €5.19
+     cod 43155837  €5.97
+
+x2  RAPPORTO PREZZO 1.2  (da €5.19 a €5.97)  [Idrotermosanitario]
+   "Darcal Raccordo Adattatore Ø3/4"-10,5÷11x14÷16"
+     cod 12462331  €5.19
+     cod 12596432  €5.97
+
+x2  RAPPORTO PREZZO 1.2  (da €5.19 a €5.97)  [Idrotermosanitario]
+   "Darcal Raccordo Adattatore Ø3/4"-7,5÷8x12÷14"
+     cod 12596434  €5.19
+     cod 12596480  €5.97
+
+x2  RAPPORTO PREZZO 1.2  (da €7.00 a €8.05)  [Ricambi E Accessori]
+   "Rosetta Essence Lavabo Cromo"
+     cod 21768461  €7.00
+     cod 84226079  €8.05
+
+x2  RAPPORTO PREZZO 1.1  (da €990.08 a €1136.96)  [Light Commercial]
+   "Recuperatore Di Calore Da 250 Mc/h"
+     cod 29934859  €990.08
+     cod 12653087  €1136.96
+
+x2  RAPPORTO PREZZO 1.1  (da €3.40 a €3.90)  [Condizionamento]
+   "Libretto Impianto Domestico Climatizzazione Invernale/estiva Solo Regione Lombardia"
+     cod 72273867  €3.40
+     cod 71811585  €3.90
+
+x2  RAPPORTO PREZZO 1.1  (da €9.51 a €10.90)  [Idrotermosanitario]
+   "Gomito Maschio Con O-ring Ø3/4"x18 Per Rame"
+     cod 12348496  €9.51
+     cod 12475658  €10.90
+
+x2  RAPPORTO PREZZO 1.1  (da €15.89 a €18.19)  [Trattamento Aria E VMC Residenziale]
+   "Kflex-a Nastro Adesivo Alluminio"
+     cod 32928167  €15.89
+     cod 95168917  €18.19
+
+x2  RAPPORTO PREZZO 1.1  (da €114.91 a €131.33)  [Acqua]
+   "Elettrovalvola Normalmente Chiusa On/off 1" Per Acqua Senza Bobina Membrana Nbr"
+     cod 12623244  €114.91
+     cod 12910481  €131.33
+
+x2  RAPPORTO PREZZO 1.1  (da €70.70 a €80.50)  [Ricambi E Accessori]
+   "Cartuccia Cromo/blu/rosso"
+     cod 12811832  €70.70
+     cod 12746485  €80.50
+
+x2  RAPPORTO PREZZO 1.1  (da €1094.97 a €1244.91)  [Commerciale]
+   "Sky Air<comp<h/p<rzag"
+     cod 67714274  €1094.97
+     cod 10393391  €1244.91
+
+x2  RAPPORTO PREZZO 1.1  (da €79.56 a €90.17)  [Residenziale]
+   "Controllo Remoto Da Smartphone E Tablet Via Wi-fi Per Modelli Super Daiseikai 9, Seiya, Console"
+     cod 71842981  €79.56
+     cod 10205477  €90.17
+
+x2  RAPPORTO PREZZO 1.1  (da €396.27 a €447.93)  [Idrotermosanitario]
+   "Riduttore Pressione Ø1.1/2" Con Attacco Manometro Ø1/4"f"
+     cod 91170382  €396.27
+     cod 12596475  €447.93
+
+x2  RAPPORTO PREZZO 1.1  (da €124.62 a €140.70)  [Doppia Parete Coibentato Aria Inox]
+   "Elemento Con Apertura Di Compensazione"
+     cod 68308405  €124.62
+     cod 52516367  €140.70
+
+x2  RAPPORTO PREZZO 1.1  (da €354.38 a €399.04)  [Doccia E Accessori]
+   "Tempesta System 210 26811 Colonna Doccia Con Miscelatore Termostatico Esterno Cromo"
+     cod 49552244  €354.38
+     cod 23289409  €399.04
+
+x3  RAPPORTO PREZZO 1.1  (da €4954.80 a €5573.40)  [Riscaldamento]
+   "H H/pht Compacs"
+     cod 67024003  €4954.80
+     cod 27642640  €5258.40
+     cod 81075686  €5573.40
+
+x2  RAPPORTO PREZZO 1.1  (da €47.95 a €53.90)  [Ricambi E Accessori]
+   "Manopola Deviatore Cromo"
+     cod 42095648  €47.95
+     cod 12434302  €53.90
+
+x2  RAPPORTO PREZZO 1.1  (da €10.77 a €12.10)  [Idrotermosanitario]
+   "Gomito Femmina Con O-ring Ø3/4"x18 Per Rame"
+     cod 12348487  €10.77
+     cod 12475661  €12.10
+
+x2  RAPPORTO PREZZO 1.1  (da €87.57 a €98.28)  [Idrotermosanitario]
+   "Elettrovalvola Normalmente Chiusa 230v Riarmo Manuale Ø3/4""
+     cod 12420549  €87.57
+     cod 12522936  €98.28
+
+x2  RAPPORTO PREZZO 1.1  (da €51.30 a €57.54)  [Doppia Parete Coiben. Lana Minerale Inox]
+   "Gbd Fascia Per 3 Cavi Tiranti"
+     cod 12905150  €51.30
+     cod 64920263  €57.54
+
+x2  RAPPORTO PREZZO 1.1  (da €97.91 a €109.80)  [Sistemi Di Sciaquo Per Wc E Orinatoi]
+   "Flussometro Automatico Ø3/4" Per Wc Cromo"
+     cod 12543035  €97.91
+     cod 12393026  €109.80
+
+x2  RAPPORTO PREZZO 1.1  (da €56.52 a €63.24)  [Monoparete Rigido e Flessibile Inox]
+   "Diritto 950 Mm Utili Crm"
+     cod 12460936  €56.52
+     cod 12485867  €63.24
+
+x2  RAPPORTO PREZZO 1.1  (da €1108.74 a €1240.32)  [Commerciale]
+   "Sky Air<comp<h/p<azas<100"
+     cod 35152753  €1108.74
+     cod 22002892  €1240.32
+
+x2  RAPPORTO PREZZO 1.1  (da €69.77 a €77.98)  [Elettrico]
+   "Stuoia Scaldante In Metallo Amorfo Ecokaldo 1m2 150w/mq " Idrhaus"
+     cod 66730820  €69.77
+     cod 86043972  €77.98
+
+x3  RAPPORTO PREZZO 1.1  (da €233.32 a €260.77)  [Sistemi Di Sciaquo Per Wc E Orinatoi]
+   "Flussometro Incasso Ø3/4" Per Wc"
+     cod 12445214  €233.32
+     cod 12897237  €241.25
+     cod 10784717  €260.77
+
+x2  RAPPORTO PREZZO 1.1  (da €2116.16 a €2360.96)  [Light Commercial]
+   "Unità Interna Canalizzabile Ad Alta Prevalenza"
+     cod 85521699  €2116.16
+     cod 12821152  €2360.96
+
+x2  RAPPORTO PREZZO 1.1  (da €24.85 a €27.65)  [Ricambi E Accessori]
+   "Valvola Di Non Ritorno Con Tappi E O-ring"
+     cod 13642224  €24.85
+     cod 12474606  €27.65
+
+x2  RAPPORTO PREZZO 1.1  (da €328.95 a €366.00)  [Commerciale]
+   "Acc<qa/vrv<panel / Kit"
+     cod 38090979  €328.95
+     cod 25252794  €366.00
+
+x2  RAPPORTO PREZZO 1.1  (da €230.33 a €256.25)  [Valvole Motorizzate Pneumatiche]
+   "Lybra S67aa Valvola Farfalla Femmina/femmina Ot58 Ø2" Con Attuatore Semplice Effetto"
+     cod 40401560  €230.33
+     cod 12512747  €256.25
+
+x2  RAPPORTO PREZZO 1.1  (da €210.38 a €233.32)  [Valvole Motorizzate Pneumatiche]
+   "Lybra S67aa Valvola Farfalla Femmina/femmina Ot58 Ø1.1/2" Con Attuatore Semplice Effetto"
+     cod 71069309  €210.38
+     cod 12512746  €233.32
+
+x2  RAPPORTO PREZZO 1.1  (da €4.60 a €5.10)  [Condizionamento]
+   "Libretto Impianto Domestico Climatizzazione Invernale/estiva Solo Regione Veneto"
+     cod 57277261  €4.60
+     cod 90084883  €5.10
+
+x2  RAPPORTO PREZZO 1.1  (da €256.52 a €284.15)  [Valvole Industriali]
+   "Moon A105 2881 Valvola Sfera Wafer Dn65 Pn25/40 B"
+     cod 19865028  €256.52
+     cod 52683444  €284.15
+
+x2  RAPPORTO PREZZO 1.1  (da €56.84 a €62.93)  [Doccia E Accessori]
+   "Euphoria 110 Massage 27221 Doccetta 3 Getti Cromo"
+     cod 12428636  €56.84
+     cod 13998546  €62.93
+
+x2  RAPPORTO PREZZO 1.1  (da €177.68 a €196.25)  [Residenziale]
+   "Griglia Per Unità Interna Cassetta Compatta Multisplit"
+     cod 32719556  €177.68
+     cod 85126319  €196.25
+
+x2  RAPPORTO PREZZO 1.1  (da €6.77 a €7.47)  [Condizionamento]
+   "Canalina C/coperchio 70x55"
+     cod 26166360  €6.77
+     cod 79122701  €7.47
+
+x2  RAPPORTO PREZZO 1.1  (da €489.51 a €539.28)  [Idrotermosanitario]
+   "Riduttore Pressione Ø2" Con Manometro 0÷10bar"
+     cod 12558841  €489.51
+     cod 12629158  €539.28
+
+x2  RAPPORTO PREZZO 1.1  (da €15571.83 a €17144.16)  [Commerciale]
+   "Roof Top Pompa Calore R410a Seriec"
+     cod 55216654  €15571.83
+     cod 10668755  €17144.16
+
+x3  RAPPORTO PREZZO 1.1  (da €176.40 a €193.55)  [Ricambi E Accessori]
+   "Elettrovalvola"
+     cod 65857474  €176.40
+     cod 12904704  €184.10
+     cod 12585653  €193.55
+
+x3  RAPPORTO PREZZO 1.1  (da €280.35 a €306.95)  [Ricambi E Accessori]
+   "Termoelemento Ø1/2" A Cera Per Grohmix"
+     cod 41078378  €280.35
+     cod 12592430  €297.85
+     cod 12352404  €306.95
+
+x2  RAPPORTO PREZZO 1.1  (da €19980.27 a €21844.83)  [Commerciale]
+   "Roof Top Pompa Calore"
+     cod 27215085  €19980.27
+     cod 61429912  €21844.83
+
+x2  RAPPORTO PREZZO 1.1  (da €37.99 a €41.52)  [Idrotermosanitario]
+   "Vaso Espansione Saldato 8lt Ø3/4""
+     cod 12508060  €37.99
+     cod 12533488  €41.52
+
+x3  RAPPORTO PREZZO 1.1  (da €251.01 a €273.28)  [Corpi Incasso]
+   "Corpo Incasso Miscelatore Monocomando Lavabo 2 Fori A Parete"
+     cod 12526166  €251.01
+     cod 96062294  €271.45
+     cod 12530468  €273.28
+
+x2  RAPPORTO PREZZO 1.1  (da €1428.00 a €1554.00)  [Riscaldamento]
+   "Ehobg12ab Caldaia Murale Condensazione Metano Solo Riscaldamento"
+     cod 52800317  €1428.00
+     cod 32637174  €1554.00
+
+x2  RAPPORTO PREZZO 1.1  (da €4482.56 a €4874.24)  [Light Commercial]
+   "Unità Esterna Inverter In Pompa Di Calore - Big Digital Inverter Serie 1 3fase Con R32"
+     cod 46090537  €4482.56
+     cod 12821158  €4874.24
+
+x2  RAPPORTO PREZZO 1.1  (da €708.75 a €769.50)  [Sistemi di Calore]
+   "Cassetta Incasso Per Plurimod Con Collettore Distribuzione 6derivazioni"
+     cod 26205614  €708.75
+     cod 12635522  €769.50
+
+x2  RAPPORTO PREZZO 1.1  (da €784.50 a €851.25)  [Sistemi di Calore]
+   "Cassetta Incasso Per Plurimod Con Collettore Distribuzione 8derivazioni"
+     cod 85053042  €784.50
+     cod 12632285  €851.25
+
+x2  RAPPORTO PREZZO 1.1  (da €761.25 a €823.50)  [Sistemi di Calore]
+   "Cassetta Incasso Per Plurimod Con Collettore Distribuzione 7derivazioni"
+     cod 88005906  €761.25
+     cod 12671743  €823.50
+
+x2  RAPPORTO PREZZO 1.1  (da €1.56 a €1.69)  [Condizionamento]
+   "Tubo Bianco Giuntabile Rinforzato"
+     cod 41123914  €1.56
+     cod 31670638  €1.69
+
+x2  RAPPORTO PREZZO 1.1  (da €12.95 a €14.00)  [Ricambi E Accessori]
+   "Set Di Installazione"
+     cod 70819157  €12.95
+     cod 92535490  €14.00
+
+x2  RAPPORTO PREZZO 1.1  (da €362.16 a €391.14)  [Doppia Parete Coiben. Lana Minerale Inox]
+   "Gbd Gomito A 87"
+     cod 12858560  €362.16
+     cod 12789359  €391.14
+
+x2  RAPPORTO PREZZO 1.1  (da €687.75 a €742.50)  [Sistemi di Calore]
+   "Cassetta Incasso Per Plurimod Con Collettore Distribuzione 5derivazioni"
+     cod 12871235  €687.75
+     cod 12671740  €742.50
+
+x2  RAPPORTO PREZZO 1.1  (da €38.20 a €41.13)  [Ricambi]
+   "Pannello Frontale"
+     cod 95897336  €38.20
+     cod 10329828  €41.13
+
+x2  RAPPORTO PREZZO 1.1  (da €84.15 a €90.55)  [Commerciale]
+   "Scheda Wi-fi"
+     cod 30093119  €84.15
+     cod 39706075  €90.55
+
+x3  RAPPORTO PREZZO 1.1  (da €273.42 a €294.21)  [Idrotermosanitario]
+   "Riduttore Pressione Ø1.1/4" Con Manometro 0÷10bar"
+     cod 12558833  €273.42
+     cod 12348398  €286.65
+     cod 12629156  €294.21
+
+x2  RAPPORTO PREZZO 1.1  (da €180.27 a €193.93)  [Easytop]
+   "Valvola Di Bilanciamento Del Ricircolo Easytop Valvola Termostatica Di Regolazione Con Sc-contur Bronzo Al Silicio, Estremità A Pressare Femmina, Con Intercettazione, Modello 2281.7 Dn: 15"
+     cod 70239867  €180.27
+     cod 25818511  €193.93
+
+x2  RAPPORTO PREZZO 1.1  (da €980.16 a €1053.60)  [Residenziale]
+   "Split<no Comp<h/pl"
+     cod 76419222  €980.16
+     cod 50164980  €1053.60
+
+x2  RAPPORTO PREZZO 1.1  (da €7805.90 a €8378.62)  [Riscaldamento]
+   "Deu.recuper. 050 Base + Serrande"
+     cod 39205918  €7805.90
+     cod 22009814  €8378.62
+
+x2  RAPPORTO PREZZO 1.1  (da €2339.04 a €2509.92)  [Residenziale]
+   "Split<no Comp<other"
+     cod 88529502  €2339.04
+     cod 79854223  €2509.92
+
+x2  RAPPORTO PREZZO 1.1  (da €9.40 a €10.09)  [Ricambi]
+   "Tubo Valvola Gas/bruciatore Pilota"
+     cod 39969404  €9.40
+     cod 22902354  €10.09
+
+x2  RAPPORTO PREZZO 1.1  (da €661.50 a €708.75)  [Sistemi di Calore]
+   "Cassetta Incasso Per Plurimod Con Collettore Distribuzione 4derivazioni"
+     cod 53686070  €661.50
+     cod 12671739  €708.75
+
+x2  RAPPORTO PREZZO 1.1  (da €614.72 a €658.24)  [Light Commercial]
+   "Unità Interna Tipo Parete (telecomando Ir Incluso) R32 E R410"
+     cod 12678065  €614.72
+     cod 12567625  €658.24
+
+x2  RAPPORTO PREZZO 1.1  (da €3.13 a €3.35)  [Idrotermosanitario]
+   "Darcal Raccordo Adattatore Ø23/1,5-11,5÷12x14÷16"
+     cod 12529753  €3.13
+     cod 12359539  €3.35
+
+x2  RAPPORTO PREZZO 1.1  (da €3.13 a €3.35)  [Idrotermosanitario]
+   "Darcal Raccordo Adattatore Ø23/1,5-9,5÷10x14÷16"
+     cod 94201362  €3.13
+     cod 12359540  €3.35
+
+x2  RAPPORTO PREZZO 1.1  (da €3.13 a €3.35)  [Idrotermosanitario]
+   "Darcal Raccordo Adattatore Ø23/1,5-12,5÷13x16÷18"
+     cod 12365683  €3.13
+     cod 12362948  €3.35
+
+x2  RAPPORTO PREZZO 1.1  (da €3.13 a €3.35)  [Idrotermosanitario]
+   "Darcal Raccordo Adattatore Ø23/1,5-10,5÷11x16÷18"
+     cod 12610334  €3.13
+     cod 12365629  €3.35
+
+x2  RAPPORTO PREZZO 1.1  (da €3.13 a €3.35)  [Idrotermosanitario]
+   "Darcal Raccordo Adattatore Ø23/1,5-11,5÷12x16÷18"
+     cod 12808011  €3.13
+     cod 12367656  €3.35
+
+x2  RAPPORTO PREZZO 1.1  (da €3.13 a €3.35)  [Idrotermosanitario]
+   "Darcal Raccordo Adattatore Ø23/1,5-13,5÷14x16÷18"
+     cod 12742636  €3.13
+     cod 12521141  €3.35
+
+x2  RAPPORTO PREZZO 1.1  (da €3.13 a €3.35)  [Idrotermosanitario]
+   "Darcal Raccordo Adattatore Ø23/1,5-10,5÷11x14÷16"
+     cod 12663245  €3.13
+     cod 12544901  €3.35
+
+x2  RAPPORTO PREZZO 1.1  (da €3.13 a €3.35)  [Idrotermosanitario]
+   "Darcal Raccordo Adattatore Ø23/1,5-7,5÷8x12÷14"
+     cod 12596483  €3.13
+     cod 12596428  €3.35
+
+x2  RAPPORTO PREZZO 1.1  (da €12.01 a €12.83)  [Attrezzaura]
+   "Scalpello Piatto 250 Mm - Idrhaus"
+     cod 39670525  €12.01
+     cod 51522077  €12.83
+
+x2  RAPPORTO PREZZO 1.1  (da €625.50 a €666.75)  [Sistemi di Calore]
+   "Cassetta Incasso Per Plurimod Con Collettore Distribuzione 3derivazioni"
+     cod 12871230  €625.50
+     cod 75056271  €666.75
+
+x2  RAPPORTO PREZZO 1.1  (da €8724.66 a €9296.52)  [Riscaldamento]
+   "Armadio Metallico Per Gruppi Di Riduzione Mod. A30"
+     cod 40843201  €8724.66
+     cod 64283032  €9296.52
+
+x2  RAPPORTO PREZZO 1.1  (da €2187.90 a €2325.80)  [Estia]
+   "Unità Esterna Inverter In Pompa Di Calore Tipo "estia" Serie 5 Ad Alta Potenza"
+     cod 12544879  €2187.90
+     cod 12541448  €2325.80
+
+x2  RAPPORTO PREZZO 1.1  (da €12.79 a €13.54)  [Idrotermosanitario]
+   "Gomito Femmina Con O-ring Ø3/4"x22 Per Rame"
+     cod 12444522  €12.79
+     cod 12475662  €13.54
+
+x2  RAPPORTO PREZZO 1.1  (da €525.18 a €556.20)  [Doppia Parete Coiben. Lana Minerale Inox]
+   "Gbd Elemento Regolabile"
+     cod 12795780  €525.18
+     cod 12807495  €556.20
+
+x2  RAPPORTO PREZZO 1.1  (da €6771.60 a €7170.60)  [Riscaldamento]
+   "A. 3 M 1x230v+n H+c With El. Heat"
+     cod 65637158  €6771.60
+     cod 78281637  €7170.60
+
+x2  RAPPORTO PREZZO 1.1  (da €28.66 a €30.18)  [Idrotermosanitario]
+   "Tee Di Bypass U6 Ø3/4""
+     cod 12348311  €28.66
+     cod 12525185  €30.18
+
+x2  RAPPORTO PREZZO 1.1  (da €28.66 a €30.18)  [Idrotermosanitario]
+   "Tee Di Bypass U8 Ø3/4""
+     cod 45062482  €28.66
+     cod 12451199  €30.18
+
+x2  RAPPORTO PREZZO 1.1  (da €28.66 a €30.18)  [Idrotermosanitario]
+   "Tee Di Bypass U4 Ø3/4""
+     cod 12741465  €28.66
+     cod 12610499  €30.18
+
+x2  RAPPORTO PREZZO 1.1  (da €33.95 a €35.70)  [Ricambi E Accessori]
+   "Molla Di Compressione"
+     cod 12670706  €33.95
+     cod 90848767  €35.70
+
+x2  RAPPORTO PREZZO 1.1  (da €28.50 a €29.92)  [Raccordi Pressfitting]
+   "Effebi-press Xwp131m Raccordo Tee Ridotto Femmina Ø54x22x54 Aisi316l"
+     cod 64300158  €28.50
+     cod 37003172  €29.92
+
+x2  RAPPORTO PREZZO 1.0  (da €48.01 a €50.40)  [Idrotermosanitario]
+   "Vaso Espansione Saldato 18lt Ø3/4""
+     cod 12479340  €48.01
+     cod 12490588  €50.40
+
+x2  RAPPORTO PREZZO 1.0  (da €14.77 a €15.51)  [Raccordi Pressfitting]
+   "Effebi-press Xwp131m Raccordo Tee Ridotto Femmina Ø28x22x28 Aisi316l"
+     cod 28844619  €14.77
+     cod 37204390  €15.51
+
+x2  RAPPORTO PREZZO 1.0  (da €29.67 a €31.15)  [Raccordi Pressfitting]
+   "Effebi-press Xwp131m Raccordo Tee Ridotto Femmina Ø54x28x54 Aisi316l"
+     cod 78415302  €29.67
+     cod 94585913  €31.15
+
+x2  RAPPORTO PREZZO 1.0  (da €101.78 a €106.70)  [Condizionamento]
+   "Supporto Antivibrante A Pavimento Con Livella Base Pavim.antivibr.p1200xl160xh90 630kg Con Livella"
+     cod 15391063  €101.78
+     cod 36560182  €106.70
+
+x2  RAPPORTO PREZZO 1.0  (da €1.06 a €1.11)  [Ricambi]
+   "Ricambio Anello Di Bloccaggio Per Dente Di Trascinamento"
+     cod 92394947  €1.06
+     cod 38328838  €1.11
+
+x2  RAPPORTO PREZZO 1.0  (da €4450.06 a €4659.56)  [Estia]
+   "Unità Idronica Aio 1 Zona Con Resistenza Elettrica Di Backup Da 6kw 3ph"
+     cod 54553408  €4450.06
+     cod 62998799  €4659.56
+
+x2  RAPPORTO PREZZO 1.0  (da €77.40 a €81.00)  [Monoparete Rigido e Flessibile Inox]
+   "Controllo Fumi Con Termometro"
+     cod 12709440  €77.40
+     cod 12709318  €81.00
+
+x2  RAPPORTO PREZZO 1.0  (da €2.27 a €2.38)  [Condizionamento]
+   "Riduzione Rame Mf 3/4x5/8 A Saldare"
+     cod 55204249  €2.27
+     cod 54719483  €2.38
+
+x2  RAPPORTO PREZZO 1.0  (da €49.64 a €51.69)  [Idrotermosanitario]
+   "Termostato Ambiente Digitale 230v"
+     cod 12470179  €49.64
+     cod 12647180  €51.69
+
+x2  RAPPORTO PREZZO 1.0  (da €162.29 a €168.73)  [Sanpress Inox]
+   "Manicotto 64,0 X 2 Acciaio Inox 1.4404"
+     cod 78946027  €162.29
+     cod 71607144  €168.73
+
+x2  RAPPORTO PREZZO 1.0  (da €7.09 a €7.37)  [Raccordi Filettati Bronzo]
+   "Raccordo A T Bronzo O Bronzo Al Silicio, Modello 3130"
+     cod 12360268  €7.09
+     cod 12360266  €7.37
+
+x2  RAPPORTO PREZZO 1.0  (da €63.35 a €65.80)  [Ricambi E Accessori]
+   "Cartuccia 35mm"
+     cod 12715747  €63.35
+     cod 49532603  €65.80
+
+x2  RAPPORTO PREZZO 1.0  (da €86.18 a €89.47)  [Condizionamento]
+   "Bacinella Raccogli Condensa Universale"
+     cod 89960040  €86.18
+     cod 82732253  €89.47
+
+x2  RAPPORTO PREZZO 1.0  (da €1968.83 a €2043.17)  [Riscaldamento]
+   "Scaldacqua Pdc C/serpentino M7 R290"
+     cod 51897581  €1968.83
+     cod 28731463  €2043.17
+
+x2  RAPPORTO PREZZO 1.0  (da €1231.65 a €1277.04)  [Commerciale]
+   "Sky Air<comp<h/p<azas<125"
+     cod 79857740  €1231.65
+     cod 15924881  €1277.04
+
+x2  RAPPORTO PREZZO 1.0  (da €52.50 a €54.25)  [Ricambi E Accessori]
+   "Vitone Ø1" Per Rubinetto Incasso"
+     cod 35521985  €52.50
+     cod 21047423  €54.25
+
+x2  RAPPORTO PREZZO 1.0  (da €5511.19 a €5691.14)  [Riscaldamento]
+   "U.t Interna All In One R290 Monofase Con Accumulo Da 240 Litri"
+     cod 46006523  €5511.19
+     cod 32267346  €5691.14
+
+x2  RAPPORTO PREZZO 1.0  (da €98.28 a €101.43)  [Idrotermosanitario]
+   "Elettrovalvola Normalmente Chiusa 230v Riarmo Manuale Ø1""
+     cod 12433515  €98.28
+     cod 12401093  €101.43
+
+x2  RAPPORTO PREZZO 1.0  (da €101.43 a €104.58)  [Idrotermosanitario]
+   "Elettrovalvola Normalmente Chiusa 24v Riarmo Manuale Ø1""
+     cod 12396610  €101.43
+     cod 12863941  €104.58
+
+x2  RAPPORTO PREZZO 1.0  (da €23.10 a €23.80)  [Ricambi E Accessori]
+   "Piastra Di Montaggio"
+     cod 12749237  €23.10
+     cod 67779702  €23.80
+
+x2  RAPPORTO PREZZO 1.0  (da €1440.75 a €1484.10)  [Commerciale]
+   "Sky Air<comp<h/p<rzasg<100"
+     cod 81112150  €1440.75
+     cod 44545198  €1484.10
+
+x2  RAPPORTO PREZZO 1.0  (da €1572.84 a €1619.76)  [Commerciale]
+   "Sky Air<comp<h/p<rzasg<125"
+     cod 19235882  €1572.84
+     cod 30010874  €1619.76
+
+x2  RAPPORTO PREZZO 1.0  (da €1664.13 a €1713.60)  [Commerciale]
+   "Sky Air<comp<h/p<rzasg<140"
+     cod 35639692  €1664.13
+     cod 89072733  €1713.60
+
+x2  RAPPORTO PREZZO 1.0  (da €1450.95 a €1486.65)  [Commerciale]
+   "Sky Air<comp<h/p<azas<140"
+     cod 79112620  €1450.95
+     cod 54243073  €1486.65
+
+x2  RAPPORTO PREZZO 1.0  (da €43.75 a €44.80)  [Ricambi E Accessori]
+   "Doccetta Estraibile Professionale Con Chiave Cromo"
+     cod 12698281  €43.75
+     cod 12742800  €44.80
+
+x2  RAPPORTO PREZZO 1.0  (da €157.50 a €161.25)  [Sistemi di Calore]
+   "Funzione Acqua Fredda E Uscita Impulsiva Ø3/4""
+     cod 12368982  €157.50
+     cod 12368985  €161.25
+
+x2  RAPPORTO PREZZO 1.0  (da €383.31 a €392.34)  [Combustibili]
+   "Elettrovalvola Normalmente Chiusa Automatica Evp08 Dn65 Pressione Massima 360 Mbar Senza Bobina"
+     cod 95709573  €383.31
+     cod 87175914  €392.34
+
+x2  RAPPORTO PREZZO 1.0  (da €135.00 a €138.00)  [Sistemi di Calore]
+   "Funzione Acqua Fredda E Uscita Impulsiva Ø1/2""
+     cod 12610340  €135.00
+     cod 12610341  €138.00
+
+x2  RAPPORTO PREZZO 1.0  (da €70.15 a €71.67)  [Ceramiche]
+   "Euro Ceramic 39331 Sedile Con Coperchio Bianco"
+     cod 12657171  €70.15
+     cod 47364113  €71.67
+
+x2  RAPPORTO PREZZO 1.0  (da €4206.07 a €4288.28)  [Estia]
+   "Unità Idronica Aio 1 Zona Con Resistenza Elettrica Di Backup Da 6kw 1ph"
+     cod 57945921  €4206.07
+     cod 27773765  €4288.28
+
+x2  RAPPORTO PREZZO 1.0  (da €41.65 a €42.35)  [Ricambi E Accessori]
+   "Vitone Ø3/4" Per Rubinetto Incasso"
+     cod 15243070  €41.65
+     cod 12920375  €42.35
+
+x2  RAPPORTO PREZZO 1.0  (da €5.19 a €5.27)  [Raccordi Filettati Bronzo]
+   "Curva A 90° Bronzo O Bronzo Al Silicio, Modello 3090"
+     cod 12360235  €5.19
+     cod 12360237  €5.27
+
+x2  RAPPORTO PREZZO 1.0  (da €271.45 a €275.42)  [Corpi Incasso]
+   "Corpo Incasso Gruppo Lavabo 3 Fori Parete"
+     cod 92230144  €271.45
+     cod 12678860  €275.42
+
+x2  RAPPORTO PREZZO 1.0  (da €65.09 a €66.00)  [Apply.Co]
+   "Plenum Soffitto/parete/pavimento Ø75 Per Griglia 300x150"
+     cod 71535048  €65.09
+     cod 12813342  €66.00
+
+x2  RAPPORTO PREZZO 1.0  (da €64.84 a €65.66)  [Caldaia]
+   "Kit Coassiale Ø 60/100 In Alluminio"
+     cod 17116541  €64.84
+     cod 65315979  €65.66
+
+x2  RAPPORTO PREZZO 1.0  (da €155.02 a €156.98)  [Project Wind]
+   "Plenum Coibentato In Lamiera Per Daikin Con Flangia 1192x178"
+     cod 30002170  €155.02
+     cod 12914359  €156.98
+
+x2  RAPPORTO PREZZO 1.0  (da €935.46 a €947.11)  [Project Wind]
+   "Kit Svelto 3 Zone Ø150 Plenum Eolo Diffusori Lineari In Alluminio Con Serranda E Deflettore Centrale L100 Per Daikin"
+     cod 33964633  €935.46
+     cod 65640932  €947.11
+
+x2  RAPPORTO PREZZO 1.0  (da €485.76 a €491.52)  [Residenziale]
+   "Comfora R32 Esterna 25"
+     cod 36004427  €485.76
+     cod 88030269  €491.52
+
+x2  RAPPORTO PREZZO 1.0  (da €148.56 a €150.21)  [Combustibili]
+   "Cassetta Contatore Gas In Acciaio Inox H60 L50 P24"
+     cod 12708782  €148.56
+     cod 65807913  €150.21
+
+x2  RAPPORTO PREZZO 1.0  (da €66.60 a €67.31)  [Apply.Co]
+   "Plenum Soffitto/parete/pavimento Ø90 Per Griglia 300x150"
+     cod 19599017  €66.60
+     cod 50492103  €67.31
+
+x2  RAPPORTO PREZZO 1.0  (da €10.17 a €10.28)  [Ricambi]
+   "Supporto Twico"
+     cod 12364302  €10.17
+     cod 12590808  €10.28
+
+x2  RAPPORTO PREZZO 1.0  (da €9.81 a €9.90)  [Ricambi]
+   "Set Manopole Per Unit Valvola Intercetta Zione Geberit Compact"
+     cod 90012902  €9.81
+     cod 95595858  €9.90
+
+x2  RAPPORTO PREZZO 1.0  (da €548.00 a €550.00)  [Vrf - Vrv - Dvm - Mrv - Multi V]
+   "Ud.int.vrv Fully Flat 60x60 R410a"
+     cod 92032210  €548.00
+     cod 73588571  €550.00
+
+x2  RAPPORTO PREZZO 1.0  (da €870.77 a €873.52)  [Corpi Incasso]
+   "Scatola Di Drenaggio Per Bordo Vasca 3/4/5 Fori"
+     cod 94209032  €870.77
+     cod 12462066  €873.52
+
+x2  RAPPORTO PREZZO 1.0  (da €42.59 a €42.65)  [Idrotermosanitario]
+   "Vaso Espansione Saldato 12lt Ø3/4""
+     cod 12470669  €42.59
+     cod 12521705  €42.65
+
+x2  RAPPORTO PREZZO 1.0  (da €103.95 a €103.95)  [Idrotermosanitario]
+   "Coppia Valvole Sfera Con Termometro Ø1.1/4"fm"
+     cod 12353288  €103.95
+     cod 12581255  €103.95
+
+x2  RAPPORTO PREZZO 1.0  (da €103.95 a €103.95)  [Idrotermosanitario]
+   "Coppia Valvole Sfera Con Termometro Ø1"fx1.1/4"m"
+     cod 12354555  €103.95
+     cod 12837291  €103.95
+
+x2  RAPPORTO PREZZO 1.0  (da €71.19 a €71.19)  [Idrotermosanitario]
+   "Coppia Valvole Sfera Con Attacco Termometro Ø1"fx1.1/4"m"
+     cod 12364016  €71.19
+     cod 12620091  €71.19
+
+x2  RAPPORTO PREZZO 1.0  (da €71.19 a €71.19)  [Idrotermosanitario]
+   "Coppia Valvole Sfera Con Attacco Termometro Ø1.1/4"fm"
+     cod 12364017  €71.19
+     cod 12741492  €71.19
+
+x2  RAPPORTO PREZZO 1.0  (da €17.14 a €17.14)  [Idrotermosanitario]
+   "Vitone Termostatico Bilanciato"
+     cod 12534247  €17.14
+     cod 12770435  €17.14
+
+x2  RAPPORTO PREZZO 1.0  (da €129.78 a €129.78)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø1/2" 1,8m3/h"
+     cod 21738831  €129.78
+     cod 60649459  €129.78
+
+x4  RAPPORTO PREZZO 1.0  (da €160.02 a €160.02)  [Idrotermosanitario]
+   "Stabiliz.port. Autoflow 3/4"
+     cod 28110023  €160.02
+     cod 45152920  €160.02
+     cod 48871282  €160.02
+     cod 83495228  €160.02
+
+x2  RAPPORTO PREZZO 1.0  (da €160.02 a €160.02)  [Idrotermosanitario]
+   "Stabilizzatore Autoflow Ø3/4" 0,9m3/h"
+     cod 79244778  €160.02
+     cod 91141485  €160.02
+
+x2  RAPPORTO PREZZO 1.0  (da €333.60 a €333.60)  [Residenziale]
+   "Sensira R32 Esterna 20"
+     cod 84183505  €333.60
+     cod 99180111  €333.60
+
+x2  RAPPORTO PREZZO 1.0  (da €262.42 a €262.42)  [Valvole Industriali]
+   "V.farf.idris Lug Gg40/epdm Dn250 Pn16 C/leva"
+     cod 36040791  €262.42
+     cod 52440581  €262.42
+
+x2  RAPPORTO PREZZO 1.0  (da €305.45 a €305.45)  [Valvole Industriali]
+   "V.farf.idris Lug 316/epdm Dn250 Pn16 C/leva"
+     cod 90615619  €305.45
+     cod 99136993  €305.45
+
+x2  RAPPORTO PREZZO 1.0  (da €191.25 a €191.25)  [Combustibili]
+   "Regolatore Bassa Pressione Per Gpl E Metano"
+     cod 12439599  €191.25
+     cod 12877733  €191.25
+
+x2  RAPPORTO PREZZO 1.0  (da €27.91 a €27.91)  [Combustibili]
+   "Regolatore Di Pressione Per Gpl Singolo Stadio"
+     cod 12532776  €27.91
+     cod 12532777  €27.91
+
+x3  RAPPORTO PREZZO 1.0  (da €27.91 a €27.91)  [Acqua]
+   "Manometro Radiale In Bagno Di Glicerina Ø 80 - Attacco 3/8""
+     cod 12588330  €27.91
+     cod 12588389  €27.91
+     cod 99942384  €27.91
+
+x2  RAPPORTO PREZZO 1.0  (da €19.90 a €19.90)  [Condizionamento]
+   "Rapporto Di Controllo Gruppi Frigo"
+     cod 13674285  €19.90
+     cod 71328943  €19.90
+
+x2  RAPPORTO PREZZO 1.0  (da €33.65 a €33.65)  [Acqua]
+   "Term.bim.dn80 Post.1/2"x200mm 0/120°c"
+     cod 71744051  €33.65
+     cod 88255392  €33.65
+
+x2  RAPPORTO PREZZO 1.0  (da €50.76 a €50.76)  [Monop. e Doppiap. Sistemi Legna/Pellet]
+   "Elemento Con Valvola"
+     cod 12904096  €50.76
+     cod 34090985  €50.76
+
+x2  RAPPORTO PREZZO 1.0  (da €158.09 a €158.09)  [Duofix]
+   "Omega20 Round Placca Di Comando 2pulsanti Bianco Opaco"
+     cod 10031974  €158.09
+     cod 35863178  €158.09
+
+x2  RAPPORTO PREZZO 1.0  (da €4.56 a €4.56)  [Ricambi]
+   "Bacinella Con Guarnizione"
+     cod 12474123  €4.56
+     cod 12548230  €4.56
+
+x6  RAPPORTO PREZZO 1.0  (da €131.54 a €131.54)  [Ricambi]
+   "Icon Set Di Frontali Cassetto Per Mobile Laterale Basso 2 Cassetti 45"
+     cod 29056750  €131.54
+     cod 44053357  €131.54
+     cod 69845316  €131.54
+     cod 74529211  €131.54
+     cod 94671994  €131.54
+     cod 19206319  €131.54
+
+x2  RAPPORTO PREZZO 1.0  (da €158.09 a €158.09)  [Duofix]
+   "Omega20 Square Placca Di Comando 2pulsanti Bianco Opaco"
+     cod 68102427  €158.09
+     cod 93276874  €158.09
+
+x2  RAPPORTO PREZZO 1.0  (da €223.32 a €223.32)  [Ricambi]
+   "Icon Set Frontali Cassetto Per Mobile La Vabo 2 Cassetti 120cm Bianco"
+     cod 98934326  €223.32
+     cod 43149153  €223.32
+
+x2  RAPPORTO PREZZO 1.0  (da €34.66 a €34.66)  [Tubazioni E Raccorderia]
+   "R19 Bocchettone Curvo Maschio Femmina Ø1.1/2" Ottone"
+     cod 31674572  €34.66
+     cod 77048061  €34.66
+
+x2  RAPPORTO PREZZO 1.0  (da €1.44 a €1.44)  [Collettori Di Distribuzione]
+   "P22 Volantino Con Targhetta Per Collettore R585c"
+     cod 35577390  €1.44
+     cod 36636474  €1.44
+
+x2  RAPPORTO PREZZO 1.0  (da €45.73 a €45.73)  [Tubazioni E Raccorderia]
+   "R18 Bocchettone Diritto Maschio Femmina Ø2" Ottone"
+     cod 54265819  €45.73
+     cod 81342260  €45.73
+
+x2  RAPPORTO PREZZO 1.0  (da €28.76 a €28.76)  [Tubazioni E Raccorderia]
+   "R18 Bocchettone Diritto Maschio Femmina Ø1.1/2" Ottone"
+     cod 73133258  €28.76
+     cod 90255304  €28.76
+
+x2  RAPPORTO PREZZO 1.0  (da €56.67 a €56.67)  [Tubazioni E Raccorderia]
+   "R19 Bocchettone Curvo Maschio Femmina Ø2" Ottone"
+     cod 82626573  €56.67
+     cod 89210424  €56.67
+
+x2  RAPPORTO PREZZO 1.0  (da €222.34 a €222.34)  [Doccia E Accessori]
+   "Rainshower Smartactive 150 26594 Asta Saliscendi L.900 Con Doccetta 3 Getti Con Ecojoy Cromo"
+     cod 12923628  €222.34
+     cod 47445034  €222.34
+
+x2  RAPPORTO PREZZO 1.0  (da €705.86 a €705.86)  [Doccia E Accessori]
+   "Tempesta 250 Sist. Thm Doccia"
+     cod 35517647  €705.86
+     cod 38794337  €705.86
+
+x2  RAPPORTO PREZZO 1.0  (da €1192.80 a €1192.80)  [Fotovoltaico]
+   "Kit Batteria Residenziale Ess 5 Kwh (low Voltage)"
+     cod 12281014  €1192.80
+     cod 81650770  €1192.80
+
+x2  RAPPORTO PREZZO 1.0  (da €3396.47 a €3396.47)  [Sist.Climatizzaz. Aria-Trattamento Aria]
+   "Dew 35-s Deumidificatore Canalizzabile Controsoffitto"
+     cod 24659700  €3396.47
+     cod 77195259  €3396.47
+
+x2  RAPPORTO PREZZO 1.0  (da €100.50 a €100.50)  [Ricambi]
+   "Teceflex Forcella A Pressare Razfaz 25-32 Anteriore"
+     cod 34412060  €100.50
+     cod 37226469  €100.50
+
+x2  RAPPORTO PREZZO 1.0  (da €86.80 a €86.80)  [Ricambi]
+   "Teceflex Forcella A Pressare Razfaz 14/16 - 20 Mm Anteriore"
+     cod 40040877  €86.80
+     cod 73793422  €86.80
+
+x2  RAPPORTO PREZZO 1.0  (da €63.21 a €63.21)  [Condizionamento]
+   "Batteria Per Flangiatubo Cod. 11513"
+     cod 26810547  €63.21
+     cod 30525206  €63.21
+
+x2  RAPPORTO PREZZO 1.0  (da €4528.80 a €4528.80)  [Light Commercial]
+   "Recuperatore Di Calore Da 1500 Mc/h"
+     cod 10201830  €4528.80
+     cod 12573170  €4528.80
+
+x2  RAPPORTO PREZZO 1.0  (da €201.28 a €201.28)  [Light Commercial]
+   "Giunto Double Twin - Big Di"
+     cod 12675674  €201.28
+     cod 14730037  €201.28
+
+x2  RAPPORTO PREZZO 1.0  (da €442.88 a €442.88)  [Residenziale]
+   "Unità Esterna Shorai Edge Monosplit Taglia 7"
+     cod 45652236  €442.88
+     cod 88346777  €442.88
+
+x2  RAPPORTO PREZZO 1.0  (da €1.72 a €1.72)  [Raccordi Filettati Bronzo]
+   "Vite Doppia Bronzo, Bronzo Al Silicio O Lega Di Rame E Silicio, Modello 3280"
+     cod 12360318  €1.72
+     cod 12360320  €1.72
+
+x2  RAPPORTO PREZZO 1.0  (da €1.81 a €1.81)  [Raccordi Filettati Bronzo]
+   "Manicotto Di Riduzione Bronzo, Bronzo Al Silicio O Lega Di Rame E Silicio, Modello 3241 R: ½"
+     cod 12360348  €1.81
+     cod 12360350  €1.81
+
+x2  RAPPORTO PREZZO 1.0  (da €34.81 a €34.81)  [Scarichi e Sifoni]
+   "Coperchio 115"
+     cod 57839209  €34.81
+     cod 75608897  €34.81
+
+x2  RAPPORTO PREZZO 1.0  (da €0.70 a €0.70)  [Ricambi E Accessori]
+   "Inserto Plastico Per Deviatore"
+     cod 47894875  €0.70
+     cod 55342731  €0.70
+

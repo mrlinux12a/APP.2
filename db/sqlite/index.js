@@ -138,6 +138,14 @@ aggiungiColonna('orders', 'contributo_raee', 'REAL NOT NULL DEFAULT 0');
 aggiungiColonna('order_items', 'raee_unitario', 'REAL NOT NULL DEFAULT 0');
 aggiungiColonna('order_items', 'raee_riga', 'REAL NOT NULL DEFAULT 0');
 
+// Presa in carico firmata dal cliente: 'evaso' resta lo stato DB, 'consegnato' si deriva
+// da questa colonna valorizzata, senza toccare il CHECK su stato.
+aggiungiColonna('orders', 'consegnato_il', 'TEXT');
+
+// Codice articolo ufficiale del produttore (diverso dal nostro "codice" interno):
+// serve per trovare schede tecniche e foto sul sito del produttore.
+aggiungiColonna('products', 'codice_fornitore', 'TEXT');
+
 // Il CHECK sul ruolo nasceva con solo ('cliente','agente'): va riscritto per accettare
 // anche 'distributore'. In SQLite un CHECK si cambia solo ricreando la tabella.
 const usersDdl = db

@@ -1,7 +1,9 @@
-// Le date sono salvate da SQLite con datetime('now'), quindi in UTC: qui le riportiamo
-// all'ora locale italiana per la visualizzazione.
+// Le date su Postgres arrivano già come oggetti Date (il driver pg le converte da solo);
+// su SQLite invece sono testo "YYYY-MM-DD HH:MM:SS" in UTC, salvato da datetime('now').
+// Qui riportiamo entrambe all'ora locale italiana per la visualizzazione.
 function toDate(sqlUtc) {
   if (!sqlUtc) return null;
+  if (sqlUtc instanceof Date) return isNaN(sqlUtc.getTime()) ? null : sqlUtc;
   const iso = String(sqlUtc).replace(' ', 'T') + 'Z';
   const d = new Date(iso);
   return isNaN(d.getTime()) ? null : d;

@@ -8,7 +8,7 @@
     .join('&');
 %>
 <form class="barra-ricerca" method="GET" action="<%= azione %>">
-  <span class="lente">🔍</span>
+  <span class="lente"><%- iconaLente %></span>
   <input type="search" name="q" value="<%= typeof q !== 'undefined' && q ? q : '' %>"
          data-ricerca
          data-ambito="<%= qsAmbito %>"

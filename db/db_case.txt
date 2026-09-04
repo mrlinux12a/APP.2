@@ -1,0 +1,999 @@
+CASI DA RIVEDERE A MANO NEL CATALOGO PRODOTTI
+Generato automaticamente il 2026-09-03T16:09:22.312Z
+Totale prodotti nel catalogo: 51182
+
+==============================================================================
+
+SEZIONE 0 — Verifica: le pulizie automatiche già applicate (codice iniziale,
+spazi, marchio ripetuto, maiuscolo, punteggiatura penzolante, ecc.) non
+trovano più nulla da correggere: 8 residui su 51182.
+==============================================================================
+
+SEZIONE 1 — Nomi con asterischi come separatori (36 articoli)
+Sembrano righe di un listino promozionale finite per errore nel campo nome.
+Non corretti automaticamente: servono una decisione su cosa tenere/togliere
+(es. se il testo "PROMO PREZZO" vada eliminato del tutto).
+------------------------------------------------------------------------------
+[24396020]  3381252*ALYS*35*UD0-I**U.I.*M/M**3,5*KW* *R32*
+[29734146]  CLAS ONE * WIFI* 24 *ARISTON * PROMO * P REZZO
+[29882319]  SCALDABAGNO**ARISTON*LYDOS*HYBRID*WI-FI* *80**
+[37212090]  GENUS * ONE+* NET35 *ARISTON * PROMO * P REZZO
+[49269410]  SOLAR*MANAGER*IZY*PLUS****************** *****
+[70522713]  GENUS * ONE+* NET24 *ARISTON * PROMO * P REZZO
+[75959581]  3381405*ALYS*25*MUD0*U.E.**MONO**2,5*KW* *R32*
+[76613812]  CALDAIA*CARES*S*24**ARISTON*PROMO*PREZZO *****
+[77366785]  3381251*ALYS*25*UD0-I**U.I.*M/M**2,5*KW* *R32*
+[82764673]  ** RICAMBIO MANTELLO CALDAIA COD.310
+[95035282]  3381524*DUAL***50**XD0-O***U.E.**5,3*KW* *R32*
+[96611357]  COLLETTORE*SOLARE*VT.*KAIROS*XP*2.5**302 0058
+[12888264]  ** S/sonda Gbd Sonda/pozetto Analisi Fumo
+[12730064]  ** 241.826.00.1 PROTEZIONE CANTIERE UP32 0
+[12730080]  ** 241.670.00.1 RACCORDO
+[12376139]  ** 3.017362 KIT ALLACCIAMENTO ANTERIORE
+[12376171]  ** 3.010350 KIT ORIZZONTALE 60/100
+[12376174]  ** 3.010351 KIT SEPARATORE ¶ 80/80
+[12376176]  ** 3.011570 KIT TRONCHETTI FLANGIATI 80
+[12410124]  ** 3.010938 KIT PROLUNGA 60/100 MT. 0,50
+[12410125]  ** 3.010740 KIT PROLUNGA 60/100 MT. 1
+[12410127]  ** 3.010950 KIT CURVA 45 60/100
+[12567342]  ** 3.028684 SCALDABAGNO CAESAR ECO 11 LT
+[12620464]  **3.013132 KIT BASSA TEMP.HERCULES
+[12620467]  ** 3.011673 KIT 3 ZONE X HERCULES
+[12621630]  ** 3.014113 KIT ANTIGELO (-15 GRADI)
+[12699073]  ** 3.014920 KIT ALLACCIAMENTO A COLONNA
+[12769594]  ** 3.022107 VICTRIX INTRA 26 KW PLUS
+[21224296]  Kit Tubo Prolunga Da 1 M Ø 160* Per Rapax 200 V4 E Rapax 200 Sol V4 Novità Disp. Ii Trim 2026
+[40905113]  Kit Tubo Prolunga Da 2 M Ø 160* Per Rapax 200 V4 E Rapax 200 Sol V4 Novità Disp. Ii Trim 2026
+[46220246]  ** 3.034531 PANNELLO FOTOVOLTAICO TRINA
+[56115776]  Kit N. 2 Gomiti Ø 200 A 45°* Per Rapax 300 V4 E Rapax 300 Sol V4 Novità Disp. Ii Trim 2026
+[56325346]  Kit Gomito Ø 160 A 87°* Per Rapax 200 V4 E Rapax 200 Sol V4 Novità Disp. Ii Trim 2026
+[78483979]  Kit N. 2 Gomiti Ø 160 A 45°* Per Rapax 200 V4 Novità Disp. Ii Trim 2026
+[12686048]  ** R01592 Manometro Post. 10bar D.63 Mm Ø 1/4"ina
+[12686050]  ** R02890 Termom. Bimet.0/60gr Att.post.d.80 50mm
+
+==============================================================================
+
+SEZIONE 2 — Nomi con la descrizione duplicata al loro interno (419 articoli)
+Non corretti automaticamente: la parte "buona" da tenere (quella con le
+misure/dettagli veri) a volte è la prima metà, a volte la seconda — va
+deciso articolo per articolo, altrimenti si rischia di perdere una misura.
+------------------------------------------------------------------------------
+[12673990]  Cassetta Con Collettore Con Intercettazioni Singole 3 Derivazioni Acqua Calda E 4 Derivazioni Acqua Fredda
+[12673991]  Cassetta Con Collettore Con Intercettazioni Singole 4 Derivazioni Acqua Calda E 5 Derivazioni Acqua Fredda
+[12673996]  Cassetta Con Collettore Con Intercettazioni Generali 3 Derivazioni Acqua Calda E 4 Derivazioni Acqua Fredda
+[10035431]  Filtro Defangatore Magnetico Girevole "magwarm" Filtro Defangatore Girevole 1"s/valvola Magworm
+[10282231]  Ispezione Con Tappo Mf - Pps Ispezione Con Tappo In Pps D.160
+[10539174]  Giunto Estensibile Per Acqua Giunto Estensibile H20 1/2"mf 300-600
+[10885056]  Kit Mantello Copribombola In Lamiera Kit Mantello Copribombola In Acc.inox H90 L50 P50 Smontato
+[10923166]  Piatto Doccia Zero Mineral Plane Zero-piatto Doccia 900x1000 Cemento In Mineral Plane Con Griglia In Tinta
+[11591644]  Filtro Autopulente Serie P Orientabile Filtro Autopulente Serie Plot 2"
+[12064568]  Anodo Al Magnesio Filettato Anodo Al Magnesio D.32 L.450 M8x12z
+[12254927]  Cappello Antivento Inox/inox Cappello Antivento Inox D200
+[12371758]  Elettrovalvola Normalmente Chiusa Per Gasolio Elettrovalvola Nc On/off 1" Per Gasolio 230 Vac Membrana In Viton
+[12395800]  Vaso Di Espansione Aperto Zincato Vaso Espansione Zincato Lt.100
+[12416043]  Valvola A Strappo Filettata Valvola A Strappo 1"1/2
+[12423902]  Pompa Decalcificante "power E40" Pompa Power E40
+[12454402]  Valvola Di Chiusura Shut-off 1/4" Sae F X 1/4" Sae M " Specifica Per R22 - R134a - R404a - R407c - Idrhaus
+[12454403]  Valvola Di Chiusura Shut-off 5/16" Sae F X 5/16" Sae M - Idrhaus
+[12481393]  Alimentatore D'aria Alimentatore D'aria Mod.leon Dne/u 1/2" Pe 8bar Capacità 1000/2000lt
+[12496462]  Carrello Sollevatore Golia Slim Carrello Sollevatore Golia Slim 3000
+[12505545]  Serie Di Chiavi Fisse Serie Chiavi Fisse Usag 8 Pz
+[12511670]  Cercaperdite Pluto Cercaperdite Pluto In Borsa Cuoio
+[12566750]  Supporto Per Canale Supporto Per Canale
+[12588381]  Vaschetta Per Esterno Vaschetta Incasso Per Esterno L 710 X H 165 X P 80
+[12644464]  Raccordo Girevole Per Pompa 1/4" Sae F X 1/4" Sae F - Idrhaus
+[12653916]  Trapano A Percussione "metabo Sbe650" Trapano A Percussione Metabo Sbe650
+[12669559]  Completo Saldatura E Taglio Ossigeno/acetilene Con Riduttori "serie Str" Cassetta Con Riduttori Mj2
+[12686278]  Completo Saldatura E Taglio Ossigeno/acetilene Senza Riduttori "serie St" Cassetta Senza Riduttori Mj1
+[12708816]  Tubo Trecciato Tubo Trecciato Dn1/2"f X 1/4" M L.70cm
+[12708817]  Alimentatore D'aria Alimentatore D'aria Mod.nick Dne/u 1/2" Pe 8bar Capacità 24/750lt
+[12708906]  Sportello Per Cassetta Per Dispositivi Di Sicurezza Portina Per Cassetta 109930
+[12708908]  Sportello Per Cassetta Per Dispositivi Di Sicurezza Portina Per Cassetta 109932
+[12711259]  Martello Perforatore Combinato A Batteria "metabo Kha 18 Ltx" Martello Combinato Metabo Kha 18 Ltx A Batteria
+[12711270]  Trapano Avvitatore A Batteria "metabo Powermaxx Bs Quick Basic" Trapano Avvitatore Metabo Powermaxx Bs Quick Basic
+[12721312]  Condenstop Big Condenstop Big Neutralizzat.cond.acida 500kw
+[12736336]  Filtro Autopulente Per Acqua Filtro Autopulente 1"1/4ff
+[12745607]  Testa Radiante A Base Tonda Inox Testa Radiante Inox D 120
+[12755989]  Testa Radiante A Base Tonda Inox Testa Radiante Inox D 140
+[12768449]  Kit Mantello Copribombola In Lamiera Kit Mantello Copribombola In Lam.prevern H90 L50 P50 Smontato
+[12768904]  Stazione Di Vuoto E Carica Con Gruppo Manometrico Digitale E Bilancia Stazione Vuoto E Carica Comby Digitale
+[12781121]  Connettore Con Led E Raddrizzatore Connettore Con Led 110v/230v Cn-0010-l
+[12827765]  Sportello Per Cassetta Per Dispositivi Di Sicurezza Portina Per Cassetta 109933
+[12832301]  Carrello Sollevatore Golia Slim Mod.5400 Carrello Sollevatore Golia Slim 5400
+[12835165]  Tappeto Scaldante Tappeto Scaldante L6m Larg.0,4m 600w 250w/mq 230v 600w Mat-system
+[12835170]  Centralina Digitale Centralina Digitale Temper Ip65 230vac Dim.11x90x60
+[12835172]  Sensore Carrabile Per Cavi Scaldanti Sensore Carrabile X Temp/umidita'
+[12880180]  Sonda Autonoma Di Rivelazione Gas Tossici Ad Uso Residenziale E Terziario Hcf100 Sonda Autonoma Di Rivelazione Gas R134a
+[12884756]  Giunto Isolante Dielettrico A Saldare Per Utenze Gas E Acqua Pn 10 Giunto Dielettrico Saldare 2" Pn10
+[12899698]  Curvatubi Ercolina "modello Junior Mec" Curvatubi Ercolina Junior Mec
+[12904014]  Kit Inserti Kit Inserti Profilo U 16-20-25-32
+[12919782]  Pompa A Pistone Oscillante Per Gasolio Pompa Pistone Oscillante Fp6 Po141
+[13093350]  Faldale Per Tetti Inclinati Faldale In Rame D80/130 Tetti Inclinati
+[13116642]  Misuratore Gas Non Fiscale Quant/mis.port.gas Qa400 Dn150 32-650mch Non Fiscale
+[13871981]  Tubo In Acciaio Inox Rigido Con Resistenza Fino A 1000 Pa Diametro Di 200 Mm In Acciaio Inox Aisi 316l
+[14901455]  Manicotto Di Giunzione Manicotto Di Giunzione Acciaio Pa D.100 Flex-coibentato Maschio
+[15344936]  Flangia Rotonda Con Anello Di Bloccaggio Flangia Rotonda Con Anello 75
+[15391063]  Supporto Antivibrante A Pavimento Con Livella Base Pavim.antivibr.p1200xl160xh90 630kg Con Livella
+[15720818]  Cappa Esterna Riscaldata Per Unità Di Trattamento Dell'aria Con Recuperatore Di Calore Cappa Esterna Riscaldata X Temperature In
+[16190412]  Sistema Isolante Per Valvole Non Flangiate Sistema Isol.x Valv. Non Flangiate Dn65
+[16395651]  Rubinetto A Sfera Per Acqua Ff Rubinetto A Sfera Pass.tot.h2o 1"1/2ff D.40
+[17621363]  Griglia Scarico Fumi Griglia Scarico Fumi Dn100
+[17816787]  Anticalcare Magnetico Freecal Big Anticalcare Magnetico 1"
+[17946971]  Cappello Cinese - Inox Cappello Cinese D80/100
+[19388078]  Testa Radiante A Base Tonda Inox Testa Radiante Inox D 150
+[19580548]  Testa Radiante A Base Tonda Inox Testa Radiante Inox D 160
+[19639173]  Faldale Per Tetti Inclinati 5° ÷ 30° Faldale Tetti Inclinati D. 130
+[19921857]  Sonda Autonoma Di Rivelazione Gas Tossici Ad Uso Residenziale E Terziario Hcf100 Sonda Autonoma Di Rivelazione Gas R410a
+[20290148]  Faldale Per Tetti Piani Inox Faldale Per Tetti Piani D. 80
+[20437279]  Piatto Doccia Zero Mineral Plane Zero-piatto Doccia 750x1800 Bianco In Mineral Plane Con Griglia In Tinta
+[20656990]  Kit Inserti Kit Inserti Profilo M 15-18-22-28
+[20722088]  Vaso Di Espansione Multifunzione Per Riscaldamento E Sanitario Ce Vaso Espansione Aquavarem 280lt Dn1" Verticale
+[20838862]  Barriera D'aria Fredda Barriera D'aria Vivair Vab 230v L 90 Cm Aria Fredda
+[22385075]  Curva A 90° Mf Curva 90° Mf D80/100 Pps/copperplus
+[22765263]  Tubo Flessibile In Rotolo - Pph Tubo Flessibile In Pph D.110
+[23582326]  Elemento Lineare Mf - Acciaio 1.2 L 2000 Mm Elemento Lineare Dn100 L.2000 "nero" Legna 1.2
+[23857211]  Filtro Autopulente Grandi Portate Serie Q Filtro Autopulente Dn 100 Grandi Portate Serie Q
+[23874136]  Piatto Doccia Zero Mineral Plane Zero-piatto Doccia 800x1600 Cemento In Mineral Plane Con Griglia In Tinta
+[24364827]  Cassetta Di Calma In Pal Cassetta Calma Muratura 400x100xp180
+[24417250]  Raccordo Bigiunto Per Tubo Ferro Per Acqua - Gas Raccordo X Tubo Ferro Dn25-1" Bigiunto
+[24925161]  Riduttore Di Pressione Per Acqua Flangiato Riduttore Pressione H2o Flangiato Dn50
+[25977064]  Cassetta Di Derivazione Cassetta Derivazione Fino A 3 Attacchi
+[26625098]  Easy Kit Nak3 - Allacciamento Per Caldaie Easy Kit Nak3 Allac.caldaia 1/2"x420 Pz.1 031402 Pz.2 041452 Pz.2 071330
+[26864595]  Curva 45° Mf- Pph Curva 45° Mf Pph D.315
+[27432946]  Anodo Al Magnesio Filettato Anodo Al Magnesio D.21,3x1000 M8x12
+[28216499]  Fermo A Muro Fermo A Muro Inox D.100
+[28309140]  Distanziatore Per Fermo A Muro Distanz.x Fermo Muro Rame 103479
+[28526782]  Cappello Conico Inox Cappello Conico D 300
+[29144838]  Valvola A Globo Filettata A 2 E 3 Vie Valvola Globo Filettata A 3 Vie 2"
+[30842402]  Filtro Autopulente Grandi Portate Serie Q Filtro Autopulente Dn 80 Grandi Portate Serie Q
+[30957283]  Schienale Per Cassetta Per Contatore Acqua In Acciaio Inox Schienale X Cass.cont.acqua Acciaio Inox H30 L40
+[31192895]  Valvola Di Sicurezza A Membrana Alta Pressione Valvola Sicurezza A Membrana 3/4" 8bar
+[31250441]  Collettore Di Distribuzione Per Geotermia Diametro Esterno 110 Collettore Di Distribuzione X Geotermia 8 Uscite Int.160 De 110 D
+[32227709]  Rotolo Tubo Flessibile Binato Per Solare In Acciaio Inox Aisi 316l - Fertwin Doppio Tubo Solare Aisi 316l 1"1/4 Dn25 Mt.25
+[32587068]  Elemento Lineare Mf - Pps L 2000 Mm Tubo Rigido In Pps L. 2000 D.200
+[32608899]  Piatto Doccia Zero Mineral Plane Zero-piatto Doccia 800x2000 Corda In Mineral Plane Con Griglia In Tinta
+[32669538]  Valvola A Globo Flangiata A 2 E 3 Vie Valvola Globo Flangiata A 2 Vie Dn65
+[33475584]  Manicotto Di Giunzione Manicotto Di Giunzione Acciaio Pa D.80 Flex-coibentato Maschio
+[33703839]  Elemento Lineare Mf - Acciaio 1.2 L 250 Mm Elemento Lineare Dn100 L. 250mm "nero" Pellet 1.2
+[34226736]  Manometro Radiale Ø 100 Manometro Radiale D.100 10 Bar
+[34536841]  Valvola Di Ritegno A Flusso Avviato Valv.di Ritegno A Flusso Avviato Dn125 Pn16
+[35018126]  Kit Bulloneria Zincata Kit Bulloneria Zincata Per Flange 4 X Dado+bullone+rondella M20x80
+[35506687]  Motore Per Valvola A Globo Filettata Motore X Valvola Globo Filettata 230 Vac
+[35961283]  Cappello Conico Inox Cappello Conico D 120
+[36131793]  Il Carrello Elevatore Modello 725 Carrello Elevatore 725
+[36215850]  Bullone Zincato Per Flange Bullone Zincato 16x70
+[36493338]  Anodo Al Magnesio Predisposto Per Indicatori Di Esaurimento Anodo Al Magnesio 1"x320 Predisposto Per Indicatore Di Esaurimento
+[36560182]  Supporto Antivibrante A Pavimento Con Livella Base Pavim.antivibr.p1200xl160xh90 630kg Con Livella
+[36854835]  Piastra Di Base Scarico Laterale F - Inox L 160 Mm Piastra Base D 200
+[38271065]  Elemento Lineare Mf - Pps L 500 Mm Tubo Rigido In Pps L. 500 D.160
+[38551986]  Curva A 90° Mf - Acciaio 1.2 Curva 90° Dn100 "nera" Pellet 1.2
+[38629707]  Piantana Porta Dispenser In Acciaio Verniciato Piantana Porta Dispenser H1400mm Con Porta Estintore H140 L33 P33
+[38647971]  Cassetta Di Calma In Pal Cassetta Calma Cartongesso 500x100xp180
+[38983627]  Curva A 45° Mf Curva 45° M/f Pp D. 80/100
+[39043852]  Termometro Digitale Termometro Digitale Radiale D.80 L.150mm
+[39169072]  Tubo Flessibile In Rotolo - Pph Tubo Flessibile In Pph D.200
+[39947127]  Elemento Lineare Mf - Pps L 250 Mm Tubo Rigido In Pps L. 250 D.125
+[40113525]  Riduttore Monomanometro Riduttore Monomanometro Per Propano
+[40444306]  Piatto Doccia Zero Mineral Plane Zero-piatto Doccia 750x1600 Corda In Mineral Plane Con Griglia In Tinta
+[40784510]  Piatto Doccia Zero Mineral Plane Zero-piatto Doccia 800x1500 Antracite In Mineral Plane Con Griglia In Tinta
+[40878347]  Piatto Doccia Zero Mineral Plane Zero-piatto Doccia 800x1000 Corda In Mineral Plane Con Griglia In Tinta
+[41462652]  Esalatore Lamellare Inox Esalatore Lamellare D 100 Inox
+[42929407]  Elemento Lineare Mf - Pps L 250 Mm Tubo Rigido In Pps L. 250 D.200
+[43479397]  Motore Per Valvola A Globo Filettata Motore X Valvola Globo Filettata 230 Vac
+[43485041]  Stazione Di Vuoto E Carica Digitale - Wifi - Wireless Stazione Vuoto E Carica Digitale Wifi
+[43584482]  Termometro A Bracciale Attacco Posteriore Ø 63 Termometro A Bracciale Post. D.63 C/fascia Rame
+[43637508]  Elettrovalvola Per Acqua Normalmente Aperta Automatica Elettrovalvola Na On/off 3/8" Per Acqua 230 Vac Membrana Nbr
+[44614156]  Valvola Di Alimentazione Aria Valvola Di Alimentazione Aria 1"1/4 Mf
+[44737769]  Testa Radiante A Base Tonda Inox Testa Radiante Inox D 100
+[44806086]  Ugelli Per Gasolio 60° Ugelli Gasolio 60° Portata 1.00 Galloni
+[45021970]  Miscelatore Termostatico Per Impianti Solari Attacchi A Bocchettone Ina Filettati Maschio Miscelatore Termostatico S100 1/2" Con
+[45104933]  Nastro Adesivo Dielettrico In Pvc Nastro Adesivo Diel. Pvc Nero H38mm 25m
+[45885345]  Bullone Inox Aisi 304 Per Flange Bullone Inox 22x90
+[46559751]  Elettrovalvola Per Acqua Normalmente Aperta Automatica Elettrovalvola Na On/off 1" Per Acqua 230 Vac Membrana Nbr
+[46796274]  Motore Per Valvola A Globo Flangiata Motore X Valvola Globo Flangiata
+[46894512]  Piatto Doccia Zero Mineral Plane Zero-piatto Doccia 2150x1000 Bianco In Mineral Plane Con Griglia In Tinta
+[47264535]  Distanziatore Per Fermo A Muro Inox Distanziator X Fermo Muro D120 X Cod.102133
+[49148632]  Valvola A Farfalla Lug Per Gas Valvola A Farfalla Dn 150 Pn10/16 "lug"
+[49373178]  Modulo Scaldante Pad Pedana Scaldante Pad Rovere Grigio 180w
+[50097654]  Valvola Di Ritegno A Flusso Avviato Valv.di Ritegno A Flusso Avviato Dn100 Pn16
+[50285285]  Scatola Di Derivazione Scatola Derivazione Esterna 10x10cm Ip65
+[50784741]  Manicotto Di Giunzione Maschio Manicotto Di Giunzione Acciaio Inox 316l Flex-coibentato Maschio D.130
+[51492378]  Bruciatore Pilota Con Deflettore A 3 Fiamme Bruciatore Pilota Per Gas
+[52172651]  Valvola A Strappo Per Gasolio Valvola A Strappo 3/8
+[52554617]  Generatori Serie Box Gruppo Elettrogeno Portatile Super Silenziato Monofase Box R3 Gruppo Elettrogeno 3kw
+[52966845]  Valvola Di Ritegno A Clapet-wafer (senza Molla) Valvola Ritegno Clapet-wafer Dn50
+[53457753]  Pompa Prova Impianti Elettrica Pompa Di Prova Elett. 180 Bar
+[53670240]  Tubo In Acciaio Inox Rigido Con Resistenza Fino A 1000 Pa Diametro Di 160 Mm In Acciaio Inox Aisi 316l
+[53878451]  Asciugamani Elettrico Asciugamani Elettrico Abs Bianco 1300 W L 290 X P 175 Mm X H 323
+[54226553]  Stazione Di Lavaggio Mastercleans Stazione Di Lavaggio E Flussaggio Mc
+[54401409]  Diffusori Estetici A Scomparsa Diffusori Estetici A Scomparsa L.1000 Passaggio Aria 30mm
+[54506344]  Carrello Sollevatore Golia Mod.1700 Carrello Sollevatore Golia 1700
+[54513094]  Piatto Doccia Zero Mineral Plane Zero-piatto Doccia 1000x1800 Bianco In Mineral Plane Con Griglia In Tinta
+[54814743]  Sistema Isolante Per Valvole Flangiate Sistema Isol.x Valvole Flangiate Dn100
+[55031216]  Cartello Maniglione Antipanico Cartello Maniglione Antipanico
+[56146461]  Cassetta Di Derivazione In Pal Cassetta Derivazione Da 4 A 6 Attacchi
+[56571579]  Coppia Supporto Per Piastra Intermedia Coppia Supporti Per Piastra Di Base E Intermedia Dn100
+[56637497]  Cappello Antivento Inox Cappello Antivento D 160
+[56827429]  Valvola Di Ritegno A Flusso Avviato Valv.di Ritegno A Flusso Avviato Dn80 Pn16
+[56872373]  Sistema Isolante Per Tubazioni Sistema Isolante Tubazioni Dn50x500mm
+[57075595]  Valvola A Farfalla Wafer Motorizzata Valv.a Farfalla Wafer Motorizzata Dn50
+[57237772]  Anodo Al Magnesio Filettato Anodo Magnesio D.26 L.700 M5x10 Z
+[57501766]  Cappello Conico Inox Cappello Conico D 250
+[58486624]  Valvola A Sfera Per Gas Valvola Sfera Gas Dn 50
+[58515852]  Cappello Antivento Inox/inox Cappello Antivento Inox D100
+[59104347]  Valvola A Farfalla Wafer Motorizzata Valv.a Farfalla Wafer Motorizzata Dn100
+[59407424]  Tubo Flessibile Doppia Parete Coibentato Tubo Flessibile Doppia Parete Coibentato Acciaio Inox Aisi 316l D.100
+[60036526]  Kit Idroscopino Round Elegant Kit Idroscopino Round Elegant Con Flessibile Pvc Simple Round
+[60088108]  Elemento Prelievo Fumi Mf - Pps Elemento Per Prelievo Fumi D.100 Pps
+[60636133]  Filtro Autopulente Grandi Portate Serie Q Filtro Autopulente Dn 65 Grandi Portate Serie Q
+[60928441]  Piastra Di Base - Inox/inox Con Scarico Laterale L 154 Mm Piastra Base Dp C/scar.d130
+[61195732]  Collare Di Centraggio Inox Collare Di Centraggio D160
+[61396364]  Valvola A Globo Filettata A 2 E 3 Vie Valvola Globo Filettata A 2 Vie 2"
+[61673820]  Anodo Al Magnesio Per Scaldabagno Con Ghiera Anodo Al Magnesio D.21,3x500 M8 T 3/4"
+[61708126]  Tubo Ad Alta Pressione Per Disotturare Le Tubazioni Tubo Alta Pressione 15 Mt Per 11.600
+[61813369]  Faldale Per Tetti Piani Faldale Inox-rame D180/230 Tetti Piani
+[62309729]  Faldale Per Tetti Piani Inox Faldale Per Tetti Piani D. 300
+[63398966]  Riduttore Di Pressione Per Acqua Pn40 Riduttore Pressione Per Acqua 1/2" Pn40
+[63983483]  Cappello Conico Inox Cappello Conico D 160
+[65593813]  Accessori Per Cercaperdite Pluto Borsa In Cuoio Per Cercaperdite Pluto
+[66591970]  Raccordo 1/4" Sae Per Bombole Modello: 1/4" Sae M X 1/2" F - Per Bombole Da 5/10 Kg - Idrhaus
+[66781517]  Raccordo Per Bombole Modello: 5/16" Sae M X 1/2" F - Per Bombole Da 5/10 Kg - Idrhaus
+[68500112]  Collare Di Riparazione Per Acqua Ad Un Bullone Collare Riparazione 1 Tirante 33/37
+[68612522]  Cinghia Con Cricco Cinghia Pe Da 5 Mt X 25 Con Cricco
+[69644316]  Piatto Doccia Zero Mineral Plane Zero-piatto Doccia 800x1200 Corda In Mineral Plane Con Griglia In Tinta
+[69799217]  Valvola Di Ritegno A Battente Ispezionabile Valvola Ritegno A Battente Ispezionabile Dn50 Pn10/16
+[70107205]  Tubo Flessibile In Rotolo - Pph Tubo Flessibile In Pph D.160
+[70839906]  Elemento Lineare Mf - Pps L 250 Mm Tubo Rigido In Pps L. 250 D.160
+[71299739]  Valvola A Globo Flangiata A 2 E 3 Vie Valvola Globo Flangiata A 3 Vie Dn50
+[71510114]  Cassetta Di Derivazione In Pal Cassetta Derivazione Fino Ø 254
+[72477909]  Raccordo Girevole Per Tubi Flessibili Modello: 1/4" Sae M X 1/4" Sae F - Idrhaus
+[72708406]  Valvola A Globo Filettata A 2 E 3 Vie Valvola Globo Filettata A 2 Vie 1"1/4
+[72887198]  Elemento Prelievo Fumi Mf - Pps Elemento Per Prelievo Fumi D.60 Pps
+[73493690]  Valvola Di Chiusura Shut-off 1/4" Sae F X 1/4" Sae M " Specifica Per R22 - R134a - R404a - R407c - Idrhaus
+[73598281]  Collari Stringitubo Professionali Gbs W2 Collari Stringitubo 45 (43-47)
+[74080690]  Cartucce Filtranti Filo Avvolto Cartuccia Filo Avvolto Polipropilene 50 Micron
+[74153826]  Fascetta Di Chiusura Fascetta Di Chiusura Acciaio Inox 312 D.100
+[74167978]  Valvola Di Ritegno A Flusso Avviato Valv.di Ritegno A Flusso Avviato Dn50 Pn16
+[74580535]  Manicotto Di Giunzione Maschio Manicotto Di Giunzione Acciaio Inox 316l Flex-coibentato Maschio D.100
+[74764139]  Sistema Isolante Per Valvole Non Flangiate Sistema Isol.x Valv. Non Flangiate Dn100
+[74839779]  Sistema Isolante Per Tubazioni Sistema Isolante Tubazioni Dn40x500mm
+[74967322]  Griglia Scarico Fumi Griglia Scarico Fumi Dn80
+[75005005]  Miscelatore Termostatico Per Impianti Solari Attacchi Filettati Femmina Miscelatore Termostatico 1 Ff Per Impianti Solari
+[75083773]  Giratubi "modello Blitz" Tipo Diritto Chiavi Blitz Tipo Diritto 275
+[75877666]  Tappo Ispezione - Inox L 80 Mm Tappo Ispezione Fumi D 150
+[75998415]  Collare Di Riparazione Per Acqua Ad Un Bullone Collare Riparazione 1 Tirante 42/45
+[76220853]  Ecogiunto Di Transizione Pe/acciaio Rivestito A Saldare Per Gas Diritto Ecog.dirit.rivestito 5"pe 140 A Saldare Per Gas Uni En 1
+[76487120]  Fermo A Muro Fermo A Muro In Rame D 100
+[76958696]  Dispenser Manuale Per Sapone Liquido Dispenser Man. Inox Per Sapone Liq.500ml Ml - Inox H 210 X L 125 X P 72 Mm
+[76999983]  Analizzatore Di Combustione Chemist 100 Be Green Analizzatore Chemist 100 Be Green
+[77581197]  Piatto Doccia Zero Mineral Plane Zero-piatto Doccia 900x1600 Corda In Mineral Plane Con Griglia In Tinta
+[77739508]  Raccordo Girevole Per Tubi Flessibili Modello: 5/16" Sae M X 5/16" Sae F - Idrhaus
+[78698504]  Valvola A Sfera Con Maniglia Prolungata Ff Valvola Sfera C/maniglia Prolung.1"ff
+[78855369]  Sonda Autonoma Di Rivelazione Gas Tossici Ad Uso Residenziale E Terziario Hcf100 Sonda Autonoma Di Rivelazione Gas R407c
+[78932946]  Alimentatore D'aria Alimentatore D'aria Mod.man Dne/u 1"x 1"1/2 Pe 10bar Capacità 3000/6000lt
+[79198469]  Diffusori Estetici A Scomparsa Diffusori Estetici A Scomparsa L.1000 Passaggio Aria 40mm
+[79263862]  Cappello Conico Inox Cappello Conico D 180
+[79818826]  Collare Di Riparazione Per Acqua Ad Un Bullone Collare Riparazione 1 Tirante 48/51
+[80019947]  Collettore Di Distribuzione Per Geotermia Diametro Esterno 110 Collettore Di Distribuzione X Geotermia 4 Uscite Int.160 De 110 D
+[80400733]  Tubo Flessibile Doppia Parete Coibentato Tubo Flessibile Doppia Parete Coibentato Acciaio Inox Aisi 316l D.130
+[81172901]  Collari Stringitubo Professionali Gbs W2 Collari Stringitubo 33 (31-34)
+[82209338]  Bocca Di Erogazione Lavabd A Parete Cromo Bocca Di Erogazione A Parete 150 Mm
+[82367876]  Supporto Antivibrante A Pavimento Con Livella Base Pavim.antivibr.p600xl160xh90 470kg Con Livella
+[82611558]  Cassetta Con E Senza Leva Cassetta Con Leva 21x17x9
+[82741328]  Cappello Conico Inox Cappello Conico D 140
+[82746115]  Cappello Cinese - Inox Cappello Cinese D100/120
+[83544040]  Sonda Autonoma Di Rivelazione Gas Tossici Ad Uso Residenziale E Terziario Hcf100 Sonda Autonoma Di Rivelazione Gas R507
+[84759420]  Giratubi "modello Blitz" Tipo Diritto Chiavi Blitz Tipo Diritto 350
+[84775529]  Indicatore Di Passaggio A Cristallo Semplice Con Alette Fisse Indicatore Passaggio Semplice Cristallo Con Alette Fisse 1" Pn16
+[85265619]  Elemento Lineare Mf - Pps L 1000 Mm Tubo Rigido In Pps L. 1000 D.125
+[85266895]  Filettatrice Elettrica Da Banco Filettatrice Elettrica Da 1/2-4"
+[85445191]  Giunto Inox Estensibile Per Acqua Mf _x000d_ C/guaina Isolante 3/4" 90/140mm Giunto Inox Estensibile Per Acqua Mf C/guaina I
+[85660751]  Piatto Doccia Zero Mineral Plane Zero-piatto Doccia 800x1700 Antracite In Mineral Plane Con Griglia In Tinta
+[85732106]  Easy Kit Nak2 - Allacciamento Per Caldaie Easy Kit Nak2 Allac.caldaie 1/2"x400 Pz.1 031402 Pz.2 071327 Pz.2 071330
+[86009332]  Carrello Sollevatore Golia Slim Golia Slim Carrello Sollevatore Golia Slim 4200
+[86211120]  Canalette Inox Style Linea Ram - Cristallo Nero Canaletta Ram Ret. L1085 Mm Crist.nero Full Inox Con Lastra Cristallo Nero
+[86508071]  Aspiratore Aspiramax 1200 Aspiratore Aspiramax 1200
+[86714342]  Distanziatore Per Fermo A Muro Inox Distanziatore X Fermo Muro D80 X Cod.102130
+[86743507]  Cappello Conico Inox Cappello Conico D 200
+[86878807]  Flessibili Doccia Spring Line Flessibile Doccia Spring Line L.175 Ø 13 Acciaio Aisi 304 Cono/calotta Liscia
+[86966261]  Rubinetto A Sfera Da Incasso Per Gas Per Gas Rubinetto A Sfera Da Incasso Per Gas
+[87557475]  Piatto Doccia Zero Mineral Plane Zero-piatto Doccia 800x 800 Corda In Mineral Plane Con Griglia In Tinta
+[88047118]  Valvola A Globo Flangiata A 2 E 3 Vie Valvola Globo Flangiata A 3 Vie Dn65
+[88514037]  Faldale Per Tetti Inclinati Faldale In Rame D180/230 Tetti Inclinati
+[89018359]  Collare Di Centraggio Inox Collare Di Centraggio D150
+[89169796]  Fascetta Di Chiusura Fascetta Di Chiusura Acciaio Inox 312 D.180
+[89384297]  Faldale Per Tetti Piani Inox Faldale Per Tetti Piani D. 100
+[90808722]  Kit Inserti Kit Inserti Profilo Th 16-20-26-32
+[91452611]  Sistema Di Controllo A Zone Sistema Controllo 3 Zone Imp.canalizzati Con By-pass
+[92625557]  Piatto Doccia Zero Mineral Plane Zero-piatto Doccia 800x1800 Antracite In Mineral Plane Con Griglia In Tinta
+[92660335]  Sistema Di Controllo A Zone Sistema Controllo 4 Zone Imp.canalizzati Con By-pass
+[93358885]  Aspiratore Con Serranda Automatica "serie Smart" Aspiratore 220/240vac Ip24 26w 295m3/h Ø150 Smart 150ma Con Serranda Automatica
+[93573983]  Valvola A Sfera Per Gas Valvola A Sfera Gas Dn 150
+[93976162]  Tappo Raccogli Condensa - Inox L 80 Mm Tappo Raccogli Condensa D. 160
+[94079641]  Valvola A Farfalla Lug Per Acqua Asole Filettate Valvola A Farfalla Per Acqua Dn 125 Di
+[94115667]  Fascetta Di Chiusura Fascetta Di Chiusura Acciaio Inox 312 D.130
+[94115997]  Distanziatore Per Fermo A Muro Distanz.x Fermo Muro Rame 103480
+[94735130]  Anodo Al Magnesio Filettato Anodo Al Magnesio D.21,3x500 M8x12 Z
+[95077878]  Tappo Raccogli Condensa - Inox L 80 Mm Tappo Raccogli Condensa D. 200
+[95696185]  Valvola Di Chiusura Shut-off 5/16" Sae F X 5/16" Sae M - Idrhaus
+[96214817]  Kit Tronchetto Porta Strumenti Ed Accessori Inail - Attacco Flangiato Tronchetto Portastrumenti Ed Accessori Inail (ex Ispesl) D
+[96299350]  Faldale Per Tetti Inclinati Faldale In Rame D100/150 Tetti Inclinati
+[96530325]  Tappo Scarico Condensa Tappo Scarico Condensa Pp D. 80/100
+[96558190]  Faldale Per Tetti Piani Faldale Inox-rame D150/200 Tetti Piani
+[96634405]  Kit Per Convertitore Elettronico Di Volume Kit Per Installazione Mx-3000 (staffa,rubinetto,niples)
+[96864785]  Dispenser Manuale Per Sapone Liquido Dispenser Manuale X Sapone Liq. 380ml Bianco/grigio L H 180 X L 65 X P 80 Mm
+[97237437]  Sistema Di Controllo A Zone Sistema Controllo 2 Zone Imp.canalizzati Con By-pass
+[97885697]  Elemento Lineare Mf - Pps L 500 Mm Tubo Rigido In Pps L. 500 D.200
+[97930538]  Cappello Conico Inox Cappello Conico D 130
+[98464355]  Elemento Lineare Mf - Acciaio 1.2 L 1000 Mm Elemento Lineare Dn100 L.1000mm "nero" Pellet 1.2
+[98639222]  Bullone Inox Aisi 304 Per Flange Bullone Inox 16x70
+[98844477]  Collare Di Centraggio Inox Collare Di Centraggio D100
+[99944856]  Raccordo Curvo Con Rivestimento Antigelo Per Cassette Antincendio Raccordo Antigelo Curvo Per Cassette Antincendio De 50 1"1/2
+[99983808]  Elettrovalvola Per Acqua Normalmente Aperta Automatica Elettrovalvola Na On/off 2" Per Acqua 230 Vac Membrana Nbr
+[12469830]  Set Guarnizioni Confezione 6 Pezzi E Confezione 3 Pezzi
+[12575731]  Rapido Smartbox Set Prolunga Universale 25mm Per Miscelatore Termostatico 2 Manopole Con Rapido Smartbox
+[12611212]  Rapido Smartbox Set Prolunga Universale 25mm Per Miscelatore Monocomando Con Rapido Smartbox
+[12628400]  Rapido Smartbox Set Prolunga Universale 50mm Per Miscelatore Monocomando Con Rapido Smartbox
+[12027810]  Kit 5 Guarnizioni Per Flangia Ø 60/100 "serie Verde" Per Fumisteria "serie Verde" Caldaie A Condensazione < 35 Kw
+[12433490]  Kit Gomito Di Sostegno Ø 60 "serie Verde" Intubamento Ø 60 "serie Verde"
+[12485959]  Kit Gruppo Allacciamento Anteriore Per Victrix Hybrid Plus, Victrix Extra Plus E Victrix Tera 24 Plus V2 (in Omni Container)
+[12485961]  Kit Gruppo Allacciamento Posteriore Per Victrix Hybrid Plus, Victrix Extra Plus E Victrix Tera 24 Plus V2 (in Omni Container)
+[12551709]  Kit Collettore Scarico Fumi Con Serrande Ø 160 Per 2 Ares Condensing 115 Erp E 2 Ares Condensing 32 Erp Erp In Batteria
+[12621625]  Kit Lamiera Supporto Camino Regolabile E Mensola Supporto Camino
+[12621631]  Kit Ricircolo Con Circolatore Victrix Zeus Superior, Victrix Zeus E Avio Eco 24
+[12687186]  Kit Antigelo -15°c Victrix Zeus Superior Magis Combo/plus 12-14-16 V2/v2t E Victrix Zeus
+[12727771]  Kit Rubinetti Intercettazione Magis Hercules Pro Per Zona 2 E 3 E Magis Hercules Pro Mini
+[12742486]  Kit Dosatore Polifosfati Per Victrix Zeus Superior, Victrix Zeus E Avio Eco 24
+[12772532]  Kit Terminale A "t" Per Intubamento Flessibile Ø 50 Per Intubamento Flessibile Ø 50 "serie Verde"
+[12817989]  Kit Resistenza Impianto 3 Kw Magis Hercules Pro E Magis Hercules Pro Mini
+[12818319]  Kit Abbinamento Magis Combo 4/6/9 Plus V2 Con Super Trio Super Trio
+[21224296]  Kit Tubo Prolunga Da 1 M Ø 160* Per Rapax 200 V4 E Rapax 200 Sol V4 Novità Disp. Ii Trim 2026
+[35139504]  Kit Ricarica Granulato Per Passivatore Di Condensa <180 Kw Per Passivatore Di Condensa Cod. 3.033687 E 3.033688
+[40905113]  Kit Tubo Prolunga Da 2 M Ø 160* Per Rapax 200 V4 E Rapax 200 Sol V4 Novità Disp. Ii Trim 2026
+[56115776]  Kit N. 2 Gomiti Ø 200 A 45°* Per Rapax 300 V4 E Rapax 300 Sol V4 Novità Disp. Ii Trim 2026
+[56325346]  Kit Gomito Ø 160 A 87°* Per Rapax 200 V4 E Rapax 200 Sol V4 Novità Disp. Ii Trim 2026
+[65621349]  Inverter Ibrido Trifase Zcs Inverter Ibrido
+[84016032]  Kit Sonda Ricircolo Per Victrix Zeus, Avio Eco 24, Victrix Zeus Superior
+[12563882]  Tecedrainpoint S - Portagriglia In Acciaio Inox, 100 Mm, Incl. Griglia Design In Acciaio Inox
+[12797428]  Tecedrainprofile - Profilo Doccia In Nero Spazzolato, Nero Spazzolato, 1000 Mm
+[12806027]  Tecedrainprofile - Profilo Doccia In Nero Spazzolato, Nero Spazzolato, 900 Mm
+[12806033]  Tecedrainprofile - Profilo Doccia In Nero Spazzolato, Nero Spazzolato, 1200 Mm
+[12862836]  Tecedrainprofile - Profilo Doccia In Nero Spazzolato, Nero Spazzolato, 800 Mm
+[12912554]  Tecefloor Attrezzo Tacker Per Ganci A Spillo Standard Da 6 Mm, Per Ganci Corti E Lunghi
+[28000056]  Tecefloor Collettore Per Circuiti Di Riscaldamento Comfort Con Indicatore Di Portata, Tipo Tecelogo-push, 9 Circuiti Di Riscaldamento
+[31995947]  Tecedrainprofile - Profilo Doccia In Nero Spazzolato, Nero Spazzolato, 1600 Mm
+[39787769]  Tecefloor Collettore Per Circuiti Di Riscaldamento Comfort Con Indicatore Di Portata, Tipo Tecelogo-push, 10 Circuiti Di Riscaldamento
+[65724191]  Tecefloor Collettore Per Circuiti Di Riscaldamento Comfort Con Indicatore Di Portata, Tipo Tecelogo-push, 4 Circuiti Di Riscaldamento
+[82840307]  Tecefloor Collettore Per Circuiti Di Riscaldamento Comfort Con Indicatore Di Portata, Tipo Tecelogo-push, 7 Circuiti Di Riscaldamento
+[84247511]  Tecefloor Collettore Per Circuiti Di Riscaldamento Comfort Con Indicatore Di Portata, Tipo Tecelogo-push, 5 Circuiti Di Riscaldamento
+[30959977]  Tubo Fless. Rosso Att. 1/4 Sae X 1/4 Sae L. 1500 S/rubinetto
+[52343021]  Rubinetto A Sfera Per Tubi Di Carica Da 5/16 Sae F. G. X 5/16 Sae M
+[88402095]  Acid Test - Kit 4 Pz Acid Test Olio Per Sistemi Hvacr
+[93683752]  Stazione Di Recupero Per Gas Refrigeranti Per Gas Combustibili, Versione Atex, C
+[10083254]  Kit Svelto 5 Zone Ø150 Plenum In Lamiera Bocchette In Abs Ad Alette Regolabili Per Haier E Plenum Coibentato In Lamiera Per Haier Con Flangia 866x165
+[12713285]  Filtro Disoleatore 3/8" Sae-m X 3/8" Sae-m
+[14148659]  Plenum Coibentato Multiingresso Predisposto Con 3 Ingressi Per Collarini Mod. E5 Ø150 E 3 Ingressi Per Collarini Ø75/ø92 - 400x150
+[19891691]  Kit Svelto 3 Zone Ø150 Plenum In Lamiera Bocchette In Abs Ad Alette Regolabili Per Haier Con Plenum Coibentato In Lamiera Per Haier Con Flangia 866x165
+[34139992]  Plenum Coibentato Multiingresso Predisposto Con 3 Ingressi Per Collarini Mod. E5 Ø150 E 3 Ingressi Per Collarini Ø75/ø92 - 300x150
+[46018306]  Kit Svelto 3 Zone Ø150 Diffusori Lineari In Alluminio Con Serranda E Deflettore Centrale L100 Per Haier E Plenum Coibentato In Lamiera Per Haier Con Flangia 866x165
+[73101673]  Plenum Coibentato Multiingresso Predisposto Con 3 Ingressi Per Collarini Mod. C3 Ø125-150 E 3 Ingressi Per Collarini Ø75/ø92 - 400x100
+[75721492]  Plenum Telescopico Per Samsung Ac 35/052/071 Rnmdkg/eu Ac 035/052/060/071 Mnmdkh/eu Ae 071 Mnmpeh/eu Am 036/045/056/071 Hnmpkh Ac 035 Hnmceh/eu Ac 035/052/071 Rnmdkg/eu Ac 035/052/060/071 M
+[91390658]  Kit Svelto 4 Zone Ø150 Plenum In Lamiera Bocchette In Abs Ad Alette Regolabili Per Haier E Plenum Coibentato In Lamiera Per Haier Con Flangia 866x165
+[91548229]  Plenum Coibentato Multiingresso Predisposto Con 3 Ingressi Per Collarini Mod. C3 Ø125-150 E 3 Ingressi Per Collarini Ø75/ø92 - 300x100
+[97865385]  Plenum Coibentato Multiingresso Con 3 Ingressi Per Collarini Mod. C3 Ø125-150 E 3 Ingressi Per Collarini Ø75/ø92 - 200x100
+[99832915]  Filtro Disoleatore 1/4" Sae-m X 1/4" Sae-m
+[12365423]  Bocchettone Bronzo O Bronzo Al Silicio, Ottone, Portagomma Di Ottone, Estremità Filettata Di Bronzo O Bronzo Al Silicio, A Sede Conica, Modello 94341g D: 18 R: ¾
+[12365424]  Bocchettone Bronzo O Bronzo Al Silicio, Ottone, Portagomma Di Ottone, Estremità Filettata Di Bronzo O Bronzo Al Silicio, A Sede Conica, Modello 94341g D: 22 R: ¾
+[12367461]  Bocchettone Bronzo O Bronzo Al Silicio, Ottone, Portagomma Di Ottone, Estremità Filettata Di Bronzo O Bronzo Al Silicio, A Sede Conica, Modello 94341g D: 28 R: 1
+[12367598]  Colonna Automatica Multiplex Visign M5 Modello 6162.45 Dn: 40/50 Lunghezza Cavo Bowden: 560 L: 100"260 H: 180"400 Vasca Da Bagno Standard Per Vasca Da Bagno Con Foro Di Scarico Ø 52
+[12387593]  Bocchettone Bronzo O Bronzo Al Silicio, Ottone, Portagomma Di Ottone, Estremità Filettata Di Bronzo O Bronzo Al Silicio, A Sede Conica, Modello 94341g D: 15 R: ½
+[12405257]  Placca Di Comando Visign For Style 10 Materiale Plastico, Modello 8315.1 Placca Di Copertura: Materiale Plastico Bianco Alpino Tasto: Materiale Plastico Bianco Alpino
+[12405258]  Placca Di Comando Visign For Style 10 Materiale Plastico, Modello 8315.1 Placca Di Copertura: Materiale Plastico Cromato Tasto: Materiale Plastico Cromato
+[12405259]  Placca Di Comando Visign For Style 10 Materiale Plastico, Modello 8315.1 Placca Di Copertura: Materiale Plastico Satinato Tasto: Materiale Plastico Satinato
+[12405262]  Placca Di Comando Visign For Style 11 Materiale Plastico, Modello 8331.1 Placca Di Copertura: Materiale Plastico Cromato Tasto: Materiale Plastico Cromato
+[12405265]  Placca Di Comando Visign For Style 12 Materiale Plastico, Metallo, Vetro, Modello 8332.1 Placca Di Copertura: Materiale Plastico Bianco Alpino Tasto: Materiale Plastico Bianco Alpino
+[12405266]  Placca Di Comando Visign For Style 12 Materiale Plastico, Metallo, Vetro, Modello 8332.1 Placca Di Copertura: Materiale Plastico Cromato Tasto: Materiale Plastico Cromato
+[12405267]  Placca Di Comando Visign For Style 12 Materiale Plastico, Metallo, Vetro, Modello 8332.1 Placca Di Copertura: Materiale Plastico Satinato Tasto: Materiale Plastico Satinato
+[12405269]  Placca Di Comando Visign For Style 13 Materiale Plastico, Modello 8333.1 Placca Di Copertura: Materiale Plastico Bianco Alpino Tasto: Materiale Plastico Bianco Alpino
+[12405270]  Placca Di Comando Visign For Style 13 Materiale Plastico, Modello 8333.1 Placca Di Copertura: Materiale Plastico Cromato Tasto: Materiale Plastico Cromato
+[12405271]  Placca Di Comando Visign For Style 13 Materiale Plastico, Modello 8333.1 Placca Di Copertura: Materiale Plastico Satinato Tasto: Materiale Plastico Satinato
+[12405273]  Placca Di Comando Visign For Style 14 Materiale Plastico, Modello 8334.1 Placca Di Copertura: Materiale Plastico Bianco Alpino Tasto: Materiale Plastico Bianco Alpino
+[12405275]  Placca Di Comando Visign For Style 14 Materiale Plastico, Modello 8334.1 Placca Di Copertura: Materiale Plastico Satinato Tasto: Materiale Plastico Satinato
+[12431483]  Placca Di Comando Visign For More 104 Metallo, Modello 8354.1 Placca Di Copertura: Alluminio Color Acciaio Inox Tasto: Alluminio Color Acciaio Inox
+[12441072]  Pozzetto A Pavimento Advantix Modello 4955.1 Dn: 70 Capacità Di Scarico 10 Mm: 0,6 Capacità Di Scarico 20 Mm: 1,1 Scarico Orizzontale
+[12450954]  Raccordo Di Compensazione Altezza Advantix Per: Compensazione Altezza Da 40"95 Mm, Modello 4947
+[12462431]  Alimentatore Di Rete Per: Pressgun 6, Pressgun 5, Pressgun 4b, Pressgun Picco 6, Pressgun Picco, Modello 2488.2 Tensione (v): 230
+[12464062]  Azionamento Risciacquo A Distanza Visign For Public 1 Metallo, Modello 8326.21 Placca Di Copertura: Acciaio Inossidabile Spazzolato Tasto: Acciaio Inossidabile Lucido
+[12493208]  Colonna Automatica Multiplex Trio Corpo Incasso Modello 6161.52 Dn: 40/50 Lunghezza Cavo Bowden: 560 L: 100"260 H: 180"400 Vasca Da Bagno Standard Per Vasca Da Bagno Con Foro Di Scar
+[12493209]  Colonna Automatica Multiplex Trio Corpo Incasso Modello 6161.62 Dn: 40/50 Lunghezza Cavo Bowden: 725 L: 130"370 H: 180"430 Vasca Da Bagno Con Scarico Centrale Per Vasca Da Bagno Con
+[12519587]  Maniglia Visign M9/mt9 Per: Multiplex Visign M9/mt9, Modello 6171.08 Versione: Cromato
+[12523341]  Placca Di Comando Visign For Style 12 Materiale Plastico, Metallo, Vetro, Modello 8332.1 Placca Di Copertura: Vetro Trasparente/grigio Chiaro Tasto: Vetro Trasparente/grigio Chiaro
+[12539185]  Colonna Automatica Rotaplex Trio Visign Rt5 Modello 6141.70 Dn: 40/50 Lunghezza Cavo Bowden: 1070 L: 150"680 H: 180"480 Vasca Da Bagno Lunghezza Speciale Per Vasca Da Bagno Con Foro
+[12540337]  Coperchio Materiale Plastico, Modello 6930.0 Ø: 75 Per Piatto Doccia Con Foro Di Scarico Ø 52 Versione: Materiale Plastico Cromato
+[12578345]  Colonna Automatica Multiplex Trio Corpo Incasso Modello 6161.72 Dn: 40/50 Lunghezza Cavo Bowden: 1070 L: 130"680 H: 180"480 Vasca Da Bagno Lunghezza Speciale Per Vasca Da Bagno Con F
+[12588548]  Bocchettone Bronzo O Bronzo Al Silicio, Ottone, Portagomma Di Ottone, Estremità Filettata Di Bronzo O Bronzo Al Silicio, A Sede Conica, Modello 94341g D: 18 R: ½
+[12591904]  Placca Di Comando Visign For More 104 Metallo, Modello 8354.1 Placca Di Copertura: Alluminio Cromato Lucido Tasto: Alluminio Cromato Lucido
+[12592408]  Coperchio Materiale Plastico, Modello 6964.0 Ø: 115 Per Piatto Doccia Con Foro Di Scarico Ø 90 Versione: Materiale Plastico Cromato
+[12592412]  Coperchio Materiale Plastico, Modello 6931.0 Ø: 90 Per Piatto Doccia Con Foro Di Scarico Ø 65 Versione: Materiale Plastico Cromato
+[12619846]  Bocchettone Bronzo O Bronzo Al Silicio, Ottone, Portagomma Di Ottone, Estremità Filettata Di Bronzo O Bronzo Al Silicio, A Sede Conica, Modello 94341g D: 35 R: 1¼
+[12635169]  Colonna Automatica Rotaplex Trio Corpo Incasso Modello 6141.72 Dn: 40/50 Lunghezza Cavo Bowden: 1070 L: 150"680 H: 180"480 Vasca Da Bagno Lunghezza Speciale Per Vasca Da Bagno Con Fo
+[12647176]  Listello Di Finitura Piastrelle Advantix Vario Per Scarico A Parete Advantix Vario Modello 4965.92
+[12662228]  Placca Di Comando Visign For Style 12 Materiale Plastico, Metallo, Vetro, Modello 8332.1 Placca Di Copertura: Vetro Parsol/nero Tasto: Vetro Parsol/nero
+[12662718]  Colonna Automatica Rotaplex Trio Corpo Incasso Modello 6141.62 Dn: 40/50 Lunghezza Cavo Bowden: 725 L: 150"400 H: 180"430 Vasca Da Bagno Con Scarico Centrale Per Vasca Da Bagno Con F
+[12663180]  Colonna Automatica Multiplex Trio F Modello 6145.51 Dn: 40/50 Lunghezza Cavo Bowden: 725 Vasca Da Bagno Con Scarico Centrale Per Vasca Da Bagno Con Foro Di Scarico Ø 52
+[12677648]  Set Di Espansione Misuratore Di Portata 0"5 L/min Acciaio Inossidabile, Eurocono, Dado A Risvolto G1, A Sede Piana, Fornitura, Misuratore Di Portata 0"5 L/min, Vite Doppia Di Ottone Cromato
+[12677976]  Placca Di Comando Visign For More 105 Metallo, Vetro, Modello 8357.1 Placca Di Copertura: Vetro Bianco/bianco Traffico Tasto: Vetro Bianco/bianco Traffico
+[12692796]  Coperchio Materiale Plastico, Modello 6928.0 Ø: 75 Per Piatto Doccia Con Foro Di Scarico Ø 52 Versione: Materiale Plastico Bianco Design
+[12696622]  Colonna Automatica Multiplex Trio Visign Mt5 Modello 6161.50 Dn: 40/50 Lunghezza Cavo Bowden: 560 L: 100"260 H: 180"400 Vasca Da Bagno Standard Per Vasca Da Bagno Con Foro Di Scarico
+[12703045]  Corpo Base Pozzetto A Pavimento Advantix Senza: Portagriglia, Modello 4955.25 Dn: 100 D: 110 L1: 77 L2: 185 H: 130 Capacità Di Scarico 10 Mm: 1,2 Capacità Di Scarico 20 Mm: 1,7 S
+[12712932]  Bocchettone Bronzo O Bronzo Al Silicio, Ottone, Portagomma Di Ottone, Estremità Filettata Di Bronzo O Bronzo Al Silicio, A Sede Conica, Modello 94341g D: 12 R: ½
+[12712933]  Bocchettone Bronzo O Bronzo Al Silicio, Ottone, Portagomma Di Ottone, Estremità Filettata Di Bronzo O Bronzo Al Silicio, A Sede Conica, Modello 94341g D: 22 R: 1
+[12713050]  Colonna Automatica Citaplex Modello 6176.45 Dn: 40/50 Vasca Da Bagno Standard Curva Di Scarico 45° Per Vasca Da Bagno Con Foro Di Scarico Ø 52
+[12748121]  Placca Di Comando Visign For Style 10 Materiale Plastico, Modello 8315.1 Placca Di Copertura: Materiale Plastico Nero Lucido Tasto: Materiale Plastico Nero Lucido
+[12790847]  Placca Di Comando Wc Per Prevista Visign For Style 21 Modello 8611.1 Placca Di Copertura: Materiale Plastico Bianco Alpino Tasto: Materiale Plastico Bianco Alpino
+[12803052]  Colonna Automatica Multiplex Trio Visign Mt5 Modello 6161.60 Dn: 40/50 Lunghezza Cavo Bowden: 725 L: 130"370 H: 180"430 Vasca Da Bagno Con Scarico Centrale Per Vasca Da Bagno Con For
+[12826458]  Filtro Advantix Vario Per Scarico A Parete Advantix Vario Modello 4967.81
+[12863310]  Set Ricambi Advantix Vario Per Scarico A Parete Advantix Vario Modello 4967.94
+[16362576]  Spazzola Per Pulizia Advantix Vario Per Scarico A Parete Advantix Vario Modello 4967.87
+[16526799]  Placca Di Comando Wc Per Prevista Visign For Style 24 Modello 8614.1 Placca Di Copertura: Materiale Plastico Color Inox Spazzolato Tasto: Materiale Plastico Color Inox Spazzolato
+[19198468]  Placca Di Comando Wc Per Prevista Visign For Style 23 Modello 8613.1 Placca Di Copertura: Materiale Plastico Nero Opaco Tasto: Materiale Plastico Nero Opaco
+[20228648]  Colonna Automatica Multiplex Visign M5 Modello 6163.45 Dn: 40/50 Lunghezza Cavo Bowden: 725 L: 130"370 H: 180"430 Vasca Da Bagno Con Scarico Centrale Per Vasca Da Bagno Con Foro Di S
+[21368876]  Colonna Automatica Rotaplex Trio Tappo A Funzionamento Elettrico, Modello 6175.2 Dn: 40/50 Vasca Da Bagno Con Scarico Centrale Per Vasca Da Bagno Con Foro Di Scarico Ø 90
+[21518557]  Placca Di Comando Wc Per Prevista Visign For Style 20 Modello 8610.1 Placca Di Copertura: Materiale Plastico Bianco Opaco Tasto: Materiale Plastico Bianco Opaco
+[22647948]  Bocchettone Bronzo O Bronzo Al Silicio, Ottone, Portagomma Di Ottone, Estremità Filettata Di Bronzo O Bronzo Al Silicio, A Sede Conica, Modello 94341g D: 42 R: 1½
+[32272739]  Placca Di Comando Wc Per Prevista Visign For Style 23 Modello 8613.1 Placca Di Copertura: Materiale Plastico Cromato Tasto: Materiale Plastico Cromato
+[32415773]  Placca Di Comando Da Esposizione Wc Per Prevista Visign For Style 24 Modello 8614.19 Placca Di Copertura: Materiale Plastico Nero Lucido Tasto: Materiale Plastico Nero Lucido
+[33588200]  Valvola A Sfera Easytop Estremità A Pressare Sanpress Inox In Tre Blocchi Con Sc-contur Acciaio Inossidabile, Estremità A Pressare Femmina, Modello 2375.8 Dn: 32 D: 35
+[34829480]  Placca Di Comando Wc Per Prevista Visign For Style 24 Modello 8614.1 Placca Di Copertura: Materiale Plastico Bianco Alpino Tasto: Materiale Plastico Bianco Alpino
+[34832220]  Cassetta Per Collettori Da Incasso Modello 1295.3 Tipo: 1000 L1: 985 L2: 1045 Allacciamento A Collettore Orizzontale: "12 Allacciamento A Collettore Verticale: "12 Allacciamento A Co
+[36319841]  Pozzetto A Pavimento Advantix Modello 4951.1 Dn: 70/100 H1: 190 H2: 85 Capacità Di Scarico 10 Mm: 0,9 Capacità Di Scarico 20 Mm: 1,4 Scarico Verticale
+[44497084]  Pozzetto A Pavimento Advantix Modello 4951.1 Dn: 50 D: 50 H1: 160 H2: 50 Capacità Di Scarico 10 Mm: 0,65 Capacità Di Scarico 20 Mm: 1,5 Scarico Verticale
+[47115723]  Placca Di Comando Wc Per Prevista Visign For Life 5 Modello 8601.1 Placca Di Copertura: Materiale Plastico Bianco Alpino Tasto: Materiale Plastico Bianco Alpino
+[47204020]  Valvola A Sfera Easytop Estremità A Pressare Sanpress Inox In Tre Blocchi Con Sc-contur Acciaio Inossidabile, Estremità A Pressare Femmina, Modello 2375.8 Dn: 15 D: 18
+[48499716]  Pozzetto A Pavimento Advantix Modello 4951.1 Dn: 70 D: 75 H1: 175 H2: 65 Capacità Di Scarico 10 Mm: 0,7 Capacità Di Scarico 20 Mm: 1,6 Scarico Verticale
+[52366557]  Colonna Automatica Multiplex Trio Visign Mt1 Modello 6161.2 Dn: 40/50 Lunghezza Cavo Bowden: 560 Vasca Da Bagno Standard Per Vasca Da Bagno Con Foro Di Scarico Ø 52
+[54482717]  Valvola A Sfera Easytop Estremità A Pressare Sanpress Inox In Tre Blocchi Con Sc-contur Acciaio Inossidabile, Estremità A Pressare Femmina, Modello 2375.8 Dn: 40 D: 42
+[56712121]  Placca Di Comando Wc Per Prevista Visign For Style 23 Modello 8613.1 Placca Di Copertura: Materiale Plastico Color Inox Spazzolato Tasto: Materiale Plastico Color Inox Spazzolato
+[56882913]  Supporto Valvola Di Scarico Con Riduttore Di Flusso Di Risciacquo Per: Cassetta Di Risciacquo 3h Da Incasso, Cassetta Di Risciacquo 3l Da Incasso, Materiale Plastico, Modello 8580.21
+[57188989]  Placca Di Comando Wc Per Prevista Visign For Style 20 Modello 8610.1 Placca Di Copertura: Materiale Plastico Bianco Alpino Tasto: Materiale Plastico Bianco Alpino
+[65048181]  Placca Di Comando Wc Per Prevista Visign For Style 21 Modello 8611.1 Placca Di Copertura: Materiale Plastico Nero Opaco Tasto: Materiale Plastico Nero Opaco
+[65309626]  Griglia Per Corriacqua Advantix Cleviva Visign C1 Fessura Di Scolo Singola Acciaio Inossidabile 1.4301, Modello 4981.50 Versione: Acciaio Inossidabile Color Rame/oro Spazzolato
+[66791092]  Bocchettone Bronzo O Bronzo Al Silicio, Ottone, Portagomma Di Ottone, Estremità Filettata Di Bronzo O Bronzo Al Silicio, A Sede Conica, Modello 94341g D: 15
+[67634107]  Placca Di Comando Wc Per Prevista Visign For More 204 Elettronico Modello 8624.1 Placca Di Copertura: Acciaio Inossidabile Nero Opaco Tasto: Metallo Nero Opaco
+[69882278]  Griglia Per Corriacqua Advantix Cleviva Visign C1 Fessura Di Scolo Singola Acciaio Inossidabile 1.4301, Modello 4981.50 Versione: Acciaio Inossidabile Spazzolato
+[72184679]  Placca Di Comando Wc Per Prevista Visign For Public 10 Modello 8630.1 Placca Di Copertura: Acciaio Inossidabile Spazzolato Tasto: Acciaio Inossidabile Spazzolato
+[75475168]  Placca Di Copertura Wc Per Prevista Visign For Style Materiale Plastico, Modello 8660.1 Placca Di Copertura: Materiale Plastico Bianco Alpino
+[76617020]  Set Accessori Visign For Style 11 Per: Sistema Di Risciacquo Per Orinatoio, Materiale Plastico, Modello 8331.2 Placca Di Copertura: Materiale Plastico Satinato Tasto: Materiale Plastico Sati
+[78806334]  Placca Di Comando Wc Per Prevista Visign For Style 20 Modello 8610.1 Placca Di Copertura: Materiale Plastico Nero Opaco Tasto: Materiale Plastico Nero Opaco
+[79316306]  Valvola A Sfera Easytop Estremità A Pressare Sanpress Inox In Tre Blocchi Con Sc-contur Acciaio Inossidabile, Estremità A Pressare Femmina, Modello 2375.8 Dn: 25 D: 28
+[82842319]  Placca Di Comando Per Orinatoio Per Prevista Visign For Style 20 Materiale Plastico, Modello 8610.2 Placca Di Copertura: Materiale Plastico Bianco Alpino Tasto: Materiale Plastico Bianco Alp
+[82887690]  Cassetta Per Collettori Da Incasso Modello 1295.3 Tipo: 700 L1: 685 L2: 745 Allacciamento A Collettore Orizzontale: "10 Allacciamento A Collettore Verticale: "7 Allacciamento A Colle
+[83841732]  Azionamento Risciacquo Wc A Distanza Per Prevista Visign For Style 23 Elettronico Modello 8640.1 Placca Di Copertura: Materiale Plastico Bianco Alpino Tasto: Materiale Plastico Bianco Alpin
+[84157100]  Set Guarnizioni Per: Cassetta Di Risciacquo 3h Da Incasso, Cassetta Di Risciacquo 3l Da Incasso, Gomma, Modello 8580.8
+[88497593]  Pozzetto A Pavimento Advantix Modello 4955.1 Dn: 100 Capacità Di Scarico 10 Mm: 1,2 Capacità Di Scarico 20 Mm: 1,7 Scarico Orizzontale
+[90450759]  Placca Di Comando Da Esposizione Wc Per Prevista Visign For Style 24 Modello 8614.19 Placca Di Copertura: Materiale Plastico Color Inox Spazzolato Tasto: Materiale Plastico Color Inox Spazzo
+[90794664]  Azionamento Risciacquo Wc A Distanza Per Prevista Visign For Style 23 Elettronico Modello 8640.1 Placca Di Copertura: Materiale Plastico Cromato Tasto: Materiale Plastico Cromato
+[93186463]  Placca Di Comando Da Esposizione Wc Per Prevista Visign For Style 20 Modello 8610.19 Placca Di Copertura: Materiale Plastico Bianco Alpino Tasto: Materiale Plastico Bianco Alpino
+[93839986]  Placca Di Comando Wc Per Prevista Visign For Style 23 Modello 8613.1 Placca Di Copertura: Materiale Plastico Bianco Alpino Tasto: Materiale Plastico Bianco Alpino
+[93867148]  Profilo Corriacqua Advantix Cleviva Acciaio Inossidabile 1.4301, Modello 4981.32 L: 1200 Versione: Acciaio Inossidabile Spazzolato
+[97114154]  Placca Di Comando Wc Per Prevista Visign For Style 20 Modello 8610.1 Placca Di Copertura: Materiale Plastico Satinato Tasto: Materiale Plastico Satinato
+
+==============================================================================
+
+SEZIONE 3 — Stesso nome usato da più articoli diversi (512 gruppi, 1407 articoli coinvolti)
+Non è un errore nel singolo nome (restano distinguibili dal codice, mostrato
+sempre a fianco), ma segnala articoli con nome identico e codice diverso —
+utile saperlo se un giorno si vuole renderli più distinguibili a colpo d'occhio.
+------------------------------------------------------------------------------
+30x  "Small Inverter Chiller R290"  —  codici: 11829262, 13794553, 17533525, 19423371, 23991100, 24895304, 27288150, 28791160, 34088229, 34324173, 36309823, 40138608, 40857193, 40877553, 40993719, 44753050, 44822502, 45677613, 50381867, 51652546, 52556750, 55853800, 65221589, 68518639, 69905484, 72373776, 76636109, 83631411, 97833987, 99497495
+21x  "Split<no Comp<h/p"  —  codici: 12920288, 12920289, 26765866, 34759903, 39430706, 48818855, 53020108, 55773438, 55854877, 56363574, 58125565, 65181946, 68065427, 74067095, 81420117, 82027679, 88159498, 91436188, 92274255, 92421830, 94467201
+18x  "Split<comp<h/p"  —  codici: 10281764, 10307652, 11892185, 12314128, 18951328, 19046772, 30206583, 30607785, 31192225, 32134386, 43044126, 46150027, 56589131, 61147100, 67599447, 72483793, 77487451, 97422090
+14x  "Resistenza 1200w 220-240v"  —  codici: 13884946, 14150321, 20020189, 17894349, 30719986, 31233680, 41207829, 43294259, 51119218, 51576125, 64683542, 86630752, 93653674, 16860579
+13x  "Termostato"  —  codici: 12447851, 19104197, 19763834, 31562118, 33832213, 34272046, 39546831, 62673149, 72734594, 78825691, 89218903, 16923312, 72246205
+13x  "Leva Cromo"  —  codici: 12698892, 12810078, 12914535, 24312748, 45668176, 47627896, 62354810, 69199897, 73487628, 82050508, 87362021, 91638290, 12786400
+11x  "Roof Top 2018 Base"  —  codici: 30009133, 28098928, 34672669, 41647611, 53789089, 54393889, 63197599, 64162881, 66093446, 68806056, 91362045
+11x  "Roof Top 2018 Fc2s"  —  codici: 18629340, 20776096, 23877315, 25706081, 42653613, 58534063, 59077785, 67480291, 74536672, 75420516, 97412424
+11x  "Roof Top 2018 Fc3s"  —  codici: 18670060, 29948054, 40784127, 56141216, 62252675, 63761679, 78717566, 92789610, 94095015, 94156094, 96086660
+10x  "Mousseur Cromo"  —  codici: 12461362, 12533481, 12667169, 12670901, 12876259, 16173374, 38233275, 91694435, 12808005, 66836123
+9x  "Chillersmalla/cewye-cz"  —  codici: 13372992, 20276218, 36350543, 52162882, 52733994, 55086121, 84637413, 89783590, 99613660
+9x  "Mousseur Con Chiave"  —  codici: 12428220, 12468290, 12478784, 12576950, 12592112, 12649344, 12718435, 18827725, 30062802
+7x  "Fancoilno Comp2pipe"  —  codici: 19256729, 30376776, 38494671, 67592777, 74298197, 78206550, 85556472
+7x  "Coppella Lana Minerale T600-g90"  —  codici: 18387639, 20807579, 33138694, 44858610, 66196597, 69314049, 80597014
+7x  "Unità Interna Parete - "r32 Serie Classic""  —  codici: 10063929, 25477337, 46578176, 56937600, 58595031, 70949798, 89294928
+7x  "Unità Interna Soffitto"  —  codici: 10230855, 14210433, 28409533, 34676318, 41014386, 59921215, 61109360
+7x  "Unità Idronica Aio 1 Zona Con Resistenza Elettrica Di Backup Da 3kw 1ph"  —  codici: 12793203, 12793204, 12801356, 14108665, 25828579, 40299528, 51276717
+7x  "Unità Interna Parete - "seiya Smart (wifi) R32"  —  codici: 13609880, 21108182, 22515385, 43140808, 52046315, 74078942, 81577245
+7x  "Unità Esterna Inverter Pompa Di Calore R32 - "classic""  —  codici: 22474845, 34687008, 35228349, 40281099, 61877799, 73056376, 99581202
+6x  "Resistenza 1500w 220-240v"  —  codici: 20119404, 31989877, 62320294, 65236291, 79493606, 81817775
+6x  "Attraversamento Tetto Inox 590mm X Mf"  —  codici: 12709235, 12709239, 12709244, 12709511, 12709512, 50549952
+6x  "Icon Set Di Frontali Cassetto Per Mobile Laterale Basso 2 Cassetti 45"  —  codici: 29056750, 44053357, 69845316, 74529211, 94671994, 19206319
+6x  "Set Guarnizioni"  —  codici: 12392162, 12585631, 12595332, 18976251, 32093648, 60369575
+6x  "Gruppo Di Serraggio Astina"  —  codici: 12418246, 12595915, 44352206, 50033307, 57202979, 95894257
+6x  "Unità Interna Canalizzabile Standard"  —  codici: 12900608, 12900615, 12900616, 12900617, 12900618, 12900620
+6x  "Unità Interna Parete (telecomando Ir Incluso)"  —  codici: 12905503, 12907690, 49470885, 55714107, 64068680, 93010394
+6x  "Unità Interna Cassetta A 4 Vie Standard"  —  codici: 43525761, 43635950, 50022399, 50287655, 56915309, 87790853
+6x  "Raccordo A T Megapress S Con Sc-contur Acciaio Al Carbonio, Rivestimento Di Zinco-nichel, Estremità A Pressare Femmina, Modello 4318 Omologazione Tedesca Vds Teleriscaldamento Sec. Agfw Fw"  —  codici: 12774155, 12865754, 60665851, 61335759, 73055676, 24386399
+5x  "Regolatore Di Pressione Per Gas Con Filtro"  —  codici: 12373466, 12644274, 12708806, 12708807, 39632333
+5x  "Regolatore Di Pressione Gpl E Metano Con Filtro"  —  codici: 12550162, 12649494, 12708804, 12772580, 73733624
+5x  "Giravite A Scalpello Wera Profilo - Idrhaus"  —  codici: 15010527, 17827316, 26550520, 57379362, 79444904
+5x  "Guarnizione"  —  codici: 12350841, 12708213, 12385034, 12588199, 68872155
+5x  "Cappuccio Cromo"  —  codici: 12428946, 12486339, 12564630, 40627094, 65799110
+5x  "Rosone Cromo"  —  codici: 12491092, 12823564, 35263855, 67988679, 12564629
+5x  "Doccetta Estraibile Cromo"  —  codici: 12524930, 12536841, 12572681, 12591792, 43623174
+5x  "Unità Esterna Inverter In Pompa Di Calore Digital Inverter Serie 1 Con R32"  —  codici: 12557132, 12557135, 12557138, 12557140, 22572874
+5x  "Unità Esterna Inverter In Pompa Di Calore Tipo "estia" Serie 1 1f"  —  codici: 12747503, 12747504, 12747505, 12747506, 74854361
+5x  "Unità Esterna Inverter Pompa Di Calore - Digital Inverter Classic Serie 1 Con R32"  —  codici: 14503789, 36971486, 59502087, 63223261, 93878026
+5x  "Unità Interna A Colonna"  —  codici: 19995862, 36660846, 37611979, 83595474, 87671220
+5x  "Manicotto Megapress S Con Sc-contur Acciaio Al Carbonio, Rivestimento Di Zinco-nichel, Estremità A Pressare Femmina, Filettatura R, Modello 4311 Omologazione Tedesca Vds Teleriscaldamento S"  —  codici: 12666491, 33061713, 61183725, 94003055, 94143378
+5x  "Manicotto Megapress S Con Sc-contur Acciaio Al Carbonio, Rivestimento Di Zinco-nichel, Estremità A Pressare Femmina, Filettature Rp, Modello 4312 Omologazione Tedesca Vds Teleriscaldamento"  —  codici: 32250010, 56552292, 56818778, 74565917, 88787705
+4x  "Resistenza 1500w 230v"  —  codici: 12447850, 59595755, 70320171, 21538199
+4x  "Tubo Acciaio Inox D 28 Per 1.0"  —  codici: 14309522, 40001022, 59850504, 79321608
+4x  "Stabiliz.port. Autoflow 3/4"  —  codici: 28110023, 45152920, 48871282, 83495228
+4x  "Roof Top Pompa Calore R410a"  —  codici: 11212476, 36521795, 60926910, 97432784
+4x  "Sensira Mono"  —  codici: 12436442, 29302535, 77609766, 91661448
+4x  "Sensira R32"  —  codici: 16195774, 74774996, 72925870, 36494982
+4x  "Free Hanging Air Curtain (white)"  —  codici: 16710835, 17859761, 28615730, 84766652
+4x  "Splitcomph/p"  —  codici: 26930048, 30689380, 59737670, 94435139
+4x  "Ext. Sky Air Seasonal Smart R410a 1ph"  —  codici: 29308529, 62578432, 94461491, 95406414
+4x  "Raccordo Diritto Per Vasi Di Espansione Aperti"  —  codici: 12535609, 12535612, 12535613, 12667722
+4x  "Valvola Intercettazione Combustibile Filettata 1 Bar"  —  codici: 12798214, 42285204, 52639488, 60760194
+4x  "Ispezione Con Tappo"  —  codici: 12697239, 12771604, 30015403, 52772641
+4x  "Gbd Diritto 940 Mm Utili"  —  codici: 12789355, 12795777, 12807494, 12823362
+4x  "Gbd Gomito A 45"  —  codici: 12789358, 12807497, 12823360, 27605844
+4x  "Gbd Ispezione Con Tappo"  —  codici: 12789362, 12795781, 12807489, 12848913
+4x  "Terminale Conico"  —  codici: 12813292, 12834841, 12871509, 33432264
+4x  "Elemento Regolabile 260-380 Mm"  —  codici: 12841927, 13291291, 72673453, 84823474
+4x  "Cappuccio Di Copertura Cromo"  —  codici: 11181979, 12920034, 54194570, 67485395
+4x  "Guarnizione Tonda Confezione 10 Pezzi"  —  codici: 12066465, 12450213, 25731521, 12693407
+4x  "Doccetta Estraibile Per Miscelatore Lavello Cromo"  —  codici: 12391972, 12573179, 12689799, 25574346
+4x  "Manicotto Cromo"  —  codici: 12428988, 12461617, 12543587, 53360467
+4x  "Rosetta Cromo"  —  codici: 12467353, 43852110, 53537339, 93842707
+4x  "Maniglia Deviatore Cromo"  —  codici: 12513429, 12921564, 49922412, 68926772
+4x  "Telaio Di Supporto"  —  codici: 12585630, 48918347, 81712527, 12749579
+4x  "Rubinetto Squadra Ø1/2"x3/8" Con Rosetta Ø55 Cromo"  —  codici: 12700196, 65370712, 93308842, 12777141
+4x  "Plenum Coibentato In Lamiera Per Daikin Con Flangia 492x178"  —  codici: 12114724, 12895478, 37306014, 67441078
+4x  "Plenum Coibentato In Lamiera Per Daikin Con Flangia 792x178"  —  codici: 12896531, 35451983, 51885185, 71002697
+4x  "Unità Interna Tipo Canalizzabile Ribassata Serie Hm Sdty R32"  —  codici: 17460911, 30841928, 60584681, 72754553
+4x  "Unità Interna Cassetta A 4 Vie 60 X 60"  —  codici: 31610778, 66580121, 75260462, 96080113
+4x  "Curva A 90° Megapress S Con Sc-contur Acciaio Al Carbonio, Rivestimento Di Zinco-nichel, Estremità A Pressare Femmina, Modello 4316 Omologazione Tedesca Vds Teleriscaldamento Sec. Agfw Fw 5"  —  codici: 12644442, 12884309, 62949482, 78619486
+4x  "Manicotto Scorrevole Megapress S Con Sc-contur Acciaio Al Carbonio, Rivestimento Di Zinco-nichel, Estremità A Pressare Femmina, Modello 4315.5 Omologazione Tedesca Vds Teleriscaldamento Sec"  —  codici: 12865756, 85144539, 91824295, 87745115
+3x  "O-ring"  —  codici: 22789716, 27926405, 12927087
+3x  "Termostato Elettronico"  —  codici: 24258631, 40829512, 54176651
+3x  "Guarnizione Flangia"  —  codici: 36724946, 51600420, 72492693
+3x  "Resistenza 1200w 230v"  —  codici: 80145710, 97261696, 63881632
+3x  "Robocal Valvola Sfogo Aria Ottone Ø3/8"m"  —  codici: 12348318, 12348319, 12348320
+3x  "Riduttore Pressione Ø1/2" Con Manometro 0÷10bar"  —  codici: 12348395, 12521115, 12629143
+3x  "Riduttore Pressione Ø3/4" Con Manometro 0÷10bar"  —  codici: 12348396, 12521116, 12629144
+3x  "Riduttore Pressione Ø1" Con Manometro 0÷10bar"  —  codici: 12348397, 12521117, 12629155
+3x  "Riduttore Pressione Ø1.1/4" Con Manometro 0÷10bar"  —  codici: 12348398, 12558833, 12629156
+3x  "Riduttore Pressione Ø1.1/2" Con Manometro 0÷10bar"  —  codici: 12348399, 12558836, 12629157
+3x  "Stabilizzatore Autoflow Ø1" 1,6m3/h"  —  codici: 12419288, 12501786, 74721684
+3x  "Stabilizzatore Autoflow Ø1" 1,2m3/h"  —  codici: 12474363, 12501791, 26294933
+3x  "Stabilizzatore Autoflow Ø3/4" 0,25m3/h"  —  codici: 12496815, 12908549, 68644096
+3x  "Stabilizzatore Autoflow Ø1" 2m3/h"  —  codici: 12501793, 12761623, 12792441
+3x  "Dirtmag Slim Defangatore Con Magnete Ø3/4"mx3/4"f"  —  codici: 12565197, 12610537, 12596470
+3x  "Stabilizzatore Autoflow Ø1.1/4" 3,25m3/h"  —  codici: 32950884, 40134609, 71408020
+3x  "Leva"  —  codici: 12588201, 12404211, 25355883
+3x  "Cassette Air Curtain (white)"  —  codici: 23257553, 33963179, 85859059
+3x  "H H/pht Compacs"  —  codici: 27642640, 67024003, 81075686
+3x  "Emura Iii Alpha - Beg, Dcs"  —  codici: 30267662, 42932501, 90757090
+3x  "Altherma 3 R Mt Outdoor 3x400v+n"  —  codici: 62782029, 65113797, 66058719
+3x  "H Boilergas Wallcond Ho"  —  codici: 65157738, 80698119, 96845213
+3x  "Deu.recuper. 035 Base + Serrande"  —  codici: 71573479, 74881622, 82393203
+3x  "Manometro Radiale In Bagno Di Glicerina Ø 80 - Attacco 3/8""  —  codici: 12588330, 12588389, 99942384
+3x  "Kit Bulloneria Zincata Per Flange"  —  codici: 17112971, 20736602, 29789816
+3x  "Stuoia Scaldante In Metallo Amorfo Ecokaldo 1m2 300w/mq " Idrhaus"  —  codici: 27117127, 62465529, 92453311
+3x  "Giunto Inox Estensibile H2o Mf 1/2"x3/4""  —  codici: 49890849, 58834081, 60832417
+3x  "Gbd Elemento Regolabile 260-380 Mm"  —  codici: 11253645, 12789356, 12892079
+3x  "Fascia Per 3 Cavi Tiranti"  —  codici: 12378199, 12567758, 24662756
+3x  "Elem.a "t" 87 D/p Inox-rame C/lana Min"  —  codici: 12417554, 12422971, 12440331
+3x  "Scarico Condensa Verticale"  —  codici: 12771605, 12783658, 12807488
+3x  "Elemento A T 87"  —  codici: 12771606, 12783805, 12811488
+3x  "Fascia Parapioggia"  —  codici: 12783085, 12802747, 12847335
+3x  "Prelievo Fumi"  —  codici: 12783838, 12824635, 12905065
+3x  "Gbd Diritto 190 Mm Utili"  —  codici: 12789352, 12795743, 12823364
+3x  "Set Di Fissaggio"  —  codici: 12730836, 12519296, 48075249
+3x  "Filtro"  —  codici: 12760197, 12899685, 88756667
+3x  "Coperchio"  —  codici: 12792687, 12513231, 12846172
+3x  "Flussometro Incasso Ø3/4" Per Wc"  —  codici: 10784717, 12445214, 12897237
+3x  "Termoelemento Ø1/2" A Cera Per Grohmix"  —  codici: 12352404, 12592430, 41078378
+3x  "Valvola Di Non Ritorno"  —  codici: 12434940, 12695417, 58439594
+3x  "Astina A Saltarello Cromo"  —  codici: 12435236, 12473678, 12647353
+3x  "Leva Per Eurostyle Cosmo Cromo"  —  codici: 12478898, 12799593, 12462754
+3x  "Tectron Skate Dispositivo Elettronico Infrarossi Acciaio Inox Satinato"  —  codici: 12497474, 12634117, 12726390
+3x  "Corpo Incasso Miscelatore Monocomando Lavabo 2 Fori A Parete"  —  codici: 12526166, 12530468, 96062294
+3x  "Elettrovalvola"  —  codici: 12585653, 12904704, 65857474
+3x  "Dima Montaggio Per Piastre Di Azionamento Small"  —  codici: 12622550, 12622986, 59933734
+3x  "Rosone Quadrato Per Miscelatore Termostatico Cromo"  —  codici: 12798598, 12807416, 12852919
+3x  "Deviatore Cromo"  —  codici: 12854408, 64295194, 12710981
+3x  "Elettrovalvola Per Orinatoio"  —  codici: 12919414, 54472471, 92364409
+3x  "Regolatore Getto Cromo"  —  codici: 29628264, 36845350, 59882857
+3x  "Prolunga Per Fuso"  —  codici: 75626799, 84916900, 26113012
+3x  "Plenum Coibentato In Lamiera Per Haier Con Flangia 866x165"  —  codici: 17491954, 18471203, 40385285
+3x  "Unità Interna Idronica Tipo "estia" Aio Serie 1"  —  codici: 10488155, 12821987, 99380537
+3x  "Unità A Parete Finitura In Legno - "super Daiseikai 10""  —  codici: 10710155, 87120745, 93694485
+3x  "Unità Interna Tipo Smart Cassetta A 4 Vie 90x90 (solo Con Super Digital Inverter R32)"  —  codici: 12591738, 38261662, 80909554
+3x  "Unità Esterna Inverter In Pompa Di Calore Super Digital Inverter Serie 1 Con R32 3hp"  —  codici: 12655179, 12659685, 12838663
+3x  "Unità Esterna Inverter In Pompa Di Calore Tipo "estia" Serie 5 - 3ph"  —  codici: 12694413, 12798021, 12830507
+3x  "Unità Esterna Inverter Pompa Di Calore - Super Digital Inverter Serie 1 Con R32"  —  codici: 12839821, 12839823, 34542584
+3x  "Unità Esterna Inverter In Pompa Di Calore Tipo "estia" Serie 1 3f"  —  codici: 18161376, 69144103, 91836260
+3x  "Unità A Parete - "super Daiseikai 10""  —  codici: 22430070, 58997020, 95101688
+3x  "Unità Esterna Inverter Pompa Di Calore - Digital Inverter Classic Serie 1 Con R32 - 3ph"  —  codici: 37306474, 63900534, 99969125
+3x  "Unità Esterna Inverter Pompa Di Calore R32 - "super Daiseikai 10""  —  codici: 39316521, 90880075, 92287280
+3x  "Manicotto Con Battente Megapress S Con Sc-contur Acciaio Al Carbonio, Rivestimento Di Zinco-nichel, Estremità A Pressare Femmina, Modello 4315 Omologazione Tedesca Vds Teleriscaldamento Sec"  —  codici: 12772187, 37456145, 96957786
+3x  "Curva A 45° Megapress S Con Sc-contur Acciaio Al Carbonio, Rivestimento Di Zinco-nichel, Estremità A Pressare Femmina, Modello 4326 Omologazione Tedesca Vds Teleriscaldamento Sec. Agfw Fw 5"  —  codici: 30130851, 75217118, 81296908
+2x  "Separatore Idraulico Dn65"  —  codici: 12514587, 12777254
+2x  "Separatore Idraulico Dn100"  —  codici: 12680847, 24755479
+2x  "Kit Scarico Coassiale Condens Orizzontale Ø80/125 L.1000mm"  —  codici: 12682942, 12867762
+2x  "Calotta"  —  codici: 18785735, 58179880
+2x  "Net Light Gateway"  —  codici: 19227002, 12683831
+2x  "Calottina"  —  codici: 22369006, 64738434
+2x  "Tubo Valvola Gas/bruciatore Pilota"  —  codici: 22902354, 39969404
+2x  "Magnete"  —  codici: 26570146, 90568243
+2x  "Scheda Principale"  —  codici: 28985197, 56924674
+2x  "Pannello Posteriore Dx"  —  codici: 33718486, 90497853
+2x  "Cavo Alimentazione"  —  codici: 35438012, 81664311
+2x  "Valvola Sicurezza"  —  codici: 54793807, 59688063
+2x  "Mantello"  —  codici: 59981603, 79570206
+2x  "Tubo Alettato Rame"  —  codici: 61534584, 36320043
+2x  "Coperchio Rubinetti"  —  codici: 68187104, 29911122
+2x  "Ue Mono Ma1-o Nevis 3,5kw R32"  —  codici: 88761901, 93796029
+2x  "Pannello Frontale"  —  codici: 95897336, 10329828
+2x  "Stabilizzatore Autoflow Ø1.1/2" 5,50m3/h"  —  codici: 11854976, 73934327
+2x  "Tee Di Bypass U4 Ø1""  —  codici: 11920517, 12610746
+2x  "Tee Di Bypass U6 Ø3/4""  —  codici: 12348311, 12525185
+2x  "Tee Di Bypass U6 Ø1""  —  codici: 12348314, 12920061
+2x  "Valvola Sicurezza Ø1/2"f 3bar"  —  codici: 12348326, 12741454
+2x  "Valvola Sicurezza Ø1/2"f 6bar"  —  codici: 12348327, 12742443
+2x  "Raccordo Diritto Maschio Con O-ring Ø3/4"x18 Per Rame"  —  codici: 12348456, 12402439
+2x  "Raccordo Diritto Maschio Con O-ring Ø3/4"x22 Per Rame"  —  codici: 12348457, 12402440
+2x  "Raccordo Diritto Intermedio Con O-ring Ø18 Per Rame"  —  codici: 12348463, 12475655
+2x  "Gomito Femmina Con O-ring Ø3/4"x18 Per Rame"  —  codici: 12348487, 12475661
+2x  "Gomito Maschio Con O-ring Ø3/4"x18 Per Rame"  —  codici: 12348496, 12475658
+2x  "Coppia Valvole Sfera Con Termometro Ø1.1/4"fm"  —  codici: 12353288, 12581255
+2x  "Coppia Valvole Sfera Con Termometro Ø1"fx1.1/4"m"  —  codici: 12354555, 12837291
+2x  "Raccordo Diritto Intermedio Con O-ring Ø15 Per Rame"  —  codici: 12358370, 12475654
+2x  "Darcal Raccordo Adattatore Ø23/1,5-11,5÷12x14÷16"  —  codici: 12359539, 12529753
+2x  "Darcal Raccordo Adattatore Ø23/1,5-9,5÷10x14÷16"  —  codici: 12359540, 94201362
+2x  "Valvola Zona 3vie Ø1/2" Per Comando 6563/1"  —  codici: 12360988, 12360991
+2x  "Valvola Zona 3vie Ø3/4" Per Comando 6563/1"  —  codici: 12360989, 12360992
+2x  "Valvola Zona 3vie Ø1" Per Comando 6563/1"  —  codici: 12360990, 12360993
+2x  "Darcal Raccordo Adattatore Ø23/1,5-12,5÷13x16÷18"  —  codici: 12362948, 12365683
+2x  "Coppia Valvole Sfera Con Attacco Termometro Ø1"fx1.1/4"m"  —  codici: 12364016, 12620091
+2x  "Coppia Valvole Sfera Con Attacco Termometro Ø1.1/4"fm"  —  codici: 12364017, 12741492
+2x  "Darcal Raccordo Adattatore Ø23/1,5-10,5÷11x16÷18"  —  codici: 12365629, 12610334
+2x  "Darcal Raccordo Adattatore Ø23/1,5-11,5÷12x16÷18"  —  codici: 12367656, 12808011
+2x  "Funzione Acqua Fredda E Uscita Impulsiva Ø3/4""  —  codici: 12368982, 12368985
+2x  "Darcal Raccordo Adattatore Ø3/4"-9÷10x12÷14"  —  codici: 12372103, 12706729
+2x  "Darcal Raccordo Adattatore Ø3/4"-11,5÷12x14÷16"  —  codici: 12372105, 12742441
+2x  "Valvola Sicurezza Ø1/2"f 8bar"  —  codici: 12384597, 12413611
+2x  "Valvola Di Zona A Sfera 2vie Motorizzata Ø1/2" 230v"  —  codici: 12388175, 12450071
+2x  "Valvola Di Zona A Sfera 2vie Motorizzata Ø3/4" 230v"  —  codici: 12388176, 12448987
+2x  "Valvola Di Zona A Sfera 2vie Motorizzata Ø1" 230v"  —  codici: 12388177, 12450636
+2x  "Valvola Di Zona A Sfera 2vie Motorizzata Ø3/4" 24v"  —  codici: 12388180, 12731521
+2x  "Valvola Di Zona A Sfera 2vie Motorizzata Ø1" 24v"  —  codici: 12388181, 12842613
+2x  "Valvola Sicurezza Ø1/2"mf 8bar"  —  codici: 12388193, 12521079
+2x  "Darcal Raccordo Adattatore Ø3/4"-11,5÷12x16÷18"  —  codici: 12395250, 12671580
+2x  "Darcal Raccordo Adattatore Ø3/4"-9,5÷10x14÷16"  —  codici: 12395384, 12909904
+2x  "Elettrovalvola Normalmente Aperta 24v Riarmo Manuale Ø1""  —  codici: 12396020, 38188601
+2x  "Elettrovalvola Normalmente Chiusa 24v Riarmo Manuale Ø1""  —  codici: 12396610, 12863941
+2x  "Stabilizzatore Autoflow Ø1/2" 0,15m3/h"  —  codici: 12399001, 12524945
+2x  "Elettrovalvola Normalmente Chiusa 230v Riarmo Manuale Ø1""  —  codici: 12401093, 12433515
+2x  "Darcal Raccordo Adattatore Ø3/4"-10,5÷11x16÷18"  —  codici: 12416065, 43155837
+2x  "Stabilizzatore Autoflow Ø3/4" 0,8m3/h"  —  codici: 12416213, 57835232
+2x  "Elettrovalvola Normalmente Chiusa 230v Riarmo Manuale Ø3/4""  —  codici: 12420549, 12522936
+2x  "Valvola Sicurezza Ø1/2"mf 4bar"  —  codici: 12436749, 12769705
+2x  "Stabilizzatore Autoflow Ø3/4" 0,35m3/h"  —  codici: 12441145, 94362999
+2x  "Stabilizzatore Autoflow Ø1/2" 0,25m3/h"  —  codici: 12441152, 12619727
+2x  "Gomito Femmina Con O-ring Ø3/4"x22 Per Rame"  —  codici: 12444522, 12475662
+2x  "Gomito Maschio Con O-ring Ø3/4"x22 Per Rame"  —  codici: 12446102, 12475659
+2x  "Tee Di Bypass U8 Ø1""  —  codici: 12450653, 73823051
+2x  "Tee Di Bypass U8 Ø3/4""  —  codici: 12451199, 45062482
+2x  "Vaso Espansione Saldato 25lt Ø3/4""  —  codici: 12452828, 12454782
+2x  "Valvola A Sfera 2vie Motorizzata Ø3/4" 24v"  —  codici: 12454019, 45142000
+2x  "Darcal Raccordo Adattatore Ø3/4"-10,5÷11x14÷16"  —  codici: 12462331, 12596432
+2x  "Termostato Ambiente Digitale 230v"  —  codici: 12470179, 12647180
+2x  "Vaso Espansione Saldato 12lt Ø3/4""  —  codici: 12470669, 12521705
+2x  "Raccordo Diritto Intermedio Con O-ring Ø22 Per Rame"  —  codici: 12475656, 12521049
+2x  "Stabilizzatore Autoflow Ø1" 1m3/h"  —  codici: 12479014, 80672899
+2x  "Vaso Espansione Saldato 18lt Ø3/4""  —  codici: 12479340, 12490588
+2x  "Valvola Sicurezza Ø1/2"f 3,5bar"  —  codici: 12484636, 12668280
+2x  "Miscelatore Termostatico Regolabile Ø1/2" 30÷48°c"  —  codici: 12494558, 12610504
+2x  "Miscelatore Termostatico Regolabile Ø1/2" 40÷60°c"  —  codici: 12494559, 12742506
+2x  "Stabilizzatore Autoflow Ø3/4" 0,15m3/h"  —  codici: 12496814, 12644136
+2x  "Stabilizzatore Autoflow Ø1/2" 0,085m3/h"  —  codici: 12501250, 39985034
+2x  "Stabilizzatore Autoflow Ø3/4" 0,7m3/h"  —  codici: 12503813, 12713186
+2x  "Vaso Espansione Saldato 8lt Ø3/4""  —  codici: 12508060, 12533488
+2x  "Stabilizzatore Autoflow Ø1.1/4" 5m3/h"  —  codici: 12515282, 23081472
+2x  "Valvola Sicurezza Ø1/2"mf 3bar"  —  codici: 12521075, 12742445
+2x  "Valvola Sicurezza Ø1/2"mf 6bar"  —  codici: 12521076, 12742444
+2x  "Darcal Raccordo Adattatore Ø23/1,5-13,5÷14x16÷18"  —  codici: 12521141, 12742636
+2x  "Vitone Termostatico Bilanciato"  —  codici: 12534247, 12770435
+2x  "Darcal Raccordo Adattatore Ø23/1,5-10,5÷11x14÷16"  —  codici: 12544901, 12663245
+2x  "Valvola Sicurezza Ø1/2"mf 2,5bar"  —  codici: 12549577, 12646686
+2x  "Elettrovalvola Normalmente Aperta 230v Riarmo Manuale Ø1""  —  codici: 12554438, 12749229
+2x  "Riduttore Pressione Ø2" Con Manometro 0÷10bar"  —  codici: 12558841, 12629158
+2x  "Valvola Intercettazione Combustibile 110°c Dn65 5m"  —  codici: 12560341, 85572664
+2x  "Valvola Sicurezza Ø1/2"mf 5bar"  —  codici: 12574503, 12678383
+2x  "Valvola Intercettazione Combustibile 110°c Dn80 5m"  —  codici: 12585580, 12637945
+2x  "Darcal Raccordo Adattatore Ø23/1,5-7,5÷8x12÷14"  —  codici: 12596428, 12596483
+2x  "Darcal Raccordo Adattatore Ø3/4"-7,5÷8x12÷14"  —  codici: 12596434, 12596480
+2x  "Riduttore Pressione Ø1/2" Con Attacco Manometro Ø1/4"f"  —  codici: 12596473, 21329180
+2x  "Riduttore Pressione Ø1" Con Attacco Manometro Ø1/4"f"  —  codici: 12596474, 19246437
+2x  "Riduttore Pressione Ø1.1/2" Con Attacco Manometro Ø1/4"f"  —  codici: 12596475, 91170382
+2x  "Funzione Acqua Fredda E Uscita Impulsiva Ø1/2""  —  codici: 12610340, 12610341
+2x  "Gruppo Caricamento Ø1/2" Con Disconnettore"  —  codici: 12610468, 12610484
+2x  "Tee Di Bypass U4 Ø3/4""  —  codici: 12610499, 12741465
+2x  "Valvola Sicurezza Ø1/2"f 7bar"  —  codici: 12610755, 12620090
+2x  "Valvola Sicurezza Ø1/2"mf 7bar"  —  codici: 12614453, 12741443
+2x  "Contatore Conteca Easy Ø1.1/2"m"  —  codici: 12626849, 79389067
+2x  "Valvola Sicurezza Ø1/2"f 2,5bar"  —  codici: 12668281, 12472873
+2x  "Cassetta Incasso Per Plurimod Con Collettore Distribuzione 4derivazioni"  —  codici: 12671739, 53686070
+2x  "Cassetta Incasso Per Plurimod Con Collettore Distribuzione 5derivazioni"  —  codici: 12671740, 12871235
+2x  "Cassetta Incasso Per Plurimod Con Collettore Distribuzione 7derivazioni"  —  codici: 12671743, 88005906
+2x  "Stabilizzatore Autoflow Ø1.1/2" 9m3/h"  —  codici: 12675173, 65747727
+2x  "Valvola A Sfera 2vie Motorizzata Ø3/4" 230v"  —  codici: 12742390, 12444342
+2x  "Air590 Griglia Fori Circolari Inox Bianco"  —  codici: 12751270, 12809949
+2x  "Elettrovalvola Normalmente Aperta 230v Riarmo Manuale Ø3/4""  —  codici: 12796931, 15000157
+2x  "Elettrovalvola Normalmente Chiusa 24v Riarmo Manuale Ø3/4""  —  codici: 12859214, 33502476
+2x  "Stabilizzatore Autoflow Ø3/4" 0,085m3/h"  —  codici: 12865599, 17490125
+2x  "Cassetta Incasso Per Plurimod Con Collettore Distribuzione 3derivazioni"  —  codici: 12871230, 75056271
+2x  "Stabilizzatore Autoflow Ø2" 11m3/h"  —  codici: 12889735, 29953492
+2x  "Stabilizzatore Autoflow Con Valvola Sfera Ø1" 0,9m3/h"  —  codici: 12913960, 62528551
+2x  "Stabilizzatore Autoflow Con Valvola Sfera Ø1.1/4" 2,75m3/h"  —  codici: 12913962, 17990705
+2x  "Stabilizzatore Autoflow Ø1.1/4" 1,2m3/h"  —  codici: 12918271, 99663672
+2x  "Stabilizzatore Autoflow Ø1.1/4" 2,75m3/h"  —  codici: 12918272, 21673227
+2x  "Stabilizzatore Autoflow Ø1.1/4" 2m3/h"  —  codici: 12918275, 41013154
+2x  "Stabilizzatore Autoflow Ø2" 7m3/h"  —  codici: 13095434, 65761362
+2x  "Stabilizzatore Autoflow Ø1.1/2" 8m3/h"  —  codici: 13356244, 55375615
+2x  "Contatore Conteca Easy Ø1.1/4"m"  —  codici: 19011129, 12629777
+2x  "Stabilizzatore Autoflow Ø1" 1,8m3/h"  —  codici: 19258913, 96004914
+2x  "Stabilizzatore Autoflow Ø1/2" 1,8m3/h"  —  codici: 21738831, 60649459
+2x  "Stabilizzatore Autoflow Ø1" 2,5m3/h"  —  codici: 24887729, 56791640
+2x  "Cassetta Incasso Per Plurimod Con Collettore Distribuzione 6derivazioni"  —  codici: 26205614, 12635522
+2x  "Elettronica Completa"  —  codici: 12588194, 39873296
+2x  "Stabilizzatore Autoflow Ø3/4" 0,6m3/h"  —  codici: 35603989, 60653950
+2x  "Valvola Sicurezza Ø1/2"mf 3,5bar"  —  codici: 40267726, 92725680
+2x  "Stabilizzatore Autoflow Con Valvola Sfera Ø1.1/4" 2,25m3/h"  —  codici: 58505132, 77896152
+2x  "Stabilizzatore Autoflow Con Valvola Sfera Ø1" 1m3/h"  —  codici: 60146227, 60654536
+2x  "Stabilizzatore Autoflow Ø2" 9m3/h"  —  codici: 60700908, 98792835
+2x  "Stabilizzatore Autoflow Ø2" 8m3/h"  —  codici: 66087097, 69454400
+2x  "Stabilizzatore Autoflow Ø1/2" 0,6m3/h"  —  codici: 70599792, 86207555
+2x  "Stabilizzatore Autoflow Ø3/4" 1,6m3/h"  —  codici: 76307978, 90862012
+2x  "Stabilizzatore Autoflow Ø3/4" 0,9m3/h"  —  codici: 79244778, 91141485
+2x  "Stabilizzatore Autoflow Ø1.1/4" 3m3/h"  —  codici: 80450356, 83851505
+2x  "Cassetta Incasso Per Plurimod Con Collettore Distribuzione 8derivazioni"  —  codici: 85053042, 12632285
+2x  "Sky Air<comp<h/p<rzag"  —  codici: 10393391, 67714274
+2x  "Roof Top Pompa Calore R410a Seriec"  —  codici: 10668755, 55216654
+2x  "Split<comp"  —  codici: 10723686, 68339644
+2x  "Sky Air<comp<h/p<azas<125"  —  codici: 15924881, 79857740
+2x  "Ext. Sky Air Seasonal Classic R410a 1ph"  —  codici: 16161048, 91164441
+2x  "Sezione Est.p/c Dc Inverter R410a 3ph"  —  codici: 17847296, 91905766
+2x  "Sky Air<comp<h/p<rzasg<125"  —  codici: 19235882, 30010874
+2x  "Sky Air<comp<h/p<azas<100"  —  codici: 22002892, 35152753
+2x  "Deu.recuper. 050 Base + Serrande"  —  codici: 22009814, 39205918
+2x  "Acc<qa/vrv<panel / Kit"  —  codici: 25252794, 38090979
+2x  "Roof Top Pompa Calore"  —  codici: 27215085, 61429912
+2x  "Scheda Wi-fi"  —  codici: 30093119, 39706075
+2x  "Ehobg12ab Caldaia Murale Condensazione Metano Solo Riscaldamento"  —  codici: 32637174, 52800317
+2x  "Sky Air<comp<h/p<rzasg<140"  —  codici: 35639692, 89072733
+2x  "Comfora R32 Esterna 25"  —  codici: 36004427, 88030269
+2x  "Altherma 3 R Mt Outdoor 1x230v+n"  —  codici: 39804478, 99348983
+2x  "Accappliedfcun-u"  —  codici: 42143537, 64011584
+2x  "Sky Air<comp<h/p<rzasg<100"  —  codici: 44545198, 81112150
+2x  "Split<no Comp<h/pl"  —  codici: 50164980, 76419222
+2x  "Sky Air<comp<h/p<azas<140"  —  codici: 54243073, 79112620
+2x  "Fancoilno Comp4pipe"  —  codici: 65366166, 86386630
+2x  "A. 3 M 1x230v+n H+c With El. Heat"  —  codici: 65637158, 78281637
+2x  "Ud.int.vrv Fully Flat 60x60 R410a"  —  codici: 73588571, 92032210
+2x  "Ventno Comphrvchrv"  —  codici: 78009087, 80051083
+2x  "Split<no Comp<other"  —  codici: 79854223, 88529502
+2x  "Sensira R32 Esterna 20"  —  codici: 84183505, 99180111
+2x  "Leva Alluminio Nera Ø3/4"-1""  —  codici: 12427008, 12710792
+2x  "Leva Alluminio Nera Ø1.1/4"-1.1/2""  —  codici: 12427009, 36762946
+2x  "Leva Alluminio Nera Ø2""  —  codici: 12427010, 12585818
+2x  "Viva 1740 Rubinetto Sfera Con Portagomma Ø3/4" Leva Blu"  —  codici: 12467960, 12467961
+2x  "Lybra S67aa Valvola Farfalla Femmina/femmina Ot58 Ø1.1/2" Con Attuatore Semplice Effetto"  —  codici: 12512746, 71069309
+2x  "Lybra S67aa Valvola Farfalla Femmina/femmina Ot58 Ø2" Con Attuatore Semplice Effetto"  —  codici: 12512747, 40401560
+2x  "Moon A105 2881 Valvola Sfera Wafer Dn65 Pn25/40 B"  —  codici: 19865028, 52683444
+2x  "Effebi-press Xwp131m Raccordo Tee Ridotto Femmina Ø28x22x28 Aisi316l"  —  codici: 28844619, 37204390
+2x  "V.farf.idris Lug Gg40/epdm Dn250 Pn16 C/leva"  —  codici: 36040791, 52440581
+2x  "Effebi-press Xwp131m Raccordo Tee Ridotto Femmina Ø54x22x54 Aisi316l"  —  codici: 37003172, 64300158
+2x  "Erogatore"  —  codici: 12891668, 12513871
+2x  "Effebi-press Xwp131m Raccordo Tee Ridotto Femmina Ø54x28x54 Aisi316l"  —  codici: 78415302, 94585913
+2x  "V.farf.idris Lug 316/epdm Dn250 Pn16 C/leva"  —  codici: 90615619, 99136993
+2x  "Griglia Tonda Pieghevole In Abs Bianca"  —  codici: 10380201, 40029065
+2x  "Centralina Per Accoppiamento Bombole Gpl 2 Posti"  —  codici: 12349336, 12644290
+2x  "Forbice Per Elettricista 140 Mm - Idrhaus"  —  codici: 12362113, 12768823
+2x  "Regolatore Di Pressione Gpl E Metano"  —  codici: 12417094, 73347992
+2x  "Regolatore Bassa Pressione Per Gpl E Metano"  —  codici: 12439599, 12877733
+2x  "Cassetta Contatore Gas In Acciaio Inox H50 L40 P24"  —  codici: 12439733, 12590366
+2x  "Valvola Di Chiusura Shut-off 1/4" Sae F X 1/4" Sae M " Specifica Per R22 - R134a - R404a - R407c - Idrhaus"  —  codici: 12454402, 73493690
+2x  "Valvola Di Chiusura Shut-off 5/16" Sae F X 5/16" Sae M - Idrhaus"  —  codici: 12454403, 95696185
+2x  "Kit Cassone Copricaldaia Rinnai Bianca"  —  codici: 12487431, 12526928
+2x  "Cassetta Contatore Gas In Lamiera Zincata H40 L30 P24"  —  codici: 12532759, 67749255
+2x  "Cassetta Contatore Gas In Lamiera Zincata H50 L40 P24"  —  codici: 12532760, 12769320
+2x  "Cassetta Contatore Gas In Lamiera Zincata H50 L30 P24"  —  codici: 12532763, 23683998
+2x  "Regolatore Di Pressione Per Gpl Singolo Stadio"  —  codici: 12532776, 12532777
+2x  "Collare Di Presa In Ghisa Dn50 (60/68) 3/4" A 1""  —  codici: 12588332, 93198670
+2x  "Guarnizione Per Resistenza Scaldabagno Per Acqua"  —  codici: 12588362, 66973893
+2x  "Cassetta Contatore Gas In Lamiera Zincata H60 L45 P24"  —  codici: 12590663, 87642742
+2x  "Elettrovalvola Normalmente Chiusa On/off 1" Per Acqua Senza Bobina Membrana Nbr"  —  codici: 12623244, 12910481
+2x  "Mensola Di Sostegno Premontata Con Livella - Idrhaus"  —  codici: 12708767, 37860670
+2x  "Cassetta Contatore Gas In Acciaio Inox H60 L50 P24"  —  codici: 12708782, 65807913
+2x  "Mensole Per Contatore Gas"  —  codici: 12709718, 12726785
+2x  "Contatore Acqua Fredda Con Quadrante Bagnato"  —  codici: 12749155, 47314916
+2x  "Elettrovalvola Normalmente Chiusa On/off 1/2" Per Acqua Senza Bobina Membrana Nbr"  —  codici: 12889632, 80238670
+2x  "Rapporto Di Controllo Gruppi Frigo"  —  codici: 13674285, 71328943
+2x  "Supporto Antivibrante A Pavimento Con Livella Base Pavim.antivibr.p1200xl160xh90 630kg Con Livella"  —  codici: 15391063, 36560182
+2x  "Kit Coassiale Ø 60/100 In Alluminio"  —  codici: 17116541, 65315979
+2x  "Canalina C/coperchio 70x55"  —  codici: 26166360, 79122701
+2x  "Morsetto"  —  codici: 29928992, 12730851
+2x  "Tubo Bianco Giuntabile Rinforzato"  —  codici: 31670638, 41123914
+2x  "Motore Per Valvola A Globo Filettata Motore X Valvola Globo Filettata 230 Vac"  —  codici: 35506687, 43479397
+2x  "Giunto Estensibile H2o Con Guaina"  —  codici: 35932758, 58286129
+2x  "Scalpello Piatto 250 Mm - Idrhaus"  —  codici: 39670525, 51522077
+2x  "Anodo Al Magnesio Filettato A Catena 1"1/4 Ø 21 130 Mm"  —  codici: 44752377, 61365969
+2x  "Libretto Impianto Domestico Climatizzazione Invernale/estiva Solo Regione Veneto"  —  codici: 57277261, 90084883
+2x  "Libretto Impianto Domestico Climatizzazione Invernale/estiva Altre Regioni Italiane"  —  codici: 57739542, 68309778
+2x  "Stuoia Scaldante In Metallo Amorfo Ecokaldo 1m2 150w/mq " Idrhaus"  —  codici: 66730820, 86043972
+2x  "Term.bim.dn80 Post.1/2"x200mm 0/120°c"  —  codici: 71744051, 88255392
+2x  "Libretto Impianto Domestico Climatizzazione Invernale/estiva Solo Regione Lombardia"  —  codici: 71811585, 72273867
+2x  "Deflettore Per Condizionatori Blowind L690xh50xp250mm"  —  codici: 77226496, 77767203
+2x  "Bacinella Raccogli Condensa Universale"  —  codici: 82732253, 89960040
+2x  "Elettrovalvola Normalmente Chiusa Automatica Evp08 Dn65 Pressione Massima 360 Mbar Senza Bobina"  —  codici: 87175914, 95709573
+2x  "Pettini Serie Di Pettini Da 1/2"- 3/4""  —  codici: 95805619, 18432479
+2x  "Pmu Morsetto Unico"  —  codici: 12699326, 28434246
+2x  "Fascia Parapioggia D.80"  —  codici: 12375758, 12793188
+2x  "Fascia Parapioggia D.300"  —  codici: 12377066, 12785893
+2x  "Fascia Sicurezza"  —  codici: 12393085, 12794968
+2x  "Diritto 950 Mm Utili Crm"  —  codici: 12460936, 12485867
+2x  "Gbd Ispezione Con Sportello D.130"  —  codici: 12639700, 21907942
+2x  "Staffa A Parete Regolabile 50-90 Mm"  —  codici: 12709300, 36932912
+2x  "Distanziatore Diam.200"  —  codici: 12709317, 12709474
+2x  "Controllo Fumi Con Termometro"  —  codici: 12709318, 12709440
+2x  "Terminale Tronco Smussato"  —  codici: 12783813, 12806257
+2x  "Gbd Gomito A 87"  —  codici: 12789359, 12858560
+2x  "Gbd Staffa A Parete"  —  codici: 12789369, 12795787
+2x  "Gbd Elemento Regolabile"  —  codici: 12795780, 12807495
+2x  "Elemento Con Valvola"  —  codici: 12904096, 34090985
+2x  "Gbd Fascia Per 3 Cavi Tiranti"  —  codici: 12905150, 64920263
+2x  "Gbd Supporto Light Con Piastre"  —  codici: 31377697, 71022102
+2x  "Gomito A 30gr"  —  codici: 36106502, 45956933
+2x  "Diritto 190 Mm Utili"  —  codici: 47448127, 50132003
+2x  "Elemento Con Apertura Di Compensazione"  —  codici: 52516367, 68308405
+2x  "Cappa Antivento A Botte"  —  codici: 58157140, 97446361
+2x  "Omega20 Round Placca Di Comando 2pulsanti Bianco Opaco"  —  codici: 10031974, 35863178
+2x  "Forcella"  —  codici: 12382818, 12674985
+2x  "Bacinella Con Guarnizione"  —  codici: 12474123, 12548230
+2x  "Guarnizione X Bacinella Cassetta Inc"  —  codici: 12590449, 12456524
+2x  "Supporto Twico"  —  codici: 12590808, 12364302
+2x  "Selnova Vaso Wc Scarico Orizzontale Bianco"  —  codici: 12615335, 12673671
+2x  "One Lavabo Appoggio Arrotondato 50cm Sft Bianco/keratect"  —  codici: 19358989, 17682714
+2x  "Sifone Salvaspazio Ø40 Con Piletta Cromato Lucido"  —  codici: 20996154, 58574042
+2x  "Flessibile"  —  codici: 33433324, 57517471
+2x  "Omega20 Square Placca Di Comando 2pulsanti Bianco Opaco"  —  codici: 68102427, 93276874
+2x  "One Lavabo Appoggio Arrotondato 50cm Sfr Sft Bianco/keratect"  —  codici: 72177465, 73123663
+2x  "Set Manopole Per Unit Valvola Intercetta Zione Geberit Compact"  —  codici: 90012902, 95595858
+2x  "Icon Set Frontali Cassetto Per Mobile La Vabo 2 Cassetti 120cm Bianco"  —  codici: 98934326, 43149153
+2x  "R179e Raccordo Adattatore Per Multistrato Ø3/4"ex16/2mm"  —  codici: 19809167, 61594070
+2x  "Pann Radiante In Cartongesso"  —  codici: 23356088, 42103654
+2x  "R19 Bocchettone Curvo Maschio Femmina Ø1.1/2" Ottone"  —  codici: 31674572, 77048061
+2x  "Kflex-a Nastro Adesivo Alluminio"  —  codici: 32928167, 95168917
+2x  "P22 Volantino Con Targhetta Per Collettore R585c"  —  codici: 35577390, 36636474
+2x  "Pannello Radiante Idro"  —  codici: 36426155, 90947838
+2x  "R18 Bocchettone Diritto Maschio Femmina Ø2" Ottone"  —  codici: 54265819, 81342260
+2x  "R18 Bocchettone Diritto Maschio Femmina Ø1.1/2" Ottone"  —  codici: 73133258, 90255304
+2x  "Pann Radiante Cartongesso"  —  codici: 82036422, 94481604
+2x  "R19 Bocchettone Curvo Maschio Femmina Ø2" Ottone"  —  codici: 82626573, 89210424
+2x  "Flussometro Automatico Ø3/4" Per Wc Cromo"  —  codici: 12393026, 12543035
+2x  "Raccordo A Scatto"  —  codici: 12398669, 12592443
+2x  "Anello Fissaggio"  —  codici: 12417176, 12778315
+2x  "Sifone Lavabo Bottiglia Ø1.1/4" Cromo"  —  codici: 12419131, 12453504
+2x  "Euphoria 110 Massage 27221 Doccetta 3 Getti Cromo"  —  codici: 12428636, 13998546
+2x  "Termoelemento Ø1/2" A Cera"  —  codici: 12427598, 12434328
+2x  "Manopola Deviatore Cromo"  —  codici: 12434302, 42095648
+2x  "Filtro Confezione 2 Pezzi"  —  codici: 12439151, 47977352
+2x  "Inserto A Scatto Confezione 10 Pezzi"  —  codici: 12451327, 96735766
+2x  "Scatola Di Drenaggio Per Bordo Vasca 3/4/5 Fori"  —  codici: 12462066, 94209032
+2x  "Eurosmart 23324 Miscelatore Monocomando Lavabo Taglia M Senza Salterello Con Ecojoy Cromo"  —  codici: 12466758, 43467215
+2x  "Valvola Di Non Ritorno Con Tappi E O-ring"  —  codici: 12474606, 13642224
+2x  "Deviatore"  —  codici: 12495742, 75819483
+2x  "Pistone"  —  codici: 12513232, 98011276
+2x  "Flessibile Per Miscelatore Con Doccetta Estraibile"  —  codici: 12526069, 12842688
+2x  "Cappuccio Di Copertura Confezione 2 Pezzi Cromo"  —  codici: 12531503, 76103585
+2x  "Leva Per Eurosmart Cromo"  —  codici: 12560037, 12573439
+2x  "Rapido Smartbox Corpo Incasso Universale"  —  codici: 12564964, 12815667
+2x  "Mousseur Super Steel"  —  codici: 72880509, 39345170
+2x  "Leva Clinica L.170mm Cromo"  —  codici: 12591986, 34798750
+2x  "Bocca Cromo"  —  codici: 80898136, 69024875
+2x  "Vitone Ø1/2" Per Rubinetto Incasso"  —  codici: 12623330, 12920373
+2x  "Maniglia Controllo Temperatura Cromo"  —  codici: 12632369, 12694420
+2x  "Maniglia Cromo"  —  codici: 12641015, 27840836
+2x  "Cartuccia Termostatica Compatta Ø3/4""  —  codici: 12645575, 12718433
+2x  "Euro Ceramic 39331 Sedile Con Coperchio Bianco"  —  codici: 12657171, 47364113
+2x  "Piletta Di Scarico Click Clack Cromo"  —  codici: 12667528, 12807774
+2x  "Molla Di Compressione"  —  codici: 12670706, 90848767
+2x  "Corpo Incasso Gruppo Lavabo 3 Fori Parete"  —  codici: 12678860, 92230144
+2x  "Maniglia Chiusura Per Valvola Intercettazione Cromo"  —  codici: 12683453, 12905033
+2x  "Doccetta Estraibile Professionale Con Chiave Cromo"  —  codici: 12698281, 12742800
+2x  "Cartuccia 35mm"  —  codici: 12715747, 49532603
+2x  "Rubinetto Squadra Ø1/2"x1/2" Con Rosetta Ø55 Cromo"  —  codici: 12742718, 32394320
+2x  "Cartuccia Cromo/blu/rosso"  —  codici: 12746485, 12811832
+2x  "Dispositivo Di Regolazione"  —  codici: 12810990, 51424710
+2x  "Doccetta Estraibile Per Miscelatore Lavello Super Steel"  —  codici: 12861658, 87453473
+2x  "Rainshower Smartactive 150 26594 Asta Saliscendi L.900 Con Doccetta 3 Getti Con Ecojoy Cromo"  —  codici: 12923628, 47445034
+2x  "Vitone Ø3/4" Per Rubinetto Incasso"  —  codici: 12920375, 15243070
+2x  "Clip"  —  codici: 14455522, 17788536
+2x  "Piastra Di Fissaggio"  —  codici: 17377584, 41782425
+2x  "Leva Di Azionamento"  —  codici: 19878876, 80347938
+2x  "Vitone Ø1" Per Rubinetto Incasso"  —  codici: 21047423, 35521985
+2x  "Rosetta Essence Lavabo Cromo"  —  codici: 21768461, 84226079
+2x  "Tempesta System 210 26811 Colonna Doccia Con Miscelatore Termostatico Esterno Cromo"  —  codici: 23289409, 49552244
+2x  "Tappo Cromo"  —  codici: 28877681, 89297639
+2x  "Tempesta 250 Sist. Thm Doccia"  —  codici: 35517647, 38794337
+2x  "Limitatore Di Portata Con Chiave"  —  codici: 42596455, 66090733
+2x  "Trasformatore"  —  codici: 46090499, 72668308
+2x  "Set Di Guarnizioni"  —  codici: 47290361, 56986909
+2x  "Tectron Bau E Dispositivo Elettronico Infrarossi Bianco"  —  codici: 50427857, 65393938
+2x  "Cavo Prolunga L.3m"  —  codici: 52510646, 74299372
+2x  "Supporto Per Asta Doccia Cromo"  —  codici: 58868638, 75344533
+2x  "Piastra Di Montaggio"  —  codici: 67779702, 12749237
+2x  "Set Di Installazione"  —  codici: 70819157, 92535490
+2x  "Tectron Bau E Dispositivo Elettronico Infrarossi Cromo"  —  codici: 95634043, 91630705
+2x  "Kit Batteria Residenziale Ess 5 Kwh (low Voltage)"  —  codici: 12281014, 81650770
+2x  "Scaldacqua Pdc C/serpentino M7 R290"  —  codici: 28731463, 51897581
+2x  "U.t Interna All In One R290 Monofase Con Accumulo Da 240 Litri"  —  codici: 32267346, 46006523
+2x  "U.i. All In One R290 Monofase"  —  codici: 49691786, 54742857
+2x  "U.i. P.d.c. Split R290 Monofase"  —  codici: 83825668, 88295383
+2x  "Dew 35-s Deumidificatore Canalizzabile Controsoffitto"  —  codici: 24659700, 77195259
+2x  "Dew 24-p Ext Deumidificatore Parete Con Mobiletto"  —  codici: 37074480, 78946805
+2x  "Detentore Diritto Ø3/8" Attacco Rame"  —  codici: 71751586, 87693116
+2x  "Teceflex Forcella A Pressare Razfaz 25-32 Anteriore"  —  codici: 34412060, 37226469
+2x  "Teceflex Forcella A Pressare Razfaz 14/16 - 20 Mm Anteriore"  —  codici: 40040877, 73793422
+2x  "Ricambio Anello Di Bloccaggio Per Dente Di Trascinamento"  —  codici: 38328838, 92394947
+2x  "Rivelatore Domestico Serie H-300 Per Gas Refrigeranti - Applicazione Multi Centr"  —  codici: 23247371, 61243037
+2x  "Batteria Per Flangiatubo Cod. 11513"  —  codici: 26810547, 30525206
+2x  "Armadio Metallico Per Gruppi Di Riduzione Mod. A30"  —  codici: 40843201, 64283032
+2x  "Riduzione Rame Mf 3/4x5/8 A Saldare"  —  codici: 54719483, 55204249
+2x  "Plenum Soffitto/parete/pavimento Ø75 Per Griglia 300x150"  —  codici: 12813342, 71535048
+2x  "Plenum Coibentato In Lamiera Per Daikin Con Flangia 1192x178"  —  codici: 12914359, 30002170
+2x  "Plenum Soffitto/parete/pavimento Ø90 Per Griglia 300x150"  —  codici: 19599017, 50492103
+2x  "Plenum Coibentato In Lamiera Per Samsung Con Flangia 818x220"  —  codici: 30427401, 60104186
+2x  "Kit Svelto 3 Zone Ø150 Plenum Eolo Diffusori Lineari In Alluminio Con Serranda E Deflettore Centrale L100 Per Daikin"  —  codici: 33964633, 65640932
+2x  "Recuperatore Di Calore Da 1500 Mc/h"  —  codici: 10201830, 12573170
+2x  "Controllo Remoto Da Smartphone E Tablet Via Wi-fi Per Modelli Super Daiseikai 9, Seiya, Console"  —  codici: 10205477, 71842981
+2x  "Unità Esterna Inverter In Pompa Di Calore Tipo "estia" Serie 5 Ad Alta Potenza"  —  codici: 12541448, 12544879
+2x  "Unità Idronica Alta Potenza Con Resistenza Elettrica Di Backup Da 3kw 1ph"  —  codici: 12544881, 12904860
+2x  "Unità Esterna Inverter In Pompa Di Calore Digital Inverter Serie 1 Con R32 3ph"  —  codici: 12557137, 12557139
+2x  "Unità Interna Tipo Parete (telecomando Ir Incluso) R32 E R410"  —  codici: 12567625, 12678065
+2x  "Recuperatore Di Calore Da 250 Mc/h"  —  codici: 12653087, 29934859
+2x  "Giunto Double Twin - Big Di"  —  codici: 12675674, 14730037
+2x  "Unità Esterna Inverter In Pompa Di Calore Digital Inverter"  —  codici: 12718602, 12900621
+2x  "Unità Interna Canalizzabile Ad Alta Prevalenza"  —  codici: 12821152, 85521699
+2x  "Unità Esterna Inverter In Pompa Di Calore - Big Digital Inverter Serie 1 3fase Con R32"  —  codici: 12821158, 46090537
+2x  "Recuperatore Di Calore Da 150 Mc/h"  —  codici: 15223508, 99588142
+2x  "Unità Idronica Aio 1 Zona Con Resistenza Elettrica Di Backup Da 6kw 1ph"  —  codici: 27773765, 57945921
+2x  "Griglia Per Unità Interna Cassetta Compatta Multisplit"  —  codici: 32719556, 85126319
+2x  "Unità Esterna Inverter In Pompa Di Calore Digital Inverter Serie 1 Con R32 Heavy Protection"  —  codici: 34394601, 37209010
+2x  "Unità Esterna Shorai Edge Monosplit Taglia 7"  —  codici: 45652236, 88346777
+2x  "Unità Idronica Aio 1 Zona Con Resistenza Elettrica Di Backup Da 6kw 3ph"  —  codici: 54553408, 62998799
+2x  "Unità Esterna Inverter Pompa Di Calore - Digital Inverter Serie 2 Con R32"  —  codici: 64546294, 96206709
+2x  "Curva A 90° Bronzo O Bronzo Al Silicio, Modello 3090"  —  codici: 12360235, 12360237
+2x  "Raccordo A T Bronzo O Bronzo Al Silicio, Modello 3130"  —  codici: 12360266, 12360268
+2x  "Manicotto Con Battente Bronzo, Bronzo Al Silicio O Lega Di Rame E Silicio, Modello 3270"  —  codici: 12360284, 12360286
+2x  "Vite Doppia Bronzo, Bronzo Al Silicio O Lega Di Rame E Silicio, Modello 3280"  —  codici: 12360318, 12360320
+2x  "Manicotto Di Riduzione Bronzo, Bronzo Al Silicio O Lega Di Rame E Silicio, Modello 3241 R: ½"  —  codici: 12360348, 12360350
+2x  "Tappo Per: Chiave Quadrata, Bronzo, Bronzo Al Silicio O Lega Di Rame E Silicio, Modello 3290"  —  codici: 12360431, 12360433
+2x  "Manicotto Di Riduzione Bronzo, Bronzo Al Silicio O Lega Di Rame E Silicio, Modello 3241 R: ½ Rp: " Cromato"  —  codici: 12386185, 12386187
+2x  "Valvola A Sfera Per Gas Profipress G Con Sc-contur Fornitura, Corpo Di Bronzo, Maniglia A Farfalla In Lamiera Di Acciaio Giallo Verniciata A Polvere, Attacco Di Presa Pressione, O-ring Hnbr"  —  codici: 19322251, 57758686
+2x  "Manicotto Di Riduzione Megapress S Con Sc-contur Acciaio Al Carbonio, Rivestimento Di Zinco-nichel, Estremità Maschio, Estremità A Pressare Femmina, Modello 4315.1 Omologazione Tedesca Vds Tel"  —  codici: 21168469, 35213459
+2x  "Valvola Di Bilanciamento Del Ricircolo Easytop Valvola Termostatica Di Regolazione Con Sc-contur Bronzo Al Silicio, Estremità A Pressare Femmina, Con Intercettazione, Modello 2281.7 Dn: 15"  —  codici: 25818511, 70239867
+2x  "Curva A 90° Megapress S Con Sc-contur Acciaio Al Carbonio, Rivestimento Di Zinco-nichel, Estremità Maschio, Estremità A Pressare Femmina, Modello 4316.1 Omologazione Tedesca Vds Teleriscald"  —  codici: 42510987, 84752379
+2x  "Valvola A Sfera Per Gas Profipress G Con Sc-contur Fornitura,corpo Di Bronzo, Attacco Di Presa Pressione, Maniglia A Farfalla In Lamiera Di Acciaio Giallo Verniciata A Polvere,o-ring Hnbr,per"  —  codici: 45910234, 74208637
+2x  "Coperchio 115"  —  codici: 57839209, 75608897
+2x  "Manicotto 64,0 X 2 Acciaio Inox 1.4404"  —  codici: 71607144, 78946027
+2x  "Manicotto Di Riduzione Megapress S Con Sc-contur Acciaio Al Carbonio, Rivestimento Di Zinco-nichel, Estremità Maschio, Estremità A Pressare Femmina, Modello 4315.1 Omologazione Tedesca Vds Tele"  —  codici: 82118800, 22539653
+2x  "Valvola Di Zona A Sfera 2vie Motorizzata Ø1/2" 24v"  —  codici: 12388178, 28643701
+2x  "Supporto"  —  codici: 12648583, 88434778
+2x  "Inserto Plastico Per Deviatore"  —  codici: 47894875, 55342731

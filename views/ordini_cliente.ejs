@@ -5,144 +5,20 @@
 </head>
 <body data-loggato="1">
   <div class="app">
-    <%- include('partials/appbar', { titolo, intestazione: 'Stato ordini', indietro: '/home' }) %>
+    <%- include('partials/appbar', { titolo, intestazione: 'Stato ordini', indietro: null }) %>
 
     <div class="contenuto">
-      <% if (!cards.length && !storico.length) { %>
-        <div class="vuoto">
-          <span class="emoji">📦</span>
-          Nessuna richiesta né ordine.
-          <div style="margin-top:6px;font-size:0.9rem;">Crea il tuo ordine dal catalogo.</div>
-        </div>
-        <a class="btn btn-primary btn-blocco" href="/home">Vai al catalogo</a>
-      <% } %>
+      <div class="vuoto">
+        <span class="emoji">📦</span>
+        Nessun ordine in corso.
+        <div style="margin-top:6px;font-size:0.9rem;">Crea il tuo ordine dal catalogo.</div>
+      </div>
+      <a class="btn btn-primary btn-blocco" href="/home">Vai al catalogo</a>
 
-      <% if (cards.length) { %>
-        <% cards.forEach(function (c) { %>
-          <% const r = c.richiesta; const step = c.step; %>
-          <div class="card card-richiesta" data-card="<%= r.id %>" data-step="<%= step %>">
-            <div class="card-richiesta-head">
-              <div class="card-richiesta-id"><%= fmt.dataOra(r.creato_il) %></div>
-              <span class="stato-badge stato-<%= r.stato %>"><%= r.stato === 'in_attesa' ? 'In attesa' : (r.stato === 'con_offerte' ? 'Da scegliere' : (r.stato === 'ordinata' ? 'Ordinata' : r.stato)) %></span>
-            </div>
-            <!-- materiale uno per riga -->
-            <div class="card-richiesta-materiale">
-              <% c.righe.forEach(function (row) { %>
-                <div class="riga-materiale"><strong><%= row.quantita %>×</strong> <%= row.nome %> <span class="meta" style="color:var(--grigio); font-size:0.8rem;">· Cod. <%= row.codice %></span></div>
-              <% }); %>
-            </div>
-
-            <!-- barra 3 stati — solo lo stato corrente è visibile/cliccabile -->
-            <div class="stepper-3" data-stepper="<%= r.id %>">
-              <button type="button" class="step <%= step === 1 ? 'attivo corrente' : (step > 1 ? 'attivo' : '') %>" data-step-btn="1" <%= step === 1 ? '' : 'disabled' %>>
-                <span class="pallino">1</span><span class="etichetta">In attesa</span>
-              </button>
-              <span class="linea <%= step > 1 ? 'piena' : '' %>"></span>
-              <button type="button" class="step <%= step === 2 ? 'attivo corrente' : (step > 2 ? 'attivo' : '') %>" data-step-btn="2" <%= step === 2 ? '' : 'disabled' %>>
-                <span class="pallino">2</span><span class="etichetta">Scegli</span>
-              </button>
-              <span class="linea <%= step > 2 ? 'piena' : '' %>"></span>
-              <button type="button" class="step <%= step === 3 ? 'attivo corrente' : '' %>" data-step-btn="3" <%= step === 3 ? '' : 'disabled' %>>
-                <span class="pallino">3</span><span class="etichetta">Consegna</span>
-              </button>
-            </div>
-
-            <div class="pannelli">
-              <% if (step === 1) { %>
-                <div class="pannello" data-pannello="1">
-                  <div class="pannello-titolo">In attesa dei venditori — <span data-countdown="<%= r.id %>" data-secondi="<%= c.secondi %>"><%= fmt.mmss(c.secondi||0) %></span></div>
-                  <div class="card card-fitta" style="margin-top:8px;">
-                    <% c.risposte.forEach(function (rr) { %>
-                      <div class="pill-distributore">
-                        <div><div class="nome"><%= rr.distributore_nome %></div><div class="filiale"><%= rr.filiale %></div></div>
-                        <span class="stato-badge stato-<%= rr.esito %>"><%= rr.esito==='in_attesa'?'In attesa':rr.esito %></span>
-                      </div>
-                    <% }); %>
-                  </div>
-                  <form method="POST" action="/richieste/<%= r.id %>/elimina" onsubmit="return confirm('Eliminare?')" style="margin-top:8px;">
-                    <button class="btn btn-rosso btn-blocco" type="submit">Elimina richiesta</button>
-                  </form>
-                </div>
-              <% } else if (step === 2) { %>
-                <div class="pannello" data-pannello="2">
-                  <% c.offerte.forEach(function (o) { %>
-                    <a class="offerta" href="/richieste/<%= r.id %>/offerta/<%= o.distributore.id %>" style="display:block; text-decoration:none;">
-                      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-                        <div>
-                          <div style="font-weight:700;"><%= o.distributore.nome %></div>
-                          <div style="font-size:0.85rem; color:var(--grigio);">Consegna entro <%= fmt.tempoConsegna(o.consegna_ore) %></div>
-                          <% if (o.consegna_minuti_stimati) { %><div style="font-size:0.8rem; color:var(--grigio);">Stimata: <%= consegna.inParole(o.consegna_minuti_stimati) %></div><% } %>
-                        </div>
-                        <div style="text-align:right;">
-                          <div style="font-weight:800; color:var(--blu);">€ <%= euro(o.totali.imponibile) %></div>
-                          <div style="font-size:0.75rem; color:var(--grigio);">+ IVA · consegna <%= o.totali.costo_consegna>0 ? '€ '+euro(o.totali.costo_consegna) : 'inclusa' %></div>
-                        </div>
-                      </div>
-                    </a>
-                  <% }); %>
-                  <% if (c.secondiScelta !== null && c.secondiScelta > 0) { %>
-                    <p class="nota" style="margin-top:8px;">Hai <strong><%= fmt.mmss(c.secondiScelta) %></strong> per scegliere.</p>
-                  <% } %>
-                </div>
-              <% } else if (step === 3) { %>
-                <div class="pannello" data-pannello="3">
-                  <% if (c.ordine) { %>
-                    <div class="riga-lista" style="padding:8px 0; border:none;">
-                      <span class="icona">📦</span><span class="corpo"><span class="etichetta">Ordine</span><span class="dettaglio"><%= c.ordine.stato %> · <%= fmt.dataOra(c.ordine.creato_il) %></span></span><span class="stato-badge stato-<%= c.ordine.stato %>"><%= c.ordine.stato %></span>
-                    </div>
-                    <div class="riga-lista" style="padding:8px 0; border:none;">
-                      <span class="icona">🚚</span><span class="corpo"><span class="etichetta"><%= c.ordine.modalita==='ritiro'?'Ritiro':'Consegna' %></span><span class="dettaglio"><%= c.ordine.destinazione %></span></span>
-                    </div>
-                    <a class="btn btn-primary btn-blocco" href="/ordini/<%= c.ordine.id %>">Apri ordine</a>
-                    <% if (c.ordine.ddt_numero) { %><a class="btn btn-chiaro btn-blocco" href="/ddt/<%= c.ordine.id %>" style="margin-top:6px;">Bolla <%= c.ordine.ddt_numero %></a><% } %>
-                  <% } else { %>
-                    <p class="nota">In consegna…</p>
-                  <% } %>
-                </div>
-              <% } %>
-            </div>
-          </div>
-        <% }); %>
-      <% } %>
-
-      <% if (storico.length) { %>
-        <details class="altre-categorie" style="margin-top:14px;">
-          <summary>Storico richieste</summary>
-          <div style="margin-top:8px;">
-            <% storico.forEach(function (c) { %>
-              <% const r = c.richiesta; %>
-              <div class="card card-richiesta" style="opacity:0.95;">
-                <div class="card-richiesta-head">
-                  <div class="card-richiesta-id"><%= fmt.dataOra(r.creato_il) %></div>
-                  <span class="stato-badge" style="background:var(--rosso-chiaro); color:var(--rosso);">scaduta</span>
-                </div>
-                <div class="card-richiesta-materiale">
-                  <% c.righe.forEach(function (row) { %>
-                    <div class="riga-materiale"><strong><%= row.quantita %>×</strong> <%= row.nome %></div>
-                  <% }); %>
-                </div>
-                <a class="btn btn-chiaro btn-blocco" href="/richieste/<%= r.id %>" style="margin-top:8px;">Apri</a>
-              </div>
-            <% }); %>
-          </div>
-        </details>
-      <% } %>
-
-      <% if (ordini.length && cards.length) { %>
-        <div class="sezione-titolo" style="margin-top:18px;">Ordini confermati</div>
-        <div class="card card-fitta">
-          <% ordini.forEach(function (o) { %>
-            <a class="riga-lista" href="/ordini/<%= o.id %>">
-              <span class="icona">📦</span>
-              <span class="corpo">
-                <span class="etichetta">Ordine — € <%= euro(totaleOrdine(o)) %></span>
-                <span class="dettaglio"><%= o.distributore_nome || 'Grossista' %> · <%= fmt.dataOra(o.creato_il) %></span>
-              </span>
-              <span class="stato-badge stato-<%= o.stato %>"><%= o.stato %></span>
-            </a>
-          <% }); %>
-        </div>
-      <% } %>
+      <p class="nota" style="margin-top:14px;">
+        Lo storico completo (richieste scadute, annullate, ordini passati e consegnati) è nel
+        menu account, in alto a destra.
+      </p>
     </div>
   </div>
 

@@ -19,7 +19,7 @@
     <div class="contenuto" style="padding-top:0;">
       <div id="risultati">
         <% if (!q) { %>
-          <div class="vuoto"><span class="emoji">🔍</span>Scrivi anche solo un pezzo di parola: cercando &laquo;valv&raquo; trovi tutte le valvole.</div>
+          <div class="vuoto"><span class="emoji"><%- iconaLente %></span>Scrivi anche solo un pezzo di parola: cercando &laquo;valv&raquo; trovi tutte le valvole.</div>
         <% } else if (!risultati.length) { %>
           <div class="vuoto"><span class="emoji">🤷</span>Nessun prodotto trovato per &laquo;<%= q %>&raquo;.</div>
         <% } else { %>

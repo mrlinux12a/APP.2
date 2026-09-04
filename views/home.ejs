@@ -10,7 +10,7 @@
     <div class="contenuto">
       <h1 class="domanda">Cosa ti serve?</h1>
       <form class="barra-ricerca grande" method="GET" action="/cerca">
-        <span class="lente">🔍</span>
+        <span class="lente"><%- iconaLente %></span>
         <input type="search" name="q" enterkeyhint="search" data-auto-cerca
                placeholder="Es. valvola sfera 3/4, raccordo 16, guarnizione"
                aria-label="Cerca un pezzo">
@@ -23,7 +23,7 @@
       <div class="griglia-evidenza">
         <% inEvidenza.forEach(function (m) { %>
           <a class="tessera-grande" href="/categoria/<%= m.slug %>">
-            <span class="emoji"><%= m.icona %></span>
+            <span class="emoji"><%- iconaCategoria(m.slug) %></span>
             <span class="nome"><%= m.nome %></span>
             <span class="desc"><%= m.descrizione %></span>
             <span class="conta"><%= m.n_prodotti %> articoli</span>
@@ -32,15 +32,12 @@
       </div>
 
       <div class="sezione-titolo">Categorie</div>
-      <div class="card card-fitta">
+      <div class="griglia-macro">
         <% altre.forEach(function (m) { %>
-          <a class="riga-lista" href="/categoria/<%= m.slug %>">
-            <span class="icona"><%= m.icona %></span>
-            <span class="corpo">
-              <span class="etichetta"><%= m.nome %></span>
-              <span class="dettaglio"><%= m.n_prodotti %> articoli</span>
-            </span>
-            <span class="freccia">›</span>
+          <a class="tessera" href="/categoria/<%= m.slug %>">
+            <span class="tessera-ico"><%- iconaCategoria(m.slug) %></span>
+            <span class="nome"><%= m.nome %></span>
+            <span class="conta"><%= m.n_prodotti %> articoli</span>
           </a>
         <% }); %>
       </div>

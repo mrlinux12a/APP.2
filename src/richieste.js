@@ -139,6 +139,54 @@ async function creaRichiesta(cliente, righeCarrello) {
   return { requestId, candidati };
 }
 
+// Nessuno ha confermato entro la finestra: riapre la STESSA richiesta (stesso id) con una
+// finestra fresca, invece di crearne una nuova — resta un unico riferimento nel tempo, utile
+// per pagamenti o altro. Riparte verso gli stessi distributori già interpellati la prima volta.
+async function reinviaRichiesta(requestId) {
+  const richiesta = await getRichiesta(requestId);
+  if (!richiesta || richiesta.stato !== 'nessuna_offerta') return null;
+  const minuti = await getFinestraMinuti();
+
+  const fai = db.transaction(async () => {
+    await db.prepare(
+      `UPDATE requests
+          SET stato = 'in_attesa', scade_il = NOW() + (? * INTERVAL '1 minute'),
+              scelta_scade_il = NULL, assegnata_auto = 0
+        WHERE id = ?`
+    ).run(minuti, requestId);
+
+    await db.prepare(
+      `UPDATE request_responses
+          SET esito = 'in_attesa', consegna_ore = NULL, totale = NULL, note = NULL,
+              risposto_il = NULL, partenza_ore = NULL, copertura = 'totale',
+              sconto_cliente_pct = NULL, consegna_minuti_stimati = NULL
+        WHERE request_id = ?`
+    ).run(requestId);
+
+    await db.prepare(
+      `DELETE FROM request_response_items WHERE response_id IN
+        (SELECT id FROM request_responses WHERE request_id = ?)`
+    ).run(requestId);
+  });
+  await fai();
+
+  const righe = await righeRichiesta(requestId);
+  const risposte = await risposteRichiesta(requestId);
+  const nArticoli = righe.reduce((acc, r) => acc + r.quantita, 0);
+  const { notificaDistributore } = require('./notifiche');
+  for (const r of risposte) {
+    await notificaDistributore(r.distributor_id, {
+      titolo: 'Richiesta rinviata',
+      testo: `${nArticoli} pz. Hai ${minuti} minuti per confermare.`,
+      link: `/distributore/richieste/${requestId}`,
+      categoria: 'richieste',
+      sottostato: 'inviata',
+    });
+  }
+
+  return requestId;
+}
+
 // ---------- Scadenza ----------
 
 // La non risposta NON e' una disponibilita': allo scadere dei 10 minuti le risposte rimaste
@@ -269,16 +317,20 @@ async function rispondi(
     salvaScontoCliente = false,
   }
 ) {
-  const richiesta = await aggiornaScadenza(requestId);
+  // Controllo "veloce" solo per uscire prima nel caso comune: non è quello che decide se la
+  // risposta viene accettata. La scadenza vera si controlla dentro la UPDATE più sotto,
+  // nella stessa transazione — altrimenti un invio arrivato proprio sull'ultimo secondo
+  // (il countdown del cliente e quello del server non sono mai perfettamente sincroni, e
+  // il job periodico che chiude le richieste scadute gira ogni 30s) può passare il
+  // controllo qui e poi scontrarsi con la chiusura della richiesta, lasciando la risposta
+  // "confermata" ma la richiesta già segnata come scaduta senza offerte.
+  const richiesta = await getRichiesta(requestId);
   if (!richiesta) return { ok: false, errore: 'Richiesta non trovata.' };
   if (richiesta.stato === 'ordinata') {
     return { ok: false, errore: 'Il cliente ha già chiuso l’ordine con un altro distributore.' };
   }
   if (richiesta.stato === 'annullata') {
     return { ok: false, errore: 'Il cliente ha annullato la richiesta.' };
-  }
-  if ((await secondiRimasti(richiesta)) <= 0) {
-    return { ok: false, errore: 'La finestra di 10 minuti è chiusa: non è più possibile rispondere.' };
   }
 
   const risposta = await getRisposta(requestId, distributorId);
@@ -330,11 +382,16 @@ async function rispondi(
       : Math.round(Math.min(90, Math.max(0, parseFloat(String(scontoCliente).replace(',', '.')) || 0)) * 10) / 10;
 
   const salva = db.transaction(async () => {
-    await db.prepare(
+    // La condizione di scadenza vive qui, dentro la UPDATE, non in un controllo separato
+    // prima: così l'accettazione o il rifiuto di "la finestra è ancora aperta" è atomico
+    // insieme alla scrittura, e non può più essere scavalcato da aggiornaScadenza() che
+    // gira in parallelo (chiamata da altre pagine, o dal job periodico ogni 30s).
+    const upd = await db.prepare(
       `UPDATE request_responses
           SET esito = ?, copertura = ?, partenza_ore = ?, consegna_ore = ?, note = ?,
               sconto_cliente_pct = ?, risposto_il = NOW()
-        WHERE id = ?`
+        WHERE id = ? AND esito = 'in_attesa'
+          AND request_id IN (SELECT id FROM requests WHERE scade_il > NOW())`
     ).run(
       esito,
       esito === 'confermato' ? copertura : 'totale',
@@ -344,6 +401,7 @@ async function rispondi(
       esito === 'confermato' && !prezzoRichiesto ? profilo : null,
       risposta.id
     );
+    if (!upd.changes) return false;
 
     await db.prepare('DELETE FROM request_response_items WHERE response_id = ?').run(risposta.id);
     const ins = db.prepare(
@@ -364,8 +422,18 @@ async function rispondi(
            sconto_pct = excluded.sconto_pct, aggiornato_il = NOW()`
       ).run(distributorId, richiesta.cliente_id, profilo);
     }
+    return true;
   });
-  await salva();
+  const salvata = await salva();
+  if (!salvata) {
+    // La UPDATE atomica non ha trovato la riga nelle condizioni attese: capiamo il motivo
+    // esatto solo per dare un messaggio preciso, la decisione è già presa.
+    const fresca = await getRisposta(requestId, distributorId);
+    if (fresca && fresca.esito !== 'in_attesa') {
+      return { ok: false, errore: 'Hai già risposto a questa richiesta.' };
+    }
+    return { ok: false, errore: 'La finestra di 10 minuti è chiusa: non è più possibile rispondere.' };
+  }
 
   // Il totale dell'offerta si calcola sulle quantità davvero disponibili.
   if (esito === 'confermato') {
@@ -390,12 +458,16 @@ async function rispondi(
 
     // Alla prima conferma la richiesta ha gia' almeno un'offerta valida: parte la
     // finestra di 5 minuti entro cui il cliente sceglie, altrimenti si assegna da sola.
+    // Include anche 'nessuna_offerta': con la UPDATE atomica qui sopra è possibile che
+    // questa conferma sia arrivata un istante dopo che aggiornaScadenza() (in corsa in
+    // parallelo) aveva già chiuso la richiesta senza offerte — la si "riapre" invece di
+    // perdere una conferma valida.
     const finestraScelta = await getFinestraSceltaMinuti();
     await db.prepare(
       `UPDATE requests
           SET stato = 'con_offerte',
               scelta_scade_il = NOW() + (? * INTERVAL '1 minute')
-        WHERE id = ? AND stato = 'in_attesa'`
+        WHERE id = ? AND stato IN ('in_attesa', 'nessuna_offerta')`
     ).run(finestraScelta, requestId);
     const mancanti = coperture.filter((r) => r.quantita_disponibile < r.quantita_richiesta).length;
     await notifica(richiesta.cliente_id, {
@@ -575,6 +647,7 @@ module.exports = {
   sceltePerScadenza,
   distributoriCandidati,
   creaRichiesta,
+  reinviaRichiesta,
   aggiornaScadenza,
   aggiornaScadenzeAperte,
   rispondi,

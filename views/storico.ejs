@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="1">
+  <div class="app">
+    <%- include('partials/appbar', { titolo, intestazione: 'Storico', indietro: '/home' }) %>
+
+    <div class="contenuto">
+      <% if (!cards.length) { %>
+        <div class="vuoto">
+          <span class="emoji">📦</span>
+          Nessuna richiesta né ordine ancora.
+        </div>
+      <% } else { %>
+        <div class="card card-fitta">
+          <% cards.forEach(function (c) { %>
+            <% const r = c.richiesta;
+               const href = c.step === 3 && c.ordine ? '/ordini/' + c.ordine.id : '/richieste/' + r.id;
+               const consegnato = c.ordine && c.ordine.consegnato_il;
+               const etichetta = consegnato ? 'Consegnato'
+                 : r.stato === 'in_attesa' ? 'In attesa'
+                 : r.stato === 'con_offerte' ? 'Da scegliere'
+                 : r.stato === 'ordinata' ? (c.ordine ? (c.ordine.stato === 'inviato' ? 'Inviato' : c.ordine.stato === 'in_evasione' ? 'In preparazione' : 'Partito') : 'Ordinata')
+                 : r.stato === 'nessuna_offerta' ? 'Scaduta senza conferme'
+                 : r.stato === 'annullata' ? 'Annullata'
+                 : r.stato;
+               const classeBadge = consegnato ? 'stato-consegnato' : (c.ordine ? 'stato-' + c.ordine.stato : 'stato-' + r.stato);
+            %>
+            <a class="riga-lista" href="<%= href %>">
+              <span class="icona">📦</span>
+              <span class="corpo">
+                <span class="etichetta"><%= fmt.dataOra(r.creato_il) %></span>
+                <span class="dettaglio">
+                  <% c.righe.forEach(function (row, i) { %><%= i ? ', ' : '' %><%= row.quantita %>× <%= row.nome %><% }); %>
+                </span>
+              </span>
+              <span class="stato-badge <%= classeBadge %>"><%= etichetta %></span>
+            </a>
+          <% }); %>
+        </div>
+      <% } %>
+    </div>
+  </div>
+
+  <%- include('partials/nav', { attivo: '' }) %>
+  <script src="/app.js" defer></script>
+</body>
+</html>

@@ -339,6 +339,14 @@ ALTER TABLE client_discount_rules ADD COLUMN IF NOT EXISTS sconto3 DOUBLE PRECIS
 ALTER TABLE client_discount_rules ADD COLUMN IF NOT EXISTS sconto4 DOUBLE PRECISION;
 ALTER TABLE client_discount_rules ADD COLUMN IF NOT EXISTS sconto5 DOUBLE PRECISION;
 
+-- Presa in carico firmata dal cliente: 'evaso' resta lo stato DB, 'consegnato' si deriva
+-- da questa colonna valorizzata, senza toccare il CHECK su stato.
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS consegnato_il TIMESTAMP;
+
+-- Codice articolo ufficiale del produttore (diverso dal nostro "codice" interno): serve
+-- per trovare schede tecniche e foto sul sito del produttore.
+ALTER TABLE products ADD COLUMN IF NOT EXISTS codice_fornitore TEXT;
+
 -- session store per postgres
 CREATE TABLE IF NOT EXISTS session (
   sid VARCHAR NOT NULL PRIMARY KEY,

@@ -1,11 +1,11 @@
 <nav class="navbar">
   <div class="interno">
-    <a href="/home" class="<%= (attivo === 'home' || attivo === 'catalogo') ? 'attivo' : '' %>"><span class="ico">📚</span>Catalogo</a>
+    <a href="/home" class="<%= (attivo === 'home' || attivo === 'catalogo') ? 'attivo' : '' %>"><span class="ico"><%- iconaCatalogo %></span>Catalogo</a>
     <a href="/carrello" class="<%= attivo === 'carrello' ? 'attivo' : '' %>">
-      <span class="ico">🛒</span>Carrello
+      <span class="ico"><%- iconaCarrello %></span>Carrello
       <% if (typeof carrelloPezzi !== 'undefined' && carrelloPezzi > 0) { %><span class="pallino" data-nav-badge><%= carrelloPezzi %></span><% } else { %><span class="pallino" data-nav-badge hidden>0</span><% } %>
     </a>
-    <a href="/ordini" class="<%= attivo === 'ordini' ? 'attivo' : '' %>"><span class="ico">📦</span>Stato ordini</a>
+    <a href="/ordini" class="<%= attivo === 'ordini' ? 'attivo' : '' %>"><span class="ico"><%- iconaOrdini %></span>Stato ordini</a>
   </div>
 </nav>
 <div hidden data-geo data-consenso="<%= (typeof geo !== 'undefined' && geo.consenso) ? '1' : '0' %>"><span data-geo-stato></span><span data-geo-badge></span><button data-geo-attiva hidden></button><button data-geo-revoca hidden></button></div>

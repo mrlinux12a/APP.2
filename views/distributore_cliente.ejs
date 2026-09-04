@@ -137,7 +137,7 @@
           <div class="card card-fitta">
             <% macro.forEach(function (m) { %>
               <%- include('partials/riga_sconti', {
-                    ambito: 'macro', chiave: m.slug, icona: m.icona,
+                    ambito: 'macro', chiave: m.slug, icona: iconaCategoria(m.slug),
                     titolo: m.nome, dettaglio: m.n_prodotti + ' prodotti',
                     scaglione: scaglione, effettivo: effettivo
                   }) %>

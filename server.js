@@ -25,6 +25,7 @@ const db = require('./db');
 const { requireLogin, requireRole } = require('./src/auth');
 const pricing = require('./src/pricing');
 const format = require('./src/format');
+const icone = require('./src/icone');
 const catalogo = require('./src/catalogo');
 const richieste = require('./src/richieste');
 const notifiche = require('./src/notifiche');
@@ -69,6 +70,11 @@ app.use(async (req, res, next) => {
   // Gli ordini creati prima delle offerte per distributore non hanno l'IVA calcolata.
   res.locals.totaleOrdine = (o) => (o.totale_ivato > 0 ? o.totale_ivato : o.totale_finale);
   res.locals.fmt = format;
+  res.locals.iconaCategoria = icone.iconaCategoria;
+  res.locals.iconaLente = icone.iconaLente;
+  res.locals.iconaCatalogo = icone.iconaCatalogo;
+  res.locals.iconaCarrello = icone.iconaCarrello;
+  res.locals.iconaOrdini = icone.iconaOrdini;
   res.locals.carrelloPezzi = contaCarrello(req);
   res.locals.notificheNonLette = req.session.user ? await notifiche.nonLette(req.session.user.id) : 0;
   res.locals.testoDisponibilita = TESTO_DISPONIBILITA;
@@ -502,6 +508,22 @@ app.post('/richieste', requireRole('cliente'), async (req, res) => {
   return inviaRichiesta(req, res);
 });
 
+// Un solo processo di richiesta alla volta: non se ne può inviare una nuova finché una
+// precedente dello stesso cliente è ancora in attesa di risposta o da scegliere. Un ordine
+// già confermato (in consegna) invece non blocca: la nuova richiesta prende il suo posto in
+// "Stato ordini". Ritorna la richiesta bloccante (aggiornata) se ce n'è una, altrimenti null.
+async function richiestaBloccante(clienteId) {
+  const aperta = await db
+    .prepare(
+      `SELECT id FROM requests WHERE cliente_id = ? AND stato IN ('in_attesa','con_offerte') ORDER BY id DESC LIMIT 1`
+    )
+    .get(clienteId);
+  if (!aperta) return null;
+  const aggiornata = await richieste.aggiornaScadenza(aperta.id);
+  if (aggiornata && (aggiornata.stato === 'in_attesa' || aggiornata.stato === 'con_offerte')) return aggiornata;
+  return null;
+}
+
 async function inviaRichiesta(req, res) {
   const righe = await righeCarrello(req);
 
@@ -527,6 +549,17 @@ async function inviaRichiesta(req, res) {
   }
 
   const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
+
+  const bloccante = await richiestaBloccante(cliente.id);
+  if (bloccante) {
+    return res.status(400).render('errore', {
+      titolo: 'Richiesta già in corso',
+      messaggio: 'Hai già una richiesta in attesa di risposta o da scegliere: aspetta che si chiuda prima di inviarne un\'altra.',
+      link: '/richieste/' + bloccante.id,
+      linkTesto: 'Apri la richiesta in corso',
+    });
+  }
+
   const { requestId } = await richieste.creaRichiesta(cliente, righe);
   req.session.carrello = {};
   res.redirect('/richieste/' + requestId);
@@ -581,11 +614,26 @@ app.get('/api/richieste/:id', requireRole('cliente'), async (req, res) => {
 
 app.post('/richieste/:id/annulla', requireRole('cliente'), async (req, res) => {
   const richiesta = await richieste.getRichiesta(req.params.id);
-  if (!richiesta || richiesta.cliente_id !== req.session.user.id) return res.redirect('/home');
+  if (!richiesta || richiesta.cliente_id !== req.session.user.id) return res.redirect('/ordini');
   if (richiesta.stato !== 'ordinata') {
     await db.prepare(`UPDATE requests SET stato = 'annullata' WHERE id = ?`).run(richiesta.id);
   }
-  res.redirect('/home');
+  res.redirect('/ordini');
+});
+
+// Nessuno ha confermato entro la finestra: riapre la STESSA richiesta (stesso id, per
+// distributori e installatore) con una finestra fresca, invece di crearne una nuova — così
+// resta un riferimento unico nel tempo, utile per pagamenti o altro.
+app.post('/richieste/:id/reinvia', requireRole('cliente'), async (req, res) => {
+  const richiesta = await richieste.getRichiesta(req.params.id);
+  if (!richiesta || richiesta.cliente_id !== req.session.user.id) return res.redirect('/ordini');
+  if (richiesta.stato !== 'nessuna_offerta') return res.redirect('/richieste/' + richiesta.id);
+
+  const bloccante = await richiestaBloccante(richiesta.cliente_id);
+  if (bloccante) return res.redirect('/richieste/' + bloccante.id);
+
+  await richieste.reinviaRichiesta(richiesta.id);
+  res.redirect('/richieste/' + richiesta.id);
 });
 
 // Elimina richiesta (cliente) — globale: sparisce anche per tutti i distributori (da confermare + storico)
@@ -696,7 +744,7 @@ app.post('/ordini', requireRole('cliente'), async (req, res) => {
     note: req.body.note,
     destinazione: req.body.destinazione,
   });
-  res.redirect('/ordini');
+  res.redirect('/ordini/' + orderId + '?nuovo=1');
 });
 
 // Creazione dell'ordine a partire da un'offerta confermata: la usano sia la scelta
@@ -804,57 +852,121 @@ async function assegnaOffertePerScadenza() {
   }
 }
 
-app.get('/ordini', requireRole('cliente'), async (req, res) => {
-  await richieste.aggiornaScadenzeAperte();
-  const ordini = await db
-    .prepare(
-      `SELECT o.*, d.nome AS distributore_nome
-         FROM orders o
-         LEFT JOIN distributors d ON d.id = o.distributor_id
-        WHERE o.cliente_id = ?
-        ORDER BY o.id DESC`
-    )
-    .all(req.session.user.id);
-  // tutte le richieste del cliente, ordinate per creazione (nuove prima)
+// Tutte le richieste del cliente (più un ordine associato, quando c'è) con lo step 1-2-3
+// già calcolato — solo i campi che lo Storico mostra davvero (data, materiale, stato):
+// niente risposte dei distributori né calcolo delle offerte, che lì non servono e sono
+// il grosso del costo (offerte() da sola fa una query per ogni distributore confermato).
+// aggiornaScadenza si chiama solo sulle richieste ancora aperte, non su tutte e 50: su
+// quelle già chiuse (la maggioranza, in uno storico) costerebbe una query a vuoto.
+async function richiesteClienteConStato(clienteId) {
   const tutte = await db
     .prepare(`SELECT * FROM requests WHERE cliente_id = ? ORDER BY id DESC LIMIT 50`)
-    .all(req.session.user.id);
+    .all(clienteId);
 
-  // costruisce le card 3-stati: ogni richiesta è una card, l'ordine ne è la continuazione
   const cardsAll = [];
   for (const r of tutte) {
-    const rAgg = (await richieste.aggiornaScadenza(r.id)) || r;
+    const rAgg =
+      r.stato === 'in_attesa' || r.stato === 'con_offerte'
+        ? (await richieste.aggiornaScadenza(r.id)) || r
+        : r;
     const righe = await richieste.righeRichiesta(rAgg.id);
-    const risposte = await richieste.risposteRichiesta(rAgg.id);
-    let step = 1;
-    let offerte = [];
+    let step = 0;
     let ordine = null;
-    let secondi = null;
-    let secondiScelta = null;
-    let scaduta = false;
-    if (rAgg.stato === 'in_attesa') {
-      step = 1;
-      secondi = await richieste.secondiRimasti(rAgg);
-      if (secondi === 0) scaduta = true;
-    } else if (rAgg.stato === 'con_offerte') {
-      step = 2;
-      offerte = await richieste.offerte(rAgg.id);
-      secondiScelta = offerte.length > 1 ? await richieste.secondiPerScegliere(rAgg) : null;
-    } else if (rAgg.stato === 'ordinata' && rAgg.order_id) {
+    if (rAgg.stato === 'in_attesa') step = 1;
+    else if (rAgg.stato === 'con_offerte') step = 2;
+    else if (rAgg.stato === 'ordinata') {
       step = 3;
-      ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(rAgg.order_id);
-    } else if (rAgg.stato === 'ordinata') {
-      step = 3;
-    } else if (rAgg.stato === 'nessuna_offerta' || rAgg.stato === 'annullata') {
-      step = 0;
-      scaduta = true;
+      if (rAgg.order_id) ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(rAgg.order_id);
     }
-    cardsAll.push({ richiesta: rAgg, righe, risposte, offerte, ordine, step, secondi, secondiScelta, scaduta });
+    cardsAll.push({ richiesta: rAgg, righe, ordine, step });
   }
-  const cards = cardsAll.filter(c => c.step >= 1 && c.step <= 3 && !c.scaduta);
-  const storico = cardsAll.filter(c => c.scaduta || c.step === 0);
+  return cardsAll;
+}
 
-  res.render('ordini_cliente', { titolo: 'Stato ordini', ordini, cards, storico, consegna });
+// "Stato ordini": mostra sempre e solo UNA cosa, mai un elenco — quella più rilevante, in
+// ordine di priorità: in attesa > da scegliere > in consegna > scaduta senza conferme. Ogni
+// livello ha una finestra oltre la quale non conta più come "attivo" (resta comunque
+// raggiungibile dallo Storico). Se ce ne fosse più di una allo stesso livello (es. account
+// demo condiviso da più persone) si prende sempre la più recente.
+const TRE_ORE_MS = 3 * 60 * 60 * 1000;
+const VENTIQUATTRO_ORE_MS = 24 * 60 * 60 * 1000;
+
+function piuRecente(elenco) {
+  return elenco.length ? elenco.reduce((a, b) => (b.richiesta.id > a.richiesta.id ? b : a)) : null;
+}
+
+// Versione "leggera" di richiesteClienteConStato, solo per il dispatcher: qui non serve MAI
+// il dettaglio (righe, risposte, offerte) di ogni richiesta — solo stato e id, perché alla
+// fine si fa solo un redirect. Le ultime 5 bastano abbondantemente (il blocco "un solo invio
+// alla volta" impedisce comunque di avere più di una richiesta in_attesa/con_offerte insieme),
+// ed è l'unico stato che ha bisogno del controllo di scadenza lazy (aggiornaScadenza scrive
+// sul DB solo se necessario). Passa da ~150 query a poche sole per apertura pagina.
+async function richiesteAttiveClienteLeggere(clienteId) {
+  const recenti = await db
+    .prepare(
+      `SELECT id, stato, creato_il, scade_il, scelta_scade_il, order_id
+         FROM requests WHERE cliente_id = ? ORDER BY id DESC LIMIT 5`
+    )
+    .all(clienteId);
+
+  const risultati = [];
+  for (const r of recenti) {
+    const rAgg =
+      r.stato === 'in_attesa' || r.stato === 'con_offerte'
+        ? (await richieste.aggiornaScadenza(r.id)) || r
+        : r;
+
+    let step = 0;
+    let ordine = null;
+    if (rAgg.stato === 'in_attesa') step = 1;
+    else if (rAgg.stato === 'con_offerte') step = 2;
+    else if (rAgg.stato === 'ordinata') {
+      step = 3;
+      if (rAgg.order_id) {
+        ordine = await db
+          .prepare('SELECT id, stato, consegnato_il, creato_il FROM orders WHERE id = ?')
+          .get(rAgg.order_id);
+      }
+    }
+    risultati.push({ richiesta: rAgg, step, ordine });
+  }
+  return risultati;
+}
+
+app.get('/ordini', requireRole('cliente'), async (req, res) => {
+  const cardsAll = await richiesteAttiveClienteLeggere(req.session.user.id);
+
+  const inAttesa = cardsAll.filter((c) => c.step === 1);
+  const daScegliere = cardsAll.filter((c) => {
+    if (c.step !== 2) return false;
+    // scelta_scade_il si fissa una sola volta, all'ingresso in "con_offerte": è il
+    // riferimento esatto di quando la richiesta è entrata in questo stato.
+    if (!c.richiesta.scelta_scade_il) return true;
+    return Date.now() - new Date(c.richiesta.scelta_scade_il).getTime() <= TRE_ORE_MS;
+  });
+  const inConsegna = cardsAll.filter((c) => {
+    if (c.step !== 3 || !c.ordine || c.ordine.consegnato_il) return false;
+    return Date.now() - new Date(c.ordine.creato_il).getTime() <= VENTIQUATTRO_ORE_MS;
+  });
+  const scadute = cardsAll.filter((c) => {
+    if (c.step !== 0 || c.richiesta.stato !== 'nessuna_offerta') return false;
+    return Date.now() - new Date(c.richiesta.scade_il).getTime() <= TRE_ORE_MS;
+  });
+
+  const attivo = piuRecente(inAttesa) || piuRecente(daScegliere) || piuRecente(inConsegna) || piuRecente(scadute);
+
+  if (attivo) {
+    return res.redirect(attivo.step === 3 ? '/ordini/' + attivo.ordine.id : '/richieste/' + attivo.richiesta.id);
+  }
+
+  res.render('ordini_cliente', { titolo: 'Stato ordini' });
+});
+
+// Storico unificato (tutto: in corso, scaduto, annullato, consegnato) — raggiungibile dal
+// menu account, non più dal tab "Stato ordini".
+app.get('/storico', requireRole('cliente'), async (req, res) => {
+  const cardsAll = await richiesteClienteConStato(req.session.user.id);
+  res.render('storico', { titolo: 'Storico', cards: cardsAll });
 });
 
 app.get('/ordini/:id', requireLogin, async (req, res) => {
@@ -884,6 +996,19 @@ app.get('/ordini/:id', requireLogin, async (req, res) => {
     nuovo: req.query.nuovo === '1',
     ivaPct: await pricing.getIvaPct(),
   });
+});
+
+// Il cliente conferma di aver ricevuto la merce: non cambia lo stato DB (resta 'evaso'),
+// valorizza solo consegnato_il, che è quanto basta per mostrare "Consegnato".
+app.post('/ordini/:id/consegnato', requireRole('cliente'), async (req, res) => {
+  const ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+  if (!ordine || ordine.cliente_id !== req.session.user.id) {
+    return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Ordine non trovato.' });
+  }
+  if (ordine.stato === 'evaso' && !ordine.consegnato_il) {
+    await db.prepare('UPDATE orders SET consegnato_il = NOW() WHERE id = ?').run(ordine.id);
+  }
+  res.redirect('/ordini/' + ordine.id);
 });
 
 // Elimina ordine (cliente) — globale
@@ -1064,7 +1189,10 @@ async function contatoriBanco(distributorId) {
 }
 
 app.get('/distributore', requireRole('distributore'), async (req, res) => {
-  await richieste.aggiornaScadenzeAperte();
+  // Niente più sweep completo di tutte le richieste aperte del sistema ad ogni apertura
+  // pagina (era una scansione system-wide, non solo di questo distributore): ci pensa già
+  // il job periodico ogni 30s, e la singola richiesta si autoaggiorna quando la si apre
+  // (vedi GET /distributore/richieste/:id).
   const distributore = await db
     .prepare('SELECT * FROM distributors WHERE id = ?')
     .get(req.session.user.distributor_id);

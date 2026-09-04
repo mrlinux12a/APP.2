@@ -121,16 +121,25 @@
 
       <p class="nota">Prezzi IVA esclusa, già comprensivi del servizio. Richiesta del <%= fmt.dataOra(richiesta.creato_il) %>.</p>
 
-      <% if (!offerte.length) { %>
+      <% if (richiesta.stato === 'nessuna_offerta') { %>
+        <form method="POST" action="/richieste/<%= richiesta.id %>/reinvia">
+          <button class="btn btn-primary btn-blocco" type="submit">Riinvia richiesta</button>
+        </form>
+      <% } else if (!offerte.length) { %>
         <a class="btn btn-primary btn-blocco" href="/home">Torna alla home</a>
       <% } %>
+      <% if (richiesta.stato === 'con_offerte') { %>
+        <form method="POST" action="/richieste/<%= richiesta.id %>/annulla">
+          <button class="btn btn-chiaro btn-blocco" type="submit" style="margin-top:12px;">Annulla la richiesta</button>
+        </form>
+      <% } %>
       <form method="POST" action="/richieste/<%= richiesta.id %>/elimina" onsubmit="return confirm('Eliminare definitivamente questa richiesta?')">
-        <button class="btn btn-rosso btn-blocco" type="submit" style="margin-top:12px;">Elimina richiesta</button>
+        <button class="btn btn-rosso btn-blocco" type="submit" style="margin-top:8px;">Elimina richiesta</button>
       </form>
     </div>
   </div>
 
-  <%- include('partials/nav', { attivo: 'home' }) %>
+  <%- include('partials/nav', { attivo: 'ordini' }) %>
   <script src="/app.js" defer></script>
 </body>
 </html>
