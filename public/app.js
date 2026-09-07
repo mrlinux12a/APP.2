@@ -948,3 +948,32 @@
     }, 1000);
   });
 })();
+
+/* Banco distributore: pausa/riattiva la ricezione di nuove richieste, cambio istantaneo
+   senza ricaricare la pagina (la sede resta comunque attiva sulla piattaforma). */
+(function () {
+  'use strict';
+  const btn = document.querySelector('[data-toggle-banco]');
+  if (!btn) return;
+  const testo = btn.querySelector('[data-toggle-banco-testo]');
+
+  btn.addEventListener('click', function () {
+    const attivoOra = btn.dataset.attivo === '1';
+    const nuovo = !attivoOra;
+    btn.disabled = true;
+    fetch('/api/distributore/stato', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ attivo: nuovo }),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        btn.dataset.attivo = d.attivo ? '1' : '0';
+        btn.classList.toggle('attivo', d.attivo);
+        btn.classList.toggle('pausa', !d.attivo);
+        if (testo) testo.textContent = d.attivo ? 'Banco operativo · Ricezione attiva' : 'Non disponibile · In pausa';
+      })
+      .catch(function () { window.alert('Non è stato possibile cambiare lo stato del banco.'); })
+      .finally(function () { btn.disabled = false; });
+  });
+})();

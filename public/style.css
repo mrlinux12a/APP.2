@@ -680,6 +680,78 @@ th { color: var(--grigio); font-weight: 600; }
 .conta-box .numero { display: block; font-size: 1.5rem; font-weight: 800; color: var(--blu); }
 .conta-box .etichetta { display: block; font-size: 0.72rem; color: var(--grigio); line-height: 1.25; margin-top: 2px; }
 
+/* ---------- Dashboard banco distributore ---------- */
+
+.banco-stato-riga {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.toggle-banco {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--bordo);
+  background: var(--surface);
+  color: var(--testo);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+.toggle-banco-pallino { width: 10px; height: 10px; border-radius: 50%; background: var(--grigio); flex: 0 0 auto; }
+.toggle-banco.attivo { border-color: var(--verde); color: var(--verde); }
+.toggle-banco.attivo .toggle-banco-pallino { background: var(--verde); box-shadow: 0 0 0 3px var(--verde-chiaro); }
+.toggle-banco.pausa { border-color: var(--rosso); color: var(--rosso); }
+.toggle-banco.pausa .toggle-banco-pallino { background: var(--rosso); }
+
+/* Griglia delle richieste urgenti: 1 colonna su telefono, più colonne quando c'è spazio. */
+.urgenti-griglia {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.urgente-card {
+  background: var(--surface);
+  border: 1px solid var(--arancio);
+  border-radius: var(--raggio);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0; /* dentro una grid: senza questo il testo non-a-capo forza la card ad allargarsi */
+}
+.urgente-testa { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.urgente-id { font-weight: 700; font-size: 0.92rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.urgente-timer {
+  flex: 0 0 auto;
+  background: var(--arancio);
+  color: #fff;
+  font-weight: 800;
+  font-size: 1.05rem;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+.urgente-prodotti { display: flex; flex-direction: column; gap: 2px; }
+.urgente-riga { font-size: 0.86rem; color: var(--testo); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.urgente-altre { color: var(--grigio); font-size: 0.8rem; }
+.urgente-azione { min-height: 44px; display: flex; align-items: center; justify-content: center; }
+
+@media (min-width: 640px) {
+  .urgenti-griglia { grid-template-columns: repeat(2, 1fr); }
+}
+@media (min-width: 960px) {
+  .urgenti-griglia { grid-template-columns: repeat(3, 1fr); }
+}
+
 /* ---------- Geolocalizzazione ---------- */
 
 .geo-box .btn { margin-top: 4px; }

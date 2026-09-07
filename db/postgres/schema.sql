@@ -369,3 +369,8 @@ CREATE TABLE IF NOT EXISTS product_groups (
 ALTER TABLE products ADD COLUMN IF NOT EXISTS gruppo_id INTEGER REFERENCES product_groups(id);
 ALTER TABLE products ADD COLUMN IF NOT EXISTS variante_valori TEXT;
 CREATE INDEX IF NOT EXISTS idx_products_gruppo ON products(gruppo_id);
+
+-- Pausa operativa del banco: distinta da "attivo" (che è l'attivazione della sede sulla
+-- piattaforma). Un banco in pausa non riceve nuove richieste, ma resta visibile ovunque
+-- altrove (punti vendita, clienti già approvati, storico).
+ALTER TABLE distributors ADD COLUMN IF NOT EXISTS ricezione_attiva INTEGER NOT NULL DEFAULT 1;

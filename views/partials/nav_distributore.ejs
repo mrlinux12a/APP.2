@@ -1,20 +1,12 @@
 <nav class="navbar">
   <div class="interno">
-    <a href="/distributore" class="<%= attivo === 'richieste' ? 'attivo' : '' %>">
-      <span class="ico">⏳</span>Richieste
+    <a href="/distributore" class="<%= attivo === 'home' ? 'attivo' : '' %>">
+      <span class="ico">🏠</span>Home
       <% if (contatori && contatori.daRispondere > 0) { %><span class="pallino"><%= contatori.daRispondere %></span><% } %>
-    </a>
-    <a href="/distributore/ordini" class="<%= attivo === 'ordini' ? 'attivo' : '' %>">
-      <span class="ico">📦</span>Ordini
-      <% if (contatori && contatori.daPreparare > 0) { %><span class="pallino"><%= contatori.daPreparare %></span><% } %>
     </a>
     <a href="/distributore/clienti" class="<%= attivo === 'clienti' ? 'attivo' : '' %>">
       <span class="ico">👥</span>Clienti
       <% if (contatori && contatori.daApprovare > 0) { %><span class="pallino"><%= contatori.daApprovare %></span><% } %>
-    </a>
-    <a href="/notifiche" class="<%= attivo === 'notifiche' ? 'attivo' : '' %>">
-      <span class="ico">🔔</span>Notifiche
-      <% if (notificheNonLette > 0) { %><span class="pallino"><%= notificheNonLette %></span><% } %>
     </a>
   </div>
 </nav>

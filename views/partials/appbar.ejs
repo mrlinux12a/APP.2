@@ -46,6 +46,7 @@
           <% } else if (currentUser.ruolo === 'distributore') { %>
             <a href="/distributore/clienti">Clienti</a>
             <a href="/distributore/ordini">Ordini da evadere</a>
+            <a href="/distributore/storico">Storico</a>
             <a href="/punti-vendita">Punti vendita</a>
           <% } %>
           <% if (!currentUser || currentUser.ruolo !== 'cliente') { %>

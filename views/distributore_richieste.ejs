@@ -4,47 +4,59 @@
   <%- include('partials/app_head', { titolo }) %>
 </head>
 <body data-loggato="1">
-  <div class="app">
+  <div class="app app-largo">
     <%- include('partials/appbar', { titolo, intestazione: distributore.nome, indietro: null }) %>
 
     <div class="contenuto">
-      <p class="sottotitolo"><%= distributore.filiale %> · zona <%= distributore.zona %></p>
+      <div class="banco-stato-riga">
+        <p class="sottotitolo" style="margin:0;"><%= distributore.filiale %> · zona <%= distributore.zona %></p>
+        <button type="button" class="toggle-banco <%= distributore.ricezione_attiva ? 'attivo' : 'pausa' %>"
+                data-toggle-banco data-attivo="<%= distributore.ricezione_attiva %>">
+          <span class="toggle-banco-pallino" aria-hidden="true"></span>
+          <span data-toggle-banco-testo><%= distributore.ricezione_attiva ? 'Banco operativo · Ricezione attiva' : 'Non disponibile · In pausa' %></span>
+        </button>
+      </div>
 
       <div class="riquadri-conta">
-        <div class="conta-box">
+        <a class="conta-box" href="#da-confermare">
           <span class="numero"><%= contatori.daRispondere %></span>
           <span class="etichetta">da confermare</span>
-        </div>
-        <a class="conta-box" href="/distributore/ordini">
-          <span class="numero"><%= contatori.daPreparare %></span>
-          <span class="etichetta">ordini da preparare</span>
         </a>
         <a class="conta-box" href="/distributore/ordini">
-          <span class="numero"><%= contatori.inPreparazione %></span>
-          <span class="etichetta">in preparazione</span>
+          <span class="numero"><%= contatori.daPreparare %></span>
+          <span class="etichetta">da preparare</span>
+        </a>
+        <a class="conta-box" href="/distributore/ordini">
+          <span class="numero"><%= contatori.inConsegna %></span>
+          <span class="etichetta">in consegna</span>
         </a>
       </div>
 
-      <%- include('partials/geolocalizzazione', {
-            ruolo: 'distributore',
-            titoloBox: 'Posizione del banco',
-            spiegazione: 'Con il tuo consenso il banco condivide la posizione in tempo reale: serve a calcolare la distanza dal cantiere del cliente e, quando la merce parte, a far seguire la consegna al cliente.'
-          }) %>
-
-      <div class="sezione-titolo">Da confermare</div>
+      <div class="sezione-titolo" id="da-confermare">Da confermare</div>
       <% if (!daRispondere.length) { %>
         <div class="vuoto"><span class="emoji">✅</span>Nessuna richiesta in attesa.</div>
       <% } else { %>
-        <div class="card card-fitta">
+        <div class="urgenti-griglia">
           <% daRispondere.forEach(function (r) { %>
-            <a class="riga-lista" href="/distributore/richieste/<%= r.id %>">
-              <span class="icona">⏳</span>
-              <span class="corpo">
-                <span class="etichetta">Richiesta #<%= r.id %> — <%= r.cliente_nome %></span>
-                <span class="dettaglio"><%= r.pezzi %> pz · ricevuta <%= fmt.oraSola(r.creato_il) %></span>
-              </span>
-              <span class="stato-badge stato-in_attesa" data-countdown-live data-secondi="<%= Math.max(0, r.secondi) %>"><%= fmt.mmss(Math.max(0, r.secondi)) %></span>
-            </a>
+            <div class="urgente-card">
+              <div class="urgente-testa">
+                <span class="urgente-id">#<%= r.id %> — <%= r.cliente_nome %></span>
+                <span class="urgente-timer" data-countdown-live data-secondi="<%= Math.max(0, r.secondi) %>">
+                  <%= fmt.mmss(Math.max(0, r.secondi)) %>
+                </span>
+              </div>
+              <div class="urgente-prodotti">
+                <% r.anteprima.forEach(function (a) { %>
+                  <span class="urgente-riga"><%= a.quantita %>× <%= a.nome %></span>
+                <% }); %>
+                <% if (r.altreRighe > 0) { %>
+                  <span class="urgente-riga urgente-altre">+<%= r.altreRighe %> altr<%= r.altreRighe === 1 ? 'o' : 'i' %></span>
+                <% } %>
+              </div>
+              <a class="btn btn-primary btn-blocco urgente-azione" href="/distributore/richieste/<%= r.id %>">
+                Apri &amp; accetta
+              </a>
+            </div>
           <% }); %>
         </div>
         <p class="nota">
@@ -52,30 +64,15 @@
         </p>
       <% } %>
 
-      <div class="sezione-titolo">Storico richieste</div>
-      <% if (!storico.length) { %>
-        <div class="vuoto"><span class="emoji">📭</span>Ancora nessuna richiesta chiusa.</div>
-      <% } else { %>
-        <div class="card card-fitta">
-          <% storico.forEach(function (r) { %>
-            <a class="riga-lista" href="/distributore/richieste/<%= r.id %>">
-              <span class="icona"><%= r.stato === 'ordinata' && r.esito === 'confermato' ? '📦' : '📄' %></span>
-              <span class="corpo">
-                <span class="etichetta">Richiesta #<%= r.id %> — <%= r.cliente_nome %></span>
-                <span class="dettaglio"><%= r.pezzi %> pz · <%= fmt.dataOra(r.creato_il) %></span>
-              </span>
-              <span class="stato-badge stato-<%= r.esito %>">
-                <%= r.esito === 'confermato' ? 'Confermata' : (r.esito === 'non_disponibile' ? 'Non disponibile' : (r.esito === 'scaduto' ? 'Non risposta' : 'In attesa')) %>
-              </span>
-            </a>
-          <% }); %>
-        </div>
-      <% } %>
-
+      <%- include('partials/geolocalizzazione', {
+            ruolo: 'distributore',
+            titoloBox: 'Posizione del banco',
+            spiegazione: 'Con il tuo consenso il banco condivide la posizione in tempo reale: serve a calcolare la distanza dal cantiere del cliente e, quando la merce parte, a far seguire la consegna al cliente.'
+          }) %>
     </div>
   </div>
 
-  <%- include('partials/nav_distributore', { attivo: 'richieste' }) %>
+  <%- include('partials/nav_distributore', { attivo: 'home', contatori }) %>
   <script src="/app.js" defer></script>
 </body>
 </html>

@@ -51,7 +51,7 @@ async function secondiRimasti(richiesta) {
 async function distributoriCandidati(productIds, zona, clienteId = null) {
   if (!productIds.length) return [];
   return db
-    .prepare(`SELECT * FROM distributors WHERE attivo = 1 ORDER BY nome`)
+    .prepare(`SELECT * FROM distributors WHERE attivo = 1 AND ricezione_attiva = 1 ORDER BY nome`)
     .all();
 }
 
@@ -68,7 +68,7 @@ async function creaRichiesta(cliente, righeCarrello) {
   // filtro zona, import incompleto), manda comunque a TUTTI i banchi attivi.
   if (!candidati.length) {
     try {
-      candidati = await db.prepare(`SELECT * FROM distributors WHERE attivo = 1 ORDER BY nome`).all();
+      candidati = await db.prepare(`SELECT * FROM distributors WHERE attivo = 1 AND ricezione_attiva = 1 ORDER BY nome`).all();
       console.log(`[richieste] fallback broadcast: ${candidati.length} distributori per cliente ${cliente.id} zona=${cliente.zona}`);
     } catch (e) { console.error('[richieste] fallback fallito', e.message); }
   }

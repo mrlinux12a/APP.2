@@ -222,7 +222,10 @@ app.get('/profilo', requireRole('cliente'), async (req, res) => {
 });
 
 app.post('/login', async (req, res) => {
-  const { username, password } = req.body;
+  // Uno spazio digitato per sbaglio (specie a fine nome, su telefono con autocorrezione)
+  // non deve far fallire l'accesso: il nome utente si confronta sempre già "ripulito".
+  const username = String(req.body.username || '').trim();
+  const { password } = req.body;
   const user = await db.prepare('SELECT * FROM users WHERE username = ? AND attivo = 1').get(username);
   if (!user || !bcrypt.compareSync(password || '', user.password_hash)) {
     return res.render('login', { errore: 'Credenziali non valide.' });
@@ -646,6 +649,12 @@ app.post('/richieste/:id/annulla', requireRole('cliente'), async (req, res) => {
   if (!richiesta || richiesta.cliente_id !== req.session.user.id) return res.redirect('/ordini');
   if (richiesta.stato !== 'ordinata') {
     await db.prepare(`UPDATE requests SET stato = 'annullata' WHERE id = ?`).run(richiesta.id);
+    // Chiude anche le risposte ancora "in attesa" dal lato banco: altrimenti la
+    // richiesta annullata dal cliente resta a intasare la dashboard dei distributori
+    // come se ci fosse ancora qualcosa da confermare.
+    await db.prepare(
+      `UPDATE request_responses SET esito = 'scaduto' WHERE request_id = ? AND esito = 'in_attesa'`
+    ).run(richiesta.id);
   }
   res.redirect('/ordini');
 });
@@ -1222,6 +1231,12 @@ async function contatoriBanco(distributorId) {
     inPreparazione: await q(
       `SELECT COUNT(*) AS n FROM orders WHERE distributor_id = ? AND stato = 'in_evasione'`
     ),
+    // "In consegna" ai fini della dashboard raggruppa tutto ciò che è già stato preso in
+    // carico (in preparazione o già partito): non richiede una nuova decisione del banco,
+    // a differenza di "da preparare".
+    inConsegna: await q(
+      `SELECT COUNT(*) AS n FROM orders WHERE distributor_id = ? AND stato IN ('in_evasione', 'evaso')`
+    ),
     daApprovare: await q(
       `SELECT COUNT(*) AS n FROM client_distributors WHERE distributor_id = ? AND stato = 'in_attesa'`
     ),
@@ -1251,12 +1266,62 @@ app.get('/distributore', requireRole('distributore'), async (req, res) => {
     )
     .all(req.session.user.distributor_id);
 
+  // Aperte finché la finestra non scade, anche se un altro banco ha già confermato.
+  const daRispondere = elenco.filter((r) => r.esito === 'in_attesa' && r.secondi > 0);
+
+  // Anteprima sintetica dei pezzi ("2x Valvola...") invece del solo totale: le prime 2
+  // righe più un conteggio delle altre, mostrata direttamente nella card urgente.
+  for (const r of daRispondere) {
+    const righe = await richieste.righeRichiesta(r.id);
+    r.anteprima = righe.slice(0, 2).map((ri) => ({ quantita: ri.quantita, nome: ri.nome }));
+    r.altreRighe = Math.max(0, righe.length - r.anteprima.length);
+  }
+
   res.render('distributore_richieste', {
     titolo: 'Richieste al banco',
     distributore,
     contatori: await contatoriBanco(req.session.user.distributor_id),
-    // Aperte finché la finestra non scade, anche se un altro banco ha già confermato.
-    daRispondere: elenco.filter((r) => r.esito === 'in_attesa' && r.secondi > 0),
+    daRispondere,
+  });
+});
+
+// Accende/spegne la ricezione di nuove richieste, senza toccare l'attivazione della sede
+// sulla piattaforma (quella resta sempre "attivo"). Risposta JSON: la home la richiama
+// via fetch per un cambio istantaneo, senza ricaricare la pagina.
+app.post('/api/distributore/stato', requireRole('distributore'), async (req, res) => {
+  const attivo = req.body.attivo ? 1 : 0;
+  await db.prepare('UPDATE distributors SET ricezione_attiva = ? WHERE id = ?').run(
+    attivo,
+    req.session.user.distributor_id
+  );
+  res.json({ ok: true, attivo: attivo === 1 });
+});
+
+// Storico richieste del banco: separato dalla home operativa per non intasarla di dati
+// vecchi. Le stesse righe che prima stavano in fondo a /distributore.
+app.get('/distributore/storico', requireRole('distributore'), async (req, res) => {
+  const distributore = await db
+    .prepare('SELECT * FROM distributors WHERE id = ?')
+    .get(req.session.user.distributor_id);
+
+  const elenco = await db
+    .prepare(
+      `SELECT r.*, rr.esito, u.ragione_sociale AS cliente_nome,
+              EXTRACT(EPOCH FROM (r.scade_il - NOW()))::int AS secondi,
+              (SELECT SUM(quantita) FROM request_items ri WHERE ri.request_id = r.id) AS pezzi
+         FROM request_responses rr
+         JOIN requests r ON r.id = rr.request_id
+         JOIN users u ON u.id = r.cliente_id
+        WHERE rr.distributor_id = ?
+        ORDER BY r.id DESC
+        LIMIT 100`
+    )
+    .all(req.session.user.distributor_id);
+
+  res.render('distributore_storico', {
+    titolo: 'Storico richieste',
+    distributore,
+    contatori: await contatoriBanco(req.session.user.distributor_id),
     storico: elenco.filter((r) => !(r.esito === 'in_attesa' && r.secondi > 0)),
   });
 });
