@@ -2,6 +2,79 @@ const db = require('../db');
 
 const PER_PAGINA = 40;
 
+function etichettaVariante(variante_valori) {
+  try {
+    const arr = typeof variante_valori === 'string' ? JSON.parse(variante_valori) : variante_valori;
+    return Array.isArray(arr) && arr.length ? arr.join(' ') : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Prodotti con lo stesso gruppo_id (stesso nome principale, misure diverse) vengono
+// mostrati come una sola card con un selettore di varianti, invece che una riga per
+// ciascuna misura. Un prodotto senza gruppo (o i cui "fratelli" non sono più attivi)
+// resta invariato: zero rischio per il catalogo esistente.
+async function raggruppaVarianti(righe) {
+  const idGruppi = [...new Set(righe.filter((r) => r.gruppo_id).map((r) => r.gruppo_id))];
+  if (!idGruppi.length) return righe;
+
+  const placeholders = idGruppi.map(() => '?').join(',');
+  const gruppi = await db
+    .prepare(
+      `SELECT g.id, g.nome_rappresentativo,
+              p.id AS prodotto_id, p.nome, p.codice, p.variante_valori,
+              p.prezzo_listino, p.sconto_base_pct, p.disponibilita, p.raee
+         FROM product_groups g
+         JOIN products p ON p.gruppo_id = g.id
+        WHERE g.id IN (${placeholders}) AND p.attivo = 1`
+    )
+    .all(...idGruppi);
+
+  const perGruppo = new Map();
+  for (const m of gruppi) {
+    if (!perGruppo.has(m.id)) perGruppo.set(m.id, { nome_rappresentativo: m.nome_rappresentativo, membri: [] });
+    perGruppo.get(m.id).membri.push(m);
+  }
+
+  const giaMostrati = new Set();
+  const risultato = [];
+  for (const r of righe) {
+    if (!r.gruppo_id) {
+      risultato.push(r);
+      continue;
+    }
+    if (giaMostrati.has(r.gruppo_id)) continue; // già rappresentato da un'altra riga dello stesso gruppo
+    const gruppo = perGruppo.get(r.gruppo_id);
+    if (!gruppo || gruppo.membri.length < 2) {
+      risultato.push(r); // fratelli non più attivi: si comporta come un prodotto singolo
+      continue;
+    }
+    giaMostrati.add(r.gruppo_id);
+    const membriOrdinati = gruppo.membri.slice().sort((a, b) => a.prezzo_listino - b.prezzo_listino);
+    const rappresentante = membriOrdinati.find((m) => m.prodotto_id === r.id) || membriOrdinati[0];
+    risultato.push({
+      ...r,
+      id: rappresentante.prodotto_id,
+      nome: gruppo.nome_rappresentativo || r.nome,
+      codice: rappresentante.codice,
+      prezzo_listino: rappresentante.prezzo_listino,
+      sconto_base_pct: rappresentante.sconto_base_pct,
+      disponibilita: rappresentante.disponibilita,
+      varianti: membriOrdinati.map((m) => ({
+        id: m.prodotto_id,
+        etichetta: etichettaVariante(m.variante_valori) || m.nome,
+        codice: m.codice,
+        prezzo_listino: m.prezzo_listino,
+        sconto_base_pct: m.sconto_base_pct,
+        disponibilita: m.disponibilita,
+        raee: m.raee,
+      })),
+    });
+  }
+  return risultato;
+}
+
 // Ricerca "parziale": ogni parola digitata deve comparire, anche solo come frammento,
 // dentro nome / codice / categoria / marchio del prodotto. Scrivendo "valv" escono tutte
 // le valvole; scrivendo "toshiba estia" escono le pompe di calore ESTIA.
@@ -58,7 +131,7 @@ async function cercaProdotti(
     : '';
   const paramsOrdine = primoTermine ? [primoTermine, primoTermine] : [];
 
-  return db
+  const righeGrezze = await db
     .prepare(
       `SELECT p.*, m.nome AS macro_nome, b.nome AS brand_nome, b.colore AS brand_colore
          FROM products p
@@ -69,6 +142,7 @@ async function cercaProdotti(
         LIMIT ?`
     )
     .all(...params, ...paramsOrdine, limite);
+  return raggruppaVarianti(righeGrezze);
 }
 
 // ---------- Macro categorie ----------
@@ -184,7 +258,7 @@ async function paginato({ where, params, pagina = 1, perPagina = PER_PAGINA }) {
   const pagine = Math.max(1, Math.ceil(totale / perPagina));
   const p = Math.min(Math.max(1, parseInt(pagina, 10) || 1), pagine);
 
-  const righe = await db
+  const righeGrezze = await db
     .prepare(
       `SELECT p.*, b.nome AS brand_nome, b.colore AS brand_colore
          FROM products p
@@ -194,6 +268,7 @@ async function paginato({ where, params, pagina = 1, perPagina = PER_PAGINA }) {
         LIMIT ? OFFSET ?`
     )
     .all(...params, perPagina, (p - 1) * perPagina);
+  const righe = await raggruppaVarianti(righeGrezze);
 
   return { righe, totale, pagina: p, pagine, perPagina };
 }

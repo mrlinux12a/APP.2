@@ -121,7 +121,7 @@ async function creaRichiesta(cliente, righeCarrello) {
   for (const d of candidati) {
     await notificaDistributore(d.id, {
       titolo: 'Nuova richiesta di disponibilità',
-      testo: `${cliente.ragione_sociale} — ${nArticoli} pz. Hai ${minuti} minuti per confermare.`,
+      testo: `${cliente.ragione_sociale} — ${nArticoli} pz. Hai ${Math.round(minuti)} minuti per confermare.`,
       link: `/distributore/richieste/${requestId}`,
       categoria: 'richieste',
       sottostato: 'inviata',
@@ -177,7 +177,7 @@ async function reinviaRichiesta(requestId) {
   for (const r of risposte) {
     await notificaDistributore(r.distributor_id, {
       titolo: 'Richiesta rinviata',
-      testo: `${nArticoli} pz. Hai ${minuti} minuti per confermare.`,
+      testo: `${nArticoli} pz. Hai ${Math.round(minuti)} minuti per confermare.`,
       link: `/distributore/richieste/${requestId}`,
       categoria: 'richieste',
       sottostato: 'inviata',

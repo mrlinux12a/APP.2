@@ -133,6 +133,17 @@ async function segnaLette(userId) {
   await db.prepare(`UPDATE notifications SET letta = 1 WHERE user_id = ?`).run(userId);
 }
 
+async function segnaLetteCategoria(userId, categoria) {
+  await db.prepare(`UPDATE notifications SET letta = 1 WHERE user_id = ? AND categoria = ?`).run(userId, categoria);
+}
+
+async function nonLetteCategoria(userId, categoria) {
+  const row = await db
+    .prepare(`SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND categoria = ? AND letta = 0`)
+    .get(userId, categoria);
+  return row ? Number(row.n) : 0;
+}
+
 module.exports = {
   CATEGORIE,
   notifica,
@@ -143,6 +154,8 @@ module.exports = {
   conteggiPerCategoria,
   conteggiPerSottostato,
   nonLette,
+  nonLetteCategoria,
   daMostrare,
   segnaLette,
+  segnaLetteCategoria,
 };

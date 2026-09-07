@@ -5,7 +5,7 @@
 </head>
 <body data-loggato="1">
   <div class="app">
-    <%- include('partials/appbar', { titolo, intestazione: 'Carrello', indietro: '/home' }) %>
+    <%- include('partials/appbar', { titolo, intestazione: 'Carrello' }) %>
 
     <% if (!righe.length) { %>
       <div class="contenuto">
@@ -46,8 +46,8 @@
                     </div>
                     <div class="prodotto-azioni prodotto-azioni-carrello">
                       <div class="stepper" data-stepper-carrello="<%= r.prodotto.id %>">
-                        <button type="button" data-passo-carrello="-1" aria-label="Togli">−</button>
-                        <input type="number" min="0" step="1" inputmode="numeric"
+                        <button type="button" data-passo-carrello="-1" aria-label="Togli" <%= r.quantita <= 1 ? 'disabled' : '' %>>−</button>
+                        <input type="number" min="1" step="1" inputmode="numeric"
                                name="quantita_<%= r.prodotto.id %>" value="<%= r.quantita %>"
                                data-qta-carrello-input="<%= r.prodotto.id %>"
                                aria-label="Quantità <%= r.prodotto.nome %>">

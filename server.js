@@ -77,6 +77,15 @@ app.use(async (req, res, next) => {
   res.locals.iconaOrdini = icone.iconaOrdini;
   res.locals.carrelloPezzi = contaCarrello(req);
   res.locals.notificheNonLette = req.session.user ? await notifiche.nonLette(req.session.user.id) : 0;
+  // Il tab "Stato ordini" segue tutta la pipeline del cliente (richiesta -> offerte ->
+  // ordine), non solo gli ordini veri e propri: il badge conta le notifiche non lette di
+  // entrambe le categorie, altrimenti una conferma disponibilità (categoria "richieste")
+  // non farebbe comparire nulla.
+  res.locals.ordiniNonLetti =
+    req.session.user && req.session.user.ruolo === 'cliente'
+      ? (await notifiche.nonLetteCategoria(req.session.user.id, 'ordini')) +
+        (await notifiche.nonLetteCategoria(req.session.user.id, 'richieste'))
+      : 0;
   res.locals.testoDisponibilita = TESTO_DISPONIBILITA;
   res.locals.geo = req.session.user ? await geo.statoUtente(req.session.user.id) : { consenso: false };
   // I contatori del banco servono alla barra di navigazione di tutte le pagine distributore.
@@ -276,6 +285,18 @@ function prodottoJson(p, servizioPct) {
     sconto_base_pct: p.sconto_base_pct,
     listino: pricing.euro(p.prezzo_listino),
     prezzo: pricing.euro(pricing.prezzoClienteConPct(p, servizioPct)),
+    varianti: p.varianti
+      ? p.varianti.map((v) => ({
+          id: v.id,
+          etichetta: v.etichetta,
+          codice: v.codice,
+          disponibilita: v.disponibilita,
+          disponibilita_testo: TESTO_DISPONIBILITA[v.disponibilita] || v.disponibilita,
+          raee: v.raee > 0 ? pricing.euro(v.raee) : null,
+          listino: pricing.euro(v.prezzo_listino),
+          prezzo: pricing.euro(pricing.prezzoClienteConPct(v, servizioPct)),
+        }))
+      : null,
   };
 }
 
@@ -570,6 +591,14 @@ app.get('/richieste/:id', requireRole('cliente'), async (req, res) => {
   if (!richiesta || richiesta.cliente_id !== req.session.user.id) {
     return res.status(404).render('errore', { titolo: 'Non trovata', messaggio: 'Richiesta non trovata.' });
   }
+  // Il cliente sta già guardando questa richiesta (schermata di attesa/offerte, che si
+  // auto-aggiorna): il cambio di stato non deve anche accendere il pallino in basso.
+  // res.locals.ordiniNonLetti è già stato calcolato dal middleware prima di questa route:
+  // va rifatto qui, altrimenti questa stessa risposta renderizzerebbe ancora il conteggio
+  // vecchio (da prima di aver segnato come lette le notifiche).
+  await notifiche.segnaLetteCategoria(req.session.user.id, 'richieste');
+  await notifiche.segnaLetteCategoria(req.session.user.id, 'ordini');
+  res.locals.ordiniNonLetti = 0;
   if (richiesta.stato === 'ordinata' && richiesta.order_id) {
     return res.redirect('/ordini/' + richiesta.order_id);
   }
@@ -934,6 +963,8 @@ async function richiesteAttiveClienteLeggere(clienteId) {
 }
 
 app.get('/ordini', requireRole('cliente'), async (req, res) => {
+  await notifiche.segnaLetteCategoria(req.session.user.id, 'ordini');
+  await notifiche.segnaLetteCategoria(req.session.user.id, 'richieste');
   const cardsAll = await richiesteAttiveClienteLeggere(req.session.user.id);
 
   const inAttesa = cardsAll.filter((c) => c.step === 1);
@@ -979,6 +1010,13 @@ app.get('/ordini/:id', requireLogin, async (req, res) => {
   }
   if (req.session.user.ruolo === 'distributore' && ordine.distributor_id !== req.session.user.distributor_id) {
     return res.status(403).render('errore', { titolo: 'Accesso negato', messaggio: 'Accesso non consentito.' });
+  }
+  // Il cliente sta guardando proprio questo ordine: un suo cambio di stato non deve
+  // anche accendere il pallino "Stato ordini" in basso.
+  if (req.session.user.ruolo === 'cliente') {
+    await notifiche.segnaLetteCategoria(req.session.user.id, 'ordini');
+    await notifiche.segnaLetteCategoria(req.session.user.id, 'richieste');
+    res.locals.ordiniNonLetti = 0;
   }
 
   const righe = await db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(ordine.id);
@@ -1112,6 +1150,8 @@ app.post('/api/ordini/:id/tracciamento', requireRole('distributore'), async (req
       titolo: 'Consegna in viaggio',
       testo: `Puoi seguire in tempo reale il mezzo che porta l'ordine #${ordine.id}.`,
       link: '/ordini/' + ordine.id,
+      categoria: 'ordini',
+      order_id: ordine.id,
     });
   }
   res.json({ ok: true, attivo: attivo === 1 });
@@ -1424,7 +1464,7 @@ app.get('/distributore/ordini/:id', requireRole('distributore'), async (req, res
     ? await richieste.getRisposta(ordine.request_id, ordine.distributor_id)
     : null;
   const mancanti = ordine.request_id
-    ? await richieste.calcolaOfferta(ordine.request_id, ordine.distributor_id).mancanti
+    ? (await richieste.calcolaOfferta(ordine.request_id, ordine.distributor_id)).mancanti
     : [];
 
   res.render('distributore_ordine', {
@@ -1455,6 +1495,8 @@ app.post('/distributore/ordini/:id/preparazione', requireRole('distributore'), a
       titolo: 'Ordine in preparazione',
       testo: `Il banco sta preparando il tuo ordine #${ordine.id}.`,
       link: '/ordini/' + ordine.id,
+      categoria: 'ordini',
+      order_id: ordine.id,
     });
   }
   res.redirect('/distributore/ordini/' + ordine.id);
@@ -1485,6 +1527,9 @@ app.post('/distributore/ordini/:id/ddt', requireRole('distributore'), async (req
     titolo: 'Merce in partenza',
     testo: `Ordine #${ordine.id}: emessa la bolla n. ${numero}. Puoi vedere il DDT in app.`,
     link: '/ddt/' + ordine.id,
+    categoria: 'ordini',
+    sottostato: 'spedito',
+    order_id: ordine.id,
   });
 
   res.redirect('/ddt/' + ordine.id);

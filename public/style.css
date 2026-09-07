@@ -501,6 +501,8 @@ a { color: var(--blu); }
 .ordine-hero .tempo { font-size: 1.1rem; font-weight: 700; color: var(--testo); }
 .ordine-hero .sotto { font-size: 0.85rem; margin-top: 3px; }
 .ordine-hero.verde .sotto { color: var(--verde); }
+:root[data-tema="chiaro"] .ordine-hero.verde { background: #cdedd4; }
+:root[data-tema="chiaro"] .ordine-hero.verde .tempo { color: var(--verde); }
 
 .link-discreto {
   display: block;
@@ -563,6 +565,7 @@ a { color: var(--blu); }
 .navbar a .ico { display: block; font-size: 1.25rem; line-height: 1.2; color: var(--icona-nav); }
 .navbar a.attivo { color: var(--blu); font-weight: 700; }
 :root:not([data-tema="chiaro"]) .navbar a.attivo { color: #ffffff; }
+.navbar a .pallino.pallino-azzurro { background: #2e97e6; }
 .navbar a .pallino {
   position: absolute;
   top: 4px;
@@ -1201,6 +1204,17 @@ th { color: var(--grigio); font-weight: 600; }
   white-space: nowrap;
 }
 .chip.attivo { background: var(--blu); border-color: var(--blu); color: #fff; }
+
+.varianti-riga { margin: 4px 0 6px; }
+.chip-variante { padding: 5px 10px; font-size: 0.78rem; }
+.selettore-variante {
+  width: auto;
+  max-width: 100%;
+  margin: 4px 0 6px;
+  padding: 6px 28px 6px 10px;
+  font-size: 0.86rem;
+  border-radius: 8px;
+}
 
 .svuota-link {
   background: none;

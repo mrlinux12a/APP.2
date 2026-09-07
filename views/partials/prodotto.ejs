@@ -1,13 +1,33 @@
 <% const qtaInCarrello = (typeof carrello !== 'undefined' && carrello && carrello[p.id]) ? carrello[p.id] : 0; %>
-<div class="prodotto" data-prodotto="<%= p.id %>">
+<div class="prodotto" data-prodotto="<%= p.id %>"
+     <% if (p.varianti) { %>data-varianti='<%= JSON.stringify(p.varianti.map(function (v) {
+          return { id: v.id, etichetta: v.etichetta, codice: v.codice, disponibilita: v.disponibilita,
+                   disponibilita_testo: testoDisponibilita[v.disponibilita] || v.disponibilita,
+                   raee: v.raee, listino: euro(v.prezzo_listino), prezzo: euro(prezzoCliente(v)),
+                   sconto: v.sconto_base_pct };
+        })) %>'<% } %>>
   <div class="info">
     <div class="nome">
       <% if (p.brand_nome) { %><span class="marchio-tag" style="--marchio:<%= p.brand_colore %>"><%= p.brand_nome %></span><% } %>
       <%= p.nome %>
     </div>
-    <div class="meta">
-      Cod. <%= p.codice %><% if (p.categoria) { %> · <%= p.categoria %><% } %>
-      <span class="badge badge-<%= p.disponibilita %>"><%= testoDisponibilita[p.disponibilita] %></span>
+    <% if (p.varianti && p.varianti.length > 8) { %>
+      <select class="selettore-variante" data-selettore-variante aria-label="Misura di <%= p.nome %>">
+        <% p.varianti.forEach(function (v) { %>
+          <option value="<%= v.id %>" <%= v.id === p.id ? 'selected' : '' %>><%= v.etichetta %></option>
+        <% }); %>
+      </select>
+    <% } else if (p.varianti) { %>
+      <div class="chip-riga varianti-riga">
+        <% p.varianti.forEach(function (v) { %>
+          <button type="button" class="chip chip-variante <%= v.id === p.id ? 'attivo' : '' %>"
+                  data-variante-id="<%= v.id %>"><%= v.etichetta %></button>
+        <% }); %>
+      </div>
+    <% } %>
+    <div class="meta" data-riga-meta>
+      Cod. <span data-riga-codice><%= p.codice %></span><% if (p.categoria) { %> · <%= p.categoria %><% } %>
+      <span class="badge badge-<%= p.disponibilita %>" data-riga-badge><%= testoDisponibilita[p.disponibilita] %></span>
     </div>
     <% if (p.refrigerante || p.ean || p.raee > 0) { %>
       <div class="meta">
@@ -17,24 +37,26 @@
         <% if (p.ean && p.ean.toUpperCase() !== 'TBA') { %> · EAN <%= p.ean %><% } %>
       </div>
     <% } %>
-    <div class="prezzo">
+    <div class="prezzo" data-riga-prezzo>
       <% if (p.sconto_base_pct > 0) { %><span class="barrato">€ <%= euro(p.prezzo_listino) %></span><% } %>
       € <%= euro(prezzoCliente(p)) %> <span class="iva">+ IVA</span>
     </div>
   </div>
-  <% if (p.disponibilita === 'non_disponibile') { %>
-    <div class="meta">non disponibile</div>
-  <% } else { %>
-    <div class="prodotto-azioni">
-      <div class="stepper">
-        <button type="button" data-passo="-1" aria-label="Togli">−</button>
-        <input type="number" min="0" step="1" inputmode="numeric" data-qta data-prodotto-qta="<%= p.id %>"
-               value="0" aria-label="Quantità <%= p.nome %>">
-        <button type="button" data-passo="1" aria-label="Aggiungi">+</button>
+  <div data-riga-azioni>
+    <% if (p.disponibilita === 'non_disponibile') { %>
+      <div class="meta">non disponibile</div>
+    <% } else { %>
+      <div class="prodotto-azioni">
+        <div class="stepper">
+          <button type="button" data-passo="-1" aria-label="Togli">−</button>
+          <input type="number" min="0" step="1" inputmode="numeric" data-qta data-prodotto-qta="<%= p.id %>"
+                 value="0" aria-label="Quantità <%= p.nome %>">
+          <button type="button" data-passo="1" aria-label="Aggiungi">+</button>
+        </div>
+        <div class="mini-carrello" data-nel-carrello="<%= p.id %>" <%= qtaInCarrello > 0 ? '' : 'hidden' %>>
+          <span>Nel carrello: <strong data-qta-carrello="<%= p.id %>"><%= qtaInCarrello %></strong> pz</span>
+        </div>
       </div>
-      <div class="mini-carrello" data-nel-carrello="<%= p.id %>" <%= qtaInCarrello > 0 ? '' : 'hidden' %>>
-        <span>Nel carrello: <strong data-qta-carrello="<%= p.id %>"><%= qtaInCarrello %></strong> pz</span>
-      </div>
-    </div>
-  <% } %>
+    <% } %>
+  </div>
 </div>

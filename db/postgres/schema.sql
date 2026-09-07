@@ -354,3 +354,18 @@ CREATE TABLE IF NOT EXISTS session (
   expire TIMESTAMP NOT NULL
 );
 CREATE INDEX IF NOT EXISTS IDX_session_expire ON session(expire);
+
+-- Gruppi di prodotti identici a parte le misure (raggruppamento automatico per nome +
+-- marca + categoria, verificato con soglia di prezzo prima di essere assegnato). Un
+-- prodotto con gruppo_id NULL resta un articolo indipendente come oggi: nessuna rottura
+-- per il catalogo esistente.
+CREATE TABLE IF NOT EXISTS product_groups (
+  id SERIAL PRIMARY KEY,
+  marca TEXT NOT NULL,
+  categoria TEXT,
+  nome_rappresentativo TEXT NOT NULL,
+  creato_il TIMESTAMP NOT NULL DEFAULT NOW()
+);
+ALTER TABLE products ADD COLUMN IF NOT EXISTS gruppo_id INTEGER REFERENCES product_groups(id);
+ALTER TABLE products ADD COLUMN IF NOT EXISTS variante_valori TEXT;
+CREATE INDEX IF NOT EXISTS idx_products_gruppo ON products(gruppo_id);

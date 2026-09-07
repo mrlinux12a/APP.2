@@ -131,8 +131,12 @@
     const input = document.querySelector('[data-qta-carrello-input="' + id + '"]');
     if (!input || !id) return;
     const passo = parseInt(btn.dataset.passoCarrello, 10);
-    const nuovo = Math.max(0, (parseInt(input.value, 10) || 0) + passo);
+    // Nel carrello il minimo è 1: per togliere del tutto una riga c'è il pulsante
+    // "Rimuovi" dedicato, non si arriva a 0 scalando con lo stepper.
+    const nuovo = Math.max(1, (parseInt(input.value, 10) || 0) + passo);
     input.value = nuovo;
+    const meno = stepper.querySelector('[data-passo-carrello="-1"]');
+    if (meno) meno.disabled = nuovo <= 1;
     // aggiorna via API
     fetch('/api/carrello/imposta', {
       method: 'POST',
@@ -142,14 +146,7 @@
       .then(function (r) { return r.json(); })
       .then(function (d) {
         aggiornaBadgeCarrello(d.pezzi);
-        if (nuovo === 0) {
-          const riga = document.querySelector('[data-riga="' + id + '"]');
-          if (riga) riga.style.opacity = '0.4';
-          // ricarica per ricalcolare totali se a zero
-          setTimeout(function () { window.location.reload(); }, 400);
-        } else {
-          window.location.reload();
-        }
+        window.location.reload();
       })
       .catch(function () { window.location.reload(); });
   });
@@ -182,13 +179,46 @@
     });
   }
 
+  // Blocco stepper/mini-carrello (o messaggio "non disponibile"): usato sia al primo
+  // disegno della card, sia quando si cambia variante dal selettore misure.
+  function azioniHtml(id, disponibilita) {
+    if (disponibilita === 'non_disponibile') return '<div class="meta">non disponibile</div>';
+    return (
+      '<div class="prodotto-azioni">' +
+      '<div class="stepper">' +
+      '<button type="button" data-passo="-1" aria-label="Togli">−</button>' +
+      '<input type="number" min="0" step="1" inputmode="numeric" data-qta data-prodotto-qta="' + id + '" value="0">' +
+      '<button type="button" data-passo="1" aria-label="Aggiungi">+</button>' +
+      '</div>' +
+      '<div class="mini-carrello" data-nel-carrello="' + id + '" hidden><span>Nel carrello: <strong data-qta-carrello="' + id + '">0</strong> pz</span></div>' +
+      '</div>'
+    );
+  }
+
+  // Oltre questa soglia una riga di chip diventa una striscia troppo lunga da scorrere:
+  // si passa a un menu a tendina, più compatto e più veloce da usare con tante misure.
+  const SOGLIA_CHIP = 8;
+
   function cardProdottoHtml(p) {
     const barrato = p.sconto_base_pct > 0
       ? '<span class="barrato">€ ' + p.listino + '</span>'
       : '';
-    const disabilitato = p.disponibilita === 'non_disponibile';
+    const varianti = !p.varianti
+      ? ''
+      : p.varianti.length > SOGLIA_CHIP
+      ? '<select class="selettore-variante" data-selettore-variante aria-label="Misura di ' + esc(p.nome) + '">' +
+        p.varianti.map(function (v) {
+          return '<option value="' + v.id + '"' + (v.id === p.id ? ' selected' : '') + '>' + esc(v.etichetta) + '</option>';
+        }).join('') + '</select>'
+      : '<div class="chip-riga varianti-riga">' +
+        p.varianti.map(function (v) {
+          return '<button type="button" class="chip chip-variante' + (v.id === p.id ? ' attivo' : '') +
+            '" data-variante-id="' + v.id + '">' + esc(v.etichetta) + '</button>';
+        }).join('') + '</div>';
     return (
-      '<div class="prodotto" data-prodotto="' + p.id + '">' +
+      '<div class="prodotto" data-prodotto="' + p.id + '"' +
+      (p.varianti ? ' data-varianti=\'' + esc(JSON.stringify(p.varianti)).replace(/'/g, '&#39;') + '\'' : '') +
+      '>' +
       '<div class="info">' +
       '<div class="nome">' +
       (p.brand_nome
@@ -196,24 +226,68 @@
           esc(p.brand_nome) + '</span> '
         : '') +
       esc(p.nome) + '</div>' +
-      '<div class="meta">Cod. ' + esc(p.codice) + ' · ' + esc(p.macro_nome || '') +
+      varianti +
+      '<div class="meta" data-riga-meta>Cod. <span data-riga-codice>' + esc(p.codice) + '</span> · ' + esc(p.macro_nome || '') +
       (p.raee ? ' · RAEE € ' + p.raee : '') +
-      ' <span class="badge badge-' + p.disponibilita + '">' + esc(p.disponibilita_testo) + '</span></div>' +
-      '<div class="prezzo">' + barrato + '€ ' + p.prezzo + ' <span class="iva">+ IVA</span></div>' +
+      ' <span class="badge badge-' + p.disponibilita + '" data-riga-badge>' + esc(p.disponibilita_testo) + '</span></div>' +
+      '<div class="prezzo" data-riga-prezzo>' + barrato + '€ ' + p.prezzo + ' <span class="iva">+ IVA</span></div>' +
       '</div>' +
-      (disabilitato
-        ? '<div class="meta">non disponibile</div>'
-        : '<div class="prodotto-azioni">' +
-          '<div class="stepper">' +
-          '<button type="button" data-passo="-1" aria-label="Togli">−</button>' +
-          '<input type="number" min="0" step="1" inputmode="numeric" data-qta data-prodotto-qta="' + p.id + '" value="0">' +
-          '<button type="button" data-passo="1" aria-label="Aggiungi">+</button>' +
-          '</div>' +
-          '<div class="mini-carrello" data-nel-carrello="' + p.id + '" hidden><span>Nel carrello: <strong data-qta-carrello="' + p.id + '">0</strong> pz</span></div>' +
-          '</div>') +
+      '<div data-riga-azioni>' + azioniHtml(p.id, p.disponibilita) + '</div>' +
       '</div>'
     );
   }
+
+  // ---------- Selettore varianti (misure) dentro una card prodotto ----------
+  // Aggiorna la card (prezzo, codice, disponibilità, stepper) sulla variante scelta,
+  // sia che arrivi da un chip cliccato sia da una select cambiata.
+  function applicaVariante(card, v) {
+    card.setAttribute('data-prodotto', v.id);
+    card.querySelectorAll('[data-variante-id]').forEach(function (c) {
+      c.classList.toggle('attivo', c.getAttribute('data-variante-id') === String(v.id));
+    });
+    const codiceEl = card.querySelector('[data-riga-codice]');
+    if (codiceEl) codiceEl.textContent = v.codice;
+    const badgeEl = card.querySelector('[data-riga-badge]');
+    if (badgeEl) {
+      badgeEl.className = 'badge badge-' + v.disponibilita;
+      badgeEl.textContent = v.disponibilita_testo || v.disponibilita;
+    }
+    const prezzoEl = card.querySelector('[data-riga-prezzo]');
+    if (prezzoEl) {
+      const barrato = (v.sconto || v.sconto_base_pct) > 0 ? '<span class="barrato">€ ' + v.listino + '</span>' : '';
+      prezzoEl.innerHTML = barrato + '€ ' + v.prezzo + ' <span class="iva">+ IVA</span>';
+    }
+    const azioniEl = card.querySelector('[data-riga-azioni]');
+    if (azioniEl) azioniEl.innerHTML = azioniHtml(v.id, v.disponibilita);
+
+    risincronizzaCarrelloVisibile();
+    ricalcolaBarra();
+  }
+
+  function trovaVariante(card, id) {
+    let varianti;
+    try { varianti = JSON.parse(card.getAttribute('data-varianti')); } catch (err) { return null; }
+    return varianti.find(function (x) { return String(x.id) === String(id); }) || null;
+  }
+
+  document.addEventListener('click', function (e) {
+    const chip = e.target.closest('[data-variante-id]');
+    if (!chip) return;
+    e.preventDefault();
+    const card = chip.closest('[data-varianti]');
+    if (!card) return;
+    const v = trovaVariante(card, chip.getAttribute('data-variante-id'));
+    if (v) applicaVariante(card, v);
+  });
+
+  document.addEventListener('change', function (e) {
+    const select = e.target.closest('[data-selettore-variante]');
+    if (!select) return;
+    const card = select.closest('[data-varianti]');
+    if (!card) return;
+    const v = trovaVariante(card, select.value);
+    if (v) applicaVariante(card, v);
+  });
 
   // Dopo aver inserito nuove card nel DOM: aggancia i loro quantità/mini-carrello e
   // aggiorna la barra in fondo. Serve sia dopo una sostituzione che dopo un'aggiunta.
@@ -456,8 +530,26 @@
     if (off) off.hidden = !attiva;
   }
 
+  // Essendo un'app multipagina (non una SPA), ogni navigazione riparte da zero e
+  // richiamerebbe l'API di posizione del browser ad ogni pagina: su origini non sicure
+  // (http) alcuni browser (Safari iOS) non ricordano il consenso da una pagina all'altra
+  // e ri-chiedono il permesso di continuo. Questo throttle a livello di sessione evita di
+  // richiamare l'API se abbiamo già un fix recente, per ridurre quanto è possibile quante
+  // volte la richiediamo — non risolve un'origine non sicura, ma aiuta comunque su https.
+  const CHIAVE_ULTIMO_FIX = 'geo_ultimo_fix_ts';
+  function fixRecente() {
+    try {
+      const t = parseInt(sessionStorage.getItem(CHIAVE_ULTIMO_FIX), 10);
+      return Number.isFinite(t) && Date.now() - t < 20000;
+    } catch (e) { return false; }
+  }
+  function segnaFixOra() {
+    try { sessionStorage.setItem(CHIAVE_ULTIMO_FIX, String(Date.now())); } catch (e) {}
+  }
+
   function invia(pos) {
     const ora = Date.now();
+    segnaFixOra();
     // Non tempestiamo il server: al massimo un aggiornamento ogni 10 secondi.
     if (ora - ultimoInvio < 10000) return;
     ultimoInvio = ora;
@@ -547,8 +639,11 @@
     }
 
     // Consenso già dato in una sessione precedente: riprendiamo senza nuovi popup.
+    // Se abbiamo già un fix recentissimo (arrivato dalla pagina precedente) evitiamo di
+    // richiamare subito l'API del browser: meno occasioni di ri-chiedere il permesso.
     if (box.dataset.consenso === '1') {
-      avviaWatch();
+      if (fixRecente()) scriviStato('Attiva — posizione aggiornata di recente');
+      else avviaWatch();
     } else if (supportata) {
       // Prima volta: la posizione si attiva appena si entra nell'app. Il permesso lo
       // chiede comunque il browser; se è già stato negato non insistiamo.
