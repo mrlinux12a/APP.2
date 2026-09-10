@@ -374,3 +374,48 @@ CREATE INDEX IF NOT EXISTS idx_products_gruppo ON products(gruppo_id);
 -- piattaforma). Un banco in pausa non riceve nuove richieste, ma resta visibile ovunque
 -- altrove (punti vendita, clienti già approvati, storico).
 ALTER TABLE distributors ADD COLUMN IF NOT EXISTS ricezione_attiva INTEGER NOT NULL DEFAULT 1;
+
+-- ---------------------------------------------------------------------------------
+-- Indici aggiunti in audit: il catalogo (50k+ prodotti) non aveva indici sui campi con
+-- cui si sfoglia (categoria/marchio/sottocategoria/misura) — ogni pagina faceva una
+-- scansione sequenziale completa. Idem per i contatori del banco, ricalcolati ad ogni
+-- pagina vista da un distributore filtrando orders/request_responses per distributor_id
+-- senza indice dedicato.
+-- ---------------------------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS idx_products_macro_attivo ON products(macro_slug, attivo);
+CREATE INDEX IF NOT EXISTS idx_products_brand_attivo ON products(brand_slug, attivo);
+CREATE INDEX IF NOT EXISTS idx_products_sottocategoria ON products(sottocategoria);
+CREATE INDEX IF NOT EXISTS idx_products_misura ON products(misura);
+CREATE INDEX IF NOT EXISTS idx_orders_distributor_stato ON orders(distributor_id, stato);
+CREATE INDEX IF NOT EXISTS idx_request_responses_distributor ON request_responses(distributor_id, esito);
+
+-- Un solo ordine per richiesta: senza questo vincolo, una corsa fra la scelta manuale del
+-- cliente e l'assegnazione automatica (o un doppio invio dello stesso click su "Invia
+-- l'ordine") poteva creare due ordini per la stessa richiesta, anche verso due
+-- distributori diversi. La vera barriera è applicativa (creaOrdineDaOfferta in server.js
+-- reclama la richiesta con una UPDATE atomica prima di creare l'ordine); questo indice è
+-- il ripiego a livello DB nel caso quella barriera venisse aggirata o rimossa per errore
+-- in futuro. Verificato prima di crearlo: nessuna riga esistente lo violava.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_request_unico ON orders(request_id) WHERE request_id IS NOT NULL;
+
+-- Una sola richiesta aperta per cliente alla volta: senza questo vincolo un doppio tap su
+-- "Procedi" poteva creare due richieste 'in_attesa' per lo stesso cliente (il controllo
+-- applicativo richiestaBloccante() legge e poi scrive, non è atomico). Verificato prima
+-- di crearlo: nessuna riga esistente lo violava.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_requests_cliente_aperta ON requests(cliente_id)
+  WHERE stato IN ('in_attesa', 'con_offerte');
+
+-- Ricerca prodotti: LOWER(nome) LIKE '%termine%' con jolly iniziale non può usare un
+-- indice B-tree, quindi ogni ricerca (richiamata ad ogni digitazione, catalogo.js
+-- cercaProdotti) faceva una scansione sequenziale su 50k+ righe. pg_trgm accelera
+-- automaticamente LIKE/ILIKE con jolly su entrambi i lati una volta creato l'indice GIN
+-- sull'espressione — nessuna modifica alla query in catalogo.js, che già usa esattamente
+-- LOWER(nome)/LOWER(codice).
+-- NOTA operativa: node scripts/apply_schema_pg.js manda tutto questo file in una sola
+-- query multi-istruzione, che Postgres esegue come un'unica transazione implicita — se
+-- CREATE EXTENSION fallisse per mancanza di privilegi, andrebbe in rollback anche tutto
+-- il resto del file. Va quindi applicata con una passata separata (aggiungendo queste
+-- righe solo dopo aver già applicato ed eseguito con successo il resto della migrazione).
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX IF NOT EXISTS idx_products_nome_trgm ON products USING GIN (LOWER(nome) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_products_codice_trgm ON products USING GIN (LOWER(codice) gin_trgm_ops);

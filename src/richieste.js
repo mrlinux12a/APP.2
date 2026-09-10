@@ -76,19 +76,22 @@ async function creaRichiesta(cliente, righeCarrello) {
   // Assicura che ogni prodotto della richiesta abbia un listino per ogni distributore
   // candidato: così il calcolo prezzo non sparisce anche se l'import non ha popolato
   // distributor_products. Usa il prezzo del prodotto come base.
+  // Prima era un doppio ciclo con una SELECT + INSERT per ogni coppia (distributore,
+  // prodotto), eseguite una alla volta dentro una transazione: con 5 distributori e 10
+  // articoli in carrello sono 50 andate e ritorno sequenziali verso il DB, e più a lungo
+  // resta aperta la transazione più cresce la finestra in cui un'altra transazione
+  // concorrente può interferire. Un solo INSERT...SELECT sostituisce tutte le coppie
+  // in una query sola.
   if (candidati.length && productIds.length) {
     try {
-      const ins = db.prepare(`INSERT INTO distributor_products (distributor_id, product_id, prezzo_listino, sconto_base_pct) VALUES (?,?,?,?) ON CONFLICT(distributor_id, product_id) DO NOTHING`);
-      const ensure = db.transaction(async () => {
-        for (const d of candidati) {
-          for (const pid of productIds) {
-            const rows = await db.prepare(`SELECT prezzo_listino, sconto_base_pct FROM products WHERE id = ?`).get(pid);
-            if (!rows) continue;
-            await ins.run(d.id, pid, rows.prezzo_listino, rows.sconto_base_pct);
-          }
-        }
-      });
-      await ensure();
+      await db.prepare(
+        `INSERT INTO distributor_products (distributor_id, product_id, prezzo_listino, sconto_base_pct)
+         SELECT d.id, p.id, p.prezzo_listino, p.sconto_base_pct
+           FROM distributors d
+           CROSS JOIN products p
+          WHERE d.id = ANY(?::int[]) AND p.id = ANY(?::int[])
+         ON CONFLICT (distributor_id, product_id) DO NOTHING`
+      ).run(candidati.map((d) => d.id), productIds);
     } catch (e) { console.error('[richieste] ensure listino fallito', e.message); }
   }
 
@@ -603,24 +606,28 @@ async function offerte(requestId, { modalita = 'consegna_mezzo_grossista' } = {}
     )
     .all(requestId);
 
-  const withTotals = [];
-  for (const c of conferme) {
-    const { distributore, totali, mancanti, carrello } = await calcolaOfferta(requestId, c.distributor_id, {
-      modalita,
-    });
-    withTotals.push({
-      distributore,
-      copertura: c.copertura,
-      partenza_ore: c.partenza_ore,
-      consegna_ore: c.consegna_ore,
-      consegna_minuti_stimati: c.consegna_minuti_stimati,
-      note: c.note,
-      risposto_il: c.risposto_il,
-      mancanti,
-      n_articoli: carrello.length,
-      totali,
-    });
-  }
+  // Ogni conferma richiede il proprio calcolaOfferta() (join su più tabelle + sconti di
+  // anagrafica): prima giravano una alla volta in sequenza, ora in parallelo — l'ordine
+  // non conta comunque, dato che il risultato si riordina subito dopo.
+  const withTotals = await Promise.all(
+    conferme.map(async (c) => {
+      const { distributore, totali, mancanti, carrello } = await calcolaOfferta(requestId, c.distributor_id, {
+        modalita,
+      });
+      return {
+        distributore,
+        copertura: c.copertura,
+        partenza_ore: c.partenza_ore,
+        consegna_ore: c.consegna_ore,
+        consegna_minuti_stimati: c.consegna_minuti_stimati,
+        note: c.note,
+        risposto_il: c.risposto_il,
+        mancanti,
+        n_articoli: carrello.length,
+        totali,
+      };
+    })
+  );
   return withTotals.sort((a, b) => {
       if (a.copertura !== b.copertura) return a.copertura === 'totale' ? -1 : 1;
       return a.totali.totale_ivato - b.totali.totale_ivato;

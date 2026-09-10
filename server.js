@@ -3,6 +3,7 @@ const express = require('express');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
 const path = require('path');
+const crypto = require('crypto');
 
 const db = require('./db');
 // auto-seed se DB vuoto (dopo clone/pull basta npm start)
@@ -38,15 +39,62 @@ const { ArchivioSqlite } = require('./src/sessioni');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Prima qui c'era un segreto fisso ('minuteria-mvp-demo-secret') usato come fallback: era
+// scritto nel sorgente, quindi pubblico per chiunque leggesse il repository — con quello
+// chiunque può firmare cookie di sessione validi. La correzione vera è impostare
+// SESSION_SECRET nell'ambiente (.env in locale, variabili d'ambiente in produzione); se
+// manca, meglio generarne uno nuovo ad ogni avvio (si perdono le sessioni al riavvio) che
+// ripetere lo stesso valore noto per sempre.
+let sessionSecret = process.env.SESSION_SECRET;
+if (!sessionSecret) {
+  sessionSecret = crypto.randomBytes(48).toString('hex');
+  console.warn(
+    'ATTENZIONE: SESSION_SECRET non impostata nell\'ambiente. Uso un valore generato ora, ' +
+    'valido solo per questo avvio (ogni riavvio disconnette tutti). Impostala in .env e, in ' +
+    'produzione, nelle variabili d\'ambiente del servizio di hosting.'
+  );
+}
+
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
+// Necessario per leggere il vero IP del client (usato dal limite tentativi di login)
+// quando l'app gira dietro un proxy/load balancer (es. Vercel).
+app.set('trust proxy', 1);
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+
+// Difesa in profondità contro il CSRF, in aggiunta al cookie di sessione già impostato
+// con sameSite:'lax' (che da solo blocca già la maggior parte degli invii cross-site):
+// rifiuta le richieste che cambiano stato se Origin (o, in mancanza, Referer) non
+// corrisponde all'host di questa app. Se mancano entrambe le intestazioni si lascia
+// passare piuttosto che bloccare traffico legittimo: capita con alcuni browser/estensioni
+// per la privacy, e sameSite:'lax' resta comunque la prima barriera.
+function stessaOrigine(req) {
+  const host = req.get('host');
+  if (!host) return false;
+  const origin = req.get('origin');
+  if (origin) {
+    try { return new URL(origin).host === host; } catch { return false; }
+  }
+  const referer = req.get('referer');
+  if (referer) {
+    try { return new URL(referer).host === host; } catch { return false; }
+  }
+  return true;
+}
+const METODI_DA_VERIFICARE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+app.use((req, res, next) => {
+  if (METODI_DA_VERIFICARE.has(req.method) && !stessaOrigine(req)) {
+    return res.status(403).send('Richiesta rifiutata: origine non corrispondente.');
+  }
+  next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(
   session({
     store: new ArchivioSqlite(), // su file, così un riavvio non scollega nessuno
-    secret: process.env.SESSION_SECRET || 'minuteria-mvp-demo-secret',
+    secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
     rolling: true, // ogni visita rinnova la scadenza: chi usa l'app resta dentro
@@ -62,13 +110,6 @@ app.use(
 app.use(async (req, res, next) => {
   res.locals.currentUser = req.session.user || null;
   res.locals.euro = pricing.euro;
-  // pricing.prezzoCliente legge il DB (async): i template EJS non possono fare "await"
-  // dentro <%= %>, quindi qui si legge la percentuale di servizio una volta per
-  // richiesta e si espone ai template una versione sincrona e pura per riga.
-  const servizioPct = await pricing.getServizioPct();
-  res.locals.prezzoCliente = (riga) => pricing.prezzoClienteConPct(riga, servizioPct);
-  // Gli ordini creati prima delle offerte per distributore non hanno l'IVA calcolata.
-  res.locals.totaleOrdine = (o) => (o.totale_ivato > 0 ? o.totale_ivato : o.totale_finale);
   res.locals.fmt = format;
   res.locals.iconaCategoria = icone.iconaCategoria;
   res.locals.iconaLente = icone.iconaLente;
@@ -76,23 +117,39 @@ app.use(async (req, res, next) => {
   res.locals.iconaCarrello = icone.iconaCarrello;
   res.locals.iconaOrdini = icone.iconaOrdini;
   res.locals.carrelloPezzi = contaCarrello(req);
-  res.locals.notificheNonLette = req.session.user ? await notifiche.nonLette(req.session.user.id) : 0;
+  res.locals.testoDisponibilita = TESTO_DISPONIBILITA;
+
+  const utente = req.session.user;
+  // Nessuna di queste dipende dal risultato di un'altra: prima giravano una dopo l'altra
+  // (fino a una decina di query in sequenza, anche per un cliente senza nulla da mostrare),
+  // sommando la latenza di ognuna invece di pagare solo quella della più lenta.
+  const [servizioPct, notificheNonLette, ordiniNonLetti, richiesteNonLette, geoStato, contatori] =
+    await Promise.all([
+      pricing.getServizioPct(),
+      utente ? notifiche.nonLette(utente.id) : Promise.resolve(0),
+      utente && utente.ruolo === 'cliente' ? notifiche.nonLetteCategoria(utente.id, 'ordini') : Promise.resolve(0),
+      utente && utente.ruolo === 'cliente' ? notifiche.nonLetteCategoria(utente.id, 'richieste') : Promise.resolve(0),
+      utente ? geo.statoUtente(utente.id) : Promise.resolve({ consenso: false }),
+      utente && utente.ruolo === 'distributore' && utente.distributor_id
+        ? contatoriBanco(utente.distributor_id)
+        : Promise.resolve(null),
+    ]);
+
+  // pricing.prezzoCliente legge il DB (async): i template EJS non possono fare "await"
+  // dentro <%= %>, quindi qui si legge la percentuale di servizio una volta per
+  // richiesta e si espone ai template una versione sincrona e pura per riga.
+  res.locals.prezzoCliente = (riga) => pricing.prezzoClienteConPct(riga, servizioPct);
+  // Gli ordini creati prima delle offerte per distributore non hanno l'IVA calcolata.
+  res.locals.totaleOrdine = (o) => (o.totale_ivato > 0 ? o.totale_ivato : o.totale_finale);
+  res.locals.notificheNonLette = notificheNonLette;
   // Il tab "Stato ordini" segue tutta la pipeline del cliente (richiesta -> offerte ->
   // ordine), non solo gli ordini veri e propri: il badge conta le notifiche non lette di
   // entrambe le categorie, altrimenti una conferma disponibilità (categoria "richieste")
   // non farebbe comparire nulla.
-  res.locals.ordiniNonLetti =
-    req.session.user && req.session.user.ruolo === 'cliente'
-      ? (await notifiche.nonLetteCategoria(req.session.user.id, 'ordini')) +
-        (await notifiche.nonLetteCategoria(req.session.user.id, 'richieste'))
-      : 0;
-  res.locals.testoDisponibilita = TESTO_DISPONIBILITA;
-  res.locals.geo = req.session.user ? await geo.statoUtente(req.session.user.id) : { consenso: false };
+  res.locals.ordiniNonLetti = ordiniNonLetti + richiesteNonLette;
+  res.locals.geo = geoStato;
   // I contatori del banco servono alla barra di navigazione di tutte le pagine distributore.
-  res.locals.contatori =
-    req.session.user && req.session.user.ruolo === 'distributore' && req.session.user.distributor_id
-      ? await contatoriBanco(req.session.user.distributor_id)
-      : null;
+  res.locals.contatori = contatori;
   next();
 });
 
@@ -221,15 +278,52 @@ app.get('/profilo', requireRole('cliente'), async (req, res) => {
   });
 });
 
+// Limite tentativi di login: senza, le credenziali si potevano provare senza alcun
+// limite (brute force / credential stuffing). In memoria di processo — su un'unica
+// istanza è sufficiente; non sopravvive a un riavvio né si condivide fra più istanze,
+// ma è già una barriera concreta dove prima non c'era nulla.
+const tentativiLogin = new Map(); // chiave "ip|utente" -> { conteggio, dal }
+const FINESTRA_LOGIN_MS = 10 * 60 * 1000;
+const MAX_TENTATIVI_LOGIN = 8;
+
+function loginBloccato(chiave) {
+  const voce = tentativiLogin.get(chiave);
+  if (!voce) return false;
+  if (Date.now() - voce.dal > FINESTRA_LOGIN_MS) {
+    tentativiLogin.delete(chiave);
+    return false;
+  }
+  return voce.conteggio >= MAX_TENTATIVI_LOGIN;
+}
+function registraTentativoFallito(chiave) {
+  const voce = tentativiLogin.get(chiave) || { conteggio: 0, dal: Date.now() };
+  voce.conteggio += 1;
+  tentativiLogin.set(chiave, voce);
+}
+setInterval(() => {
+  const ora = Date.now();
+  for (const [chiave, voce] of tentativiLogin) {
+    if (ora - voce.dal > FINESTRA_LOGIN_MS) tentativiLogin.delete(chiave);
+  }
+}, FINESTRA_LOGIN_MS).unref();
+
 app.post('/login', async (req, res) => {
   // Uno spazio digitato per sbaglio (specie a fine nome, su telefono con autocorrezione)
   // non deve far fallire l'accesso: il nome utente si confronta sempre già "ripulito".
   const username = String(req.body.username || '').trim();
   const { password } = req.body;
+  const chiave = req.ip + '|' + username.toLowerCase();
+
+  if (loginBloccato(chiave)) {
+    return res.status(429).render('login', { errore: 'Troppi tentativi non riusciti. Riprova tra qualche minuto.' });
+  }
+
   const user = await db.prepare('SELECT * FROM users WHERE username = ? AND attivo = 1').get(username);
   if (!user || !bcrypt.compareSync(password || '', user.password_hash)) {
+    registraTentativoFallito(chiave);
     return res.render('login', { errore: 'Credenziali non valide.' });
   }
+  tentativiLogin.delete(chiave);
   req.session.user = {
     id: user.id,
     ruolo: user.ruolo,
@@ -257,11 +351,17 @@ app.get('/home', requireRole('cliente'), async (req, res) => {
 
 app.get('/cerca', requireRole('cliente'), async (req, res) => {
   const q = (req.query.q || '').trim();
-  const risultati = q ? await catalogo.cercaProdotti(q) : [];
+  const diametro = req.query.diametro || null;
+  const materiale = req.query.materiale || null;
+  const risultati = q ? await catalogo.cercaProdotti(q, { diametro, materiale, limite: 100 }) : [];
+  const tag = q ? catalogo.tagRaffinamento(risultati) : { diametri: [], materiali: [] };
   res.render('cerca', {
     titolo: 'Cerca',
     q,
+    diametro,
+    materiale,
     risultati,
+    tag,
     carrello: getCarrello(req),
   });
 });
@@ -313,11 +413,14 @@ app.get('/api/cerca', requireRole('cliente'), async (req, res) => {
     famiglia: req.query.famiglia || null,
     sotto: req.query.sotto || null,
     misura: req.query.misura || null,
+    materiale: req.query.materiale || null,
+    diametro: req.query.diametro || null,
     limite: 60,
   };
   const risultati = q.length >= 2 ? await catalogo.cercaProdotti(q, ambito) : [];
+  const tag = q.length >= 2 ? catalogo.tagRaffinamento(risultati) : { diametri: [], materiali: [] };
   const servizioPct = await pricing.getServizioPct();
-  res.json({ risultati: risultati.map((p) => prodottoJson(p, servizioPct)) });
+  res.json({ risultati: risultati.map((p) => prodottoJson(p, servizioPct)), tag });
 });
 
 // Pagina successiva di una categoria/sottocategoria, per lo scroll infinito: stessi
@@ -584,7 +687,22 @@ async function inviaRichiesta(req, res) {
     });
   }
 
-  const { requestId } = await richieste.creaRichiesta(cliente, righe);
+  let requestId;
+  try {
+    ({ requestId } = await richieste.creaRichiesta(cliente, righe));
+  } catch (e) {
+    // 23505 = violazione del vincolo unico che ammette una sola richiesta aperta per
+    // cliente (vedi schema.sql, idx_requests_cliente_aperta): un doppio tap sullo stesso
+    // invio può far passare entrambe le chiamate oltre il controllo di richiestaBloccante
+    // qui sopra (è una lettura-poi-scrittura, non atomica) prima che la seconda arrivi
+    // all'INSERT — a quel punto è il DB stesso a fermarla. Portiamo comunque il cliente
+    // sulla richiesta che è realmente stata creata, invece di un errore 500.
+    if (e && e.code === '23505') {
+      const bloccante2 = await richiestaBloccante(cliente.id);
+      if (bloccante2) return res.redirect('/richieste/' + bloccante2.id);
+    }
+    throw e;
+  }
   req.session.carrello = {};
   res.redirect('/richieste/' + requestId);
 }
@@ -782,6 +900,14 @@ app.post('/ordini', requireRole('cliente'), async (req, res) => {
     note: req.body.note,
     destinazione: req.body.destinazione,
   });
+  if (orderId === null) {
+    // Un'altra chiamata concorrente ha chiuso questa richiesta un istante prima (doppio
+    // tap sullo stesso "Invia l'ordine", o l'assegnazione automatica dei 5 minuti scattata
+    // nello stesso momento): non è stato creato un secondo ordine duplicato, portiamo il
+    // cliente su quello vero, chiunque l'abbia creato.
+    const aggiornata = await richieste.getRichiesta(richiesta.id);
+    return res.redirect(aggiornata && aggiornata.order_id ? '/ordini/' + aggiornata.order_id : '/richieste/' + richiesta.id);
+  }
   res.redirect('/ordini/' + orderId + '?nuovo=1');
 });
 
@@ -815,6 +941,18 @@ async function creaOrdineDaOfferta(richiesta, distributorId, risposta, opzioni =
   );
 
   const creaOrdine = db.transaction(async () => {
+    // Blocco atomico "solo il primo vince": prima questa UPDATE non esisteva e l'ordine
+    // veniva sempre creato senza controllare se la richiesta era già stata chiusa da
+    // un'altra chiamata concorrente — un doppio tap sullo stesso invio, o l'assegnazione
+    // automatica dei 5 minuti scattata nello stesso istante di una scelta manuale,
+    // potevano creare due ordini (anche con due distributori diversi) per la stessa
+    // richiesta. Ora solo la chiamata che riesce a far passare questa UPDATE (changes=1)
+    // prosegue; l'altra trova stato già 'ordinata' e si ferma senza scrivere nulla.
+    const claim = await db.prepare(
+      `UPDATE requests SET stato = 'ordinata' WHERE id = ? AND stato <> 'ordinata'`
+    ).run(richiesta.id);
+    if (!claim.changes) return null;
+
     const info = await insertOrder.run(
       richiesta.cliente_id,
       modalita,
@@ -833,10 +971,7 @@ async function creaOrdineDaOfferta(richiesta, distributorId, risposta, opzioni =
     );
     const orderId = Number(info.lastInsertRowid);
     for (const riga of totali.righe) await insertItem.run(orderId, riga.product_id, riga.codice_snapshot, riga.nome_snapshot, riga.quantita, riga.prezzo_listino_snapshot, riga.sconto_pct_snapshot, riga.prezzo_netto_unitario, riga.subtotale, riga.prezzo_unitario_cliente, riga.subtotale_cliente, riga.raee_unitario, riga.raee_riga);
-    await db.prepare(`UPDATE requests SET stato = 'ordinata', order_id = ? WHERE id = ?`).run(
-      orderId,
-      richiesta.id
-    );
+    await db.prepare(`UPDATE requests SET order_id = ? WHERE id = ?`).run(orderId, richiesta.id);
     // Chiuso l'ordine, gli altri banchi non devono più poter rispondere.
     await db.prepare(
       `UPDATE request_responses SET esito = 'scaduto', risposto_il = NOW()
@@ -846,6 +981,7 @@ async function creaOrdineDaOfferta(richiesta, distributorId, risposta, opzioni =
   });
 
   const orderId = await creaOrdine();
+  if (orderId === null) return null;
 
   const distributore = await db.prepare('SELECT * FROM distributors WHERE id = ?').get(distributorId);
   await notifiche.notificaDistributore(distributorId, {
@@ -879,7 +1015,10 @@ async function assegnaOffertePerScadenza() {
   for (const r of scelte) {
     const richiesta = await richieste.getRichiesta(r.id);
     const migliore = await richieste.offertaPiuVeloce(r.id);
-    if (!richiesta || !migliore) return;
+    // Era "return": una singola richiesta del lotto senza offerta valida interrompeva
+    // l'intero giro, saltando anche tutte le altre richieste ancora da assegnare in
+    // questo tick da 30 secondi.
+    if (!richiesta || !migliore) continue;
 
     await db.prepare('UPDATE requests SET assegnata_auto = 1 WHERE id = ?').run(r.id);
     try {
@@ -1219,27 +1358,34 @@ function distanzaClienteBanco(cliente, distributore) {
 
 // Riepilogo dei numeri che il banco deve avere sotto gli occhi.
 async function contatoriBanco(distributorId) {
-  const q = async (sql, ...p) => (await db.prepare(sql).get(distributorId, ...p)).n;
-  return {
-    daRispondere: await q(
+  // Prima erano 5 query separate, una dopo l'altra (await in sequenza): eseguita ad ogni
+  // singola pagina vista da un distributore, sommava 5 andate e ritorno verso il DB dove
+  // ne bastava una per gli ordini (con FILTER) più altre due, tutte e tre in parallelo.
+  const [ordini, daRispondereRow, daApprovareRow] = await Promise.all([
+    db.prepare(
+      `SELECT
+         COUNT(*) FILTER (WHERE stato = 'inviato') AS da_preparare,
+         COUNT(*) FILTER (WHERE stato = 'in_evasione') AS in_preparazione,
+         COUNT(*) FILTER (WHERE stato IN ('in_evasione', 'evaso')) AS in_consegna
+         FROM orders WHERE distributor_id = ?`
+    ).get(distributorId),
+    db.prepare(
       `SELECT COUNT(*) AS n FROM request_responses rr JOIN requests r ON r.id = rr.request_id
         WHERE rr.distributor_id = ? AND rr.esito = 'in_attesa' AND r.scade_il > NOW()`
-    ),
-    daPreparare: await q(
-      `SELECT COUNT(*) AS n FROM orders WHERE distributor_id = ? AND stato = 'inviato'`
-    ),
-    inPreparazione: await q(
-      `SELECT COUNT(*) AS n FROM orders WHERE distributor_id = ? AND stato = 'in_evasione'`
-    ),
+    ).get(distributorId),
+    db.prepare(
+      `SELECT COUNT(*) AS n FROM client_distributors WHERE distributor_id = ? AND stato = 'in_attesa'`
+    ).get(distributorId),
+  ]);
+  return {
+    daRispondere: Number(daRispondereRow.n),
+    daPreparare: Number(ordini.da_preparare),
+    inPreparazione: Number(ordini.in_preparazione),
     // "In consegna" ai fini della dashboard raggruppa tutto ciò che è già stato preso in
     // carico (in preparazione o già partito): non richiede una nuova decisione del banco,
     // a differenza di "da preparare".
-    inConsegna: await q(
-      `SELECT COUNT(*) AS n FROM orders WHERE distributor_id = ? AND stato IN ('in_evasione', 'evaso')`
-    ),
-    daApprovare: await q(
-      `SELECT COUNT(*) AS n FROM client_distributors WHERE distributor_id = ? AND stato = 'in_attesa'`
-    ),
+    inConsegna: Number(ordini.in_consegna),
+    daApprovare: Number(daApprovareRow.n),
   };
 }
 
@@ -1648,6 +1794,36 @@ app.get('/agente/ordini', requireRole('agente'), async (req, res) => {
     )
     .all();
   res.render('agente_ordini', { titolo: 'Ordini in arrivo', ordini });
+});
+
+// ---------- Gestione errori ----------
+
+// Senza un handler dedicato, un errore lanciato da una rotta async finiva nel gestore di
+// default di Express: fuori da NODE_ENV=production può restituire lo stack trace al
+// client, e comunque non è coerente con le pagine di errore già esistenti nell'app.
+// Va registrato dopo tutte le rotte (Express lo riconosce come error-handler dai 4
+// parametri), quindi resta qui in fondo.
+app.use((err, req, res, next) => {
+  console.error('Errore non gestito nella richiesta', req.method, req.originalUrl, ':', err);
+  if (res.headersSent) return next(err);
+  res.status(500).render('errore', {
+    titolo: 'Errore imprevisto',
+    messaggio: 'Si è verificato un problema imprevisto. Riprova tra poco.',
+  });
+});
+
+// Reti di sicurezza a livello di processo: prima non c'erano, quindi un errore sfuggito
+// (es. una Promise rifiutata senza .catch) poteva passare inosservato nei log, o — nel
+// caso di un'eccezione davvero non gestita — lasciare il processo in uno stato incerto
+// senza che nessuno se ne accorgesse. Sull'eccezione non gestita si esce deliberatamente
+// (invece di continuare a girare in uno stato che potrebbe essere corrotto): se l'app è
+// tenuta in vita da un process manager/hosting che la riavvia, è la scelta più sicura.
+process.on('unhandledRejection', (motivo) => {
+  console.error('Promise rifiutata senza gestione:', motivo);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Eccezione non gestita, arresto il processo:', err);
+  process.exit(1);
 });
 
 // ---------- Avvio ----------

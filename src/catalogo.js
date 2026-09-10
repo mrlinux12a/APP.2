@@ -75,12 +75,49 @@ async function raggruppaVarianti(righe) {
   return risultato;
 }
 
+// Parole materiale riconosciute nel nome: non è una colonna (nessun campo "materiale"
+// esiste nello schema), è una lista fissa validata sui dati reali del catalogo — nessuna
+// di queste genera falsi positivi come sottostringa (verificato: le uniche occorrenze
+// "senza spazio prima" sono composti legittimi come "inox-rame", "ppe-inox", mai rumore).
+const MATERIALI_RICONOSCIUTI = [
+  'ottone', 'inox', 'acciaio', 'rame', 'cromo', 'bronzo', 'polipropilene',
+  'zincato', 'alluminio', 'plastica', 'pvc', 'ghisa', 'nichelato',
+];
+
+// Equivalenze pollici -> mm SOLO per le taglie gas/impianti a pressione: verificato sui
+// dati che il catalogo non usa mai "DN", e che i diametri mm "tondi" più grandi (90, 110,
+// 125, 160) appartengono a tubi di scarico/pluviale senza un vero equivalente in pollici
+// in questo catalogo — non vanno mai aggiunti qui.
+const EQUIVALENZE_POLLICI_MM = {
+  '1/2': [15, 20],
+  '3/4': [20, 22, 25], // 22 = misura rame comune per 3/4", sempre inclusa (non solo se il materiale è rame)
+  '1': [25, 32],
+  '1.1/4': [32, 40],
+  '1.1/2': [40, 50],
+  '2': [50, 63],
+};
+
+// "3/4"" -> "3/4": la stessa forma con cui è scritta la chiave delle equivalenze sopra.
+function chiaveEquivalenza(termine) {
+  return String(termine || '').replace(/"$/, '');
+}
+
+// Pattern Postgres (operatore ~*) per un diametro in mm ancorato a un confine non
+// numerico: "20" non deve mai intercettare "Ø200" o "120". Uno o più valori insieme,
+// es. frammentiDiametroMm([20,22,25]) -> 'ø\s?(20|22|25)(?!\d)'.
+function frammentoDiametroMm(valoriMm) {
+  return `ø\\s?(${valoriMm.join('|')})(?!\\d)`;
+}
+
 // Ricerca "parziale": ogni parola digitata deve comparire, anche solo come frammento,
 // dentro nome / codice / categoria / marchio del prodotto. Scrivendo "valv" escono tutte
 // le valvole; scrivendo "toshiba estia" escono le pompe di calore ESTIA.
 async function cercaProdotti(
   query,
-  { macroSlug = null, brandSlug = null, famiglia = null, sotto = null, misura = null, limite = 100 } = {}
+  {
+    macroSlug = null, brandSlug = null, famiglia = null, sotto = null, misura = null,
+    materiale = null, diametro = null, limite = 100,
+  } = {}
 ) {
   const termini = String(query || '')
     .toLowerCase()
@@ -113,15 +150,47 @@ async function cercaProdotti(
     where.push('p.misura = ?');
     params.push(misura);
   }
+  // Chip "Materiale" già scelta: stesso confronto sostanziale della ricerca per termine,
+  // isolato come filtro esplicito invece che mescolato al testo digitato.
+  if (materiale) {
+    where.push('LOWER(p.nome) LIKE ?');
+    params.push(`%${materiale.toLowerCase()}%`);
+  }
+  // Chip "Diametro" già scelta: valore preso 1:1 da uno dei tag calcolati da
+  // tagRaffinamento() (es. "20 mm" o '3/4"'), quindi già nella forma giusta per il
+  // pattern corrispondente.
+  if (diametro) {
+    const mm = diametro.match(/^(\d{2,3})\s?mm$/i);
+    if (mm) {
+      where.push('p.nome ~* ?');
+      params.push(frammentoDiametroMm([mm[1]]));
+    } else {
+      const pollici = chiaveEquivalenza(diametro).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      where.push('p.nome ~* ?');
+      params.push(`${pollici}\\s*"`);
+    }
+  }
 
   for (const t of termini) {
-    where.push(
-      `(LOWER(p.nome) LIKE ? OR LOWER(p.codice) LIKE ? OR LOWER(COALESCE(p.categoria, '')) LIKE ?
+    const bloccoBase = `(LOWER(p.nome) LIKE ? OR LOWER(p.codice) LIKE ? OR LOWER(COALESCE(p.categoria, '')) LIKE ?
         OR LOWER(COALESCE(m.nome, '')) LIKE ? OR LOWER(COALESCE(b.nome, '')) LIKE ?
-        OR LOWER(COALESCE(p.ean, '')) LIKE ?)`
-    );
+        OR LOWER(COALESCE(p.ean, '')) LIKE ?)`;
     const like = `%${t}%`;
-    params.push(like, like, like, like, like, like);
+    const paramsBase = [like, like, like, like, like, like];
+
+    // Il termine digitato è una misura in pollici riconosciuta (es. "3/4", '3/4"'): oltre
+    // al confronto testuale letterale di sempre, si prova anche il match sui millimetri
+    // equivalenti scritti nel nome — solo su nome (mai su codice/categoria/marchio/ean,
+    // per non allargare la superficie di falsi positivi a campi dove un "20" nudo
+    // significherebbe altro).
+    const equivalenti = EQUIVALENZE_POLLICI_MM[chiaveEquivalenza(t)];
+    if (equivalenti) {
+      where.push(`(${bloccoBase} OR p.nome ~* ?)`);
+      params.push(...paramsBase, frammentoDiametroMm(equivalenti));
+    } else {
+      where.push(bloccoBase);
+      params.push(...paramsBase);
+    }
   }
 
   // Chi inizia con il testo digitato viene prima (cercando "valv" prima le "Valvola ...").
@@ -143,6 +212,59 @@ async function cercaProdotti(
     )
     .all(...params, ...paramsOrdine, limite);
   return raggruppaVarianti(righeGrezze);
+}
+
+// ---------- Tag di raffinamento (diametro, materiale) ----------
+//
+// Diametro e materiale non sono colonne del DB (niente "materiale", e "misura" è di
+// fatto vuota su tutto il catalogo): a differenza di misureDisponibili()/
+// marchiNellaCategoria() qui sotto, che fanno un GROUP BY su una colonna reale,
+// l'aggregazione va fatta in JS sui risultati già recuperati — nessuna query aggiuntiva.
+
+const RE_DIAMETRO_POLLICI = /(\d+(?:\.\d+)?\/\d+|\d+)\s*"/g;
+const RE_DIAMETRO_MM = /ø\s?(\d{2,3})(?!\d)/gi;
+const RE_DIAMETRO_MM_NUDO = /(?<![a-z0-9])(\d{2,3})\s?mm(?![a-z])/gi;
+
+function estraiTagDaTesto(testoGrezzo) {
+  const testo = String(testoGrezzo || '');
+  const bassa = testo.toLowerCase();
+
+  const diametri = new Set();
+  let m;
+  RE_DIAMETRO_POLLICI.lastIndex = 0;
+  while ((m = RE_DIAMETRO_POLLICI.exec(testo))) diametri.add(m[1] + '"');
+  RE_DIAMETRO_MM.lastIndex = 0;
+  while ((m = RE_DIAMETRO_MM.exec(testo))) diametri.add(m[1] + ' mm');
+  RE_DIAMETRO_MM_NUDO.lastIndex = 0;
+  while ((m = RE_DIAMETRO_MM_NUDO.exec(testo))) diametri.add(m[1] + ' mm');
+
+  const materiali = MATERIALI_RICONOSCIUTI.filter((parola) => bassa.includes(parola));
+  return { diametri: [...diametri], materiali };
+}
+
+// Diametri e materiali più frequenti in un elenco di prodotti già recuperato (risultato
+// di una ricerca o di una pagina categoria) — pensati come chip di raffinamento rapido,
+// non come conteggio esaustivo. Sui prodotti raggruppati per varianti (raggruppaVarianti())
+// "nome" è il nome rappresentativo del gruppo e spesso NON contiene la misura (che vive
+// nell'etichetta di ogni singola variante, es. 'Ø3/4"ff') — verificato che senza includere
+// anche le etichette il chip "Diametro" può sparire del tutto su risultati dominati da
+// prodotti raggruppati (oltre un terzo del catalogo). Si estrae quindi da nome + tutte le
+// etichette varianti insieme, non solo da nome.
+function tagRaffinamento(righe, { limiteDiametri = 8, limiteMateriali = 8 } = {}) {
+  const contaD = new Map();
+  const contaM = new Map();
+  for (const r of righe || []) {
+    const testo = r.nome + (Array.isArray(r.varianti) ? ' ' + r.varianti.map((v) => v.etichetta).join(' ') : '');
+    const { diametri, materiali } = estraiTagDaTesto(testo);
+    for (const d of diametri) contaD.set(d, (contaD.get(d) || 0) + 1);
+    for (const mat of materiali) contaM.set(mat, (contaM.get(mat) || 0) + 1);
+  }
+  const top = (mappa, limite) =>
+    [...mappa.entries()]
+      .map(([valore, n]) => ({ valore, n }))
+      .sort((a, b) => b.n - a.n || a.valore.localeCompare(b.valore))
+      .slice(0, limite);
+  return { diametri: top(contaD, limiteDiametri), materiali: top(contaM, limiteMateriali) };
 }
 
 // ---------- Macro categorie ----------
@@ -274,7 +396,13 @@ async function paginato({ where, params, pagina = 1, perPagina = PER_PAGINA }) {
 }
 
 // Prodotti di una categoria, filtrabili per sottocategoria, misura e marchio.
-async function prodottiDellaCategoria(macroSlug, { sotto = null, misura = null, marchio = null, pagina = 1 } = {}) {
+// materiale/diametro accettati per simmetria con cercaProdotti() (stessa logica di
+// estrazione dal testo, vedi sopra) — non ancora collegati a un filtro visibile in
+// categoria.ejs, pronti per quando si deciderà di estenderla.
+async function prodottiDellaCategoria(
+  macroSlug,
+  { sotto = null, misura = null, marchio = null, materiale = null, diametro = null, pagina = 1 } = {}
+) {
   const where = ['p.attivo = 1', 'p.macro_slug = ?'];
   const params = [macroSlug];
   if (sotto) {
@@ -288,6 +416,21 @@ async function prodottiDellaCategoria(macroSlug, { sotto = null, misura = null, 
   if (marchio) {
     where.push('p.brand_slug = ?');
     params.push(marchio);
+  }
+  if (materiale) {
+    where.push('LOWER(p.nome) LIKE ?');
+    params.push(`%${materiale.toLowerCase()}%`);
+  }
+  if (diametro) {
+    const mm = diametro.match(/^(\d{2,3})\s?mm$/i);
+    if (mm) {
+      where.push('p.nome ~* ?');
+      params.push(frammentoDiametroMm([mm[1]]));
+    } else {
+      const pollici = chiaveEquivalenza(diametro).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      where.push('p.nome ~* ?');
+      params.push(`${pollici}\\s*"`);
+    }
   }
   return paginato({ where: where.join(' AND '), params, pagina });
 }
@@ -346,6 +489,7 @@ async function prodottiDelMarchio(slug, famiglia, pagina) {
 module.exports = {
   PER_PAGINA,
   cercaProdotti,
+  tagRaffinamento,
   macroCategorie,
   categorieInEvidenza,
   altreCategorie,

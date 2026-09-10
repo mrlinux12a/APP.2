@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const { AsyncLocalStorage } = require('async_hooks');
 
 const DATABASE_URL = process.env.DATABASE_URL || 'postgres://minuteria:minuteria@localhost:5432/minuteria';
 
@@ -7,6 +8,29 @@ const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: isSupabase ? { rejectUnauthorized: false } : false,
 });
+
+// Senza questo handler, un client idle del pool che perde la connessione (capita spesso
+// con i connection pooler gestiti come quello di Supabase) emette un evento 'error' non
+// intercettato: Node lo tratta come eccezione non gestita e fa cadere l'intero processo,
+// non solo la richiesta interessata.
+pool.on('error', (err) => {
+  console.error('[db] connessione del pool interrotta:', err.message);
+});
+
+// Contesto per-transazione: prima si affidava l'esecuzione durante una transazione a una
+// riassegnazione diretta di pool.query, ma è uno stato GLOBALE condiviso — con due
+// transazioni concorrenti (normale in un'app multi-utente) la seconda sovrascriveva il
+// client della prima, e al termine ne resettava la query "sotto i piedi" della prima
+// ancora in corso: le sue istruzioni successive finivano fuori dalla transazione (o su
+// quella sbagliata), rendendo falsa ogni garanzia di atomicità. AsyncLocalStorage lega il
+// client al contesto asincrono della singola chiamata, quindi ogni transazione (anche se
+// interlacciata con altre) resta isolata per tutta la sua catena di await.
+const contestoTransazione = new AsyncLocalStorage();
+
+function esecutore() {
+  const store = contestoTransazione.getStore();
+  return store ? store.client : pool;
+}
 
 // Tabelle senza colonna "id" (chiave primaria naturale): un INSERT su queste tabelle
 // non può chiedere "RETURNING id", altrimenti Postgres dà errore "column id does not exist".
@@ -63,7 +87,7 @@ function prepare(sql) {
             arr = Object.values(params[0]);
           }
         }
-        const res = await pool.query(pgSql, arr);
+        const res = await esecutore().query(pgSql, arr);
         return res.rows[0] || null;
       },
       all: async (...params) => {
@@ -74,7 +98,7 @@ function prepare(sql) {
         } else {
           arr = params;
         }
-        const res = await pool.query(pgSql, arr);
+        const res = await esecutore().query(pgSql, arr);
         return res.rows;
       },
       run: async (...params) => {
@@ -91,7 +115,7 @@ function prepare(sql) {
         let q = pgSql;
         const isInsert = /^\s*INSERT/i.test(q) && !/RETURNING/i.test(q) && !TABELLE_SENZA_ID.has(tabellaInsert(q));
         if (isInsert) q += ' RETURNING id';
-        const res = await pool.query(q, arr);
+        const res = await esecutore().query(q, arr);
         const row = res.rows[0];
         return { lastInsertRowid: row ? row.id : null, lastInsertId: row ? row.id : null, changes: res.rowCount, rowCount: res.rowCount };
       },
@@ -102,18 +126,18 @@ function prepare(sql) {
   let pgSql2 = translated.replace(/\?/g, () => `$${++i}`);
   return {
     get: async (...params) => {
-      const res = await pool.query(pgSql2, params);
+      const res = await esecutore().query(pgSql2, params);
       return res.rows[0] || null;
     },
     all: async (...params) => {
-      const res = await pool.query(pgSql2, params);
+      const res = await esecutore().query(pgSql2, params);
       return res.rows;
     },
     run: async (...params) => {
       let q = pgSql2;
       const isInsert = /^\s*INSERT/i.test(q) && !/RETURNING/i.test(q) && !TABELLE_SENZA_ID.has(tabellaInsert(q));
       if (isInsert) q += ' RETURNING id';
-      const res = await pool.query(q, params);
+      const res = await esecutore().query(q, params);
       const row = res.rows[0];
       return { lastInsertRowid: row ? row.id : null, lastInsertId: row ? row.id : null, changes: res.rowCount, rowCount: res.rowCount };
     },
@@ -123,7 +147,7 @@ function prepare(sql) {
 async function exec(sql) {
   if (/^\s*PRAGMA/i.test(sql.trim())) return;
   const pgSql = toPg(sql);
-  await pool.query(pgSql);
+  await esecutore().query(pgSql);
 }
 
 // ensureInit() NON applica più lo schema in automatico ad ogni avvio. L'avevamo protetto
@@ -153,19 +177,22 @@ async function ensureInit() {
 
 function transaction(fn) {
   return async (...args) => {
+    // Transazione già in corso su questa stessa catena di chiamate (una funzione
+    // transazionale che ne invoca un'altra): Postgres non supporta transazioni annidate
+    // vere, quindi si riusa lo stesso client invece di aprirne una seconda che
+    // resterebbe in attesa di una connessione mai rilasciata.
+    if (contestoTransazione.getStore()) return fn(...args);
+
     const client = await pool.connect();
-    const origQuery = pool.query.bind(pool);
     try {
       await client.query('BEGIN');
-      pool.query = client.query.bind(client);
-      const result = await fn(...args);
+      const result = await contestoTransazione.run({ client }, () => fn(...args));
       await client.query('COMMIT');
       return result;
     } catch (e) {
       try { await client.query('ROLLBACK'); } catch {}
       throw e;
     } finally {
-      pool.query = origQuery;
       client.release();
     }
   };
@@ -174,7 +201,7 @@ function transaction(fn) {
 const db = {
   prepare,
   exec,
-  query: (sql, params=[]) => pool.query(toPg(sql).replace(/\?/g, (()=>{let i=0; return ()=>`$${++i}`})()), params),
+  query: (sql, params=[]) => esecutore().query(toPg(sql).replace(/\?/g, (()=>{let i=0; return ()=>`$${++i}`})()), params),
   get: async (sql, ...p) => {
     await ensureInit();
     const prep = prepare(sql);

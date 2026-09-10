@@ -1,3 +1,13 @@
+<%
+  function conFiltri(cambio) {
+    const stato = { q, diametro, materiale };
+    Object.keys(cambio).forEach(function (k) { stato[k] = cambio[k]; });
+    const parti = Object.keys(stato)
+      .filter(function (k) { return stato[k]; })
+      .map(function (k) { return k + '=' + encodeURIComponent(stato[k]); });
+    return '/cerca' + (parti.length ? '?' + parti.join('&') : '');
+  }
+%>
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -11,9 +21,34 @@
       <%- include('partials/barra_ricerca', {
             azione: '/cerca',
             q,
-            ambito: {},
+            ambito: { diametro: diametro || '', materiale: materiale || '' },
             segnaposto: 'Scrivi anche solo una parte, es. "valv"'
           }) %>
+    </div>
+
+    <div class="contenuto" style="padding-top:0;padding-bottom:0;">
+      <div id="tag-raffinamento">
+        <% if (q && tag.diametri.length) { %>
+          <div class="filtro-titolo">Diametro</div>
+          <div class="chip-riga">
+            <a class="chip <%= diametro ? '' : 'attivo' %>" href="<%= conFiltri({ diametro: null }) %>">Tutti</a>
+            <% tag.diametri.forEach(function (d) { %>
+              <a class="chip <%= diametro === d.valore ? 'attivo' : '' %>"
+                 href="<%= conFiltri({ diametro: d.valore }) %>"><%= d.valore %></a>
+            <% }); %>
+          </div>
+        <% } %>
+        <% if (q && tag.materiali.length) { %>
+          <div class="filtro-titolo">Materiale</div>
+          <div class="chip-riga">
+            <a class="chip <%= materiale ? '' : 'attivo' %>" href="<%= conFiltri({ materiale: null }) %>">Tutti</a>
+            <% tag.materiali.forEach(function (mat) { %>
+              <a class="chip <%= materiale === mat.valore ? 'attivo' : '' %>"
+                 href="<%= conFiltri({ materiale: mat.valore }) %>"><%= mat.valore %></a>
+            <% }); %>
+          </div>
+        <% } %>
+      </div>
     </div>
 
     <div class="contenuto" style="padding-top:0;">

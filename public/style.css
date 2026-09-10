@@ -281,8 +281,11 @@ a { color: var(--blu); }
   padding: 3px;
 }
 .stepper button {
-  width: 30px;
-  height: 30px;
+  /* 44px: soglia minima raccomandata per un target da toccare (WCAG 2.5.5) — prima erano
+     30px, il controllo più usato in assoluto in un'app pensata per l'uso da cantiere
+     (guanti, dita sporche/bagnate). */
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: none;
   background: var(--surface);
@@ -1278,7 +1281,8 @@ th { color: var(--grigio); font-weight: 600; }
 .chip.attivo { background: var(--blu); border-color: var(--blu); color: #fff; }
 
 .varianti-riga { margin: 4px 0 6px; }
-.chip-variante { padding: 5px 10px; font-size: 0.78rem; }
+/* Prima 5px/10px (~28px di altezza): troppo piccolo per un tocco preciso da cantiere. */
+.chip-variante { padding: 11px 14px; font-size: 0.8rem; }
 .selettore-variante {
   width: auto;
   max-width: 100%;

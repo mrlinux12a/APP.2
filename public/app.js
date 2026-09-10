@@ -312,6 +312,47 @@
     // Ambito della pagina (categoria, marchio, famiglia, gruppo): la ricerca resta lì dentro.
     const ambito = campoRicerca.dataset.ambito || '';
 
+    // Chip di raffinamento (diametro/materiale), solo dove il contenitore esiste (oggi
+    // solo /cerca): stesso pattern "ripristina al contenuto iniziale svuotando" di sopra.
+    const contenitoreTag = document.getElementById('tag-raffinamento');
+    const tagIniziale = contenitoreTag ? contenitoreTag.innerHTML : '';
+
+    function leggiFiltro(chiave) {
+      try { return new URLSearchParams(window.location.search).get(chiave) || ''; } catch (e) { return ''; }
+    }
+    let diametroAttivo = leggiFiltro('diametro');
+    let materialeAttivo = leggiFiltro('materiale');
+
+    function urlCerca(q, cambio) {
+      const stato = { q: q, diametro: diametroAttivo, materiale: materialeAttivo };
+      Object.keys(cambio).forEach(function (k) { stato[k] = cambio[k]; });
+      const parti = Object.keys(stato)
+        .filter(function (k) { return stato[k]; })
+        .map(function (k) { return k + '=' + encodeURIComponent(stato[k]); });
+      return '/cerca' + (parti.length ? '?' + parti.join('&') : '');
+    }
+
+    function rigaChip(titolo, voci, attivo, chiave) {
+      if (!voci.length) return '';
+      var html = '<div class="filtro-titolo">' + titolo + '</div><div class="chip-riga">';
+      var cambioTutti = {}; cambioTutti[chiave] = null;
+      html += '<a class="chip ' + (attivo ? '' : 'attivo') + '" href="' + urlCerca(ultima, cambioTutti) + '">Tutti</a>';
+      voci.forEach(function (v) {
+        var cambio = {}; cambio[chiave] = v.valore;
+        html += '<a class="chip ' + (attivo === v.valore ? 'attivo' : '') + '" href="' +
+          urlCerca(ultima, cambio) + '">' + esc(v.valore) + '</a>';
+      });
+      return html + '</div>';
+    }
+
+    function disegnaTag(tag) {
+      if (!contenitoreTag) return;
+      const t = tag || { diametri: [], materiali: [] };
+      contenitoreTag.innerHTML =
+        rigaChip('Diametro', t.diametri, diametroAttivo, 'diametro') +
+        rigaChip('Materiale', t.materiali, materialeAttivo, 'materiale');
+    }
+
     campoRicerca.addEventListener('input', function () {
       clearTimeout(timer);
       timer = setTimeout(cerca, 220);
@@ -329,6 +370,7 @@
       ultima = q;
       if (q.length < 2) {
         contenitore.innerHTML = contenutoIniziale;
+        if (contenitoreTag) contenitoreTag.innerHTML = tagIniziale;
         mostraPaginazione(true);
         ricalcolaBarra();
         return;
@@ -339,6 +381,7 @@
           if (campoRicerca.value.trim() !== q) return;
           mostraPaginazione(false);
           disegnaRisultati(dati.risultati || []);
+          disegnaTag(dati.tag);
         })
         .catch(function () { /* offline: resta l'ultimo elenco mostrato */ });
     }
@@ -977,3 +1020,23 @@
       .finally(function () { btn.disabled = false; });
   });
 })();
+
+/* Impedisce il doppio invio dei form che cambiano stato (conferma ordine, risposta del
+   banco, elimina...): un doppio tap — frequente su rete lenta da cantiere, quando non si
+   vede subito una reazione — poteva mandare due POST identiche in rapida successione.
+   Il server ora si difende comunque (vedi creaOrdineDaOfferta in server.js), ma è meglio
+   non generarla nemmeno la seconda richiesta. Generico: si applica a ogni <form> dell'app,
+   non solo a quello dell'ordine. */
+document.addEventListener('submit', function (e) {
+  const form = e.target;
+  if (!(form instanceof HTMLFormElement)) return;
+  const bottoni = form.querySelectorAll('button[type="submit"], input[type="submit"]');
+  if (!bottoni.length) return;
+  // Il ritardo di un tick lascia al browser il tempo di leggere quale bottone è stato
+  // premuto (nome/valore) prima di disabilitarlo: alcuni form hanno più bottoni di invio
+  // diversi (es. "Conferma" / "Rifiuta") e disabilitarli subito, in modo sincrono, rischia
+  // di far perdere quale dei due ha davvero avviato l'invio.
+  setTimeout(function () {
+    bottoni.forEach(function (b) { b.disabled = true; });
+  }, 0);
+}, true);
