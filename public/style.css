@@ -1265,20 +1265,31 @@ th { color: var(--grigio); font-weight: 600; }
   overflow-x: auto;
   padding-bottom: 4px;
   margin-bottom: 6px;
+  /* Scorrimento orizzontale invariato, solo la barra visibile nascosta (grigia e larga
+     su Chrome desktop, stonava con il resto dell'interfaccia). */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* Edge legacy */
 }
+.chip-riga::-webkit-scrollbar { display: none; } /* Chrome, Safari */
 .chip {
+  /* Prima: stesso sfondo (--surface) della card che lo contiene, distinto solo da un
+     bordo sottile — si leggeva come un'etichetta di testo, non un pulsante. Stesso
+     trucco già usato dallo stepper (sfondo --sfondo + ombra leggera) per segnalare "è
+     un controllo, non testo", qui applicato ai chip non selezionati. */
   flex: 0 0 auto;
   padding: 7px 13px;
   border-radius: 999px;
   border: 1px solid var(--bordo);
-  background: var(--surface);
+  background: var(--sfondo);
   color: var(--testo);
   text-decoration: none;
   font-size: 0.86rem;
   font-weight: 600;
   white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
 }
-.chip.attivo { background: var(--blu); border-color: var(--blu); color: #fff; }
+.chip.attivo { background: var(--blu); border-color: var(--blu); color: #fff; box-shadow: none; }
 
 .varianti-riga { margin: 4px 0 6px; }
 /* Prima 5px/10px (~28px di altezza): troppo piccolo per un tocco preciso da cantiere. */
