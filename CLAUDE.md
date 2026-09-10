@@ -161,6 +161,110 @@ l'installatore/distributore ha già (o può ottenere) un accesso B2B con media k
 marchi principali, (3) accettare una copertura parziale (~33%) via ricerca nome+marca per il
 resto, con verifica manuale caso per caso prima di pubblicare qualunque foto.
 
+## Raggruppamento prodotti per misura (varianti) — Fase 1-4 completate
+
+Obiettivo: nel catalogo, prodotti identici a parte la misura (es. "Valvola Sicurezza Ø1/2\" 3bar"
+e "...Ø1/2\" 6bar") compaiono come **una sola card** con un selettore di misure, invece che una
+riga per variante.
+
+- Schema: tabella `product_groups` (marca, categoria, nome_rappresentativo) + colonne su
+  `products`: `gruppo_id` (FK, nullable — un prodotto senza gruppo resta indipendente come prima,
+  zero rischio) e `variante_valori` (TEXT, JSON dei token estratti, es. `["Ø1/2\"f","6bar"]`).
+- Algoritmo di raggruppamento (script una tantum, non salvato nel repo — vedi sezione file
+  temporanei sotto): un token del nome conta come "variabile" **solo se ha un'unità/simbolo
+  riconoscibile attaccato** (Ø, Dn, Pn, Sp., L., mm, ", °, frazioni, combo tipo 40x40, "N vie").
+  Un numero nudo (es. "25" a inizio nome) NON viene considerato una misura — spesso è un numero
+  di modello/serie del produttore (verificato su RBM: "25 Valvola..." e "22 Uniflux..." sono due
+  modelli diversi, non due misure dello stesso prodotto), o una gradazione lega (Moon 304/316), o
+  una quantità di confezione ("60 Coppie..."). Sogliato inoltre con un controllo di sanità sul
+  prezzo (rapporto max/min > 20x nel gruppo → sospetto, escluso).
+- **Risultato applicato al DB reale**: 4.964 gruppi, 18.827 prodotti raggruppati su 51.182
+  (36,8%). Il resto non è "fallito", è lasciato fuori deliberatamente: sono per lo più numeri
+  senza unità riconoscibile, dove non c'è modo sicuro di distinguere una misura vera da un codice
+  interno senza guardare prodotto per prodotto.
+- **Variabili non numeriche (maschio/femmina, colore, finitura) NON implementate**: analizzate
+  ma scartate per ora — "maschio/femmina" descrive l'attacco fisico di ciascuna estremità di un
+  pezzo (spesso 2, a volte 3 per i pezzi a T), non è un'etichetta stilistica intercambiabile come
+  il colore; raggrupparle rischiava di unire prodotti realmente diversi. Serve una decisione
+  dell'utente su quali attributi promuovere a "variabile vera" prima di implementarle.
+- UI: in `views/partials/prodotto.ejs` e nella funzione `cardProdottoHtml` in `public/app.js`
+  (stesso componente sia per il rendering server-side sia per ricerca live/scroll infinito) —
+  sotto **8 varianti** mostra chip cliccabili, sopra passa a un `<select>` nativo (più compatto
+  per gruppi affollati, es. "Valvola Sicurezza" ne ha oltre 60). Logica di raggruppamento query
+  in `src/catalogo.js` (`raggruppaVarianti()`), applicata sia a `cercaProdotti()` sia a
+  `paginato()` (quindi categoria e marchio).
+- **Non ancora fatto**: pannello per staccare manualmente una variante finita per errore in un
+  gruppo (oggi servirebbe intervento diretto sul DB); pagina/UI di ricerca per allargare ancora
+  la copertura (43% è il tetto raggiunto finora, non un limite tecnico assoluto).
+
+## Home distributore — dashboard operativa (fatto)
+
+`/distributore` riscritta da elenco piatto a dashboard: toggle "Banco operativo / In pausa"
+(colonna nuova `distributors.ricezione_attiva`, **rispettata nel matching richieste** —
+`src/richieste.js` → `distributoriCandidati()` filtra `ricezione_attiva = 1`, sia nella query
+principale sia nel fallback broadcast; distinta da `distributors.attivo` che è l'attivazione
+della sede sulla piattaforma, non va confusa). Cambio di stato istantaneo via
+`POST /api/distributore/stato`, nessun reload.
+
+Card "Da confermare" con countdown grande (badge ambra, `--arancio` — non `--blu`, perché
+`--blu` è ambra solo in scuro ma diventa blu petrolio in chiaro, mentre l'allarme deve restare
+ambra in entrambi i temi) e anteprima prodotti reale (prime 2 righe + "+N altri"), non solo il
+totale pezzi. KPI ridotti a 3 e cliccabili (da confermare / da preparare / in consegna — "in
+consegna" in `contatoriBanco()` somma `in_evasione` + `evaso`). Storico spostato su
+`/distributore/storico` dedicata (raggiungibile solo dal menu account), tolto dalla home per non
+intasarla. Menu in basso ridotto a **Home + Clienti** soltanto (Ordini e Notifiche restano
+raggiungibili da menu account / campanella, non più tab fissi).
+
+Due bug reali (non solo estetici) trovati testando dal vivo e corretti in questa sessione:
+- `views` con `min-width:0` mancante su `.urgente-card` causava overflow orizzontale su mobile
+  con nomi prodotto lunghi (card che sfondava lo schermo).
+- **`/richieste/:id/annulla` non chiudeva le risposte "in attesa" dei distributori** — una
+  richiesta annullata dal cliente restava visibile al banco come ancora da confermare, a tempo
+  indeterminato. Ora la POST chiude anche `request_responses` (esito → `'scaduto'`) per quella
+  richiesta.
+
+## Altri bug corretti in sessione (sparsi, utile saperli già chiusi)
+
+- `finestra_conferma_min` in `config` era finita a 0,1666 minuti (10 secondi) invece di 10 —
+  probabile refuso di un test precedente rimasto live in produzione, spiegava perché quasi tutto
+  lo storico richieste risultava "Non risposta". Corretto (valore tornato a 10).
+- `server.js`, dettaglio ordine banco: `await richieste.calcolaOfferta(...).mancanti` leggeva
+  `.mancanti` sulla Promise invece che sul risultato risolto (precedenza `.` su `await`) — la
+  pagina `/distributore/ordini/:id` andava in 500 per **qualsiasi** ordine legato a una
+  richiesta, cioè quasi tutti. Corretto con le parentesi.
+- Notifiche al banco mostravano un numero non arrotondato ("Hai 0.16666666666666666 minuti per
+  confermare") quando `finestra_conferma_min` non era un intero — `Math.round()` aggiunto in
+  `src/richieste.js`.
+- Login non toglieva gli spazi dal nome utente prima del confronto in DB (uno spazio finale
+  faceva fallire l'accesso anche con credenziali giuste). La registrazione invece già puliva
+  tutti i campi (`pulisci()`/`normalizzaUtente()` in `src/anagrafiche.js`).
+- Carrello: scendere a 0 con lo stepper eliminava la riga. Ora il minimo nel carrello è **1**
+  (il "−" si disabilita a 1, sbiadito); rimuovere richiede il pulsante "Rimuovi" esplicito, mai
+  più uno zero accidentale.
+
+## Notifiche — badge "Stato ordini" lato cliente
+
+Il tab "Stato ordini" mostra un pallino **azzurro** (`+N`, distinto dal rosso del carrello) per
+notifiche non lette che coprono **sia** categoria `ordini` **sia** `richieste` (il tab segue
+tutta la pipeline cliente: richiesta → offerte → ordine, non solo gli ordini in senso stretto —
+una conferma disponibilità del distributore è categoria "richieste", non "ordini"; il badge va
+sommato su entrambe altrimenti quell'evento non accende nulla). Segnato come letto visitando
+`/ordini`, `/richieste/:id` o `/ordini/:id` — attenzione se si tocca uno di questi tre: il
+conteggio va ricalcolato/azzerato **dopo** aver marcato come lette (il middleware condiviso lo
+calcola prima che la route giri, quindi va risettato a mano in `res.locals.ordiniNonLetti` se la
+route stessa fa un render invece di un redirect, altrimenti si vede il valore vecchio per un
+giro).
+
+## Aspetto grafico — aggiornamenti dopo la sezione sopra
+
+- Toggle chiaro/scuro **spostato dal menu account all'appbar**, icona sole/luna a sinistra
+  dell'icona account (stesso stile line-icon delle altre).
+- Icone nav in basso (catalogo/carrello/stato ordini) e lente: **bianche** in scuro (non più
+  ambra — `--icona-nav` cambiato), lente leggermente più grande in entrambi i temi.
+- Card "in arrivo tra..." (`ordine_hero.verde` in `ordine_dettaglio.ejs`): in chiaro era troppo
+  sbiadita (il testo principale restava colore normale su sfondo verde tenuissimo) — corretto
+  **solo per il tema chiaro** con override mirato, lo scuro non è stato toccato.
+
 ## File temporanei di sessione (non nel repository)
 
 Script di analisi/pulizia e mockup di design creati durante le sessioni vivono nella cartella
