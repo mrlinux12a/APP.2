@@ -650,7 +650,7 @@ main { max-width: 900px; margin: 0 auto; padding: 16px; }
 h1 { font-size: 1.35rem; margin-top: 0; }
 h2 { font-size: 1.1rem; }
 
-.tabella-scroll { overflow-x: auto; }
+.tabella-scroll { overflow-x: auto; touch-action: pan-x; }
 table { width: 100%; border-collapse: collapse; }
 .tabella-scroll table { min-width: 640px; }
 th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--bordo); font-size: 0.92rem; }
@@ -950,6 +950,7 @@ th { color: var(--grigio); font-weight: 600; }
   overflow-x: auto;
   padding-bottom: 4px;
   scrollbar-width: thin;
+  touch-action: pan-x; /* stesso motivo di .chip-riga: evita che lo scroll orizzontale da trackpad diventi uno zoom della pagina */
 }
 .tessera-marchio {
   flex: 0 0 auto;
@@ -1255,7 +1256,9 @@ th { color: var(--grigio); font-weight: 600; }
   color: var(--grigio);
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  margin: 10px 2px 6px;
+  /* Margine sopra aumentato (10px -> 16px): più aria fra un blocco chip e il successivo
+     (es. Diametro/Materiale), per non farli leggere come un unico gruppo confuso. */
+  margin: 16px 2px 6px;
 }
 .filtro-titolo .secondario { font-weight: 500; text-transform: none; letter-spacing: 0; }
 
@@ -1269,6 +1272,19 @@ th { color: var(--grigio); font-weight: 600; }
      su Chrome desktop, stonava con il resto dell'interfaccia). */
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* Edge legacy */
+  /* Da PC, scorrere con un trackpad/mouse a scroll orizzontale su un elemento con
+     overflow-x può essere interpretato dal browser come un gesto di pinch-zoom, "zoomando
+     fuori" tutta la pagina invece di scorrere solo questa riga — capita più spesso su
+     elementi stretti come questo. touch-action lo esclude esplicitamente: qui si scorre
+     solo in orizzontale, mai zoom. */
+  touch-action: pan-x;
+  /* Sfumatura sul bordo destro: segnala che si può scorrere per vedere altri chip, cosa
+     che prima capiva dalla barra di scorrimento grigia ora nascosta. Sfuma la trasparenza
+     dell'elemento stesso (non un colore fisso), quindi funziona identica sia dentro una
+     card (--surface) sia sullo sfondo pagina (--sfondo), qui e nei chip di variante sul
+     prodotto (.varianti-riga usa la stessa classe). */
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 18px), transparent 100%);
+  mask-image: linear-gradient(to right, black calc(100% - 18px), transparent 100%);
 }
 .chip-riga::-webkit-scrollbar { display: none; } /* Chrome, Safari */
 .chip {

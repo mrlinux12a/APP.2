@@ -41,17 +41,25 @@ const PORT = process.env.PORT || 3000;
 
 // Prima qui c'era un segreto fisso ('minuteria-mvp-demo-secret') usato come fallback: era
 // scritto nel sorgente, quindi pubblico per chiunque leggesse il repository — con quello
-// chiunque può firmare cookie di sessione validi. La correzione vera è impostare
-// SESSION_SECRET nell'ambiente (.env in locale, variabili d'ambiente in produzione); se
-// manca, meglio generarne uno nuovo ad ogni avvio (si perdono le sessioni al riavvio) che
-// ripetere lo stesso valore noto per sempre.
+// chiunque può firmare cookie di sessione validi. La correzione giusta è impostare
+// SESSION_SECRET nell'ambiente (.env in locale, variabili d'ambiente in produzione).
+// Se manca, PRIMA qui si generava un valore casuale nuovo ad ogni avvio: sembrava più
+// sicuro, ma un valore diverso ad ogni riavvio invalida tutti i cookie già emessi — con
+// l'hosting che fa auto-deploy ad ogni push, ogni deploy disconnetteva tutti (compresi
+// utenti a metà azione). Meglio un fallback STABILE: derivato da DATABASE_URL (che non
+// cambia da un riavvio all'altro), invece che casuale. Non è un segreto nuovo da
+// proteggere in più: chi ha già DATABASE_URL ha accesso diretto al DB, ben oltre quello
+// che potrebbe fare forgiando un cookie di sessione.
 let sessionSecret = process.env.SESSION_SECRET;
 if (!sessionSecret) {
-  sessionSecret = crypto.randomBytes(48).toString('hex');
+  sessionSecret = crypto
+    .createHash('sha256')
+    .update('minuteria-session|' + (process.env.DATABASE_URL || 'sviluppo-locale'))
+    .digest('hex');
   console.warn(
-    'ATTENZIONE: SESSION_SECRET non impostata nell\'ambiente. Uso un valore generato ora, ' +
-    'valido solo per questo avvio (ogni riavvio disconnette tutti). Impostala in .env e, in ' +
-    'produzione, nelle variabili d\'ambiente del servizio di hosting.'
+    'ATTENZIONE: SESSION_SECRET non impostata nell\'ambiente. Uso un valore derivato da ' +
+    'DATABASE_URL (stabile fra i riavvii, ma meglio impostare SESSION_SECRET esplicitamente ' +
+    'in .env e, in produzione, nelle variabili d\'ambiente del servizio di hosting).'
   );
 }
 

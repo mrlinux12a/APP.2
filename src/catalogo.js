@@ -89,18 +89,50 @@ const MATERIALI_RICONOSCIUTI = [
 // 125, 160) appartengono a tubi di scarico/pluviale senza un vero equivalente in pollici
 // in questo catalogo — non vanno mai aggiunti qui.
 const EQUIVALENZE_POLLICI_MM = {
+  '1/8': [6, 8],
+  '1/4': [8, 10],
+  '3/8': [10, 12], // 12 = misura rame comune per 3/8", come 22 per 3/4"
   '1/2': [15, 20],
   '3/4': [20, 22, 25], // 22 = misura rame comune per 3/4", sempre inclusa (non solo se il materiale è rame)
   '1': [25, 32],
   '1.1/4': [32, 40],
   '1.1/2': [40, 50],
   '2': [50, 63],
+  '2.1/2': [65, 76],
 };
 
 // "3/4"" -> "3/4": la stessa forma con cui è scritta la chiave delle equivalenze sopra.
 function chiaveEquivalenza(termine) {
   return String(termine || '').replace(/"$/, '');
 }
+
+// Parole generiche sulla misura: chi scrive "diametro"/"pollici" nella ricerca non sta
+// cercando quella parola scritta nel nome (il catalogo usa quasi sempre il simbolo Ø o le
+// virgolette, mai la parola per esteso — verificato: "diametro" letterale compare solo in
+// 22 nomi su 27.676), sta chiedendo "prodotti con una misura", punto. Ogni parola qui sotto
+// diventa quindi un controllo sul PATTERN della misura invece che sul testo letterale.
+const PAROLE_GENERICHE_MISURA = {
+  diametro: 'ø\\s?[0-9]|[0-9]\\s*(mm|")|diam',
+  diam: 'ø\\s?[0-9]|[0-9]\\s*(mm|")|diam',
+  misura: 'ø\\s?[0-9]|[0-9]\\s*(mm|")|diam',
+  pollici: '[0-9]\\s*"',
+  pollice: '[0-9]\\s*"',
+};
+
+// Tolleranza ai refusi di battitura (richiede l'estensione pg_trgm, attivata in
+// db/postgres/schema.sql): sotto i 4 caratteri il confronto per somiglianza è troppo
+// rumoroso, sopra la soglia 0.45 verificata sui dati distingue bene i refusi reali
+// (racordo, otone, sfeera...) dal rumore.
+// Nota tecnica: l'operatore <% userebbe l'indice GIN esistente invece di scansionare
+// tutta la tabella, ma legge la soglia da un'impostazione di sessione (SET
+// pg_trgm.word_similarity_threshold) — impostarla una volta per connessione via
+// pool.on('connect', ...) è stato provato e scartato: il listener è asincrono e il pool
+// può assegnare quella stessa connessione a un'altra query prima che la SET finisca,
+// causando due query concorrenti sullo stesso client (confermato da un avviso di
+// deprecazione di pg proprio su questo). Si resta quindi sulla funzione esplicita,
+// con scansione sequenziale — più lenta ma senza rischi di concorrenza.
+const SOGLIA_MINIMA_FUZZY = 4;
+const SOGLIA_FUZZY = 0.45;
 
 // Pattern Postgres (operatore ~*) per un diametro in mm ancorato a un confine non
 // numerico: "20" non deve mai intercettare "Ø200" o "120". Uno o più valori insieme,
@@ -178,6 +210,17 @@ async function cercaProdotti(
     const like = `%${t}%`;
     const paramsBase = [like, like, like, like, like, like];
 
+    // Parola generica sulla misura ("diametro", "pollici"...): il catalogo non scrive mai
+    // quella parola per esteso, quindi cercarla alla lettera non troverebbe nulla anche
+    // quando il prodotto ha eccome un diametro (es. "Detentore...Ø3/8"..."). Sostituisce
+    // l'intero blocco con un controllo sul pattern della misura, non sul testo letterale.
+    const patternGenerico = PAROLE_GENERICHE_MISURA[t];
+    if (patternGenerico) {
+      where.push('p.nome ~* ?');
+      params.push(patternGenerico);
+      continue;
+    }
+
     // Il termine digitato è una misura in pollici riconosciuta (es. "3/4", '3/4"'): oltre
     // al confronto testuale letterale di sempre, si prova anche il match sui millimetri
     // equivalenti scritti nel nome — solo su nome (mai su codice/categoria/marchio/ean,
@@ -187,6 +230,13 @@ async function cercaProdotti(
     if (equivalenti) {
       where.push(`(${bloccoBase} OR p.nome ~* ?)`);
       params.push(...paramsBase, frammentoDiametroMm(equivalenti));
+    } else if (t.length >= SOGLIA_MINIMA_FUZZY) {
+      // Tollera i refusi di battitura (es. "valvla" invece di "valvola"): oltre al
+      // confronto esatto di sempre, prova anche una corrispondenza per somiglianza
+      // (pg_trgm) su una parola del nome. Solo dai 4 caratteri in su: sotto, la
+      // somiglianza è troppo rumorosa (quasi tutto assomiglierebbe a quasi tutto).
+      where.push(`(${bloccoBase} OR word_similarity(?, LOWER(p.nome)) > ${SOGLIA_FUZZY})`);
+      params.push(...paramsBase, t);
     } else {
       where.push(bloccoBase);
       params.push(...paramsBase);

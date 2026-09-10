@@ -13,7 +13,8 @@
          data-ricerca
          data-ambito="<%= qsAmbito %>"
          placeholder="<%= segnaposto %>"
-         aria-label="<%= segnaposto %>">
+         aria-label="<%= segnaposto %>"
+         autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
   <% Object.keys(a).filter(function (k) { return a[k] && k !== 'macro' && k !== 'marchio'; }).forEach(function (k) { %>
     <input type="hidden" name="<%= k %>" value="<%= a[k] %>">
   <% }); %>

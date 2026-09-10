@@ -379,9 +379,15 @@
         .then(function (r) { return r.json(); })
         .then(function (dati) {
           if (campoRicerca.value.trim() !== q) return;
+          // Da cellulare, sostituire il contenuto della pagina mentre si sta scrivendo
+          // può far sparire la tastiera (il browser toglie il focus dal campo quando il
+          // layout intorno cambia): se l'utente sta ancora scrivendo qui, si rimette il
+          // focus subito dopo aver ridisegnato risultati e chip.
+          const eraFocus = document.activeElement === campoRicerca;
           mostraPaginazione(false);
           disegnaRisultati(dati.risultati || []);
           disegnaTag(dati.tag);
+          if (eraFocus) campoRicerca.focus();
         })
         .catch(function () { /* offline: resta l'ultimo elenco mostrato */ });
     }
