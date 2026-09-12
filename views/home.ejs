@@ -11,40 +11,43 @@
       <h1 class="domanda">Cosa ti serve?</h1>
       <form class="barra-ricerca grande" method="GET" action="/cerca">
         <span class="lente"><%- iconaLente %></span>
-        <input type="search" name="q" enterkeyhint="search" data-auto-cerca
+        <input type="search" name="q" enterkeyhint="search" data-ricerca
                placeholder="Es. valvola sfera 3/4, raccordo 16, guarnizione"
-               aria-label="Cerca un pezzo">
+               aria-label="Cerca un pezzo"
+               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
         <button type="submit">Cerca</button>
       </form>
       <p class="nota sotto-ricerca">
         Scrivi anche solo un pezzo di parola o la misura: <strong>valv 3/4</strong> basta.
       </p>
 
-      <div class="griglia-evidenza">
-        <% inEvidenza.forEach(function (m) { %>
-          <a class="tessera-grande" href="/categoria/<%= m.slug %>">
-            <span class="emoji"><%- iconaCategoria(m.slug) %></span>
-            <span class="nome"><%= m.nome %></span>
-            <span class="desc"><%= m.descrizione %></span>
-            <span class="conta"><%= m.n_prodotti %> articoli</span>
-          </a>
-        <% }); %>
-      </div>
+      <div id="risultati">
+        <div class="griglia-evidenza">
+          <% inEvidenza.forEach(function (m) { %>
+            <a class="tessera-grande" href="/categoria/<%= m.slug %>">
+              <span class="emoji"><%- iconaCategoria(m.slug) %></span>
+              <span class="nome"><%= m.nome %></span>
+              <span class="desc"><%= m.descrizione %></span>
+              <span class="conta"><%= m.n_prodotti %> articoli</span>
+            </a>
+          <% }); %>
+        </div>
 
-      <div class="sezione-titolo">Categorie</div>
-      <div class="griglia-macro">
-        <% altre.forEach(function (m) { %>
-          <a class="tessera" href="/categoria/<%= m.slug %>">
-            <span class="tessera-ico"><%- iconaCategoria(m.slug) %></span>
-            <span class="nome"><%= m.nome %></span>
-            <span class="conta"><%= m.n_prodotti %> articoli</span>
-          </a>
-        <% }); %>
-      </div>
+        <div class="sezione-titolo">Categorie</div>
+        <div class="griglia-macro">
+          <% altre.forEach(function (m) { %>
+            <a class="tessera" href="/categoria/<%= m.slug %>">
+              <span class="tessera-ico"><%- iconaCategoria(m.slug) %></span>
+              <span class="nome"><%= m.nome %></span>
+              <span class="conta"><%= m.n_prodotti %> articoli</span>
+            </a>
+          <% }); %>
+        </div>
 
-      <p class="nota">
-        I prezzi in app sono IVA esclusa. La disponibilità viene confermata dal banco prima di chiudere l'ordine.
-      </p>
+        <p class="nota">
+          I prezzi in app sono IVA esclusa. La disponibilità viene confermata dal banco prima di chiudere l'ordine.
+        </p>
+      </div>
     </div>
   </div>
 

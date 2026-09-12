@@ -53,17 +53,6 @@
     <% } else { %>
       <div class="contenuto" style="padding-top:0;">
 
-        <% if (!q && misure.length) { %>
-          <div class="filtro-titolo">Misura</div>
-          <div class="chip-riga">
-            <a class="chip <%= misura ? '' : 'attivo' %>" href="<%= conFiltri({ misura: null }) %>">Tutte</a>
-            <% misure.forEach(function (m) { %>
-              <a class="chip <%= misura === m.misura ? 'attivo' : '' %>"
-                 href="<%= conFiltri({ misura: m.misura }) %>"><%= m.misura %></a>
-            <% }); %>
-          </div>
-        <% } %>
-
         <% if (!q && marchi.length > 1) { %>
           <div class="filtro-titolo">Marchio <span class="secondario">(facoltativo)</span></div>
           <div class="chip-riga">

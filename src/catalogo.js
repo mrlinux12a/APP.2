@@ -75,15 +75,6 @@ async function raggruppaVarianti(righe) {
   return risultato;
 }
 
-// Parole materiale riconosciute nel nome: non è una colonna (nessun campo "materiale"
-// esiste nello schema), è una lista fissa validata sui dati reali del catalogo — nessuna
-// di queste genera falsi positivi come sottostringa (verificato: le uniche occorrenze
-// "senza spazio prima" sono composti legittimi come "inox-rame", "ppe-inox", mai rumore).
-const MATERIALI_RICONOSCIUTI = [
-  'ottone', 'inox', 'acciaio', 'rame', 'cromo', 'bronzo', 'polipropilene',
-  'zincato', 'alluminio', 'plastica', 'pvc', 'ghisa', 'nichelato',
-];
-
 // Equivalenze pollici -> mm SOLO per le taglie gas/impianti a pressione: verificato sui
 // dati che il catalogo non usa mai "DN", e che i diametri mm "tondi" più grandi (90, 110,
 // 125, 160) appartengono a tubi di scarico/pluviale senza un vero equivalente in pollici
@@ -106,6 +97,27 @@ function chiaveEquivalenza(termine) {
   return String(termine || '').replace(/"$/, '');
 }
 
+// Frazioni pollici scritte a parole ("un mezzo", "tre quarti"): nel catalogo non compaiono
+// mai per esteso, quindi vanno tradotte nella cifra corrispondente PRIMA di spezzare la
+// query in singoli termini — da lì in poi passano per la stessa pipeline di sempre
+// (equivalenze mm comprese). Ordine dalla frase più lunga/specifica alla più corta, per
+// non lasciare che "mezzo" da solo consumi un pezzo di "uno e mezzo" o "due e mezzo".
+const SINONIMI_FRAZIONE_A_PAROLE = [
+  [/\bdue\s+e\s+mezzo\b/g, '2.1/2'],
+  [/\buno?\s+e\s+un\s+quarto\b/g, '1.1/4'],
+  [/\buno?\s+e\s+mezzo\b/g, '1.1/2'],
+  [/\btre\s+ottavi\b/g, '3/8'],
+  [/\btre\s+quarti\b/g, '3/4'],
+  [/\bun\s+ottavo\b/g, '1/8'],
+  [/\bun\s+quarto\b/g, '1/4'],
+  [/\bun\s+mezzo\b/g, '1/2'],
+  [/\bmezzo\b/g, '1/2'],
+];
+
+function sostituisciFrazioniAParole(testo) {
+  return SINONIMI_FRAZIONE_A_PAROLE.reduce((acc, [pattern, sostituzione]) => acc.replace(pattern, sostituzione), testo);
+}
+
 // Parole generiche sulla misura: chi scrive "diametro"/"pollici" nella ricerca non sta
 // cercando quella parola scritta nel nome (il catalogo usa quasi sempre il simbolo Ø o le
 // virgolette, mai la parola per esteso — verificato: "diametro" letterale compare solo in
@@ -118,6 +130,44 @@ const PAROLE_GENERICHE_MISURA = {
   pollici: '[0-9]\\s*"',
   pollice: '[0-9]\\s*"',
 };
+const CHIAVI_PAROLE_GENERICHE_MISURA = Object.keys(PAROLE_GENERICHE_MISURA);
+
+function distanzaLevenshtein(a, b) {
+  const righe = a.length;
+  const colonne = b.length;
+  const dp = Array.from({ length: righe + 1 }, () => new Array(colonne + 1).fill(0));
+  for (let i = 0; i <= righe; i++) dp[i][0] = i;
+  for (let j = 0; j <= colonne; j++) dp[0][j] = j;
+  for (let i = 1; i <= righe; i++) {
+    for (let j = 1; j <= colonne; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+  return dp[righe][colonne];
+}
+
+// Refusi anche sulle parole-comando sopra (non solo sui nomi prodotto): "pollicq" deve
+// capire "pollice" tanto quanto "valvla" capisce "valvola" più sotto. Soglia più stretta
+// (1 carattere) per le chiavi corte come "diam", più permissiva (2) per quelle lunghe —
+// verificato contro un elenco di termini comuni del catalogo (valvola, raccordo, dado,
+// bocchettone...) per escludere collisioni accidentali.
+function correggiParolaChiave(termine) {
+  if (PAROLE_GENERICHE_MISURA[termine]) return termine;
+  if (termine.length < SOGLIA_MINIMA_FUZZY) return termine;
+  let migliore = null;
+  let distanzaMigliore = Infinity;
+  for (const chiave of CHIAVI_PAROLE_GENERICHE_MISURA) {
+    const distanzaMassima = chiave.length >= 7 ? 2 : 1;
+    const d = distanzaLevenshtein(termine, chiave);
+    if (d <= distanzaMassima && d < distanzaMigliore) {
+      migliore = chiave;
+      distanzaMigliore = d;
+    }
+  }
+  return migliore || termine;
+}
 
 // Tolleranza ai refusi di battitura (richiede l'estensione pg_trgm, attivata in
 // db/postgres/schema.sql): sotto i 4 caratteri il confronto per somiglianza è troppo
@@ -151,8 +201,7 @@ async function cercaProdotti(
     materiale = null, diametro = null, limite = 100,
   } = {}
 ) {
-  const termini = String(query || '')
-    .toLowerCase()
+  const termini = sostituisciFrazioniAParole(String(query || '').toLowerCase())
     .split(/\s+/)
     .map((t) => t.trim())
     .filter(Boolean);
@@ -182,15 +231,13 @@ async function cercaProdotti(
     where.push('p.misura = ?');
     params.push(misura);
   }
-  // Chip "Materiale" già scelta: stesso confronto sostanziale della ricerca per termine,
-  // isolato come filtro esplicito invece che mescolato al testo digitato.
+  // Filtro esplicito per materiale, isolato dal testo digitato liberamente in "query".
   if (materiale) {
     where.push('LOWER(p.nome) LIKE ?');
     params.push(`%${materiale.toLowerCase()}%`);
   }
-  // Chip "Diametro" già scelta: valore preso 1:1 da uno dei tag calcolati da
-  // tagRaffinamento() (es. "20 mm" o '3/4"'), quindi già nella forma giusta per il
-  // pattern corrispondente.
+  // Filtro esplicito per diametro: accetta sia la forma mm ("20 mm") sia quella in
+  // pollici ('3/4"'), isolato dal testo digitato liberamente in "query".
   if (diametro) {
     const mm = diametro.match(/^(\d{2,3})\s?mm$/i);
     if (mm) {
@@ -214,7 +261,8 @@ async function cercaProdotti(
     // quella parola per esteso, quindi cercarla alla lettera non troverebbe nulla anche
     // quando il prodotto ha eccome un diametro (es. "Detentore...Ø3/8"..."). Sostituisce
     // l'intero blocco con un controllo sul pattern della misura, non sul testo letterale.
-    const patternGenerico = PAROLE_GENERICHE_MISURA[t];
+    // correggiParolaChiave tollera anche i refusi su queste parole-comando (es. "pollicq").
+    const patternGenerico = PAROLE_GENERICHE_MISURA[correggiParolaChiave(t)];
     if (patternGenerico) {
       where.push('p.nome ~* ?');
       params.push(patternGenerico);
@@ -262,59 +310,6 @@ async function cercaProdotti(
     )
     .all(...params, ...paramsOrdine, limite);
   return raggruppaVarianti(righeGrezze);
-}
-
-// ---------- Tag di raffinamento (diametro, materiale) ----------
-//
-// Diametro e materiale non sono colonne del DB (niente "materiale", e "misura" è di
-// fatto vuota su tutto il catalogo): a differenza di misureDisponibili()/
-// marchiNellaCategoria() qui sotto, che fanno un GROUP BY su una colonna reale,
-// l'aggregazione va fatta in JS sui risultati già recuperati — nessuna query aggiuntiva.
-
-const RE_DIAMETRO_POLLICI = /(\d+(?:\.\d+)?\/\d+|\d+)\s*"/g;
-const RE_DIAMETRO_MM = /ø\s?(\d{2,3})(?!\d)/gi;
-const RE_DIAMETRO_MM_NUDO = /(?<![a-z0-9])(\d{2,3})\s?mm(?![a-z])/gi;
-
-function estraiTagDaTesto(testoGrezzo) {
-  const testo = String(testoGrezzo || '');
-  const bassa = testo.toLowerCase();
-
-  const diametri = new Set();
-  let m;
-  RE_DIAMETRO_POLLICI.lastIndex = 0;
-  while ((m = RE_DIAMETRO_POLLICI.exec(testo))) diametri.add(m[1] + '"');
-  RE_DIAMETRO_MM.lastIndex = 0;
-  while ((m = RE_DIAMETRO_MM.exec(testo))) diametri.add(m[1] + ' mm');
-  RE_DIAMETRO_MM_NUDO.lastIndex = 0;
-  while ((m = RE_DIAMETRO_MM_NUDO.exec(testo))) diametri.add(m[1] + ' mm');
-
-  const materiali = MATERIALI_RICONOSCIUTI.filter((parola) => bassa.includes(parola));
-  return { diametri: [...diametri], materiali };
-}
-
-// Diametri e materiali più frequenti in un elenco di prodotti già recuperato (risultato
-// di una ricerca o di una pagina categoria) — pensati come chip di raffinamento rapido,
-// non come conteggio esaustivo. Sui prodotti raggruppati per varianti (raggruppaVarianti())
-// "nome" è il nome rappresentativo del gruppo e spesso NON contiene la misura (che vive
-// nell'etichetta di ogni singola variante, es. 'Ø3/4"ff') — verificato che senza includere
-// anche le etichette il chip "Diametro" può sparire del tutto su risultati dominati da
-// prodotti raggruppati (oltre un terzo del catalogo). Si estrae quindi da nome + tutte le
-// etichette varianti insieme, non solo da nome.
-function tagRaffinamento(righe, { limiteDiametri = 8, limiteMateriali = 8 } = {}) {
-  const contaD = new Map();
-  const contaM = new Map();
-  for (const r of righe || []) {
-    const testo = r.nome + (Array.isArray(r.varianti) ? ' ' + r.varianti.map((v) => v.etichetta).join(' ') : '');
-    const { diametri, materiali } = estraiTagDaTesto(testo);
-    for (const d of diametri) contaD.set(d, (contaD.get(d) || 0) + 1);
-    for (const mat of materiali) contaM.set(mat, (contaM.get(mat) || 0) + 1);
-  }
-  const top = (mappa, limite) =>
-    [...mappa.entries()]
-      .map(([valore, n]) => ({ valore, n }))
-      .sort((a, b) => b.n - a.n || a.valore.localeCompare(b.valore))
-      .slice(0, limite);
-  return { diametri: top(contaD, limiteDiametri), materiali: top(contaM, limiteMateriali) };
 }
 
 // ---------- Macro categorie ----------
@@ -539,7 +534,6 @@ async function prodottiDelMarchio(slug, famiglia, pagina) {
 module.exports = {
   PER_PAGINA,
   cercaProdotti,
-  tagRaffinamento,
   macroCategorie,
   categorieInEvidenza,
   altreCategorie,

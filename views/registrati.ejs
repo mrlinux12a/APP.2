@@ -116,7 +116,7 @@
         <label for="username">Nome utente *</label>
         <input type="text" id="username" name="username" autocapitalize="none"
                autocomplete="username" spellcheck="false" data-utente
-               pattern="[A-Za-z0-9._-]{3,30}"
+               pattern="[A-Za-z0-9._\-]{3,30}"
                placeholder="tutto attaccato, es. rossimpianti"
                value="<%= dati.username || '' %>" required>
         <p class="nota" style="margin:-6px 0 12px;">

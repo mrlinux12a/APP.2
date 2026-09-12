@@ -312,47 +312,6 @@
     // Ambito della pagina (categoria, marchio, famiglia, gruppo): la ricerca resta lì dentro.
     const ambito = campoRicerca.dataset.ambito || '';
 
-    // Chip di raffinamento (diametro/materiale), solo dove il contenitore esiste (oggi
-    // solo /cerca): stesso pattern "ripristina al contenuto iniziale svuotando" di sopra.
-    const contenitoreTag = document.getElementById('tag-raffinamento');
-    const tagIniziale = contenitoreTag ? contenitoreTag.innerHTML : '';
-
-    function leggiFiltro(chiave) {
-      try { return new URLSearchParams(window.location.search).get(chiave) || ''; } catch (e) { return ''; }
-    }
-    let diametroAttivo = leggiFiltro('diametro');
-    let materialeAttivo = leggiFiltro('materiale');
-
-    function urlCerca(q, cambio) {
-      const stato = { q: q, diametro: diametroAttivo, materiale: materialeAttivo };
-      Object.keys(cambio).forEach(function (k) { stato[k] = cambio[k]; });
-      const parti = Object.keys(stato)
-        .filter(function (k) { return stato[k]; })
-        .map(function (k) { return k + '=' + encodeURIComponent(stato[k]); });
-      return '/cerca' + (parti.length ? '?' + parti.join('&') : '');
-    }
-
-    function rigaChip(titolo, voci, attivo, chiave) {
-      if (!voci.length) return '';
-      var html = '<div class="filtro-titolo">' + titolo + '</div><div class="chip-riga">';
-      var cambioTutti = {}; cambioTutti[chiave] = null;
-      html += '<a class="chip ' + (attivo ? '' : 'attivo') + '" href="' + urlCerca(ultima, cambioTutti) + '">Tutti</a>';
-      voci.forEach(function (v) {
-        var cambio = {}; cambio[chiave] = v.valore;
-        html += '<a class="chip ' + (attivo === v.valore ? 'attivo' : '') + '" href="' +
-          urlCerca(ultima, cambio) + '">' + esc(v.valore) + '</a>';
-      });
-      return html + '</div>';
-    }
-
-    function disegnaTag(tag) {
-      if (!contenitoreTag) return;
-      const t = tag || { diametri: [], materiali: [] };
-      contenitoreTag.innerHTML =
-        rigaChip('Diametro', t.diametri, diametroAttivo, 'diametro') +
-        rigaChip('Materiale', t.materiali, materialeAttivo, 'materiale');
-    }
-
     campoRicerca.addEventListener('input', function () {
       clearTimeout(timer);
       timer = setTimeout(cerca, 220);
@@ -370,7 +329,6 @@
       ultima = q;
       if (q.length < 2) {
         contenitore.innerHTML = contenutoIniziale;
-        if (contenitoreTag) contenitoreTag.innerHTML = tagIniziale;
         mostraPaginazione(true);
         ricalcolaBarra();
         return;
@@ -382,11 +340,10 @@
           // Da cellulare, sostituire il contenuto della pagina mentre si sta scrivendo
           // può far sparire la tastiera (il browser toglie il focus dal campo quando il
           // layout intorno cambia): se l'utente sta ancora scrivendo qui, si rimette il
-          // focus subito dopo aver ridisegnato risultati e chip.
+          // focus subito dopo aver ridisegnato i risultati.
           const eraFocus = document.activeElement === campoRicerca;
           mostraPaginazione(false);
           disegnaRisultati(dati.risultati || []);
-          disegnaTag(dati.tag);
           if (eraFocus) campoRicerca.focus();
         })
         .catch(function () { /* offline: resta l'ultimo elenco mostrato */ });
@@ -401,21 +358,6 @@
       contenitore.innerHTML = '<div class="card card-fitta">' + risultati.map(cardProdottoHtml).join('') + '</div>';
       risincronizzaCarrelloVisibile();
     }
-  }
-
-  // ---------- Ricerca dalla home: appena scritte 3 lettere si va ai risultati ----------
-  // (senza dover premere "Cerca" o Invio; su /cerca poi la ricerca è già live mentre si scrive)
-  const campoRicercaHome = document.querySelector('[data-auto-cerca]');
-  if (campoRicercaHome) {
-    let timerHome = null;
-    campoRicercaHome.addEventListener('input', function () {
-      clearTimeout(timerHome);
-      const q = campoRicercaHome.value.trim();
-      if (q.length < 3) return;
-      timerHome = setTimeout(function () {
-        window.location.href = '/cerca?q=' + encodeURIComponent(q);
-      }, 350);
-    });
   }
 
   // ---------- Scroll infinito nelle categorie ----------

@@ -362,14 +362,12 @@ app.get('/cerca', requireRole('cliente'), async (req, res) => {
   const diametro = req.query.diametro || null;
   const materiale = req.query.materiale || null;
   const risultati = q ? await catalogo.cercaProdotti(q, { diametro, materiale, limite: 100 }) : [];
-  const tag = q ? catalogo.tagRaffinamento(risultati) : { diametri: [], materiali: [] };
   res.render('cerca', {
     titolo: 'Cerca',
     q,
     diametro,
     materiale,
     risultati,
-    tag,
     carrello: getCarrello(req),
   });
 });
@@ -426,9 +424,8 @@ app.get('/api/cerca', requireRole('cliente'), async (req, res) => {
     limite: 60,
   };
   const risultati = q.length >= 2 ? await catalogo.cercaProdotti(q, ambito) : [];
-  const tag = q.length >= 2 ? catalogo.tagRaffinamento(risultati) : { diametri: [], materiali: [] };
   const servizioPct = await pricing.getServizioPct();
-  res.json({ risultati: risultati.map((p) => prodottoJson(p, servizioPct)), tag });
+  res.json({ risultati: risultati.map((p) => prodottoJson(p, servizioPct)) });
 });
 
 // Pagina successiva di una categoria/sottocategoria, per lo scroll infinito: stessi
@@ -481,11 +478,9 @@ app.get('/categoria/:slug', requireRole('cliente'), async (req, res) => {
     sottocategorie,
     sotto,
     sottoSlug,
-    // La misura è il primo filtro utile in cantiere; il marchio viene dopo.
-    misure: sottoSlug || sfogliaDiretto ? await catalogo.misureDisponibili({ macroSlug: macro.slug, sotto: sottoSlug }) : [],
-    misura,
     marchi: sottoSlug || sfogliaDiretto ? await catalogo.marchiNellaCategoria({ macroSlug: macro.slug, sotto: sottoSlug }) : [],
     marchio,
+    misura,
     q,
     elenco,
     carrello: getCarrello(req),
