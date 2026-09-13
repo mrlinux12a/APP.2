@@ -1,0 +1,344 @@
+<title>Icone Minuteria</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Source+Sans+3:wght@400;600;700&display=swap">
+<style>
+  :root{
+    /* Token del tema SCURO reale dell'app ("Cantiere Notte") — copiati 1:1 da public/style.css */
+    --bg:#12181f; --surface:#1a222b; --bordo:#2a3540; --testo:#eef2f5; --grigio:#93a2ad;
+    --accento:#f2a71b; --accento-scuro:#c9860a; --accento-chiaro:#2b2313;
+    --verde:#5fbf63; --rosso:#ff6b6b; --icona-nav:#ffffff;
+    --raggio:14px; --font-display:'Sora',system-ui,sans-serif; --font-testo:'Source Sans 3',system-ui,sans-serif;
+  }
+  [data-preview="chiaro"]{
+    --bg:#f3f1ec; --surface:#ffffff; --bordo:#e2ded3; --testo:#232019; --grigio:#6b6a5f;
+    --accento:#245a8f; --accento-scuro:#1a4468; --accento-chiaro:#e3edf7;
+    --verde:#2f8f45; --rosso:#c23b3b; --icona-nav:#000000;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--testo);
+    font-family:var(--font-testo); transition:background .25s ease,color .25s ease;
+  }
+  h1,h2,.etichetta-nome,.etichetta-sez{ font-family:var(--font-display); text-wrap:balance; }
+  ::selection{ background:var(--accento); color:#12181f; }
+
+  .scaffold{ max-width:1080px; margin:0 auto; padding:28px 20px 80px; }
+
+  header.testata{
+    display:flex; flex-wrap:wrap; gap:18px; align-items:flex-start; justify-content:space-between;
+    padding-bottom:22px; border-bottom:1px solid var(--bordo); margin-bottom:30px;
+  }
+  .testata-testo{ max-width:640px; }
+  .eyebrow{
+    font-family:var(--font-testo); font-size:.72rem; font-weight:700; letter-spacing:.09em;
+    text-transform:uppercase; color:var(--accento); margin:0 0 8px;
+  }
+  h1{ font-size:1.85rem; font-weight:700; margin:0 0 10px; color:var(--testo); }
+  .sottotitolo{ margin:0; color:var(--grigio); font-size:.95rem; line-height:1.55; }
+  .sottotitolo strong{ color:var(--testo); }
+
+  .toggle-tema{
+    display:flex; align-items:center; gap:0; background:var(--surface); border:1px solid var(--bordo);
+    border-radius:999px; padding:4px; flex-shrink:0;
+  }
+  .toggle-tema button{
+    font-family:var(--font-testo); font-weight:600; font-size:.82rem; border:none; background:none;
+    color:var(--grigio); padding:8px 16px; border-radius:999px; cursor:pointer; transition:background .15s,color .15s;
+  }
+  .toggle-tema button.attivo{ background:var(--accento); color:#fff; }
+  [data-preview="chiaro"] .toggle-tema button.attivo{ color:#fff; }
+
+  .legenda-ruoli{ display:flex; gap:14px; flex-wrap:wrap; margin:18px 0 34px; font-size:.82rem; color:var(--grigio); }
+  .legenda-ruoli span{ display:inline-flex; align-items:center; gap:6px; }
+  .puntino{ width:8px; height:8px; border-radius:50%; display:inline-block; }
+  .puntino.installatore{ background:#4fc3bf; }
+  .puntino.venditore{ background:var(--accento); }
+  .puntino.comune{ background:var(--grigio); }
+
+  /* ---------- Anteprima navigazione: il pezzo che dimostra la parità di colore ---------- */
+  .blocco-nav{
+    display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:44px;
+  }
+  @media (max-width:620px){ .blocco-nav{ grid-template-columns:1fr; } }
+  .telefono-mock{
+    background:var(--surface); border:1px solid var(--bordo); border-radius:20px; padding:18px 14px 0;
+    overflow:hidden;
+  }
+  .telefono-mock .titolo-mock{
+    font-family:var(--font-display); font-weight:700; font-size:.95rem; margin:0 0 3px; padding:0 6px;
+  }
+  .telefono-mock .nota-mock{ font-size:.78rem; color:var(--grigio); margin:0 0 16px; padding:0 6px; }
+  .finto-schermo{
+    background:var(--bg); border-radius:12px 12px 0 0; height:64px; position:relative;
+    border:1px solid var(--bordo); border-bottom:none;
+  }
+  .finta-navbar{
+    display:flex; background:var(--surface); border:1px solid var(--bordo); border-top:none;
+    border-radius:0 0 10px 10px; margin:0 -1px -1px;
+  }
+  .finta-navbar a{
+    flex:1; text-align:center; padding:10px 4px 12px; text-decoration:none; color:var(--grigio);
+    font-size:.68rem; font-weight:600; font-family:var(--font-testo);
+  }
+  .finta-navbar a svg{ display:block; margin:0 auto 3px; width:1.35rem; height:1.35rem; color:var(--icona-nav); }
+  /* Fedele alla regola reale: l'icona resta sempre nel colore --icona-nav, è la sola
+     etichetta di testo a diventare accento (blu in chiaro, bianco in scuro) da attiva. */
+  .finta-navbar a.attivo{ color:var(--accento); font-weight:700; }
+  [data-preview="scuro"] .finta-navbar a.attivo{ color:#fff; }
+
+  /* ---------- Sezioni e griglie di icone ---------- */
+  .sezione{ margin-bottom:44px; }
+  .etichetta-sez{
+    font-size:1.05rem; font-weight:700; margin:0 0 4px; display:flex; align-items:baseline; gap:10px;
+  }
+  .conteggio-sez{ font-family:var(--font-testo); font-weight:600; font-size:.76rem; color:var(--grigio); }
+  .spiega-sez{ margin:0 0 16px; color:var(--grigio); font-size:.86rem; max-width:70ch; }
+
+  .griglia-icone{ display:grid; grid-template-columns:repeat(auto-fill,minmax(148px,1fr)); gap:12px; }
+  .carta-icona{
+    background:var(--surface); border:1px solid var(--bordo); border-radius:var(--raggio);
+    padding:16px 14px; display:flex; flex-direction:column; gap:10px; position:relative;
+  }
+  .riga-badge{ position:absolute; top:10px; right:10px; }
+  .chip-icona{
+    width:44px; height:44px; border-radius:12px; background:var(--accento-chiaro);
+    display:flex; align-items:center; justify-content:center; color:var(--accento);
+  }
+  .chip-icona svg{ width:22px; height:22px; }
+  .etichetta-nome{ font-size:.88rem; font-weight:700; margin:0; }
+  .righe-meta{ margin-top:auto; display:flex; flex-direction:column; gap:3px; }
+  .prima-dopo{ font-size:.76rem; color:var(--grigio); display:flex; align-items:center; gap:5px; }
+  .prima-dopo .vecchia{ font-size:1rem; filter:saturate(.7); opacity:.75; }
+  .prima-dopo .freccia{ color:var(--bordo); }
+
+  footer.piede{
+    margin-top:50px; padding-top:20px; border-top:1px solid var(--bordo);
+    font-size:.8rem; color:var(--grigio); line-height:1.6;
+  }
+  footer.piede code{
+    background:var(--surface); border:1px solid var(--bordo); border-radius:5px; padding:1px 6px;
+    font-size:.78rem; color:var(--testo);
+  }
+</style>
+
+<div class="scaffold">
+
+  <header class="testata">
+    <div class="testata-testo">
+      <p class="eyebrow">Revisione visiva — non ancora in produzione</p>
+      <h1>Icone Minuteria</h1>
+      <p class="sottotitolo">
+        Le icone attuali sono due mondi diversi: <strong>Catalogo</strong>, <strong>Carrello</strong> e
+        <strong>Stato ordini</strong> dell'installatore sono già line-icon disegnate su misura
+        (<code>src/icone.js</code>), mentre il resto — notifiche, anagrafica cliente, stati ordine,
+        menu del venditore — sono ancora emoji di sistema: cambiano aspetto da telefono a telefono e
+        non rispondono ai colori del tema. Qui sotto la stessa icona <strong>prima → dopo</strong>,
+        divisa per dove si usa. Usa il selettore per controllare entrambi i temi dell'app.
+      </p>
+    </div>
+    <div class="toggle-tema" role="group" aria-label="Tema di anteprima">
+      <button type="button" data-tema-btn="scuro" class="attivo">Cantiere Notte</button>
+      <button type="button" data-tema-btn="chiaro">Chiaro</button>
+    </div>
+  </header>
+
+  <div class="legenda-ruoli">
+    <span><i class="puntino installatore"></i> Installatore</span>
+    <span><i class="puntino venditore"></i> Venditore</span>
+    <span><i class="puntino comune"></i> Comune a entrambi</span>
+  </div>
+
+  <div class="sezione">
+    <div class="etichetta-sez">Navigazione — stessa meccanica di colore <span class="conteggio-sez">grigio a riposo → accento se attiva, per tema</span></div>
+    <p class="spiega-sez">
+      Il menu dell'installatore è già un SVG con <code>stroke="currentColor"</code>: eredita il grigio
+      di riposo e l'accento del tema da CSS. Il menu del venditore oggi usa 🏠 e 👥, emoji che restano
+      sempre uguali qualunque tema: sostituendoli con lo stesso tipo di SVG ottengono automaticamente
+      gli <strong>stessi colori</strong>, senza scrivere CSS nuovo.
+    </p>
+    <div class="blocco-nav">
+      <div class="telefono-mock">
+        <p class="titolo-mock">Installatore — oggi</p>
+        <p class="nota-mock">nav.ejs, già line-icon</p>
+        <div class="finto-schermo"></div>
+        <div class="finta-navbar" id="nav-installatore"></div>
+      </div>
+      <div class="telefono-mock">
+        <p class="titolo-mock">Venditore — proposta</p>
+        <p class="nota-mock">nav_distributore.ejs, oggi 🏠 👥</p>
+        <div class="finto-schermo"></div>
+        <div class="finta-navbar" id="nav-venditore"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="sezioni-icone"></div>
+
+  <footer class="piede">
+    Stile: viewBox 24×24, <code>fill="none"</code>, <code>stroke="currentColor"</code>,
+    <code>stroke-width 1.6</code>, tratti arrotondati — identico a <code>src/icone.js</code> di oggi,
+    così le nuove icone erediteranno automaticamente i colori già gestiti da CSS
+    (<code>--icona-nav</code>, <code>--blu</code> quando attive) invece di restare fisse come le emoji.
+  </footer>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  function svg(pathInner, sw){
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (sw||1.6) +
+      '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + pathInner + '</svg>';
+  }
+
+  var ICONE = {
+    home: svg('<path d="M4 11.5 12 4l8 7.5"/><path d="M6 10.5V20a1 1 0 0 0 1 1h3v-5.5h4V21h3a1 1 0 0 0 1-1v-9.5"/>'),
+    clienti: svg('<circle cx="8.5" cy="8.2" r="3"/><path d="M2.8 19.8c.7-3.5 3-5.3 5.7-5.3s5 1.8 5.7 5.3"/><circle cx="17" cy="8.8" r="2.3"/><path d="M15.2 14.7c2.3.3 3.9 2 4.5 5"/>'),
+    notifiche: svg('<path d="M6 10.5a6 6 0 0 1 12 0c0 3.8 1.4 5.3 1.4 5.3H4.6S6 14.3 6 10.5Z"/><path d="M10 19.3a2 2 0 0 0 4 0"/>'),
+    posizione: svg('<path d="M12 21s-6.5-6.1-6.5-11A6.5 6.5 0 0 1 18.5 10c0 4.9-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.2"/>'),
+    azienda: svg('<rect x="4.5" y="3" width="11" height="18" rx="1"/><path d="M8 7.2h1M8 11h1M8 14.8h1M12.5 7.2h1M12.5 11h1M12.5 14.8h1"/><path d="M15.5 21v-4.5h4V21"/>'),
+    fiscale: svg('<path d="M6.5 3h11v18l-2.3-1.4L13 21l-2.3-1.4L8.5 21l-2-1.4Z"/><path d="M9 8h6M9 11.5h6M9 15h3.5"/>'),
+    destinazione: svg('<path d="M6 3v18"/><path d="M6 4.2h11l-2.4 3.3L17 10.8H6"/>'),
+    telefono: svg('<path d="M6.2 3.2h3l1.4 3.8-2 1.5a12 12 0 0 0 5.9 5.9l1.5-2 3.8 1.4v3a2 2 0 0 1-2 2C10.9 18.8 5.2 13.1 4.2 5.2a2 2 0 0 1 2-2Z"/>'),
+    orario: svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3.2 2"/>'),
+    persona: svg('<circle cx="12" cy="8" r="3.4"/><path d="M5 19c1.2-3.6 4-5.4 7-5.4s5.8 1.8 7 5.4"/>'),
+    negozio: svg('<path d="M4 4h16l1.4 4.8a2.4 2.4 0 0 1-4.4 1.4 2.4 2.4 0 0 1-4.5 0 2.4 2.4 0 0 1-4.5 0A2.4 2.4 0 0 1 3.5 9L4 4Z"/><path d="M5 10.6V20h14v-9.4"/><path d="M9.8 20v-5h4.4v5"/>'),
+    ordine: svg('<path d="M3 8.5 12 4l9 4.5-9 4.5-9-4.5Z"/><path d="M3 8.5V16l9 4.5 9-4.5V8.5"/><path d="M12 13v7.5"/>'),
+    consegna: svg('<rect x="2.5" y="8" width="10.5" height="8" rx="1"/><path d="M13 11h3.2l3.3 3v2H19"/><circle cx="7" cy="18" r="1.6"/><circle cx="16.5" cy="18" r="1.6"/>'),
+    nota: svg('<path d="M4.2 19.8 5 16l10.5-10.5a1.6 1.6 0 0 1 2.2 0l.8.8a1.6 1.6 0 0 1 0 2.2L8 19l-3.8.8Z"/><path d="M13.6 7l3.4 3.4"/>'),
+    mappa: svg('<path d="M9 4 4 6v14l5-2 6 2 5-2V4l-5 2-6-2Z"/><path d="M9 4v14M15 6v14"/>'),
+    pagamento: svg('<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/>'),
+    marchio: svg('<path d="M12.3 3.5H20v7.7L11 20.5a1.5 1.5 0 0 1-2.1 0l-6.4-6.4a1.5 1.5 0 0 1 0-2.1L12.3 3.5Z"/><circle cx="16.2" cy="7.4" r="1.4"/>'),
+    famiglia: svg('<path d="M3.5 7a1 1 0 0 1 1-1h4.6l2 2.1h8.4a1 1 0 0 1 1 1v9.4a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1Z"/>'),
+    listino: svg('<path d="M12 6.3c-1.8-1.3-4-1.9-6.5-1.9v13c2.5 0 4.7.6 6.5 1.9 1.8-1.3 4-1.9 6.5-1.9v-13c-2.5 0-4.7.6-6.5 1.9Z"/><path d="M12 6.3v13"/>'),
+    nuovo: svg('<path d="M12 3l1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7Z"/>'),
+    lavorazione: svg('<path d="M14.7 6.3a3.5 3.5 0 0 0-4.6 4.6L4 17l3 3 6.1-6.1a3.5 3.5 0 0 0 4.6-4.6l-2.3 2.3-2-2Z"/>'),
+    rifiutato: svg('<circle cx="12" cy="12" r="8.5"/><path d="M9 9l6 6M15 9l-6 6"/>'),
+    documento: svg('<path d="M7 3h7l4 4v14H7Z"/><path d="M14 3v4h4"/><path d="M9.5 12h5M9.5 15.3h5"/>'),
+    ok: svg('<circle cx="12" cy="12" r="8.5"/><path d="M8.3 12.3l2.4 2.4 4.8-5"/>'),
+    nessunRisultato: svg('<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.2 15.2l5 5"/><path d="M8 10.5h5"/>', 2),
+    scatolaVuota: svg('<path d="M3 8.5 12 4l9 4.5-9 4.5-9-4.5Z"/><path d="M3 8.5V14.5M21 8.5V14.5"/><path d="M7 12.3v3.4M17 12.3v3.4"/>'),
+    notificheOff: svg('<path d="M6.2 10.3a6 6 0 0 1 9.3-5"/><path d="M18 10.5c0 3.8 1.4 5.3 1.4 5.3H8"/><path d="M10 19.3a2 2 0 0 0 4 0"/><path d="M3.5 3.5l17 17"/>'),
+    carrello: svg('<circle cx="9" cy="20" r="1.3"/><circle cx="17" cy="20" r="1.3"/><path d="M3 4h2l2.2 11.2a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.6L20.5 8H6"/>'),
+    catalogo: svg('<path d="M4 5.5c2-1 4.5-1 8 0v13c-3.5-1-6-1-8 0V5.5Z"/><path d="M20 5.5c-2-1-4.5-1-8 0v13c3.5-1 6-1 8 0V5.5Z"/>')
+  };
+
+  var RUOLO = { installatore: 'Installatore', venditore: 'Venditore', comune: 'Comune' };
+
+  var SEZIONI = [
+    {
+      titolo: 'Comuni a entrambi',
+      spiega: 'Usate nella barra in alto e nelle schede di contatto, viste sia dall\'installatore che dal venditore.',
+      voci: [
+        { chiave:'notifiche', nome:'Notifiche', vecchia:'🔔', ruolo:'comune', dove:'appbar.ejs · campanella in alto' },
+        { chiave:'posizione', nome:'Posizione / distanza', vecchia:'📍', ruolo:'comune', dove:'geolocalizzazione, anagrafica cliente' }
+      ]
+    },
+    {
+      titolo: 'Anagrafica e contatti',
+      spiega: 'Le righe con azienda, P.IVA, telefono e destinazione — stesso partial riusato nel profilo installatore e nella scheda cliente del venditore.',
+      voci: [
+        { chiave:'azienda', nome:'Azienda / ragione sociale', vecchia:'🏢', ruolo:'comune', dove:'profilo, anagrafica cliente' },
+        { chiave:'fiscale', nome:'Dati fiscali', vecchia:'🧾', ruolo:'comune', dove:'P.IVA, C.F., SDI/PEC' },
+        { chiave:'destinazione', nome:'Destinazione merce', vecchia:'🚩', ruolo:'comune', dove:'indirizzo di consegna' },
+        { chiave:'telefono', nome:'Telefono', vecchia:'📞', ruolo:'comune', dove:'riga cliccabile "tel:"' },
+        { chiave:'orario', nome:'Orario / tempo', vecchia:'🕒', ruolo:'comune', dove:'riepilogo, scheda cliente banco' },
+        { chiave:'persona', nome:'Persona', vecchia:'👤', ruolo:'installatore', dove:'riepilogo, dettaglio ordine' },
+        { chiave:'negozio', nome:'Punto vendita', vecchia:'🏪', ruolo:'installatore', dove:'punti vendita, riepilogo' }
+      ]
+    },
+    {
+      titolo: 'Ordine e consegna',
+      spiega: 'Dal carrello alla bolla: pacco, corriere, note e mappa.',
+      voci: [
+        { chiave:'ordine', nome:'Ordine / pacco', vecchia:'📦', ruolo:'comune', dove:'già la stessa di "Stato ordini"' },
+        { chiave:'consegna', nome:'Consegna', vecchia:'🚚', ruolo:'comune', dove:'modalità e stato spedizione' },
+        { chiave:'nota', nome:'Nota', vecchia:'📝', ruolo:'comune', dove:'note cliente / annotazioni DDT' },
+        { chiave:'mappa', nome:'Mappa', vecchia:'🗺️', ruolo:'venditore', dove:'dove consegnare, ordine banco' },
+        { chiave:'pagamento', nome:'Pagamento', vecchia:'💳', ruolo:'installatore', dove:'riepilogo ordine' }
+      ]
+    },
+    {
+      titolo: 'Catalogo e marchi',
+      spiega: 'Sfoglio marchi, famiglie di prodotto e listino — solo lato installatore.',
+      voci: [
+        { chiave:'marchio', nome:'Marchio', vecchia:'🏷️', ruolo:'installatore', dove:'schede marchio' },
+        { chiave:'famiglia', nome:'Famiglia prodotto', vecchia:'📁', ruolo:'installatore', dove:'categoria, famiglie marchio' },
+        { chiave:'listino', nome:'Listino', vecchia:'📗', ruolo:'installatore', dove:'scheda marchio' }
+      ]
+    },
+    {
+      titolo: 'Stati (solo venditore)',
+      spiega: 'Badge di stato nelle liste del banco: nuova anagrafica, ordine in lavorazione, rifiuto, riga di storico.',
+      voci: [
+        { chiave:'nuovo', nome:'Nuovo', vecchia:'🆕', ruolo:'venditore', dove:'anagrafica da approvare, ordine appena arrivato' },
+        { chiave:'lavorazione', nome:'In lavorazione', vecchia:'🛠️', ruolo:'venditore', dove:'ordine in preparazione' },
+        { chiave:'rifiutato', nome:'Rifiutato', vecchia:'🚫', ruolo:'venditore', dove:'anagrafica rifiutata' },
+        { chiave:'documento', nome:'Documento', vecchia:'📄', ruolo:'venditore', dove:'riga storico generica' }
+      ]
+    },
+    {
+      titolo: 'Stati vuoti',
+      spiega: 'Le illustrazioni per "non c\'è ancora niente qui" — stesso stile ma più grandi, al posto dell\'emoji isolata.',
+      voci: [
+        { chiave:'ok', nome:'Tutto fatto', vecchia:'✅', ruolo:'venditore', dove:'nessuna richiesta in attesa' },
+        { chiave:'nessunRisultato', nome:'Nessun risultato', vecchia:'🤷', ruolo:'installatore', dove:'ricerca senza esito' },
+        { chiave:'scatolaVuota', nome:'Vuoto', vecchia:'📭', ruolo:'comune', dove:'categoria, storico banco' },
+        { chiave:'notificheOff', nome:'Notifiche assenti', vecchia:'🔕', ruolo:'comune', dove:'lista notifiche vuota' },
+        { chiave:'carrello', nome:'Carrello vuoto', vecchia:'🛒', ruolo:'installatore', dove:'stessa icona del carrello, più grande' }
+      ]
+    }
+  ];
+
+  function cartaIcona(v){
+    return (
+      '<div class="carta-icona">' +
+        '<div class="riga-badge"><i class="puntino ' + v.ruolo + '" title="' + RUOLO[v.ruolo] + '"></i></div>' +
+        '<div class="chip-icona">' + ICONE[v.chiave] + '</div>' +
+        '<p class="etichetta-nome">' + v.nome + '</p>' +
+        '<div class="righe-meta">' +
+          '<span class="prima-dopo"><span class="vecchia">' + v.vecchia + '</span><span class="freccia">→</span> line-icon</span>' +
+          '<span class="prima-dopo">' + v.dove + '</span>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  var contenitore = document.getElementById('sezioni-icone');
+  contenitore.innerHTML = SEZIONI.map(function(sez){
+    return (
+      '<div class="sezione">' +
+        '<div class="etichetta-sez">' + sez.titolo + ' <span class="conteggio-sez">' + sez.voci.length + ' icone</span></div>' +
+        '<p class="spiega-sez">' + sez.spiega + '</p>' +
+        '<div class="griglia-icone">' + sez.voci.map(cartaIcona).join('') + '</div>' +
+      '</div>'
+    );
+  }).join('');
+
+  function navRow(id, voci){
+    var el = document.getElementById(id);
+    el.innerHTML = voci.map(function(v){
+      return '<a class="' + (v.attivo ? 'attivo' : '') + '" href="#">' + ICONE[v.chiave] + v.nome + '</a>';
+    }).join('');
+  }
+  navRow('nav-installatore', [
+    { chiave:'catalogo', nome:'Catalogo', attivo:true },
+    { chiave:'carrello', nome:'Carrello', attivo:false },
+    { chiave:'ordine', nome:'Ordini', attivo:false }
+  ]);
+  navRow('nav-venditore', [
+    { chiave:'home', nome:'Home', attivo:true },
+    { chiave:'clienti', nome:'Clienti', attivo:false }
+  ]);
+
+  var root = document.documentElement;
+  root.setAttribute('data-preview', 'scuro');
+  document.querySelectorAll('[data-tema-btn]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var tema = btn.getAttribute('data-tema-btn');
+      root.setAttribute('data-preview', tema);
+      document.querySelectorAll('[data-tema-btn]').forEach(function(b){ b.classList.toggle('attivo', b === btn); });
+    });
+  });
+})();
+</script>

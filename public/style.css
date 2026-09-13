@@ -250,13 +250,74 @@ a { color: var(--blu); }
 
 .prodotto {
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 12px;
   padding: 12px 14px;
   border-bottom: 1px solid var(--bordo);
 }
 .prodotto:last-child { border-bottom: none; }
 .prodotto .info { flex: 1; min-width: 0; }
+
+/* Colonna a destra della card: la foto sta in alto, lo stepper viene spinto in basso
+   (justify-content: space-between) così la foto ha lo spazio in alto senza convivere con
+   il tasto +/-. Centrata (non a destra): così il centro della foto cade sopra al numero
+   dello stepper, non sopra al bordo destro della card. Senza foto reale c'è comunque
+   .prodotto-foto-vuota, stesse dimensioni ma invisibile: lo stepper resta spinto in basso
+   fin da ora, pronto per quando arriverà la foto vera, senza spostamenti dell'ultimo minuto. */
+.prodotto-laterale {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+  gap: 8px;
+}
+.prodotto-foto {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: var(--surface);
+}
+.prodotto-foto-vuota { background: none; visibility: hidden; }
+.prodotto-foto:not(.prodotto-foto-vuota) { cursor: zoom-in; }
+
+/* Foto prodotto a schermo intero (apertura in app.js al click sulla miniatura). */
+.foto-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+.foto-overlay[hidden] { display: none; }
+.foto-overlay-img {
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 8px;
+  background: var(--surface);
+}
+.foto-overlay-chiudi {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  /* Sfondo scuro pieno (non il solito translucido): la foto sotto può essere bianca,
+     un cerchio semi-trasparente ci sparirebbe sopra. */
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
 .prodotto .nome { font-weight: 600; line-height: 1.3; }
 .prodotto .meta { font-size: 0.8rem; color: var(--grigio); margin-top: 3px; }
 .prodotto .prezzo { margin-top: 6px; font-weight: 700; color: var(--blu); }
@@ -1441,14 +1502,60 @@ th { color: var(--grigio); font-weight: 600; }
 }
 
 @media (min-width: 720px) {
-  .app { max-width: 860px; padding-bottom: calc(62px + 62px + 16px); }
-  .barra-carrello .interno { max-width: 860px; }
-  .navbar .interno { max-width: 860px; justify-content: center; gap: 28px; }
+  .app { max-width: 1400px; padding-bottom: calc(62px + 62px + 16px); }
+  .barra-carrello .interno { max-width: 1400px; }
+  .navbar .interno { max-width: 1400px; justify-content: center; gap: 28px; }
   .carrello-layout { grid-template-columns: 1.6fr 0.9fr; align-items: start; }
   .carrello-riepilogo { position: sticky; top: 64px; }
   .prodotto { padding: 16px 18px; gap: 16px; }
   .barra-carrello { bottom: 62px; }
   body { background: var(--sfondo); }
+
+  /* L'header (.appbar) esce dalla colonna centrale di .app e occupa tutta la larghezza
+     della finestra: tecnica standard "full-bleed" (100vw + margine negativo), l'alternativa
+     sarebbe spostare l'appbar fuori da .app in ogni singola vista (~20 file .ejs). */
+  .appbar {
+    width: 100vw;
+    left: 50%;
+    margin-left: -50vw;
+  }
+
+  /* Da tablet in su la card entra in una sola riga: foto, poi nome/dettagli, poi lo
+     stepper -/+ in fondo alla riga (spazio permettendo) — invece della colonna foto sopra
+     e stepper sotto usata su mobile, dove lo spazio orizzontale non basta per tutti e tre. */
+  .prodotto { align-items: center; }
+  .prodotto-laterale { display: contents; }
+  .prodotto-foto { order: -1; }
+  .prodotto [data-riga-azioni] { flex: none; }
+  /* Il segnaposto invisibile serve solo su mobile (per tenere lo stepper già in basso in
+     vista delle foto mancanti); da tablet in su, senza foto vera, la card resta compatta
+     come prima invece di riservare uno spazio a sinistra che non useremmo. */
+  .prodotto-foto-vuota { display: none; }
+
+  /* Griglia di categorie: da 2 colonne fisse a tante quante ci stanno (min 220px l'una),
+     invece di restare a 2 anche quando lo schermo è largo il triplo. Le tessere "in
+     evidenza" in home (più grandi) idem, con una soglia più larga. */
+  .griglia-macro { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  .griglia-evidenza { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+
+  /* Lista prodotti (ricerca/categoria/marchio): da elenco verticale a riga singola a una
+     griglia di card affiancate. Ogni .prodotto diventa una card a sé (bordo/sfondo propri)
+     invece di una riga separata da un bordo inferiore dentro un unico contenitore. */
+  .card.card-fitta.griglia-prodotti {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+    gap: 12px;
+    background: none;
+    border: none;
+    padding: 0;
+    overflow: visible;
+  }
+  .griglia-prodotti .prodotto {
+    border: 1px solid var(--bordo);
+    border-radius: var(--raggio);
+    background: var(--surface);
+  }
+  .griglia-prodotti .prodotto:last-child { border-bottom: 1px solid var(--bordo); }
 }
 
 /* geo mappa nascosta per ora — posizione richiesta all'ingresso ma non mostrata */

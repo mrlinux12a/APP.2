@@ -227,12 +227,17 @@
         : '') +
       esc(p.nome) + '</div>' +
       varianti +
-      '<div class="meta" data-riga-meta>Cod. <span data-riga-codice>' + esc(p.codice) + '</span> · ' + esc(p.macro_nome || '') +
+      '<div class="meta" data-riga-meta><span data-riga-codice hidden>' + esc(p.codice) + '</span>' + esc(p.macro_nome || '') +
       (p.raee ? ' · RAEE € ' + p.raee : '') +
       ' <span class="badge badge-' + p.disponibilita + '" data-riga-badge>' + esc(p.disponibilita_testo) + '</span></div>' +
       '<div class="prezzo" data-riga-prezzo>' + barrato + '€ ' + p.prezzo + ' <span class="iva">+ IVA</span></div>' +
       '</div>' +
+      '<div class="prodotto-laterale">' +
+      (p.foto_url
+        ? '<img class="prodotto-foto" src="' + esc(p.foto_url) + '" alt="" loading="lazy">'
+        : '<div class="prodotto-foto prodotto-foto-vuota" aria-hidden="true"></div>') +
       '<div data-riga-azioni>' + azioniHtml(p.id, p.disponibilita) + '</div>' +
+      '</div>' +
       '</div>'
     );
   }
@@ -355,7 +360,7 @@
           '<div class="vuoto"><span class="emoji">🤷</span>Nessun prodotto trovato.</div>';
         return;
       }
-      contenitore.innerHTML = '<div class="card card-fitta">' + risultati.map(cardProdottoHtml).join('') + '</div>';
+      contenitore.innerHTML = '<div class="card card-fitta griglia-prodotti">' + risultati.map(cardProdottoHtml).join('') + '</div>';
       risincronizzaCarrelloVisibile();
     }
   }
@@ -885,3 +890,63 @@ document.addEventListener('submit', function (e) {
     bottoni.forEach(function (b) { b.disabled = true; });
   }, 0);
 }, true);
+
+/* Pagine liste del venditore (home, ordini da evadere, clienti): si ricaricano da sole
+   così le richieste/ordini appena arrivati compaiono senza dover premere F5. Salta il giro
+   se la scheda è in background o se l'utente ha il focus su un campo, per non interrompere
+   nulla che stia scrivendo. */
+(function () {
+  'use strict';
+  const ms = parseInt(document.body.dataset.autoRefresh, 10);
+  if (!ms) return;
+
+  setInterval(function () {
+    const attivo = document.activeElement;
+    const suCampo = attivo && ['INPUT', 'TEXTAREA', 'SELECT'].includes(attivo.tagName);
+    if (!document.hidden && !suCampo) window.location.reload();
+  }, ms);
+})();
+
+/* Foto prodotto a schermo intero: un tap sulla miniatura la apre ingrandita. Delegato su
+   document (le card della ricerca live/scroll infinito vengono ridisegnate a runtime, un
+   listener messo sulla singola <img> al caricamento pagina non le coprirebbe). Il segnaposto
+   invisibile (.prodotto-foto-vuota, dove non c'è ancora una foto vera) è escluso. */
+(function () {
+  'use strict';
+  let overlay = null;
+
+  function apri(src) {
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.className = 'foto-overlay';
+      overlay.innerHTML =
+        '<button type="button" class="foto-overlay-chiudi" aria-label="Chiudi">' +
+        '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>' +
+        '</button>' +
+        '<img class="foto-overlay-img" alt="">';
+      document.body.appendChild(overlay);
+      overlay.addEventListener('click', function (e) {
+        if (e.target === overlay || e.target.closest('.foto-overlay-chiudi')) chiudi();
+      });
+    }
+    overlay.querySelector('.foto-overlay-img').src = src;
+    overlay.removeAttribute('hidden');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function chiudi() {
+    if (!overlay) return;
+    overlay.setAttribute('hidden', '');
+    document.body.style.overflow = '';
+  }
+
+  document.addEventListener('click', function (e) {
+    const foto = e.target.closest('.prodotto-foto:not(.prodotto-foto-vuota)');
+    if (!foto) return;
+    apri(foto.src);
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') chiudi();
+  });
+})();

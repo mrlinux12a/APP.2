@@ -347,6 +347,10 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS consegnato_il TIMESTAMP;
 -- per trovare schede tecniche e foto sul sito del produttore.
 ALTER TABLE products ADD COLUMN IF NOT EXISTS codice_fornitore TEXT;
 
+-- URL della foto prodotto (path locale sotto /public o URL esterno). NULL = nessuna foto,
+-- la card mostra lo spazio vuoto: nessuna rottura per i prodotti non ancora fotografati.
+ALTER TABLE products ADD COLUMN IF NOT EXISTS foto_url TEXT;
+
 -- session store per postgres
 CREATE TABLE IF NOT EXISTS session (
   sid VARCHAR NOT NULL PRIMARY KEY,

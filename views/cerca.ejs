@@ -23,7 +23,7 @@
         <% } else if (!risultati.length) { %>
           <div class="vuoto"><span class="emoji"><%- iconaVuotoRicerca %></span>Nessun prodotto trovato per &laquo;<%= q %>&raquo;.</div>
         <% } else { %>
-          <div class="card card-fitta">
+          <div class="card card-fitta griglia-prodotti">
             <% risultati.forEach(function (p) { %>
               <%- include('partials/prodotto', { p, carrello }) %>
             <% }); %>

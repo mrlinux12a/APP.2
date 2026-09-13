@@ -92,7 +92,7 @@
           <% if (!elenco.righe.length) { %>
             <div class="vuoto"><span class="emoji"><%- iconaVuotoRicerca %></span>Nessun articolo trovato.</div>
           <% } else { %>
-            <div class="card card-fitta">
+            <div class="card card-fitta griglia-prodotti">
               <% elenco.righe.forEach(function (p) { %>
                 <%- include('partials/prodotto', { p, carrello }) %>
               <% }); %>

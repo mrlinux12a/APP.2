@@ -480,6 +480,20 @@ async function prodottiDellaCategoria(
   return paginato({ where: where.join(' AND '), params, pagina });
 }
 
+// Vetrina trasversale alle categorie: tutti i prodotti che hanno già una foto, qualunque
+// sia la marca/categoria. Cresce da sola man mano che si aggiungono foto — non è un elenco
+// fisso da aggiornare a mano.
+async function prodottiConFoto({ pagina = 1 } = {}) {
+  return paginato({ where: 'p.attivo = 1 AND p.foto_url IS NOT NULL', params: [], pagina });
+}
+
+async function contaProdottiConFoto() {
+  const row = await db
+    .prepare('SELECT COUNT(*) AS n FROM products WHERE attivo = 1 AND foto_url IS NOT NULL')
+    .get();
+  return row ? Number(row.n) : 0;
+}
+
 // ---------- Marchi ----------
 
 async function marchi() {
@@ -543,6 +557,8 @@ module.exports = {
   misureDisponibili,
   marchiNellaCategoria,
   prodottiDellaCategoria,
+  prodottiConFoto,
+  contaProdottiConFoto,
   marchi,
   marchio,
   famiglieDelMarchio,

@@ -26,7 +26,7 @@
       </div>
     <% } %>
     <div class="meta" data-riga-meta>
-      Cod. <span data-riga-codice><%= p.codice %></span><% if (p.categoria) { %> · <%= p.categoria %><% } %>
+      <span data-riga-codice hidden><%= p.codice %></span><% if (p.categoria) { %><%= p.categoria %><% } %>
       <span class="badge badge-<%= p.disponibilita %>" data-riga-badge><%= testoDisponibilita[p.disponibilita] %></span>
     </div>
     <% if (p.refrigerante || p.ean || p.raee > 0) { %>
@@ -42,21 +42,28 @@
       € <%= euro(prezzoCliente(p)) %> <span class="iva">+ IVA</span>
     </div>
   </div>
-  <div data-riga-azioni>
-    <% if (p.disponibilita === 'non_disponibile') { %>
-      <div class="meta">non disponibile</div>
+  <div class="prodotto-laterale">
+    <% if (p.foto_url) { %>
+      <img class="prodotto-foto" src="<%= p.foto_url %>" alt="" loading="lazy">
     <% } else { %>
-      <div class="prodotto-azioni">
-        <div class="stepper">
-          <button type="button" data-passo="-1" aria-label="Togli">−</button>
-          <input type="number" min="0" step="1" inputmode="numeric" data-qta data-prodotto-qta="<%= p.id %>"
-                 value="0" aria-label="Quantità <%= p.nome %>">
-          <button type="button" data-passo="1" aria-label="Aggiungi">+</button>
-        </div>
-        <div class="mini-carrello" data-nel-carrello="<%= p.id %>" <%= qtaInCarrello > 0 ? '' : 'hidden' %>>
-          <span>Nel carrello: <strong data-qta-carrello="<%= p.id %>"><%= qtaInCarrello %></strong> pz</span>
-        </div>
-      </div>
+      <div class="prodotto-foto prodotto-foto-vuota" aria-hidden="true"></div>
     <% } %>
+    <div data-riga-azioni>
+      <% if (p.disponibilita === 'non_disponibile') { %>
+        <div class="meta">non disponibile</div>
+      <% } else { %>
+        <div class="prodotto-azioni">
+          <div class="stepper">
+            <button type="button" data-passo="-1" aria-label="Togli">−</button>
+            <input type="number" min="0" step="1" inputmode="numeric" data-qta data-prodotto-qta="<%= p.id %>"
+                   value="0" aria-label="Quantità <%= p.nome %>">
+            <button type="button" data-passo="1" aria-label="Aggiungi">+</button>
+          </div>
+          <div class="mini-carrello" data-nel-carrello="<%= p.id %>" <%= qtaInCarrello > 0 ? '' : 'hidden' %>>
+            <span>Nel carrello: <strong data-qta-carrello="<%= p.id %>"><%= qtaInCarrello %></strong> pz</span>
+          </div>
+        </div>
+      <% } %>
+    </div>
   </div>
 </div>

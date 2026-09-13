@@ -350,6 +350,7 @@ app.get('/home', requireRole('cliente'), async (req, res) => {
     titolo: 'Ordini Minuteria',
     inEvidenza: await catalogo.categorieInEvidenza(),
     altre: await catalogo.altreCategorie(),
+    prodottiConFotoConta: await catalogo.contaProdottiConFoto(),
   });
 });
 
@@ -384,6 +385,7 @@ function prodottoJson(p, servizioPct) {
     macro_nome: p.macro_nome,
     brand_nome: p.brand_nome,
     brand_colore: p.brand_colore,
+    foto_url: p.foto_url || null,
     raee: p.raee > 0 ? pricing.euro(p.raee) : null,
     disponibilita: p.disponibilita,
     disponibilita_testo: TESTO_DISPONIBILITA[p.disponibilita] || p.disponibilita,
@@ -422,6 +424,28 @@ app.get('/api/cerca', requireRole('cliente'), async (req, res) => {
   const risultati = q.length >= 2 ? await catalogo.cercaProdotti(q, ambito) : [];
   const servizioPct = await pricing.getServizioPct();
   res.json({ risultati: risultati.map((p) => prodottoJson(p, servizioPct)) });
+});
+
+// Vetrina "Elementi con foto": trasversale alle categorie, cresce da sola man mano che i
+// prodotti guadagnano una foto (vedi catalogo.prodottiConFoto).
+app.get('/con-foto', requireRole('cliente'), async (req, res) => {
+  const elenco = await catalogo.prodottiConFoto({ pagina: req.query.p });
+  res.render('con_foto', {
+    titolo: 'Elementi con foto',
+    elenco,
+    carrello: getCarrello(req),
+  });
+});
+
+app.get('/api/con-foto/prodotti', requireRole('cliente'), async (req, res) => {
+  const elenco = await catalogo.prodottiConFoto({ pagina: req.query.pagina });
+  const servizioPct = await pricing.getServizioPct();
+  res.json({
+    risultati: elenco.righe.map((p) => prodottoJson(p, servizioPct)),
+    pagina: elenco.pagina,
+    pagine: elenco.pagine,
+    totale: elenco.totale,
+  });
 });
 
 // Pagina successiva di una categoria/sottocategoria, per lo scroll infinito: stessi
