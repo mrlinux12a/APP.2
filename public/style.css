@@ -666,7 +666,7 @@ th { color: var(--grigio); font-weight: 600; }
 
 .riquadri-conta {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
   margin-bottom: 14px;
 }
@@ -722,6 +722,7 @@ th { color: var(--grigio); font-weight: 600; }
   margin-bottom: 8px;
 }
 .urgente-card {
+  position: relative;
   background: var(--surface);
   border: 1px solid var(--arancio);
   border-radius: var(--raggio);
@@ -731,6 +732,26 @@ th { color: var(--grigio); font-weight: 600; }
   gap: 8px;
   min-width: 0; /* dentro una grid: senza questo il testo non-a-capo forza la card ad allargarsi */
 }
+
+/* Tasto per togliere una card "da preparare" dalla home senza aprirla: in alto a destra,
+   discreto finché non serve. Il form è assoluto (non un elemento di flusso in più dentro
+   la colonna flex della card), il pulsante dentro è solo lo stile del cerchio. */
+.urgente-rimuovi-wrap { position: absolute; top: 10px; right: 10px; margin: 0; }
+.urgente-rimuovi {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: var(--sfondo);
+  color: var(--grigio);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+.urgente-rimuovi svg { width: 15px; height: 15px; }
+.urgente-rimuovi:hover { color: var(--rosso); }
 .urgente-testa { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .urgente-id { font-weight: 700; font-size: 0.92rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .urgente-timer {
@@ -743,10 +764,22 @@ th { color: var(--grigio); font-weight: 600; }
   border-radius: 999px;
   font-variant-numeric: tabular-nums;
 }
-.urgente-prodotti { display: flex; flex-direction: column; gap: 2px; }
+/* Altezza minima per 3 righe: indipendentemente da quante righe di prodotto mostra
+   davvero (1, 2 o 3), il pulsante in fondo resta sempre alla stessa altezza su tutte
+   le card, non solo su quelle della stessa riga della griglia. */
+.urgente-prodotti { display: flex; flex-direction: column; gap: 2px; min-height: 64px; }
 .urgente-riga { font-size: 0.86rem; color: var(--testo); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .urgente-altre { color: var(--grigio); font-size: 0.8rem; }
-.urgente-azione { min-height: 44px; display: flex; align-items: center; justify-content: center; }
+.urgente-azione { min-height: 44px; display: flex; align-items: center; justify-content: center; margin-top: auto; }
+
+/* Due pulsanti affiancati (Ispeziona / Accetta) invece dell'unico pulsante di apertura. */
+.urgente-azioni { display: flex; gap: 8px; margin-top: auto; }
+.urgente-azioni > a, .urgente-azioni form { flex: 1; margin: 0; }
+.urgente-azioni .btn { width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: center; }
+
+/* Stessa card delle richieste urgenti, ma bordo neutro: usata per gli ordini già confermati
+   in attesa di preparazione, che non hanno un countdown da rispettare. */
+.urgente-card.neutra { border-color: var(--bordo); }
 
 @media (min-width: 640px) {
   .urgenti-griglia { grid-template-columns: repeat(2, 1fr); }

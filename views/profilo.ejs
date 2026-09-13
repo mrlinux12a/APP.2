@@ -26,7 +26,7 @@
       <div class="card card-fitta">
         <% legami.forEach(function (l) { %>
           <div class="riga-lista">
-            <span class="icona">🏪</span>
+            <span class="icona"><%- iconaNegozio %></span>
             <span class="corpo">
               <span class="etichetta"><%= l.distributore %></span>
               <span class="dettaglio">
@@ -50,7 +50,7 @@
       <div class="sezione-titolo">Dati di fatturazione</div>
       <div class="card card-fitta">
         <div class="riga-lista">
-          <span class="icona">🏢</span>
+          <span class="icona"><%- iconaAzienda %></span>
           <span class="corpo">
             <span class="etichetta"><%= cliente.ragione_sociale %></span>
             <span class="dettaglio">
@@ -59,7 +59,7 @@
           </span>
         </div>
         <div class="riga-lista">
-          <span class="icona">🧾</span>
+          <span class="icona"><%- iconaFiscale %></span>
           <span class="corpo">
             <span class="etichetta">P. IVA <%= cliente.partita_iva || '—' %></span>
             <span class="dettaglio">
@@ -68,21 +68,21 @@
           </span>
         </div>
         <div class="riga-lista">
-          <span class="icona">📍</span>
+          <span class="icona"><%- iconaPosizione %></span>
           <span class="corpo">
             <span class="etichetta">Sede legale</span>
             <span class="dettaglio"><%= indirizzoCliente || '—' %></span>
           </span>
         </div>
         <div class="riga-lista">
-          <span class="icona">🚩</span>
+          <span class="icona"><%- iconaDestinazione %></span>
           <span class="corpo">
             <span class="etichetta">Consegna abituale</span>
             <span class="dettaglio"><%= cliente.indirizzo_consegna || 'Come sede legale' %></span>
           </span>
         </div>
         <div class="riga-lista">
-          <span class="icona">📞</span>
+          <span class="icona"><%- iconaTelefono %></span>
           <span class="corpo">
             <span class="etichetta"><%= cliente.telefono || '—' %></span>
             <span class="dettaglio"><%= cliente.email || '—' %></span>

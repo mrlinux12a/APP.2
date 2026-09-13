@@ -14,7 +14,7 @@
       </p>
 
       <% if (!marchi.length) { %>
-        <div class="vuoto"><span class="emoji">🏷</span>Nessun marchio caricato per ora.</div>
+        <div class="vuoto"><span class="emoji"><%- iconaVuotoScatola %></span>Nessun marchio caricato per ora.</div>
       <% } else { %>
         <div class="card card-fitta">
           <% marchi.forEach(function (m) { %>

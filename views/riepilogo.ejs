@@ -16,21 +16,21 @@
         <div class="sezione-titolo">Dettagli dell'ordine</div>
         <div class="card card-fitta">
           <div class="riga-lista">
-            <span class="icona">👤</span>
+            <span class="icona"><%- iconaPersona %></span>
             <span class="corpo">
               <span class="etichetta"><%= cliente.ragione_sociale %></span>
               <span class="dettaglio"><%= cliente.telefono || 'Telefono non impostato' %></span>
             </span>
           </div>
           <div class="riga-lista">
-            <span class="icona">🏪</span>
+            <span class="icona"><%- iconaNegozio %></span>
             <span class="corpo">
               <span class="etichetta"><%= offerta.distributore.nome %></span>
               <span class="dettaglio"><%= offerta.distributore.filiale %> · zona <%= offerta.distributore.zona %></span>
             </span>
           </div>
           <div class="riga-lista">
-            <span class="icona">🕒</span>
+            <span class="icona"><%- iconaOrario %></span>
             <span class="corpo">
               <span class="etichetta">Partenza ordine stimata: <%= fmt.tempoConsegna(risposta.partenza_ore) %></span>
               <span class="dettaglio">Consegna stimata in <%= fmt.tempoConsegna(risposta.consegna_ore) %> — tempi dichiarati dal banco</span>
@@ -87,7 +87,7 @@
         <div class="sezione-titolo">Come vuoi pagare?</div>
         <div class="card card-fitta">
           <div class="riga-lista">
-            <span class="icona">💳</span>
+            <span class="icona"><%- iconaPagamento %></span>
             <span class="corpo">
               <span class="etichetta">Alle condizioni concordate con il distributore</span>
               <span class="dettaglio">I metodi di pagamento in app verranno definiti più avanti</span>

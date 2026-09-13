@@ -358,8 +358,12 @@ async function rispondi(
   const richieste_ = await righeRichiesta(requestId);
   const coperture = richieste_.map((r) => {
     const chiesta = r.quantita;
+    // "Accetta ordine" (prezzoRichiesto) copre sempre tutto il richiesto: non c'è più un
+    // modulo con cui il banco dichiara una disponibilità parziale riga per riga.
     const disponibile = rifiuta
       ? 0
+      : prezzoRichiesto
+      ? chiesta
       : Math.max(0, Math.min(chiesta, parseInt(righe[r.product_id], 10) || 0));
     return {
       product_id: r.product_id,

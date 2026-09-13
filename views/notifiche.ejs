@@ -24,7 +24,7 @@
           <% if (conteggi[k]) { %>
             <a class="chip <%= categoria === k ? 'attivo' : '' %>"
                href="<%= filtro({ categoria: k, sottostato: null }) %>">
-              <%= categorie[k].icona %> <%= categorie[k].nome %> · <%= conteggi[k].n %>
+              <%- categorie[k].icona %> <%= categorie[k].nome %> · <%= conteggi[k].n %>
             </a>
           <% } %>
         <% }); %>
@@ -49,12 +49,12 @@
       </button>
 
       <% if (!elenco.length) { %>
-        <div class="vuoto"><span class="emoji">🔕</span>Nessuna notifica in questa vista.</div>
+        <div class="vuoto"><span class="emoji"><%- iconaVuotoNotifiche %></span>Nessuna notifica in questa vista.</div>
       <% } else { %>
         <div class="card card-fitta">
           <% elenco.forEach(function (n) { %>
             <a class="riga-lista" href="<%= n.link || '#' %>">
-              <span class="icona"><%= (categorie[n.categoria] || categorie.generale).icona %></span>
+              <span class="icona"><%- (categorie[n.categoria] || categorie.generale).icona %></span>
               <span class="corpo">
                 <span class="etichetta"><%= n.titolo %></span>
                 <span class="dettaglio"><%= n.testo %></span>

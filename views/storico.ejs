@@ -10,7 +10,7 @@
     <div class="contenuto">
       <% if (!cards.length) { %>
         <div class="vuoto">
-          <span class="emoji">📦</span>
+          <span class="emoji"><%- iconaVuotoScatola %></span>
           Nessuna richiesta né ordine ancora.
         </div>
       <% } else { %>
@@ -29,7 +29,7 @@
                const classeBadge = consegnato ? 'stato-consegnato' : (c.ordine ? 'stato-' + c.ordine.stato : 'stato-' + r.stato);
             %>
             <a class="riga-lista" href="<%= href %>">
-              <span class="icona">📦</span>
+              <span class="icona"><%- iconaOrdini %></span>
               <span class="corpo">
                 <span class="etichetta"><%= fmt.dataOra(r.creato_il) %></span>
                 <span class="dettaglio">

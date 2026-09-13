@@ -5,14 +5,14 @@
 </head>
 <body data-loggato="1">
   <div class="app">
-    <%- include('partials/appbar', { titolo, intestazione: 'Ordine #' + ordine.id, indietro: '/distributore/ordini' }) %>
+    <%- include('partials/appbar', { titolo, intestazione: 'Ordine #' + ordine.id, indietro: '/distributore' }) %>
 
     <div class="contenuto">
       <% if (errore) { %><div class="errore"><%= errore %></div><% } %>
 
       <div class="card card-fitta">
         <div class="riga-lista">
-          <span class="icona">📦</span>
+          <span class="icona"><%- iconaOrdini %></span>
           <span class="corpo">
             <span class="etichetta">Ordine #<%= ordine.id %></span>
             <span class="dettaglio">Ricevuto <%= fmt.dataOra(ordine.creato_il) %></span>
@@ -22,14 +22,14 @@
           </span>
         </div>
         <div class="riga-lista">
-          <span class="icona">🕒</span>
+          <span class="icona"><%- iconaOrario %></span>
           <span class="corpo">
             <span class="etichetta">Partenza dichiarata: <%= fmt.tempoConsegna(ordine.partenza_ore) %></span>
             <span class="dettaglio">Consegna dichiarata: <%= fmt.tempoConsegna(ordine.consegna_ore) %></span>
           </span>
         </div>
         <div class="riga-lista">
-          <span class="icona">🚚</span>
+          <span class="icona"><%- iconaConsegna %></span>
           <span class="corpo">
             <span class="etichetta">
               <%= ordine.modalita === 'ritiro' ? 'Ritiro al banco' : 'Consegna con mezzo del distributore' %>
@@ -39,7 +39,7 @@
         </div>
         <% if (ordine.note) { %>
           <div class="riga-lista">
-            <span class="icona">📝</span>
+            <span class="icona"><%- iconaNota %></span>
             <span class="corpo">
               <span class="etichetta">Note del cliente</span>
               <span class="dettaglio"><%= ordine.note %></span>
@@ -55,7 +55,7 @@
       <% if (ordine.modalita !== 'ritiro') { %>
         <div class="card">
           <div class="riga-lista" style="padding:0; border:none;">
-            <span class="icona">🗺</span>
+            <span class="icona"><%- iconaMappa %></span>
             <span class="corpo">
               <span class="etichetta">Dove consegnare</span>
               <span class="dettaglio">
@@ -98,15 +98,9 @@
         <div class="riepilogo-riga forte"><span class="voce">Totale</span><span>€ <%= euro(totaleOrdine(ordine)) %></span></div>
       </div>
 
-      <% if (ordine.stato === 'inviato') { %>
-        <form method="POST" action="/distributore/ordini/<%= ordine.id %>/preparazione">
-          <button class="btn btn-primary btn-blocco" type="submit">Prendi in preparazione</button>
-        </form>
-        <p class="nota">Il cliente riceve una notifica quando il banco prende in carico l'ordine.</p>
-
-      <% } else if (!ordine.ddt_numero) { %>
+      <% if (!ordine.ddt_numero) { %>
         <div class="avviso avviso-info">
-          In preparazione dal <%= fmt.dataOra(ordine.preso_in_carico_il || ordine.in_evasione_il) %>.
+          In preparazione dal <%= fmt.dataOra(ordine.preso_in_carico_il || ordine.in_evasione_il || ordine.creato_il) %>.
           Quando la merce parte, emetti la bolla.
         </div>
 
@@ -155,23 +149,6 @@
         <a class="btn btn-primary btn-blocco" href="/ddt/<%= ordine.id %>">Apri e stampa la bolla / DDT</a>
       <% } %>
 
-      <% if (ordine.stato !== 'inviato' && ordine.modalita !== 'ritiro') { %>
-        <div class="sezione-titolo">Consegna in tempo reale</div>
-        <div class="card" data-tracciamento="<%= ordine.id %>" data-attivo="<%= ordine.tracciamento_attivo ? '1' : '0' %>">
-          <p class="nota" style="margin-top:0;">
-            Attivando la condivisione, il cliente vede la posizione del mezzo mentre la merce
-            viaggia verso di lui. Si interrompe da qui o disattivando la posizione del banco.
-          </p>
-          <button class="btn btn-chiaro btn-blocco" type="button" data-tracciamento-on
-                  <%- ordine.tracciamento_attivo ? 'hidden' : '' %>>
-            Condividi la posizione del mezzo
-          </button>
-          <button class="btn btn-rosso btn-blocco" type="button" data-tracciamento-off
-                  <%- ordine.tracciamento_attivo ? '' : 'hidden' %>>
-            Interrompi la condivisione
-          </button>
-        </div>
-      <% } %>
       <form method="POST" action="/distributore/ordini/<%= ordine.id %>/elimina" onsubmit="return confirm('Eliminare definitivamente questo ordine?')">
         <button class="btn btn-rosso btn-blocco" type="submit" style="margin-top:12px;">Elimina ordine</button>
       </form>

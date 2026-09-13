@@ -9,12 +9,12 @@
 
     <div class="contenuto">
       <% if (!storico.length) { %>
-        <div class="vuoto"><span class="emoji">📭</span>Ancora nessuna richiesta chiusa.</div>
+        <div class="vuoto"><span class="emoji"><%- iconaVuotoScatola %></span>Ancora nessuna richiesta chiusa.</div>
       <% } else { %>
         <div class="card card-fitta">
           <% storico.forEach(function (r) { %>
             <a class="riga-lista" href="/distributore/richieste/<%= r.id %>">
-              <span class="icona"><%= r.stato === 'ordinata' && r.esito === 'confermato' ? '📦' : '📄' %></span>
+              <span class="icona"><%- r.stato === 'ordinata' && r.esito === 'confermato' ? iconaOrdini : iconaDocumento %></span>
               <span class="corpo">
                 <span class="etichetta">Richiesta #<%= r.id %> — <%= r.cliente_nome %></span>
                 <span class="dettaglio"><%= r.pezzi %> pz · <%= fmt.dataOra(r.creato_il) %></span>

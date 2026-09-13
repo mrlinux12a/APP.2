@@ -56,7 +56,7 @@
               <span class="stato-badge stato-con_offerte">Disponibilità parziale</span>
             </div>
             <div class="tempo" style="color:var(--rosso);">
-              ⚠️ Mancano
+              <%- iconaAvviso %> Mancano
               <% o.mancanti.forEach(function (m, k) { %><%= k ? ', ' : '' %><%= m.mancano %> pz di <%= m.nome %><% }); %>
             </div>
           <% } else { %>
@@ -65,19 +65,19 @@
             </div>
           <% } %>
 
-          <div class="tempo">🕒 Parte dalla filiale entro <%= fmt.tempoConsegna(o.partenza_ore) %></div>
+          <div class="tempo"><%- iconaOrario %> Parte dalla filiale entro <%= fmt.tempoConsegna(o.partenza_ore) %></div>
           <div class="tempo">
-            🚚 Da te in <strong><%= consegna.inParole(o.consegna_minuti_stimati) %></strong>
+            <%- iconaConsegna %> Da te in <strong><%= consegna.inParole(o.consegna_minuti_stimati) %></strong>
             <% if (o.distributore.id === idPiuVeloce && offerte.length > 1) { %>
               <span class="stato-badge stato-confermato">più veloce</span>
             <% } %>
           </div>
           <div class="tempo">
-            📦 Merce € <%= euro(o.totali.totale_finale) %> + IVA ·
+            <%- iconaOrdini %> Merce € <%= euro(o.totali.totale_finale) %> + IVA ·
             <%= o.totali.costo_consegna > 0 ? 'consegna € ' + euro(o.totali.costo_consegna) : 'consegna inclusa' %>
           </div>
           <% if (o.note) { %>
-            <div class="tempo">📝 <%= o.note %></div>
+            <div class="tempo"><%- iconaNota %> <%= o.note %></div>
           <% } %>
           <% if (i === 0 && offerte.length > 1 && o.copertura === 'totale') { %>
             <div class="tempo" style="color:var(--verde); font-weight:600;">✓ Offerta più conveniente</div>

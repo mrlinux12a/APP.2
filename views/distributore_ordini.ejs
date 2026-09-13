@@ -9,13 +9,13 @@
 
     <div class="contenuto">
       <% if (!ordini.length) { %>
-        <div class="vuoto"><span class="emoji">📦</span>Nessun ordine ricevuto per ora.</div>
+        <div class="vuoto"><span class="emoji"><%- iconaVuotoScatola %></span>Nessun ordine ricevuto per ora.</div>
       <% } else { %>
         <div class="card card-fitta">
           <% ordini.forEach(function (o) { %>
             <a class="riga-lista" href="/distributore/ordini/<%= o.id %>">
               <span class="icona">
-                <%= o.stato === 'inviato' ? '🆕' : (o.stato === 'in_evasione' ? '🛠' : '🚚') %>
+                <%- o.stato === 'inviato' ? iconaNuovo : (o.stato === 'in_evasione' ? iconaLavorazione : iconaConsegna) %>
               </span>
               <span class="corpo">
                 <span class="etichetta">Ordine #<%= o.id %> — <%= o.cliente_nome %></span>

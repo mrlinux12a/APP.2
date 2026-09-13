@@ -119,11 +119,7 @@ app.use(async (req, res, next) => {
   res.locals.currentUser = req.session.user || null;
   res.locals.euro = pricing.euro;
   res.locals.fmt = format;
-  res.locals.iconaCategoria = icone.iconaCategoria;
-  res.locals.iconaLente = icone.iconaLente;
-  res.locals.iconaCatalogo = icone.iconaCatalogo;
-  res.locals.iconaCarrello = icone.iconaCarrello;
-  res.locals.iconaOrdini = icone.iconaOrdini;
+  Object.assign(res.locals, icone);
   res.locals.carrelloPezzi = contaCarrello(req);
   res.locals.testoDisponibilita = TESTO_DISPONIBILITA;
 
@@ -1227,7 +1223,7 @@ app.post('/distributore/ordini/:id/elimina', requireRole('distributore'), async 
     await db.prepare('DELETE FROM orders WHERE id = ?').run(ordine.id);
   });
   await elimina();
-  res.redirect('/distributore/ordini');
+  res.redirect('/distributore');
 });
 
 // ---------- Notifiche ----------
@@ -1275,75 +1271,7 @@ app.post('/api/posizione', requireLogin, async (req, res) => {
 // Revoca: spegne il consenso e cancella davvero le coordinate salvate.
 app.post('/api/posizione/revoca', requireLogin, async (req, res) => {
   await geo.revoca(req.session.user.id);
-  if (req.session.user.ruolo === 'distributore' && req.session.user.distributor_id) {
-    await db.prepare(
-      `UPDATE orders SET tracciamento_attivo = 0 WHERE distributor_id = ? AND tracciamento_attivo = 1`
-    ).run(req.session.user.distributor_id);
-  }
   res.json({ ok: true, consenso: false });
-});
-
-// Il banco accende o spegne la condivisione del mezzo per un singolo ordine.
-app.post('/api/ordini/:id/tracciamento', requireRole('distributore'), async (req, res) => {
-  const ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
-  if (!ordine || ordine.distributor_id !== req.session.user.distributor_id) {
-    return res.status(404).json({ ok: false });
-  }
-  const attivo = req.body.attivo ? 1 : 0;
-  if (attivo && !(await geo.statoUtente(req.session.user.id)).consenso) {
-    return res
-      .status(400)
-      .json({ ok: false, errore: 'Attiva prima la posizione del banco: serve il tuo consenso.' });
-  }
-  await db.prepare('UPDATE orders SET tracciamento_attivo = ? WHERE id = ?').run(attivo, ordine.id);
-  if (attivo) {
-    await notifiche.notifica(ordine.cliente_id, {
-      titolo: 'Consegna in viaggio',
-      testo: `Puoi seguire in tempo reale il mezzo che porta l'ordine #${ordine.id}.`,
-      link: '/ordini/' + ordine.id,
-      categoria: 'ordini',
-      order_id: ordine.id,
-    });
-  }
-  res.json({ ok: true, attivo: attivo === 1 });
-});
-
-// Il cliente segue il mezzo: risponde solo se il banco sta condividendo per quell'ordine.
-app.get('/api/ordini/:id/posizione', requireLogin, async (req, res) => {
-  const ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
-  if (!ordine) return res.status(404).json({ attivo: false });
-  const utente = req.session.user;
-  const suo =
-    (utente.ruolo === 'cliente' && ordine.cliente_id === utente.id) ||
-    (utente.ruolo === 'distributore' && ordine.distributor_id === utente.distributor_id) ||
-    utente.ruolo === 'agente';
-  if (!suo) return res.status(403).json({ attivo: false });
-
-  if (!ordine.tracciamento_attivo || !ordine.distributor_id) return res.json({ attivo: false });
-
-  const distributore = await db.prepare('SELECT geo_lat, geo_lng, nome FROM distributors WHERE id = ?').get(ordine.distributor_id);
-  const cliente = await db
-    .prepare('SELECT geo_lat, geo_lng, geo_consenso FROM users WHERE id = ?')
-    .get(ordine.cliente_id);
-
-  const mezzo =
-    distributore && distributore.geo_lat !== null
-      ? { lat: distributore.geo_lat, lng: distributore.geo_lng }
-      : null;
-  const destinazione =
-    cliente && cliente.geo_consenso && cliente.geo_lat !== null
-      ? { lat: cliente.geo_lat, lng: cliente.geo_lng }
-      : null;
-  const km = geo.distanzaKm(mezzo, destinazione);
-
-  res.json({
-    attivo: true,
-    mezzo,
-    destinazione,
-    nome_mezzo: distributore ? distributore.nome : '',
-    distanza_km: km,
-    distanza: geo.formattaDistanza(km),
-  });
 });
 
 // ---------- Distributore: banco ----------
@@ -1368,8 +1296,7 @@ async function contatoriBanco(distributorId) {
     db.prepare(
       `SELECT
          COUNT(*) FILTER (WHERE stato = 'inviato') AS da_preparare,
-         COUNT(*) FILTER (WHERE stato = 'in_evasione') AS in_preparazione,
-         COUNT(*) FILTER (WHERE stato IN ('in_evasione', 'evaso')) AS in_consegna
+         COUNT(*) FILTER (WHERE stato = 'in_evasione') AS in_preparazione
          FROM orders WHERE distributor_id = ?`
     ).get(distributorId),
     db.prepare(
@@ -1384,10 +1311,6 @@ async function contatoriBanco(distributorId) {
     daRispondere: Number(daRispondereRow.n),
     daPreparare: Number(ordini.da_preparare),
     inPreparazione: Number(ordini.in_preparazione),
-    // "In consegna" ai fini della dashboard raggruppa tutto ciò che è già stato preso in
-    // carico (in preparazione o già partito): non richiede una nuova decisione del banco,
-    // a differenza di "da preparare".
-    inConsegna: Number(ordini.in_consegna),
     daApprovare: Number(daApprovareRow.n),
   };
 }
@@ -1426,11 +1349,33 @@ app.get('/distributore', requireRole('distributore'), async (req, res) => {
     r.altreRighe = Math.max(0, righe.length - r.anteprima.length);
   }
 
+  // Ordini già confermati, in attesa che il banco li prepari: anteprima a card in home,
+  // stesso trattamento di "daRispondere" ma senza countdown.
+  const daPreparare = await db
+    .prepare(
+      `SELECT o.*, u.ragione_sociale AS cliente_nome
+         FROM orders o
+         JOIN users u ON u.id = o.cliente_id
+        WHERE o.distributor_id = ? AND o.stato = 'inviato'
+        ORDER BY o.id DESC
+        LIMIT 20`
+    )
+    .all(req.session.user.distributor_id);
+
+  for (const o of daPreparare) {
+    const righe = await db
+      .prepare('SELECT nome_snapshot, quantita FROM order_items WHERE order_id = ?')
+      .all(o.id);
+    o.anteprima = righe.slice(0, 2).map((ri) => ({ quantita: ri.quantita, nome: ri.nome_snapshot }));
+    o.altreRighe = Math.max(0, righe.length - o.anteprima.length);
+  }
+
   res.render('distributore_richieste', {
     titolo: 'Richieste al banco',
     distributore,
     contatori: await contatoriBanco(req.session.user.distributor_id),
     daRispondere,
+    daPreparare,
   });
 });
 
@@ -1495,7 +1440,6 @@ app.get('/distributore/richieste/:id', requireRole('distributore'), async (req, 
     : null;
 
   const secondi = await richieste.secondiRimasti(richiesta);
-  const servizioPct = await pricing.getServizioPct();
   res.render('distributore_dettaglio', {
     titolo: 'Richiesta #' + richiesta.id,
     richiesta,
@@ -1513,43 +1457,27 @@ app.get('/distributore/richieste/:id', requireRole('distributore'), async (req, 
       richiesta.stato !== 'annullata',
     indirizzoCliente: ddt.indirizzoCompleto(cliente),
     distanza: distanzaClienteBanco(cliente, distributore),
-    // Sconto già concordato con questo cliente: precompila il modulo.
-    scontoCliente: await richieste.scontoCliente(distributorId, richiesta.cliente_id),
-    servizioPct,
     errore: req.query.errore || null,
   });
 });
 
-// Il banco risponde riga per riga: campi disp_<product_id> con la quantità che riesce a
-// coprire, più il tempo di partenza e quello di consegna. Il pulsante "rifiuta" azzera tutto.
+// Il banco ha solo due azioni possibili: accettare tutto il richiesto al prezzo standard,
+// o rifiutare. Si può rispondere sia dal dettaglio della richiesta sia con un click diretto
+// dalla card "Da confermare" in home (in tal caso "torna" riporta alla home invece che al
+// dettaglio, ma solo se la risposta va a buon fine).
 app.post('/distributore/richieste/:id/rispondi', requireRole('distributore'), async (req, res) => {
-  const righe = {};
-  const sconti = {};
-  for (const [chiave, valore] of Object.entries(req.body || {})) {
-    if (chiave.startsWith('disp_')) {
-      const id = parseInt(chiave.slice('disp_'.length), 10);
-      if (id) righe[id] = parseInt(valore, 10) || 0;
-    } else if (chiave.startsWith('sconto_riga_')) {
-      const id = parseInt(chiave.slice('sconto_riga_'.length), 10);
-      if (id) sconti[id] = valore;
-    }
-  }
-
   const esitoRisposta = await richieste.rispondi(req.params.id, req.session.user.distributor_id, {
-    righe,
-    sconti,
     rifiuta: req.body.azione === 'rifiuta',
-    // "Accetta al prezzo di richiesta": conferma tutto com'è, senza toccare gli sconti.
     prezzoRichiesto: req.body.azione === 'prezzo_richiesto',
-    scontoCliente: req.body.sconto_cliente,
-    salvaScontoCliente: req.body.salva_sconto === 'si',
-    partenza_ore: req.body.partenza_ore,
-    consegna_ore: req.body.consegna_ore,
-    note: req.body.note,
+    // Tempi non più scelti dal banco: partenza/consegna stimata restano un default fisso
+    // finché non saranno calcolati dal corriere collegato via API.
+    partenza_ore: req.body.partenza_ore || 2,
+    consegna_ore: req.body.consegna_ore || 6,
   });
 
   const base = '/distributore/richieste/' + req.params.id;
-  res.redirect(esitoRisposta.ok ? base : base + '?errore=' + encodeURIComponent(esitoRisposta.errore));
+  if (!esitoRisposta.ok) return res.redirect(base + '?errore=' + encodeURIComponent(esitoRisposta.errore));
+  res.redirect(req.body.torna === 'home' ? '/distributore' : base);
 });
 
 // ---------- Distributore: anagrafiche clienti da approvare ----------
@@ -1663,11 +1591,31 @@ async function ordineDelBanco(req) {
   return ordine;
 }
 
+// Segna l'ordine come preso in carico dal banco (stato 'inviato' -> 'in_evasione') e avvisa
+// il cliente. Non c'è più un pulsante dedicato per questo passaggio: scatta da solo aprendo
+// il dettaglio dell'ordine, oppure con il tasto di rimozione sulla card in home.
+async function prendiInCarico(ordine) {
+  if (ordine.stato !== 'inviato') return ordine;
+  await db.prepare(
+    `UPDATE orders SET stato = 'in_evasione', in_evasione_il = NOW(), preso_in_carico_il = NOW()
+      WHERE id = ?`
+  ).run(ordine.id);
+  await notifiche.notifica(ordine.cliente_id, {
+    titolo: 'Ordine in preparazione',
+    testo: `Il banco sta preparando il tuo ordine #${ordine.id}.`,
+    link: '/ordini/' + ordine.id,
+    categoria: 'ordini',
+    order_id: ordine.id,
+  });
+  return { ...ordine, stato: 'in_evasione', in_evasione_il: new Date(), preso_in_carico_il: new Date() };
+}
+
 app.get('/distributore/ordini/:id', requireRole('distributore'), async (req, res) => {
-  const ordine = await ordineDelBanco(req);
+  let ordine = await ordineDelBanco(req);
   if (!ordine) {
     return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Ordine non trovato.' });
   }
+  ordine = await prendiInCarico(ordine);
 
   const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(ordine.cliente_id);
   const distributore = await db
@@ -1696,38 +1644,19 @@ app.get('/distributore/ordini/:id', requireRole('distributore'), async (req, res
   });
 });
 
+// Usata dal tasto di rimozione sulla card "Ordini da preparare" in home: la fa sparire da
+// lì spostandola in "in preparazione", senza dover aprire il dettaglio.
 app.post('/distributore/ordini/:id/preparazione', requireRole('distributore'), async (req, res) => {
   const ordine = await ordineDelBanco(req);
   if (!ordine) return res.redirect('/distributore/ordini');
-  if (ordine.stato === 'inviato') {
-    await db.prepare(
-      `UPDATE orders SET stato = 'in_evasione', in_evasione_il = NOW(),
-                         preso_in_carico_il = NOW()
-        WHERE id = ?`
-    ).run(ordine.id);
-    await notifiche.notifica(ordine.cliente_id, {
-      titolo: 'Ordine in preparazione',
-      testo: `Il banco sta preparando il tuo ordine #${ordine.id}.`,
-      link: '/ordini/' + ordine.id,
-      categoria: 'ordini',
-      order_id: ordine.id,
-    });
-  }
-  res.redirect('/distributore/ordini/' + ordine.id);
+  await prendiInCarico(ordine);
+  res.redirect(req.body.torna === 'home' ? '/distributore' : '/distributore/ordini/' + ordine.id);
 });
 
 // Emissione della bolla / DDT: assegna il numero progressivo e segna la merce partita.
 app.post('/distributore/ordini/:id/ddt', requireRole('distributore'), async (req, res) => {
   const ordine = await ordineDelBanco(req);
   if (!ordine) return res.redirect('/distributore/ordini');
-  if (ordine.stato === 'inviato') {
-    return res.redirect(
-      '/distributore/ordini/' +
-        ordine.id +
-        '?errore=' +
-        encodeURIComponent('Prendi prima in preparazione l’ordine, poi emetti la bolla.')
-    );
-  }
 
   const numero = await ddt.emetti(ordine, {
     colli: req.body.colli,

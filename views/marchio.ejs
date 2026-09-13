@@ -34,7 +34,7 @@
 
         <div class="card card-fitta">
           <div class="riga-lista">
-            <span class="icona">📗</span>
+            <span class="icona"><%- iconaListino %></span>
             <span class="corpo">
               <span class="etichetta"><%= marca.listino_nome %></span>
               <span class="dettaglio">Aggiornato a <%= marca.listino_aggiornato %></span>
@@ -42,7 +42,7 @@
           </div>
           <% if (marca.distributore_ufficiale) { %>
             <div class="riga-lista">
-              <span class="icona">🏢</span>
+              <span class="icona"><%- iconaAzienda %></span>
               <span class="corpo">
                 <span class="etichetta">Distributore ufficiale</span>
                 <span class="dettaglio"><%= marca.distributore_ufficiale %></span>
@@ -50,7 +50,7 @@
             </div>
           <% } %>
           <div class="riga-lista">
-            <span class="icona">🏷</span>
+            <span class="icona"><%- iconaMarchio %></span>
             <span class="corpo">
               <span class="etichetta">Sconto Base configurato: <%= marca.sconto_default_pct %>%</span>
               <span class="dettaglio">Valore di configurazione: ogni banco applica poi le proprie condizioni</span>
@@ -62,7 +62,7 @@
         <div class="card card-fitta">
           <% famiglie.forEach(function (f) { %>
             <a class="riga-lista" href="/marchi/<%= marca.slug %>?famiglia=<%= encodeURIComponent(f.codice) %>">
-              <span class="icona">📁</span>
+              <span class="icona"><%- iconaFamiglia %></span>
               <span class="corpo">
                 <span class="etichetta"><%= f.nome %></span>
                 <span class="dettaglio"><%= f.n_prodotti %> articoli</span>
@@ -90,7 +90,7 @@
 
         <div id="risultati">
           <% if (!elenco.righe.length) { %>
-            <div class="vuoto"><span class="emoji">🤷</span>Nessun articolo trovato.</div>
+            <div class="vuoto"><span class="emoji"><%- iconaVuotoRicerca %></span>Nessun articolo trovato.</div>
           <% } else { %>
             <div class="card card-fitta">
               <% elenco.righe.forEach(function (p) { %>

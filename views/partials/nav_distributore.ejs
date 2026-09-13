@@ -1,11 +1,11 @@
 <nav class="navbar">
   <div class="interno">
     <a href="/distributore" class="<%= attivo === 'home' ? 'attivo' : '' %>">
-      <span class="ico">🏠</span>Home
+      <span class="ico"><%- iconaHome %></span>Home
       <% if (contatori && contatori.daRispondere > 0) { %><span class="pallino"><%= contatori.daRispondere %></span><% } %>
     </a>
     <a href="/distributore/clienti" class="<%= attivo === 'clienti' ? 'attivo' : '' %>">
-      <span class="ico">👥</span>Clienti
+      <span class="ico"><%- iconaClienti %></span>Clienti
       <% if (contatori && contatori.daApprovare > 0) { %><span class="pallino"><%= contatori.daApprovare %></span><% } %>
     </a>
   </div>

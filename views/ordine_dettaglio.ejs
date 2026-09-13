@@ -35,32 +35,6 @@
           <% } %>
         </div>
 
-        <% if (ordine.modalita !== 'ritiro' && ordine.stato !== 'inviato') { %>
-          <div class="card" data-segui-ordine="<%= ordine.id %>" style="margin-bottom:10px;">
-            <div class="riga-lista" style="padding:0; border:none;">
-              <span class="icona">🚚</span>
-              <span class="corpo">
-                <span class="etichetta" data-segui-titolo>Tracciamento non attivo</span>
-                <span class="dettaglio" data-segui-stato>
-                  Il distributore condivide la posizione del mezzo quando la merce parte.
-                </span>
-              </span>
-            </div>
-            <div class="mappa mappa-attiva" data-segui-mappa hidden
-                 role="img" aria-label="Mappa della posizione del mezzo rispetto alla destinazione"></div>
-            <div class="geo-legenda" data-segui-legenda hidden>
-              <span class="p-mezzo">Mezzo del distributore</span>
-              <span class="p-dest">Destinazione</span>
-            </div>
-            <% if (!geo.consenso) { %>
-              <p class="nota" style="margin-bottom:0;">
-                Per vedere la distanza dal tuo cantiere attiva la tua posizione nella home:
-                serve il tuo consenso e puoi revocarlo quando vuoi.
-              </p>
-            <% } %>
-          </div>
-        <% } %>
-
         <div class="sezione-titolo">Prodotti</div>
         <div class="card">
           <% righe.forEach(function (r) { %>
@@ -105,7 +79,7 @@
           <div class="card card-fitta">
             <% if (distributore) { %>
               <div class="riga-lista">
-                <span class="icona">🏪</span>
+                <span class="icona"><%- iconaNegozio %></span>
                 <span class="corpo">
                   <span class="etichetta"><%= distributore.nome %></span>
                   <span class="dettaglio"><%= distributore.filiale %></span>
@@ -113,7 +87,7 @@
               </div>
             <% } %>
             <div class="riga-lista">
-              <span class="icona">🚚</span>
+              <span class="icona"><%- iconaConsegna %></span>
               <span class="corpo">
                 <span class="etichetta">
                   <%= ordine.modalita === 'ritiro' ? 'Ritiro al banco' : 'Consegna con mezzo del distributore' %>
@@ -126,7 +100,7 @@
             </div>
             <% if (ordine.destinazione) { %>
               <div class="riga-lista">
-                <span class="icona">🚩</span>
+                <span class="icona"><%- iconaDestinazione %></span>
                 <span class="corpo">
                   <span class="etichetta">Destinazione merce</span>
                   <span class="dettaglio"><%= ordine.destinazione %></span>
@@ -135,7 +109,7 @@
             <% } %>
             <% if (ordine.ddt_numero) { %>
               <a class="riga-lista" href="/ddt/<%= ordine.id %>">
-                <span class="icona">🧾</span>
+                <span class="icona"><%- iconaFiscale %></span>
                 <span class="corpo">
                   <span class="etichetta">Bolla / DDT n. <%= ordine.ddt_numero %></span>
                   <span class="dettaglio">Del <%= fmt.dataSola(ordine.ddt_data) %></span>
@@ -145,7 +119,7 @@
             <% } %>
             <% if (ordine.note) { %>
               <div class="riga-lista">
-                <span class="icona">📝</span>
+                <span class="icona"><%- iconaNota %></span>
                 <span class="corpo">
                   <span class="etichetta">Note</span>
                   <span class="dettaglio"><%= ordine.note %></span>
@@ -172,7 +146,7 @@
 
         <div class="card card-fitta">
           <div class="riga-lista">
-            <span class="icona">📦</span>
+            <span class="icona"><%- iconaOrdini %></span>
             <span class="corpo">
               <span class="etichetta">Ordine #<%= ordine.id %></span>
               <span class="dettaglio"><%= fmt.dataOra(ordine.creato_il) %></span>
@@ -183,7 +157,7 @@
           </div>
           <% if (distributore) { %>
             <div class="riga-lista">
-              <span class="icona">🏪</span>
+              <span class="icona"><%- iconaNegozio %></span>
               <span class="corpo">
                 <span class="etichetta"><%= distributore.nome %></span>
                 <span class="dettaglio"><%= distributore.filiale %></span>
@@ -191,14 +165,14 @@
             </div>
           <% } %>
           <div class="riga-lista">
-            <span class="icona">👤</span>
+            <span class="icona"><%- iconaPersona %></span>
             <span class="corpo">
               <span class="etichetta"><%= cliente.ragione_sociale %></span>
               <span class="dettaglio"><%= cliente.telefono || '—' %></span>
             </span>
           </div>
           <div class="riga-lista">
-            <span class="icona">🚚</span>
+            <span class="icona"><%- iconaConsegna %></span>
             <span class="corpo">
               <span class="etichetta">
                 <%= ordine.modalita === 'ritiro' ? 'Ritiro al banco' : 'Consegna con mezzo del distributore' %>
@@ -211,7 +185,7 @@
           </div>
           <% if (ordine.destinazione) { %>
             <div class="riga-lista">
-              <span class="icona">🚩</span>
+              <span class="icona"><%- iconaDestinazione %></span>
               <span class="corpo">
                 <span class="etichetta">Destinazione merce</span>
                 <span class="dettaglio"><%= ordine.destinazione %></span>
@@ -220,7 +194,7 @@
           <% } %>
           <% if (ordine.ddt_numero) { %>
             <a class="riga-lista" href="/ddt/<%= ordine.id %>">
-              <span class="icona">🧾</span>
+              <span class="icona"><%- iconaFiscale %></span>
               <span class="corpo">
                 <span class="etichetta">Bolla / DDT n. <%= ordine.ddt_numero %></span>
                 <span class="dettaglio">Del <%= fmt.dataSola(ordine.ddt_data) %> — intestata a <%= cliente.ragione_sociale %></span>
@@ -230,7 +204,7 @@
           <% } %>
           <% if (ordine.note) { %>
             <div class="riga-lista">
-              <span class="icona">📝</span>
+              <span class="icona"><%- iconaNota %></span>
               <span class="corpo">
                 <span class="etichetta">Note</span>
                 <span class="dettaglio"><%= ordine.note %></span>

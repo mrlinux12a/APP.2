@@ -10,148 +10,47 @@
     <div class="contenuto">
       <% if (errore) { %><div class="errore"><%= errore %></div><% } %>
 
-      <div class="sezione-titolo">Cliente ordinante</div>
-      <%- include('partials/anagrafica_cliente', { cliente, indirizzoCliente, distanza }) %>
-
-      <div class="card card-fitta">
-        <div class="riga-lista">
-          <span class="icona">🕒</span>
-          <span class="corpo">
-            <span class="etichetta">Ricevuta alle <%= fmt.oraSola(richiesta.creato_il) %></span>
-            <span class="dettaglio">
-              <% if (apribile) { %>
-                Restano <span data-countdown-live data-secondi="<%= secondi %>" data-ricarica-a-zero><%= fmt.mmss(secondi) %></span> per rispondere
-              <% } else { %>
-                Finestra di conferma chiusa
-              <% } %>
-            </span>
-          </span>
-          <span class="stato-badge stato-<%= risposta.esito %>">
-            <%= risposta.esito === 'confermato'
-                ? (risposta.copertura === 'parziale' ? 'Parziale' : 'Confermata')
-                : (risposta.esito === 'non_disponibile' ? 'Non disponibile' : (risposta.esito === 'scaduto' ? 'Non risposta' : 'In attesa')) %>
-          </span>
-        </div>
-      </div>
+      <details class="altre-categorie">
+        <summary>Cliente ordinante</summary>
+        <%- include('partials/anagrafica_cliente', { cliente, minimale: true }) %>
+      </details>
 
       <% if (apribile) { %>
-        <form method="POST" action="/distributore/richieste/<%= richiesta.id %>/rispondi"
-              data-modulo-risposta data-servizio="<%= servizioPct %>">
-          <div class="sezione-titolo">Sconto per questo cliente</div>
-          <div class="card">
-            <label for="sconto_cliente">Sconto da applicare a tutte le righe (%)</label>
-            <div class="riga-sconto">
-              <input type="number" id="sconto_cliente" name="sconto_cliente" min="0" max="90" step="0.5"
-                     inputmode="decimal" placeholder="es. 42"
-                     value="<%= scontoCliente ? scontoCliente.sconto_pct : '' %>"
-                     data-sconto-cliente>
-              <button class="btn btn-chiaro" type="button" data-applica-sconto>Applica a tutte</button>
-            </div>
-            <% if (scontoCliente) { %>
-              <p class="nota" style="margin:0;">
-                Sconto in anagrafica per <%= cliente.ragione_sociale %>:
-                <strong><%= scontoCliente.sconto_pct %>%</strong>, aggiornato il
-                <%= fmt.dataSola(scontoCliente.aggiornato_il) %>.
-              </p>
-            <% } else { %>
-              <p class="nota" style="margin:0;">
-                Per questo cliente non c'è ancora uno sconto concordato: quello che imposti qui
-                puoi salvarlo in anagrafica e verrà riproposto la prossima volta.
-              </p>
-            <% } %>
-            <label class="riga-check">
-              <input type="checkbox" name="salva_sconto" value="si">
-              Salva questo sconto nell'anagrafica del cliente
-            </label>
+        <div class="card attesa">
+          <div class="cerchio-attesa">
+            <span data-countdown-live data-secondi="<%= secondi %>" data-ricarica-a-zero><%= fmt.mmss(secondi) %></span>
           </div>
-
-          <div class="sezione-titolo">Disponibilità e prezzi riga per riga</div>
-          <p class="nota" style="margin-top:0;">
-            Per ogni riga indica quanti pezzi copri e, se vuoi, lo sconto preciso da applicare.
-            Meno pezzi di quelli richiesti = conferma <strong>parziale</strong>. In fondo puoi
-            accettare la chiamata al prezzo di richiesta senza toccare nulla, oppure rifiutare.
+          <div style="font-weight:700; font-size:1.05rem;">Tempo per rispondere</div>
+          <p class="sottotitolo" style="margin-top:6px;">
+            Richiesta ricevuta alle <%= fmt.oraSola(richiesta.creato_il) %>
           </p>
+        </div>
+
+        <form method="POST" action="/distributore/richieste/<%= richiesta.id %>/rispondi">
+          <div class="sezione-titolo">Materiale richiesto</div>
           <div class="card card-fitta">
             <% offerta.righe.forEach(function (r) { %>
-              <div class="prodotto riga-banco"
-                   data-listino="<%= r.prezzo_listino %>"
-                   data-standard="<%= r.sconto_standard_pct %>">
+              <div class="prodotto riga-banco">
                 <div class="info">
                   <div class="nome"><%= r.nome %></div>
                   <div class="meta">
-                    Cod. <%= r.codice %> · richiesti <strong><%= r.quantita_richiesta %></strong> pz
+                    Cod. <%= r.codice %> · <strong><%= r.quantita_richiesta %></strong> pz
                     · listino € <%= euro(r.prezzo_listino) %>
                   </div>
-                  <div class="riga-sconto piccola">
-                    <label for="sc_<%= r.product_id %>">Sconto %</label>
-                    <input type="number" id="sc_<%= r.product_id %>" name="sconto_riga_<%= r.product_id %>"
-                           min="0" max="90" step="0.5" inputmode="decimal"
-                           value="<%= r.sconto_base_pct %>" data-sconto-riga>
-                  </div>
                   <div class="prezzo">
-                    € <span data-prezzo-riga><%= euro(prezzoCliente(r)) %></span>
+                    € <%= euro(prezzoCliente(r)) %>
                     <span class="iva">+ IVA · cad. per il cliente</span>
                     <% if (r.raee > 0) { %><span class="iva">· RAEE € <%= euro(r.raee) %></span><% } %>
                   </div>
                 </div>
-                <div class="stepper">
-                  <button type="button" data-passo="-1" aria-label="Togli">−</button>
-                  <input type="number" min="0" max="<%= r.quantita_richiesta %>" step="1"
-                         inputmode="numeric" name="disp_<%= r.product_id %>"
-                         value="<%= r.quantita_richiesta %>"
-                         aria-label="Pezzi disponibili di <%= r.nome %>">
-                  <button type="button" data-passo="1" aria-label="Aggiungi">+</button>
-                </div>
               </div>
             <% }); %>
           </div>
-          <button class="btn btn-chiaro btn-blocco" type="button" data-azzera-righe style="margin-bottom:14px;">
-            Azzera tutte le quantità
+
+          <button class="btn btn-verde btn-blocco" type="submit" name="azione" value="prezzo_richiesto">
+            Accetta ordine
           </button>
-
-          <div class="sezione-titolo">Tempi</div>
-          <div class="card">
-            <label for="partenza_ore">Partenza ordine stimata</label>
-            <select id="partenza_ore" name="partenza_ore">
-              <option value="1">entro 1 ora</option>
-              <option value="2" selected>entro 2 ore</option>
-              <option value="4">entro 4 ore</option>
-              <option value="8">in giornata (8 ore)</option>
-              <option value="24">domani (24 ore)</option>
-              <option value="48">entro 48 ore</option>
-            </select>
-
-            <label for="consegna_ore">Consegna stimata al cliente</label>
-            <select id="consegna_ore" name="consegna_ore">
-              <option value="2">2 ore</option>
-              <option value="4">4 ore</option>
-              <option value="6" <%= distributore.consegna_ore_default === 6 ? 'selected' : '' %>>6 ore</option>
-              <option value="24" <%= distributore.consegna_ore_default === 24 ? 'selected' : '' %>>24 ore</option>
-              <option value="48" <%= distributore.consegna_ore_default === 48 ? 'selected' : '' %>>48 ore</option>
-              <option value="72">72 ore</option>
-            </select>
-            <p class="nota" style="margin:0;">
-              La consegna non può precedere la partenza: se scegli un valore più basso viene
-              allineato al tempo di partenza.
-            </p>
-
-            <label for="note" style="margin-top:12px;">Note per il cliente (opzionale)</label>
-            <textarea id="note" name="note" rows="2"
-                      placeholder="Es. il 18000 BTU arriva giovedì, ritiro banco 2..."></textarea>
-          </div>
-
-          <button class="btn btn-verde btn-blocco" type="submit" name="azione" value="conferma">
-            Conferma con questi sconti e tempi
-          </button>
-          <button class="btn btn-primary btn-blocco" type="submit" name="azione" value="prezzo_richiesto"
-                  style="margin-top:10px;">
-            Accetta al prezzo di richiesta
-          </button>
-          <p class="nota">
-            "Al prezzo di richiesta" conferma alle condizioni standard del tuo listino, quelle
-            che il cliente ha già visto: gli sconti scritti sopra vengono ignorati.
-          </p>
-          <button class="btn btn-rosso btn-blocco" type="submit" name="azione" value="rifiuta">
+          <button class="btn btn-rosso btn-blocco" type="submit" name="azione" value="rifiuta" style="margin-top:10px;">
             Rifiuta: merce non disponibile
           </button>
         </form>

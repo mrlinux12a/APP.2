@@ -33,12 +33,12 @@
       <div class="contenuto" style="padding-top:0;">
         <p class="sottotitolo"><%= macro.descrizione %></p>
         <% if (!sottocategorie.length) { %>
-          <div class="vuoto"><span class="emoji">📭</span>Nessun prodotto in questa categoria.</div>
+          <div class="vuoto"><span class="emoji"><%- iconaVuotoScatola %></span>Nessun prodotto in questa categoria.</div>
         <% } else { %>
           <div class="card card-fitta">
             <% sottocategorie.forEach(function (s) { %>
               <a class="riga-lista" href="<%= conFiltri({ sotto: s.slug, misura: null, marchio: null }) %>">
-                <span class="icona">📁</span>
+                <span class="icona"><%- iconaFamiglia %></span>
                 <span class="corpo">
                   <span class="etichetta"><%= s.nome %></span>
                   <span class="dettaglio"><%= s.n %> articoli</span>
@@ -74,7 +74,7 @@
 
         <div id="risultati">
           <% if (!elenco.righe.length) { %>
-            <div class="vuoto"><span class="emoji">🤷</span>Nessun articolo con questi filtri.</div>
+            <div class="vuoto"><span class="emoji"><%- iconaVuotoRicerca %></span>Nessun articolo con questi filtri.</div>
           <% } else { %>
             <div class="card card-fitta">
               <% elenco.righe.forEach(function (p) { %>

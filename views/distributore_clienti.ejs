@@ -10,12 +10,12 @@
     <div class="contenuto">
       <div class="sezione-titolo">Da approvare</div>
       <% if (!daApprovare.length) { %>
-        <div class="vuoto"><span class="emoji">✅</span>Nessuna anagrafica in attesa.</div>
+        <div class="vuoto"><span class="emoji"><%- iconaVuotoOk %></span>Nessuna anagrafica in attesa.</div>
       <% } else { %>
         <div class="card card-fitta">
           <% daApprovare.forEach(function (c) { %>
             <a class="riga-lista" href="/distributore/clienti/<%= c.cliente_id %>">
-              <span class="icona">🆕</span>
+              <span class="icona"><%- iconaNuovo %></span>
               <span class="corpo">
                 <span class="etichetta"><%= c.ragione_sociale %></span>
                 <span class="dettaglio">
@@ -37,12 +37,12 @@
 
       <div class="sezione-titolo">Clienti approvati</div>
       <% if (!approvati.length) { %>
-        <div class="vuoto"><span class="emoji">👥</span>Ancora nessun cliente approvato.</div>
+        <div class="vuoto"><span class="emoji"><%- iconaClienti %></span>Ancora nessun cliente approvato.</div>
       <% } else { %>
         <div class="card card-fitta">
           <% approvati.forEach(function (c) { %>
             <a class="riga-lista" href="/distributore/clienti/<%= c.cliente_id %>">
-              <span class="icona">🏢</span>
+              <span class="icona"><%- iconaAzienda %></span>
               <span class="corpo">
                 <span class="etichetta"><%= c.ragione_sociale %></span>
                 <span class="dettaglio">
@@ -60,7 +60,7 @@
         <div class="card card-fitta">
           <% rifiutati.forEach(function (c) { %>
             <a class="riga-lista" href="/distributore/clienti/<%= c.cliente_id %>">
-              <span class="icona">🚫</span>
+              <span class="icona"><%- iconaRifiutato %></span>
               <span class="corpo">
                 <span class="etichetta"><%= c.ragione_sociale %></span>
                 <span class="dettaglio">P. IVA <%= c.partita_iva || '—' %></span>

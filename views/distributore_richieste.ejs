@@ -26,21 +26,17 @@
           <span class="numero"><%= contatori.daPreparare %></span>
           <span class="etichetta">da preparare</span>
         </a>
-        <a class="conta-box" href="/distributore/ordini">
-          <span class="numero"><%= contatori.inConsegna %></span>
-          <span class="etichetta">in consegna</span>
-        </a>
       </div>
 
       <div class="sezione-titolo" id="da-confermare">Da confermare</div>
       <% if (!daRispondere.length) { %>
-        <div class="vuoto"><span class="emoji">✅</span>Nessuna richiesta in attesa.</div>
+        <div class="vuoto"><span class="emoji"><%- iconaVuotoOk %></span>Nessuna richiesta in attesa.</div>
       <% } else { %>
         <div class="urgenti-griglia">
           <% daRispondere.forEach(function (r) { %>
             <div class="urgente-card">
               <div class="urgente-testa">
-                <span class="urgente-id">#<%= r.id %> — <%= r.cliente_nome %></span>
+                <span class="urgente-id"><%= r.cliente_nome %></span>
                 <span class="urgente-timer" data-countdown-live data-secondi="<%= Math.max(0, r.secondi) %>">
                   <%= fmt.mmss(Math.max(0, r.secondi)) %>
                 </span>
@@ -53,15 +49,53 @@
                   <span class="urgente-riga urgente-altre">+<%= r.altreRighe %> altr<%= r.altreRighe === 1 ? 'o' : 'i' %></span>
                 <% } %>
               </div>
-              <a class="btn btn-primary btn-blocco urgente-azione" href="/distributore/richieste/<%= r.id %>">
-                Apri &amp; accetta
-              </a>
+              <div class="urgente-azioni">
+                <a class="btn btn-chiaro" href="/distributore/richieste/<%= r.id %>">Ispeziona</a>
+                <form method="POST" action="/distributore/richieste/<%= r.id %>/rispondi">
+                  <input type="hidden" name="azione" value="prezzo_richiesto">
+                  <input type="hidden" name="torna" value="home">
+                  <button class="btn btn-verde" type="submit">Accetta</button>
+                </form>
+              </div>
             </div>
           <% }); %>
         </div>
         <p class="nota">
           Hai 10 minuti per rispondere. Se non rispondi la richiesta risulta non confermata.
         </p>
+      <% } %>
+
+      <div class="sezione-titolo">Ordini da preparare</div>
+      <% if (!daPreparare.length) { %>
+        <div class="vuoto"><span class="emoji"><%- iconaVuotoScatola %></span>Nessun ordine da preparare.</div>
+      <% } else { %>
+        <div class="urgenti-griglia">
+          <% daPreparare.forEach(function (o) { %>
+            <div class="urgente-card neutra">
+              <form class="urgente-rimuovi-wrap" method="POST" action="/distributore/ordini/<%= o.id %>/preparazione">
+                <input type="hidden" name="torna" value="home">
+                <button class="urgente-rimuovi" type="submit" aria-label="Togli dalla lista da preparare">
+                  <%- iconaChiudi %>
+                </button>
+              </form>
+              <div class="urgente-testa" style="padding-right:26px;">
+                <span class="urgente-id"><%= o.cliente_nome %></span>
+              </div>
+              <div class="urgente-prodotti">
+                <% o.anteprima.forEach(function (a) { %>
+                  <span class="urgente-riga"><%= a.quantita %>× <%= a.nome %></span>
+                <% }); %>
+                <% if (o.altreRighe > 0) { %>
+                  <span class="urgente-riga urgente-altre">+<%= o.altreRighe %> altr<%= o.altreRighe === 1 ? 'o' : 'i' %></span>
+                <% } %>
+              </div>
+              <a class="btn btn-primary btn-blocco urgente-azione" href="/distributore/ordini/<%= o.id %>">
+                Ispeziona
+              </a>
+            </div>
+          <% }); %>
+        </div>
+        <a class="nota" href="/distributore/ordini" style="display:block;">Vedi tutti gli ordini →</a>
       <% } %>
 
       <%- include('partials/geolocalizzazione', {

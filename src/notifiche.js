@@ -1,4 +1,5 @@
 const db = require('../db');
+const icone = require('./icone');
 
 // Notifiche in-app, raggruppate per categoria con i relativi sottostati.
 // Il browser le trasforma in notifica push di sistema (public/app.js): il flag
@@ -7,7 +8,7 @@ const db = require('../db');
 const CATEGORIE = {
   ordini: {
     nome: 'Ordini',
-    icona: '📦',
+    icona: icone.iconaOrdini,
     sottostati: {
       in_approvazione: 'In approvazione dal cliente',
       spedito: 'Spedito',
@@ -17,7 +18,7 @@ const CATEGORIE = {
   },
   richieste: {
     nome: 'Richieste',
-    icona: '⏳',
+    icona: icone.iconaOrario,
     sottostati: {
       inviata: 'Inviata',
       senza_risposta: 'Senza risposta',
@@ -26,14 +27,14 @@ const CATEGORIE = {
   },
   approvazioni: {
     nome: 'Approvazioni',
-    icona: '👥',
+    icona: icone.iconaClienti,
     sottostati: {
       in_sospeso: 'In sospeso',
       confermata: 'Confermata',
       negata: 'Negata',
     },
   },
-  generale: { nome: 'Altro', icona: '🔔', sottostati: {} },
+  generale: { nome: 'Altro', icona: icone.iconaNotifiche, sottostati: {} },
 };
 
 async function notifica(userId, { titolo, testo, link = null, categoria = 'generale', sottostato = '', order_id = null }) {
