@@ -7,12 +7,18 @@
   <div class="app">
     <%- include('partials/appbar', { titolo, intestazione: 'Riepilogo offerte', indietro: '/home' }) %>
 
-    <div class="contenuto">
+    <% const aperta = richiesta.stato === 'con_offerte'; %>
+    <div class="contenuto"<% if (aperta) { %> data-offerte-live="<%= richiesta.id %>" data-conferme="<%= offerte.length %>"<% } %>>
       <% if (richiesta.stato === 'annullata') { %>
         <div class="avviso avviso-attenzione">Hai annullato questa richiesta.</div>
+      <% } else if (richiesta.stato === 'nessuna_offerta' && offerte.length) { %>
+        <div class="avviso avviso-attenzione">
+          Le offerte sono scadute senza che venisse scelto un distributore, quindi nessun ordine
+          è partito. Puoi reinviare la richiesta per avere conferme aggiornate.
+        </div>
       <% } else if (!offerte.length) { %>
         <div class="avviso avviso-attenzione">
-          Nessun distributore ha confermato la disponibilità entro i 10 minuti.
+          Nessun distributore ha confermato la disponibilità entro i <%= Math.round(minutiRisposta) %> minuti.
           La mancata risposta non vale come disponibilità: il materiale potrebbe esserci
           ma non essere reperibile al banco.
         </div>
@@ -22,22 +28,22 @@
           <%= offerte.length === 1 ? 'distributore ha confermato' : 'distributori hanno confermato' %>
           la disponibilità. Scegli con chi ordinare.
         </div>
-
-        <% if (secondiScelta !== null && secondiScelta > 0) { %>
-          <div class="avviso avviso-attenzione conto-scelta" data-scelta data-secondi="<%= secondiScelta %>">
-            Hai <strong><span id="countdown-scelta"><%= fmt.mmss(secondiScelta) %></span></strong>
-            per scegliere. Se non scegli, l'ordine va da solo al distributore con la
-            <strong>consegna più veloce</strong>.
-          </div>
-        <% } else if (secondiScelta === 0) { %>
-          <div class="avviso avviso-attenzione">
-            I <%= minutiScelta %> minuti per scegliere sono scaduti: l'ordine sta per essere
-            assegnato al distributore più veloce.
-          </div>
-        <% } %>
       <% } %>
 
-      <% offerte.forEach(function (o, i) { %>
+      <% if (aperta && secondiScelta !== null && secondiScelta > 0) { %>
+        <div class="avviso avviso-attenzione conto-scelta" data-scelta data-secondi="<%= secondiScelta %>">
+          Hai <strong><span id="countdown-scelta"><%= fmt.mmss(secondiScelta) %></span></strong>
+          per scegliere. Se non scegli, l'ordine parte da solo verso
+          <strong><%= nomeAssegnazione %></strong> (consegna più veloce tra chi copre tutto il materiale).
+        </div>
+      <% } else if (aperta && secondiScelta === 0) { %>
+        <div class="avviso avviso-attenzione">
+          Il tempo per scegliere è scaduto: l'ordine sta per partire verso
+          <strong><%= nomeAssegnazione %></strong>.
+        </div>
+      <% } %>
+
+      <% (aperta ? offerte : []).forEach(function (o, i) { %>
         <a class="offerta <%= i === 0 && offerte.length > 1 && o.copertura === 'totale' ? 'migliore' : '' %>"
            href="/richieste/<%= richiesta.id %>/offerta/<%= o.distributore.id %>">
           <div class="testa">
@@ -125,10 +131,10 @@
         <form method="POST" action="/richieste/<%= richiesta.id %>/reinvia">
           <button class="btn btn-primary btn-blocco" type="submit">Riinvia richiesta</button>
         </form>
-      <% } else if (!offerte.length) { %>
+      <% } else if (!aperta) { %>
         <a class="btn btn-primary btn-blocco" href="/home">Torna alla home</a>
       <% } %>
-      <% if (richiesta.stato === 'con_offerte') { %>
+      <% if (aperta) { %>
         <form method="POST" action="/richieste/<%= richiesta.id %>/annulla">
           <button class="btn btn-chiaro btn-blocco" type="submit" style="margin-top:12px;">Annulla la richiesta</button>
         </form>

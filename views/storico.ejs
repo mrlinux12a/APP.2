@@ -23,7 +23,7 @@
                  : r.stato === 'in_attesa' ? 'In attesa'
                  : r.stato === 'con_offerte' ? 'Da scegliere'
                  : r.stato === 'ordinata' ? (c.ordine ? (c.ordine.stato === 'inviato' ? 'Inviato' : c.ordine.stato === 'in_evasione' ? 'In preparazione' : 'Partito') : 'Ordinata')
-                 : r.stato === 'nessuna_offerta' ? 'Scaduta senza conferme'
+                 : r.stato === 'nessuna_offerta' ? 'Scaduta senza ordine'
                  : r.stato === 'annullata' ? 'Annullata'
                  : r.stato;
                const classeBadge = consegnato ? 'stato-consegnato' : (c.ordine ? 'stato-' + c.ordine.stato : 'stato-' + r.stato);

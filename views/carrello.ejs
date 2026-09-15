@@ -101,12 +101,13 @@
               </p>
             <% } %>
 
-            <form method="POST" action="/richieste" id="form-invia">
+            <form method="POST" action="/richieste" id="form-invia" data-invia-carrello>
+              <input type="hidden" name="modo" value="imposta">
               <button class="btn btn-primary btn-blocco" type="submit" <%= raggiunto ? '' : 'disabled' %> style="padding:16px;font-size:1.05rem;">
                 Conferma e chiedi disponibilità
               </button>
               <p class="nota" style="text-align:center;margin-top:8px;">
-                Invierai la richiesta ai distributori della tua zona. Rispondono entro 10 minuti.
+                Invierai la richiesta ai distributori. Rispondono entro <%= Math.round(minutiRisposta) %> minuti.
               </p>
             </form>
 

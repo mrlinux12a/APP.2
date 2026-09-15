@@ -592,14 +592,21 @@ app.post('/api/carrello/aggiungi', requireRole('cliente'), async (req, res) => {
 app.post('/api/carrello/aggiungi-batch', requireRole('cliente'), async (req, res) => {
   const items = Array.isArray(req.body.items) ? req.body.items : [];
   if (!items.length) return res.status(400).json({ ok: false, errore: 'Nessun articolo.' });
+  const richiesti = items
+    .map(({ id, qty }) => ({ pid: parseInt(id, 10), q: Math.max(0, parseInt(qty, 10) || 0) }))
+    .filter(({ pid, q }) => pid && q);
+  // Un articolo non valido o non più attivo si salta: prima un "return" dentro il ciclo
+  // chiudeva la route senza rispondere, il pulsante restava su "…" e il carrello non si salvava.
+  const attivi = richiesti.length
+    ? new Set(
+        (await db.prepare('SELECT id FROM products WHERE attivo = 1 AND id = ANY(?::int[])').all(richiesti.map((r) => r.pid)))
+          .map((p) => p.id)
+      )
+    : new Set();
   const carrello = getCarrello(req);
   const aggiornati = {};
-  for (const { id, qty } of items) {
-    const pid = parseInt(id, 10);
-    const q = Math.max(0, parseInt(qty, 10) || 0);
-    if (!pid || !q) return;
-    const prodotto = await db.prepare('SELECT id FROM products WHERE id = ? AND attivo = 1').get(pid);
-    if (!prodotto) return;
+  for (const { pid, q } of richiesti) {
+    if (!attivi.has(pid)) continue;
     carrello[pid] = (carrello[pid] || 0) + q;
     aggiornati[pid] = carrello[pid];
   }
@@ -642,6 +649,7 @@ app.get('/carrello', requireRole('cliente'), async (req, res) => {
     mancaAlMinimo: pricing.round2(Math.max(0, minimo - totali.totale_finale)),
     raggiunto: totali.totale_finale >= minimo,
     ivaPct: await pricing.getIvaPct(),
+    minutiRisposta: await pricing.getFinestraMinuti(),
   });
 });
 
@@ -652,9 +660,11 @@ app.post('/carrello/svuota', requireRole('cliente'), async (req, res) => {
 
 // ---------- Cliente: richiesta di disponibilità ----------
 
-// "Procedi": manda la richiesta ai distributori della zona e apre la schermata di attesa.
+// "Conferma e chiedi disponibilità": manda la richiesta ai distributori e apre l'attesa.
+// Dal carrello arrivano le quantità visibili in pagina (modo 'imposta'): anche quelle
+// scritte a mano e mai salvate, che prima andavano perse e la richiesta partiva con le vecchie.
 app.post('/richieste', requireRole('cliente'), async (req, res) => {
-  aggiornaCarrelloDaForm(req, 'aggiungi');
+  aggiornaCarrelloDaForm(req, req.body.modo === 'imposta' ? 'imposta' : 'aggiungi');
   return inviaRichiesta(req, res);
 });
 
@@ -753,18 +763,21 @@ app.get('/richieste/:id', requireRole('cliente'), async (req, res) => {
     righe: await richieste.righeRichiesta(richiesta.id),
     risposte: await richieste.risposteRichiesta(richiesta.id),
     secondi: await richieste.secondiRimasti(richiesta),
+    minutiRisposta: await pricing.getFinestraMinuti(),
   };
 
   if (richiesta.stato === 'in_attesa') return res.render('richiesta_attesa', dati);
 
   const offerte = await richieste.offerte(richiesta.id);
   const piuVeloce = await richieste.offertaPiuVeloce(richiesta.id);
+  const perAssegnazione = await richieste.offertaPerAssegnazione(richiesta.id);
   return res.render('richiesta_offerte', {
     ...dati,
     offerte,
-    // Con più di un'offerta scatta la finestra di 5 minuti per scegliere.
-    secondiScelta: offerte.length > 1 ? await richieste.secondiPerScegliere(richiesta) : null,
-    minutiScelta: await pricing.getFinestraSceltaMinuti(),
+    // Il conto alla rovescia vale anche con UNA sola offerta: prima compariva solo con due
+    // o più, ma l'ordine automatico partiva comunque e il cliente non ne sapeva niente.
+    secondiScelta: offerte.length ? await richieste.secondiAllAssegnazione(richiesta) : null,
+    nomeAssegnazione: perAssegnazione ? perAssegnazione.distributore_nome : null,
     idPiuVeloce: piuVeloce ? piuVeloce.distributor_id : null,
     consegna,
   });
@@ -788,15 +801,19 @@ app.get('/api/richieste/:id', requireRole('cliente'), async (req, res) => {
 app.post('/richieste/:id/annulla', requireRole('cliente'), async (req, res) => {
   const richiesta = await richieste.getRichiesta(req.params.id);
   if (!richiesta || richiesta.cliente_id !== req.session.user.id) return res.redirect('/ordini');
-  if (richiesta.stato !== 'ordinata') {
-    await db.prepare(`UPDATE requests SET stato = 'annullata' WHERE id = ?`).run(richiesta.id);
-    // Chiude anche le risposte ancora "in attesa" dal lato banco: altrimenti la
-    // richiesta annullata dal cliente resta a intasare la dashboard dei distributori
-    // come se ci fosse ancora qualcosa da confermare.
-    await db.prepare(
-      `UPDATE request_responses SET esito = 'scaduto' WHERE request_id = ? AND esito = 'in_attesa'`
-    ).run(richiesta.id);
-  }
+  // Condizione dentro la UPDATE: se l'ordine automatico è partito un istante prima,
+  // l'annullamento non deve sovrascrivere 'ordinata' lasciando un ordine vivo su una
+  // richiesta che il cliente crede annullata.
+  const upd = await db
+    .prepare(`UPDATE requests SET stato = 'annullata' WHERE id = ? AND stato IN ('in_attesa', 'con_offerte', 'nessuna_offerta')`)
+    .run(richiesta.id);
+  if (!upd.changes) return res.redirect('/richieste/' + richiesta.id);
+  // Chiude anche le risposte ancora "in attesa" dal lato banco: altrimenti la
+  // richiesta annullata dal cliente resta a intasare la dashboard dei distributori
+  // come se ci fosse ancora qualcosa da confermare.
+  await db.prepare(
+    `UPDATE request_responses SET esito = 'scaduto' WHERE request_id = ? AND esito = 'in_attesa'`
+  ).run(richiesta.id);
   res.redirect('/ordini');
 });
 
@@ -822,10 +839,18 @@ app.post('/richieste/:id/elimina', requireRole('cliente'), async (req, res) => {
     return res.status(404).render('errore', { titolo: 'Non trovata', messaggio: 'Richiesta non trovata.' });
   }
   const elimina = db.transaction(async () => {
-    if (richiesta.order_id) {
+    // Righe bloccate fino alla fine: un ordine creato o preso in carico nel frattempo non
+    // può più essere cancellato "sotto" al distributore.
+    const attuale = await db.prepare('SELECT order_id FROM requests WHERE id = ? FOR UPDATE').get(richiesta.id);
+    if (!attuale) return null;
+    let ordineEliminato = null;
+    if (attuale.order_id) {
+      const ordine = await db.prepare('SELECT * FROM orders WHERE id = ? FOR UPDATE').get(attuale.order_id);
+      if (ordine && !ordineAnnullabileDalCliente(ordine)) throw new OrdineInLavorazione(ordine);
       await db.prepare('UPDATE requests SET order_id = NULL WHERE id = ?').run(richiesta.id);
-      await db.prepare('DELETE FROM order_items WHERE order_id = ?').run(richiesta.order_id);
-      await db.prepare('DELETE FROM orders WHERE id = ?').run(richiesta.order_id);
+      await db.prepare('DELETE FROM order_items WHERE order_id = ?').run(attuale.order_id);
+      await db.prepare('DELETE FROM orders WHERE id = ?').run(attuale.order_id);
+      ordineEliminato = ordine;
     }
     const rows = await db.prepare('SELECT id FROM request_responses WHERE request_id = ?').all(richiesta.id);
     const rids = rows.map(r => r.id);
@@ -833,10 +858,51 @@ app.post('/richieste/:id/elimina', requireRole('cliente'), async (req, res) => {
     await db.prepare('DELETE FROM request_responses WHERE request_id = ?').run(richiesta.id);
     await db.prepare('DELETE FROM request_items WHERE request_id = ?').run(richiesta.id);
     await db.prepare('DELETE FROM requests WHERE id = ?').run(richiesta.id);
+    return ordineEliminato;
   });
-  await elimina();
+  let ordineEliminato;
+  try {
+    ordineEliminato = await elimina();
+  } catch (e) {
+    if (e instanceof OrdineInLavorazione) return rifiutaEliminazioneOrdine(res, e.ordine);
+    throw e;
+  }
+  if (ordineEliminato) await avvisaOrdineAnnullato(ordineEliminato);
   res.redirect('/home');
 });
+
+// Il cliente può togliere un ordine solo finché il banco non l'ha preso in carico: dopo, la
+// merce è in preparazione o partita e cancellarlo lo farebbe sparire anche al distributore.
+function ordineAnnullabileDalCliente(ordine) {
+  return ordine.stato === 'inviato';
+}
+
+class OrdineInLavorazione extends Error {
+  constructor(ordine) {
+    super('ordine già preso in carico');
+    this.ordine = ordine;
+  }
+}
+
+function rifiutaEliminazioneOrdine(res, ordine) {
+  return res.status(400).render('errore', {
+    titolo: 'Ordine già in lavorazione',
+    messaggio: 'Il distributore ha già preso in carico questo ordine: per annullarlo contattalo direttamente.',
+    link: '/ordini/' + ordine.id,
+    linkTesto: "Torna all'ordine",
+  });
+}
+
+async function avvisaOrdineAnnullato(ordine) {
+  if (!ordine.distributor_id) return;
+  const cliente = await db.prepare('SELECT ragione_sociale FROM users WHERE id = ?').get(ordine.cliente_id);
+  await notifiche.notificaDistributore(ordine.distributor_id, {
+    titolo: 'Ordine annullato dal cliente',
+    testo: `${cliente ? cliente.ragione_sociale : 'Il cliente'} ha annullato l'ordine #${ordine.id} prima della presa in carico.`,
+    link: '/distributore',
+    categoria: 'ordini',
+  });
+}
 
 // Elimina richiesta (distributore) — locale: sparisce solo dal suo banco (da confermare + storico)
 app.post('/distributore/richieste/:id/elimina', requireRole('distributore'), async (req, res) => {
@@ -865,6 +931,9 @@ app.get('/richieste/:id/offerta/:distributorId', requireRole('cliente'), async (
   if (!richiesta || richiesta.cliente_id !== req.session.user.id) {
     return res.status(404).render('errore', { titolo: 'Non trovata', messaggio: 'Richiesta non trovata.' });
   }
+  // Solo da una richiesta con offerte aperte: da una annullata o scaduta si arrivava comunque
+  // al riepilogo e si poteva chiudere un ordine (la pagina offerte mostrava ancora le card).
+  if (richiesta.stato !== 'con_offerte') return res.redirect('/richieste/' + richiesta.id);
   const risposta = await db
     .prepare(
       `SELECT * FROM request_responses WHERE request_id = ? AND distributor_id = ? AND esito = 'confermato'`
@@ -882,6 +951,7 @@ app.get('/richieste/:id/offerta/:distributorId', requireRole('cliente'), async (
   const modalita = req.query.modalita === 'ritiro' ? 'ritiro' : 'consegna_mezzo_grossista';
   const offerta = await richieste.calcolaOfferta(richiesta.id, req.params.distributorId, { modalita });
   const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
+  const perAssegnazione = await richieste.offertaPerAssegnazione(richiesta.id);
 
   res.render('riepilogo', {
     titolo: "Riepilogo dell'ordine",
@@ -891,6 +961,10 @@ app.get('/richieste/:id/offerta/:distributorId', requireRole('cliente'), async (
     modalita,
     cliente,
     ivaPct: await pricing.getIvaPct(),
+    // Anche qui il cliente deve vedere quanto manca all'ordine automatico: mentre compila
+    // note e destinazione il tempo corre.
+    secondiScelta: await richieste.secondiAllAssegnazione(richiesta),
+    nomeAssegnazione: perAssegnazione ? perAssegnazione.distributore_nome : null,
   });
 });
 
@@ -901,7 +975,18 @@ app.post('/ordini', requireRole('cliente'), async (req, res) => {
   if (!richiesta || richiesta.cliente_id !== req.session.user.id) {
     return res.status(404).render('errore', { titolo: 'Non trovata', messaggio: 'Richiesta non trovata.' });
   }
-  if (richiesta.stato === 'ordinata') return res.redirect('/ordini/' + richiesta.order_id);
+  if (richiesta.stato === 'ordinata') return rispostaGiaOrdinata(res, richiesta);
+  if (!(await richieste.sceltaAncoraValida(richiesta.id))) {
+    return res.status(400).render('errore', {
+      titolo: 'Richiesta non più aperta',
+      messaggio:
+        richiesta.stato === 'annullata'
+          ? 'Hai annullato questa richiesta: non si può più ordinare da qui.'
+          : 'Le offerte di questa richiesta sono scadute: puoi reinviarla per avere conferme aggiornate.',
+      link: '/richieste/' + richiesta.id,
+      linkTesto: 'Apri la richiesta',
+    });
+  }
 
   const distributorId = parseInt(req.body.distributor_id, 10);
   const risposta = await db
@@ -925,14 +1010,30 @@ app.post('/ordini', requireRole('cliente'), async (req, res) => {
   });
   if (orderId === null) {
     // Un'altra chiamata concorrente ha chiuso questa richiesta un istante prima (doppio
-    // tap sullo stesso "Invia l'ordine", o l'assegnazione automatica dei 5 minuti scattata
-    // nello stesso momento): non è stato creato un secondo ordine duplicato, portiamo il
-    // cliente su quello vero, chiunque l'abbia creato.
+    // tap sullo stesso "Invia l'ordine", o l'assegnazione automatica scattata nello stesso
+    // momento): non è stato creato un secondo ordine duplicato.
     const aggiornata = await richieste.getRichiesta(richiesta.id);
-    return res.redirect(aggiornata && aggiornata.order_id ? '/ordini/' + aggiornata.order_id : '/richieste/' + richiesta.id);
+    if (aggiornata && aggiornata.stato === 'ordinata') return rispostaGiaOrdinata(res, aggiornata);
+    return res.redirect('/richieste/' + richiesta.id);
   }
   res.redirect('/ordini/' + orderId + '?nuovo=1');
 });
+
+// "Invia l'ordine" su una richiesta già chiusa. Se l'ha chiusa l'ordine automatico il
+// cliente va avvisato: prima veniva portato sull'ordine in silenzio, e consegna/ritiro,
+// destinazione e note appena scritte andavano perse senza che lo sapesse.
+function rispostaGiaOrdinata(res, richiesta) {
+  if (!richiesta.order_id) return res.redirect('/richieste/' + richiesta.id);
+  if (!richiesta.assegnata_auto) return res.redirect('/ordini/' + richiesta.order_id);
+  return res.status(409).render('errore', {
+    titolo: 'Ordine già assegnato',
+    messaggio:
+      "Il tempo per scegliere era scaduto e l'ordine è partito in automatico, con consegna e note predefinite: " +
+      'le scelte di questa pagina non sono state applicate. Se serve cambiarle contatta il distributore.',
+    link: '/ordini/' + richiesta.order_id,
+    linkTesto: "Apri l'ordine",
+  });
+}
 
 // Creazione dell'ordine a partire da un'offerta confermata: la usano sia la scelta
 // manuale del cliente sia l'assegnazione automatica allo scadere dei 5 minuti.
@@ -971,9 +1072,13 @@ async function creaOrdineDaOfferta(richiesta, distributorId, risposta, opzioni =
     // potevano creare due ordini (anche con due distributori diversi) per la stessa
     // richiesta. Ora solo la chiamata che riesce a far passare questa UPDATE (changes=1)
     // prosegue; l'altra trova stato già 'ordinata' e si ferma senza scrivere nulla.
+    // Vale solo da 'con_offerte' (prima bastava "non ordinata": passava anche un'annullata),
+    // e assegnata_auto si scrive qui, insieme all'ordine: prima si scriveva prima, a parte,
+    // e se la creazione si interrompeva la richiesta restava bloccata per sempre.
     const claim = await db.prepare(
-      `UPDATE requests SET stato = 'ordinata' WHERE id = ? AND stato <> 'ordinata'`
-    ).run(richiesta.id);
+      `UPDATE requests SET stato = 'ordinata', assegnata_auto = ?
+        WHERE id = ? AND stato = 'con_offerte'`
+    ).run(opzioni.automatico ? 1 : 0, richiesta.id);
     if (!claim.changes) return null;
 
     const info = await insertOrder.run(
@@ -1021,7 +1126,7 @@ async function creaOrdineDaOfferta(richiesta, distributorId, risposta, opzioni =
   await notifiche.notifica(richiesta.cliente_id, {
     titolo: opzioni.automatico ? 'Ordine assegnato automaticamente' : 'Ordine inviato',
     testo: opzioni.automatico
-      ? `Non hai scelto entro i 5 minuti: l'ordine #${orderId} è andato a ${distributore.nome}, il più veloce.`
+      ? `Non hai scelto in tempo: l'ordine #${orderId} è andato a ${distributore.nome}, con la consegna più veloce.`
       : `Ordine #${orderId} inviato a ${distributore.nome}.`,
     link: '/ordini/' + orderId,
     categoria: 'ordini',
@@ -1032,25 +1137,15 @@ async function creaOrdineDaOfferta(richiesta, distributorId, risposta, opzioni =
   return orderId;
 }
 
-// Allo scadere dei 5 minuti senza scelta, l'ordine va al distributore più veloce.
-async function assegnaOffertePerScadenza() {
-  const scelte = await richieste.sceltePerScadenza();
-  for (const r of scelte) {
-    const richiesta = await richieste.getRichiesta(r.id);
-    const migliore = await richieste.offertaPiuVeloce(r.id);
-    // Era "return": una singola richiesta del lotto senza offerta valida interrompeva
-    // l'intero giro, saltando anche tutte le altre richieste ancora da assegnare in
-    // questo tick da 30 secondi.
-    if (!richiesta || !migliore) continue;
-
-    await db.prepare('UPDATE requests SET assegnata_auto = 1 WHERE id = ?').run(r.id);
-    try {
-      await creaOrdineDaOfferta(richiesta, migliore.distributor_id, migliore, { automatico: true });
-    } catch (err) {
-      console.error(`Assegnazione automatica fallita per la richiesta ${r.id}:`, err.message);
-    }
-  }
-}
+// Finita la scelta senza decisione, l'ordine va a chi copre tutto il materiale con la
+// consegna più veloce. Lo chiama richieste.aggiornaScadenza() a ogni lettura della
+// richiesta (su Vercel i timer non girano fra una visita e l'altra) e il timer qui sotto.
+richieste.impostaAssegnatore(async (requestId) => {
+  const richiesta = await richieste.getRichiesta(requestId);
+  const migliore = await richieste.offertaPerAssegnazione(requestId);
+  if (!richiesta || !migliore) return null;
+  return creaOrdineDaOfferta(richiesta, migliore.distributor_id, migliore, { automatico: true });
+});
 
 // Tutte le richieste del cliente (più un ordine associato, quando c'è) con lo step 1-2-3
 // già calcolato — solo i campi che lo Storico mostra davvero (data, materiale, stato):
@@ -1195,6 +1290,9 @@ app.get('/ordini/:id', requireLogin, async (req, res) => {
   const distributore = ordine.distributor_id
     ? await db.prepare('SELECT * FROM distributors WHERE id = ?').get(ordine.distributor_id)
     : null;
+  const richiestaOrdine = ordine.request_id
+    ? await db.prepare('SELECT assegnata_auto FROM requests WHERE id = ?').get(ordine.request_id)
+    : null;
 
   res.render('ordine_dettaglio', {
     titolo: 'Ordine #' + ordine.id,
@@ -1203,6 +1301,9 @@ app.get('/ordini/:id', requireLogin, async (req, res) => {
     cliente,
     distributore,
     nuovo: req.query.nuovo === '1',
+    // Un ordine partito da solo deve dirlo: senza, sembrava che qualcun altro l'avesse inviato.
+    assegnataAuto: !!(richiestaOrdine && richiestaOrdine.assegnata_auto),
+    annullabile: ordineAnnullabileDalCliente(ordine),
     ivaPct: await pricing.getIvaPct(),
   });
 });
@@ -1227,11 +1328,22 @@ app.post('/ordini/:id/elimina', requireRole('cliente'), async (req, res) => {
     return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Ordine non trovato.' });
   }
   const elimina = db.transaction(async () => {
-    if (ordine.request_id) await db.prepare('UPDATE requests SET order_id = NULL, stato = ? WHERE id = ?').run('annullata', ordine.request_id);
-    await db.prepare('DELETE FROM order_items WHERE order_id = ?').run(ordine.id);
-    await db.prepare('DELETE FROM orders WHERE id = ?').run(ordine.id);
+    const attuale = await db.prepare('SELECT * FROM orders WHERE id = ? FOR UPDATE').get(ordine.id);
+    if (!attuale) return null;
+    if (!ordineAnnullabileDalCliente(attuale)) throw new OrdineInLavorazione(attuale);
+    if (attuale.request_id) await db.prepare('UPDATE requests SET order_id = NULL, stato = ? WHERE id = ?').run('annullata', attuale.request_id);
+    await db.prepare('DELETE FROM order_items WHERE order_id = ?').run(attuale.id);
+    await db.prepare('DELETE FROM orders WHERE id = ?').run(attuale.id);
+    return attuale;
   });
-  await elimina();
+  let eliminato;
+  try {
+    eliminato = await elimina();
+  } catch (e) {
+    if (e instanceof OrdineInLavorazione) return rifiutaEliminazioneOrdine(res, e.ordine);
+    throw e;
+  }
+  if (eliminato) await avvisaOrdineAnnullato(eliminato);
   res.redirect('/ordini');
 });
 
@@ -1400,6 +1512,7 @@ app.get('/distributore', requireRole('distributore'), async (req, res) => {
     contatori: await contatoriBanco(req.session.user.distributor_id),
     daRispondere,
     daPreparare,
+    minutiRisposta: await pricing.getFinestraMinuti(),
   });
 });
 
@@ -1466,6 +1579,7 @@ app.get('/distributore/richieste/:id', requireRole('distributore'), async (req, 
   const secondi = await richieste.secondiRimasti(richiesta);
   res.render('distributore_dettaglio', {
     titolo: 'Richiesta #' + richiesta.id,
+    minutiRisposta: await pricing.getFinestraMinuti(),
     richiesta,
     risposta,
     cliente,
@@ -1788,13 +1902,11 @@ process.on('uncaughtException', (err) => {
 // "nessuna conferma" arriva comunque allo scadere dei 10 minuti.
 (async () => {
   try { await richieste.aggiornaScadenzeAperte(); } catch {}
-  try { await assegnaOffertePerScadenza(); } catch {}
 })();
 setInterval(async () => {
   try {
+    // Chiude le finestre scadute e crea gli ordini automatici (vedi impostaAssegnatore).
     await richieste.aggiornaScadenzeAperte();
-    // Passati i 5 minuti senza scelta, l'ordine va al distributore più veloce.
-    await assegnaOffertePerScadenza();
   } catch (err) {
     console.error('Errore nel controllo scadenze:', err.message);
   }

@@ -133,8 +133,8 @@ async function creaRichiesta(cliente, righeCarrello) {
 
   if (!candidati.length) {
     await notifica(cliente.id, {
-      titolo: 'Nessun distributore in zona',
-      testo: 'Nessun rivenditore della tua zona tratta tutti i prodotti richiesti.',
+      titolo: 'Nessun distributore disponibile',
+      testo: 'Nessun distributore attivo può ricevere la richiesta in questo momento.',
       link: `/richieste/${requestId}`,
     });
   }
@@ -192,15 +192,37 @@ async function reinviaRichiesta(requestId) {
 
 // ---------- Scadenza ----------
 
-// La non risposta NON e' una disponibilita': allo scadere dei 10 minuti le risposte rimaste
-// in attesa diventano 'scaduto' e la richiesta si chiude con le sole conferme arrivate.
+// Oltre questo ritardo dalla fine della finestra di scelta l'ordine non si crea più da solo:
+// le offerte scadono. Su Vercel nessun timer gira fra una visita e l'altra, quindi senza
+// questo limite un ordine poteva partire ore o giorni dopo, alla prima pagina aperta.
+const TOLLERANZA_ASSEGNAZIONE_MIN = 15;
+
+// Crea l'ordine automatico per una richiesta: lo imposta server.js, che condivide il codice
+// con l'ordine scelto a mano. Riceve l'id della richiesta, restituisce l'id ordine o null.
+let assegnatore = null;
+function impostaAssegnatore(fn) {
+  assegnatore = fn;
+}
+
+// Porta avanti una richiesta aperta: chiude la finestra di risposta dei banchi e, finita
+// anche quella di scelta, crea l'ordine automatico (o fa scadere le offerte se è tardi).
+// Si chiama a ogni lettura della richiesta, non solo dal timer.
 async function aggiornaScadenza(requestId) {
   const richiesta = await getRichiesta(requestId);
   if (!richiesta) return null;
-  // 'con_offerte' resta aperta fino allo scadere: anche gli altri distributori possono
-  // ancora confermare, così il cliente ha più offerte da confrontare.
   if (richiesta.stato !== 'in_attesa' && richiesta.stato !== 'con_offerte') return richiesta;
-  if ((await secondiRimasti(richiesta)) > 0) return richiesta;
+  const risposteChiuse = await chiudiFinestraRisposte(richiesta);
+  const sceltaChiusa = await chiudiFinestraScelta(requestId);
+  return risposteChiuse || sceltaChiusa ? getRichiesta(requestId) : richiesta;
+}
+
+// La non risposta NON e' una disponibilita': allo scadere della finestra le risposte rimaste
+// in attesa diventano 'scaduto' e la richiesta si chiude con le sole conferme arrivate.
+// 'con_offerte' resta aperta fino allo scadere: anche gli altri distributori possono ancora
+// confermare, così il cliente ha più offerte da confrontare.
+async function chiudiFinestraRisposte(richiesta) {
+  const requestId = richiesta.id;
+  if ((await secondiRimasti(richiesta)) > 0) return false;
 
   const rowInSospeso = await db
     .prepare(
@@ -208,7 +230,7 @@ async function aggiornaScadenza(requestId) {
     )
     .get(requestId);
   const inSospeso = rowInSospeso ? Number(rowInSospeso.n) : 0;
-  if (richiesta.stato === 'con_offerte' && inSospeso === 0) return richiesta;
+  if (richiesta.stato === 'con_offerte' && inSospeso === 0) return false;
 
   const chiudi = db.transaction(async () => {
     await db.prepare(
@@ -232,31 +254,87 @@ async function aggiornaScadenza(requestId) {
 
   const conferme = await chiudi();
   // Se il cliente era già stato avvisato delle offerte, non lo avvisiamo una seconda volta.
-  if (richiesta.stato === 'con_offerte') return getRichiesta(requestId);
+  if (richiesta.stato === 'con_offerte') return true;
+  const minuti = await getFinestraMinuti();
   const { notifica } = require('./notifiche');
   await notifica(richiesta.cliente_id, {
     titolo: conferme > 0 ? 'Offerte disponibili' : 'Nessuna conferma ricevuta',
     testo:
       conferme > 0
         ? `${conferme} distributore/i ha confermato la disponibilità. Scegli con chi ordinare.`
-        : 'Nessun distributore ha confermato entro i 10 minuti. Puoi ripetere la richiesta.',
+        : `Nessun distributore ha confermato entro i ${Math.round(minuti)} minuti. Puoi ripetere la richiesta.`,
     link: `/richieste/${requestId}`,
     categoria: 'richieste',
   });
-
-  return getRichiesta(requestId);
+  return true;
 }
 
-// Secondi che restano al cliente per scegliere fra più offerte confermate.
-async function secondiPerScegliere(richiesta) {
-  if (!richiesta || !richiesta.scelta_scade_il) return null;
+// Finita la scelta (e la finestra dei banchi): ordine automatico entro la tolleranza, oltre
+// le offerte scadono e la richiesta smette di bloccare nuovi invii. Nessun flag viene
+// scritto prima dell'ordine: se la creazione fallisce si riprova alla lettura successiva,
+// invece di lasciare la richiesta bloccata per sempre.
+async function chiudiFinestraScelta(requestId) {
+  const r = await db
+    .prepare(
+      `SELECT EXTRACT(EPOCH FROM (NOW() - GREATEST(scade_il, scelta_scade_il)))::int AS oltre
+         FROM requests
+        WHERE id = ? AND stato = 'con_offerte' AND scelta_scade_il IS NOT NULL`
+    )
+    .get(requestId);
+  if (!r || Number(r.oltre) < 0) return false;
+
+  if (Number(r.oltre) <= TOLLERANZA_ASSEGNAZIONE_MIN * 60) {
+    if (!assegnatore) return false;
+    try {
+      return (await assegnatore(requestId)) !== null;
+    } catch (err) {
+      console.error(`[richieste] assegnazione automatica fallita per la richiesta ${requestId}:`, err.message);
+      return false;
+    }
+  }
+
+  const upd = await db
+    .prepare(`UPDATE requests SET stato = 'nessuna_offerta' WHERE id = ? AND stato = 'con_offerte'`)
+    .run(requestId);
+  if (!upd.changes) return false;
+  const richiesta = await getRichiesta(requestId);
+  const { notifica } = require('./notifiche');
+  await notifica(richiesta.cliente_id, {
+    titolo: 'Offerte scadute',
+    testo: 'Non hai scelto un distributore in tempo e le offerte sono scadute senza ordine. Puoi reinviare la richiesta.',
+    link: `/richieste/${requestId}`,
+    categoria: 'richieste',
+  });
+  return true;
+}
+
+// Secondi che mancano all'ordine automatico: finita la scelta E la finestra dei banchi.
+async function secondiAllAssegnazione(richiesta) {
+  if (!richiesta || richiesta.stato !== 'con_offerte' || !richiesta.scelta_scade_il) return null;
   const row = await db
-    .prepare(`SELECT EXTRACT(EPOCH FROM (?::timestamp - NOW()))::int AS s`)
-    .get(richiesta.scelta_scade_il);
+    .prepare(
+      `SELECT EXTRACT(EPOCH FROM (GREATEST(scade_il, scelta_scade_il) - NOW()))::int AS s
+         FROM requests WHERE id = ?`
+    )
+    .get(richiesta.id);
   return Math.max(0, row ? Number(row.s) : 0);
 }
 
-// Offerta più veloce: vince il tempo di consegna stimato più basso.
+// Un ordine scelto a mano è ammesso finché la richiesta ha offerte aperte e non è oltre la
+// tolleranza: dopo, le conferme dei banchi sono troppo vecchie per valere.
+async function sceltaAncoraValida(requestId) {
+  const r = await db
+    .prepare(
+      `SELECT (stato = 'con_offerte'
+               AND (scelta_scade_il IS NULL
+                    OR NOW() <= GREATEST(scade_il, scelta_scade_il) + (? * INTERVAL '1 minute'))) AS ok
+         FROM requests WHERE id = ?`
+    )
+    .get(TOLLERANZA_ASSEGNAZIONE_MIN, requestId);
+  return !!(r && r.ok);
+}
+
+// Offerta più veloce: vince il tempo di consegna stimato più basso (badge "più veloce").
 async function offertaPiuVeloce(requestId) {
   return db
     .prepare(
@@ -270,7 +348,23 @@ async function offertaPiuVeloce(requestId) {
     .get(requestId);
 }
 
-// Passata utile all'avvio e a ogni tanto: chiude tutte le richieste ormai scadute.
+// Offerta che riceve l'ordine automatico: prima chi copre tutto il materiale, poi il più
+// veloce. Solo per velocità poteva vincere un'offerta parziale e l'ordine perdeva articoli.
+async function offertaPerAssegnazione(requestId) {
+  return db
+    .prepare(
+      `SELECT rr.*, d.nome AS distributore_nome
+         FROM request_responses rr
+         JOIN distributors d ON d.id = rr.distributor_id
+        WHERE rr.request_id = ? AND rr.esito = 'confermato'
+        ORDER BY CASE WHEN rr.copertura = 'totale' THEN 0 ELSE 1 END,
+                 COALESCE(rr.consegna_minuti_stimati, rr.consegna_ore * 60) ASC, rr.risposto_il ASC
+        LIMIT 1`
+    )
+    .get(requestId);
+}
+
+// Passata utile all'avvio e a ogni tanto: chiude le finestre scadute e assegna gli ordini.
 async function aggiornaScadenzeAperte() {
   const aperte = await db
     .prepare(
@@ -280,22 +374,6 @@ async function aggiornaScadenzeAperte() {
     .all();
   for (const r of aperte) await aggiornaScadenza(r.id);
   return aperte.length;
-}
-
-// Richieste con offerte pronte e finestra di scelta scaduta: si assegnano da sole.
-// Restituisce l'elenco delle richieste da chiudere automaticamente, l'ordine vero lo
-// crea server.js perché condivide il codice con l'ordine scelto a mano.
-async function sceltePerScadenza() {
-  return db
-    .prepare(
-      `SELECT id, cliente_id FROM requests
-        WHERE stato = 'con_offerte'
-          AND assegnata_auto = 0
-          AND scelta_scade_il IS NOT NULL
-          AND scelta_scade_il <= NOW()
-          AND scade_il <= NOW()`
-    )
-    .all();
 }
 
 // ---------- Risposta del distributore ----------
@@ -439,7 +517,8 @@ async function rispondi(
     if (fresca && fresca.esito !== 'in_attesa') {
       return { ok: false, errore: 'Hai già risposto a questa richiesta.' };
     }
-    return { ok: false, errore: 'La finestra di 10 minuti è chiusa: non è più possibile rispondere.' };
+    const minuti = await getFinestraMinuti();
+    return { ok: false, errore: `La finestra di ${Math.round(minuti)} minuti è chiusa: non è più possibile rispondere.` };
   }
 
   // Il totale dell'offerta si calcola sulle quantità davvero disponibili.
@@ -463,8 +542,10 @@ async function rispondi(
       risposta.id
     );
 
-    // Alla prima conferma la richiesta ha gia' almeno un'offerta valida: parte la
-    // finestra di 5 minuti entro cui il cliente sceglie, altrimenti si assegna da sola.
+    // Con una conferma la richiesta ha almeno un'offerta valida: parte (o si allunga) la
+    // finestra entro cui il cliente sceglie, altrimenti l'ordine si assegna da solo. Si
+    // allunga a ogni nuova conferma: prima partiva solo alla prima, e un'offerta arrivata
+    // tardi lasciava al cliente zero secondi per valutarla.
     // Include anche 'nessuna_offerta': con la UPDATE atomica qui sopra è possibile che
     // questa conferma sia arrivata un istante dopo che aggiornaScadenza() (in corsa in
     // parallelo) aveva già chiuso la richiesta senza offerte — la si "riapre" invece di
@@ -473,8 +554,8 @@ async function rispondi(
     await db.prepare(
       `UPDATE requests
           SET stato = 'con_offerte',
-              scelta_scade_il = NOW() + (? * INTERVAL '1 minute')
-        WHERE id = ? AND stato IN ('in_attesa', 'nessuna_offerta')`
+              scelta_scade_il = GREATEST(COALESCE(scelta_scade_il, NOW()), NOW() + (? * INTERVAL '1 minute'))
+        WHERE id = ? AND stato IN ('in_attesa', 'nessuna_offerta', 'con_offerte')`
     ).run(finestraScelta, requestId);
     const mancanti = coperture.filter((r) => r.quantita_disponibile < r.quantita_richiesta).length;
     await notifica(richiesta.cliente_id, {
@@ -509,7 +590,7 @@ async function rispondi(
         testo:
           conferme > 0
             ? 'Tutti i distributori hanno risposto. Scegli con chi ordinare.'
-            : 'Nessun distributore della zona ha il materiale disponibile.',
+            : 'Nessun distributore ha il materiale disponibile.',
         link: `/richieste/${requestId}`,
         categoria: 'richieste',
       });
@@ -653,9 +734,12 @@ module.exports = {
   risposteRichiesta,
   getRisposta,
   secondiRimasti,
-  secondiPerScegliere,
+  secondiAllAssegnazione,
+  sceltaAncoraValida,
   offertaPiuVeloce,
-  sceltePerScadenza,
+  offertaPerAssegnazione,
+  impostaAssegnatore,
+  TOLLERANZA_ASSEGNAZIONE_MIN,
   distributoriCandidati,
   creaRichiesta,
   reinviaRichiesta,

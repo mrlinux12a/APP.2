@@ -12,7 +12,20 @@
       <input type="hidden" name="distributor_id" value="<%= offerta.distributore.id %>">
       <input type="hidden" name="modalita" value="<%= modalita %>">
 
-      <div class="contenuto">
+      <div class="contenuto" data-offerte-live="<%= richiesta.id %>">
+        <% if (secondiScelta !== null && secondiScelta > 0) { %>
+          <div class="avviso avviso-attenzione conto-scelta" data-scelta data-secondi="<%= secondiScelta %>">
+            Hai <strong><span id="countdown-scelta"><%= fmt.mmss(secondiScelta) %></span></strong>
+            per inviare l'ordine. Poi parte da solo verso <strong><%= nomeAssegnazione %></strong>,
+            con consegna e note predefinite.
+          </div>
+        <% } else if (secondiScelta === 0) { %>
+          <div class="avviso avviso-attenzione">
+            Il tempo per scegliere è scaduto: l'ordine sta per partire verso
+            <strong><%= nomeAssegnazione %></strong>.
+          </div>
+        <% } %>
+
         <div class="sezione-titolo">Dettagli dell'ordine</div>
         <div class="card card-fitta">
           <div class="riga-lista">

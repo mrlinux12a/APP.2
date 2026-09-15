@@ -165,9 +165,36 @@
       .catch(function () { window.location.reload(); });
   });
 
-  document.addEventListener('input', function (e) {
+  // Quantità scritta a mano: si salva quando il campo perde il fuoco e la pagina si ricarica
+  // per aggiornare totale e ordine minimo. Prima non si salvava mai (il pulsante "Aggiorna"
+  // a cui si affidava non esiste) e la richiesta partiva con la quantità vecchia.
+  let invioCarrelloInCorso = false;
+  document.addEventListener('change', function (e) {
     if (!e.target.matches('[data-qta-carrello-input]')) return;
-    // l'utente digita: non inviamo subito, lascia il pulsante Aggiorna del form come fallback
+    const id = e.target.getAttribute('data-qta-carrello-input');
+    const qty = Math.max(0, parseInt(e.target.value, 10) || 0);
+    fetch('/api/carrello/imposta', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id, qty: qty }),
+    })
+      .then(function () { if (!invioCarrelloInCorso) window.location.reload(); })
+      .catch(function () { if (!invioCarrelloInCorso) window.location.reload(); });
+  });
+
+  // "Conferma e chiedi disponibilità" è un form separato: porta con sé le quantità visibili,
+  // così vale quello che il cliente vede anche se il salvataggio sopra non ha fatto in tempo.
+  document.addEventListener('submit', function (e) {
+    const form = e.target.closest('[data-invia-carrello]');
+    if (!form) return;
+    invioCarrelloInCorso = true;
+    document.querySelectorAll('[data-qta-carrello-input]').forEach(function (inp) {
+      const campo = document.createElement('input');
+      campo.type = 'hidden';
+      campo.name = 'quantita_' + inp.getAttribute('data-qta-carrello-input');
+      campo.value = Math.max(0, parseInt(inp.value, 10) || 0);
+      form.appendChild(campo);
+    });
   });
 
   // ---------- Helper condivisi per costruire una card prodotto da JSON ----------
@@ -800,7 +827,8 @@
   });
 })();
 
-/* Finestra di 5 minuti per scegliere il distributore: countdown e ricarica alla scadenza. */
+/* Tempo per scegliere il distributore: countdown e una sola ricarica alla scadenza (prima
+   ne veniva programmata una nuova a ogni secondo passato lo zero). */
 (function () {
   'use strict';
 
@@ -809,6 +837,7 @@
 
   let secondi = parseInt(box.dataset.secondi, 10) || 0;
   const orologio = document.getElementById('countdown-scelta');
+  let ricaricaProgrammata = false;
 
   setInterval(function () {
     secondi = Math.max(0, secondi - 1);
@@ -817,9 +846,34 @@
       const s = secondi % 60;
       orologio.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
     }
-    // Scaduto: il server assegna al più veloce, ricarichiamo per mostrare l'esito.
-    if (secondi === 0) window.setTimeout(function () { window.location.reload(); }, 3000);
+    if (secondi === 0 && !ricaricaProgrammata) {
+      ricaricaProgrammata = true;
+      window.setTimeout(function () { window.location.reload(); }, 3000);
+    }
   }, 1000);
+})();
+
+/* Offerte e riepilogo si aggiornano da soli: una nuova conferma, l'ordine partito in
+   automatico o le offerte scadute ricaricano la pagina invece di lasciarla ferma. */
+(function () {
+  'use strict';
+
+  const box = document.querySelector('[data-offerte-live]');
+  if (!box) return;
+  const richiestaId = box.getAttribute('data-offerte-live');
+  const conferme = box.hasAttribute('data-conferme') ? parseInt(box.getAttribute('data-conferme'), 10) : null;
+
+  setInterval(function () {
+    fetch('/api/richieste/' + richiestaId)
+      .then(function (r) { return r.json(); })
+      .then(function (dati) {
+        if (!dati.stato) return;
+        if (dati.stato !== 'con_offerte' || (conferme !== null && dati.conferme !== conferme)) {
+          window.location.reload();
+        }
+      })
+      .catch(function () { /* riprova al giro dopo */ });
+  }, 5000);
 })();
 
 /* Countdown generico: qualsiasi elemento con data-countdown-live si aggiorna da solo

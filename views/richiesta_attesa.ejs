@@ -12,7 +12,7 @@
         <div class="cerchio-attesa"><span id="countdown"><%= fmt.mmss(secondi) %></span></div>
         <div style="font-weight:700; font-size:1.05rem;">Stiamo chiedendo al banco</div>
         <p class="sottotitolo" style="margin-top:6px;">
-          I distributori della zona <%= richiesta.zona %> hanno 10 minuti per confermare la
+          I distributori hanno <%= Math.round(minutiRisposta) %> minuti per confermare la
           disponibilità del materiale. Ti avvisiamo con una notifica appena rispondono:
           puoi anche chiudere questa schermata.
         </p>
@@ -36,7 +36,7 @@
         <% }); %>
       </div>
       <p class="nota">
-        Se un distributore non risponde entro i 10 minuti la richiesta risulta non confermata:
+        Se un distributore non risponde entro i <%= Math.round(minutiRisposta) %> minuti la richiesta risulta non confermata:
         il materiale potrebbe esserci ma non essere reperibile al banco.
       </p>
 

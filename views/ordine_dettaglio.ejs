@@ -17,6 +17,13 @@
           <strong>Ordine inviato.</strong> Il distributore ha ricevuto la conferma e prepara il materiale.
         </div>
       <% } %>
+      <% if (assegnataAuto && currentUser.ruolo !== 'distributore') { %>
+        <div class="avviso avviso-attenzione">
+          <strong>Ordine partito in automatico.</strong> Il tempo per scegliere il distributore era
+          scaduto, quindi l'ordine è andato a chi copriva tutto il materiale con la consegna più
+          veloce, con consegna e note predefinite.
+        </div>
+      <% } %>
 
       <% if (currentUser.ruolo === 'cliente') { %>
         <%
@@ -138,9 +145,11 @@
             <button class="btn btn-primary btn-blocco" type="submit">Ordine consegnato</button>
           </form>
         <% } %>
-        <form method="POST" action="/ordini/<%= ordine.id %>/elimina" onsubmit="return confirm('Eliminare definitivamente questo ordine?')">
-          <button class="link-discreto" type="submit">Elimina ordine</button>
-        </form>
+        <% if (annullabile) { %>
+          <form method="POST" action="/ordini/<%= ordine.id %>/elimina" onsubmit="return confirm('Annullare questo ordine? Il distributore verrà avvisato.')">
+            <button class="link-discreto" type="submit">Annulla ordine</button>
+          </form>
+        <% } %>
 
       <% } else { %>
 

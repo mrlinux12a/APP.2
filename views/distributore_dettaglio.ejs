@@ -98,6 +98,10 @@
           </a>
         <% } else if (richiesta.stato === 'ordinata') { %>
           <div class="avviso avviso-attenzione">Il cliente ha scelto un altro distributore.</div>
+        <% } else if (richiesta.stato === 'annullata') { %>
+          <div class="avviso avviso-attenzione">Il cliente ha annullato la richiesta: nessun ordine.</div>
+        <% } else if (richiesta.stato === 'nessuna_offerta') { %>
+          <div class="avviso avviso-attenzione">Il cliente non ha scelto in tempo e le offerte sono scadute: nessun ordine.</div>
         <% } else { %>
           <p class="nota">In attesa che il cliente scelga con quale distributore ordinare.</p>
         <% } %>
@@ -111,7 +115,7 @@
           <% } else if (richiesta.stato === 'ordinata') { %>
             Il cliente ha già chiuso l'ordine con un altro distributore.
           <% } else { %>
-            Nessuna risposta entro i 10 minuti: la richiesta è stata chiusa senza la tua conferma.
+            Nessuna risposta entro i <%= Math.round(minutiRisposta) %> minuti: la richiesta è stata chiusa senza la tua conferma.
           <% } %>
         </div>
 
