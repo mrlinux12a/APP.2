@@ -5,6 +5,7 @@ db/minuteria.db-shm
 db/supabase_dump.sql
 db/supabase_dump_nt.sql
 .env
+foto_catalogo
 
 # Config locale di anteprima (percorsi assoluti della macchina)
 .claude/

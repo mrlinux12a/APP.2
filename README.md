@@ -1,13 +1,12 @@
 # Ordini Minuteria — MVP
 
 App per digitalizzare gli ordini di materiale termoidraulico tra installatori pilota e i
-distributori di zona. La vista cliente è pensata **per il telefono**; la vista agente resta una
+distributori. La vista cliente è pensata **per il telefono**; la vista agente resta una
 pagina da scrivania.
 
 ## Avvio in locale
 
-Richiede **Node.js 22.5 o superiore** (usa il modulo SQLite integrato in Node, niente
-compilazioni native da installare — più semplice su qualsiasi hosting).
+Richiede **Node.js 22.5 o superiore**.
 
 ```
 npm install
@@ -15,8 +14,13 @@ npm run seed     # crea/aggiorna utenti, catalogo e listini demo (idempotente)
 npm start
 ```
 
-Apri `http://localhost:3000`. Vedrai un avviso "SQLite is an experimental feature": è normale,
-non un errore.
+Apri `http://localhost:3000`.
+
+Senza un file `.env` con `DATABASE_URL` parte in **SQLite** (`db/minuteria.db`, un modulo
+integrato in Node — niente compilazioni native, vedrai un avviso "SQLite is an experimental
+feature": è normale). **Ma in questo repository `.env` c'è già**, punta al Supabase Postgres di
+produzione condiviso: `npm start` in locale scrive quindi sul DB vero, non su un file locale
+usa e getta (dettagli e limiti del percorso SQLite in `CLAUDE.md`).
 
 ## Credenziali demo
 
@@ -71,8 +75,14 @@ riferimento** fra quelli attivi.
 
 Ai banchi scelti arriva la notifica *"Nuova anagrafica da approvare"*. Il distributore apre la
 scheda del cliente, vede tutti i dati fiscali e decide: **approva** (indicando il proprio codice
-cliente) o **rifiuta** se non lo riconosce. Finché nessuno approva, il cliente può sfogliare il
-catalogo ma non inviare richieste; le richieste vanno **solo ai banchi che lo hanno approvato**.
+cliente) o **rifiuta** se non lo riconosce.
+
+> **Non ancora applicato**: il codice non blocca né filtra sulla base dell'approvazione — un
+> cliente registrato ma non approvato da nessun banco può comunque inviare richieste, e queste
+> arrivano a **tutti** i distributori attivi, non solo a quelli che l'hanno approvato
+> (`distributoriApprovati()` in `src/anagrafiche.js` esiste ma nessuna route la richiama). Il
+> comportamento descritto sopra ("finché nessuno approva non può ordinare") è quello inteso,
+> non quello reale: verificarlo prima di contarci in produzione.
 
 Approvato il cliente, il banco imposta gli **sconti concordati** per ambito:
 
@@ -84,8 +94,9 @@ Approvato il cliente, il banco imposta gli **sconti concordati** per ambito:
 | Generale | tutto il catalogo | 4ª |
 
 Vale sempre la regola più precisa; dove non c'è nessuna regola resta lo sconto Base del listino
-del banco. Svuotando un campo la regola sparisce. Questi sconti precompilano il modulo di
-risposta, dove il banco può comunque ritoccare riga per riga.
+del banco. Svuotando un campo la regola sparisce. Questi sconti restano un riferimento di
+lettura quando il banco vede la richiesta (vedi "Sconti al banco" più sotto: oggi non li può più
+ritoccare riga per riga da lì).
 
 ## Punti vendita sulla mappa
 
@@ -118,16 +129,22 @@ quell'elenco e rilanciare lo script.
    (oppure "Aggiungi e continua a scegliere" per pescare da più categorie).
 4. **Riepilogo** — "Procedi" non manda niente: mostra prima articoli, quantità, prezzi e
    totale. La richiesta parte solo dopo **Conferma e chiedi disponibilità**.
-5. **Attesa** — la richiesta parte verso i distributori della zona del cliente che trattano
-   *tutti* i prodotti richiesti. Hanno **10 minuti** per confermare la disponibilità al banco.
-   Il cliente vede un countdown e riceve una notifica appena arriva una risposta: può chiudere
-   la schermata.
-5. **Offerte** — appena almeno un distributore conferma (o allo scadere dei 10 minuti) il cliente
-   vede l'elenco di chi ha confermato, con **tempo di consegna stimato e prezzo per ciascun
-   distributore**, ordinati dal più conveniente.
-6. **Riepilogo ordine** — scelto il distributore si arriva subito al riepilogo: consegna o ritiro,
+5. **Attesa** — la richiesta parte verso **tutti i distributori attivi** (non è più filtrata per
+   zona né per copertura del prodotto). Hanno **10 minuti** (configurabile, `finestra_conferma_min`)
+   per confermare la disponibilità al banco. Il cliente vede un countdown e riceve una notifica
+   appena arriva una risposta: può chiudere la schermata.
+6. **Offerte** — appena almeno un distributore conferma il cliente vede l'elenco di chi ha
+   confermato, con **tempo di consegna stimato e prezzo per ciascun distributore**, ordinati dal
+   più conveniente. Da qui parte (o si allunga, a ogni nuova conferma) una finestra per scegliere
+   con chi ordinare: se il cliente non sceglie in tempo, l'ordine parte da solo verso il
+   distributore che copre **tutto** il materiale con la **consegna più veloce** (fra chi copre
+   tutto; se nessuno copre tutto, vince comunque il più veloce). Oltre 15 minuti dalla scadenza
+   le offerte decadono senza creare un ordine, e il cliente può reinviare la richiesta.
+7. **Riepilogo ordine** — scelto il distributore si arriva subito al riepilogo: consegna o ritiro,
    note, riepilogo articoli, imponibile, IVA e totale. Il pulsante **Invia l'ordine** chiude
-   l'ordine con quel distributore.
+   l'ordine con quel distributore. Se l'assegnazione automatica scatta mentre il cliente sta
+   ancora compilando questa pagina, viene avvisato che l'ordine è già partito con i valori
+   predefiniti invece di essere lasciato a inviare una pagina ormai superata.
 
 **Distributore** (banco, telefono)
 
@@ -136,20 +153,20 @@ il confronto lato cliente ne prevede tre.
 
 1. **Richieste** — elenco di quelle da confermare con il tempo che resta, e i contatori del banco
    (da confermare / da preparare / in preparazione).
-2. **Risposta riga per riga** — per ogni articolo il banco indica quanti pezzi copre:
-   - tutti i pezzi di tutte le righe → **disponibilità totale**;
-   - qualche riga ridotta → **disponibilità parziale**, e il cliente vede subito cosa manca;
-   - tutto a zero (o pulsante *Rifiuta*) → **rifiuto per indisponibilità merce**.
-   Insieme alla conferma il banco dichiara la **partenza ordine stimata** e la **consegna
-   stimata**: entrambe arrivano al cliente nella schermata delle offerte. La consegna non può
-   precedere la partenza.
+2. **Risposta** — due sole azioni: **Accetta ordine** (copre tutto il richiesto alle condizioni
+   standard del proprio listino, quelle già viste dal cliente) o **Rifiuta: merce non disponibile**.
+   Non c'è più una risposta riga per riga né uno sconto da concordare in questa schermata: la
+   partenza (2 ore) e la consegna stimata (6 ore) sono valori fissi finché non arriva un corriere
+   collegato via API, non una scelta del banco.
 3. **Ordini** — quando il cliente sceglie quel banco, l'ordine entra in *Da preparare* →
-   *Prendi in preparazione* → *Emetti bolla e segna la merce partita*.
+   *Prendi in preparazione* → *Emetti bolla e segna la merce partita*. Il cliente può annullare un
+   ordine solo finché resta *Da preparare*: dopo, tocca contattarlo, e annullando prima il banco
+   riceve una notifica.
 4. **Dati del cliente** — su richiesta e ordine il banco vede l'anagrafica completa
    dell'ordinante: ragione sociale, referente, indirizzo, P. IVA, codice fiscale, SDI/PEC,
    telefono, email e destinazione della merce.
 
-Chi non risponde entro i 10 minuti risulta "non risposta": la non risposta **non** vale come
+Chi non risponde entro la finestra risulta "non risposta": la non risposta **non** vale come
 disponibilità.
 
 ## Marchi e listini dei produttori
@@ -175,20 +192,41 @@ Il cliente lo trova dalla sezione *Marchi* in home: marchio → famiglia → art
 > condizioni commerciali reali: va sostituito con gli sconti veri prima di usare i prezzi con i
 > clienti.
 
+## Foto prodotto
+
+`/con-foto` è una vetrina trasversale a categorie e marchi: mostra tutti i prodotti che hanno
+già una `foto_url`, senza toglierli dalle loro categorie normali. Si popola da sola — non è un
+elenco da tenere aggiornato a mano.
+
+Le foto arrivano da due fonti:
+
+- import manuale di singole immagini (marchio Effebi, primo lotto: 826 prodotti);
+- estrazione automatica dai listini PDF dei fornitori (Caleffi, Wavin, Grohe, Giacomini,
+  Fischer: altri 5.292 prodotti), abbinando il codice fornitore stampato accanto a ogni foto
+  al `codice_fornitore` a DB. Il metodo — regole di layout diverse per ogni catalogo, verificate
+  a campione prima di scrivere sul DB — è descritto nella memoria di sessione
+  (`project_foto_cataloghi`), utile se si aggiunge un altro catalogo (es. RBM).
+
+File in `public/img/prodotti/<marca>_<codice_fornitore>.webp`; `NULL` in `foto_url` non rompe
+nulla, la card mostra lo spazio vuoto.
+
 ## Sconti al banco
 
-Nella risposta a una richiesta il distributore può:
+Nella risposta a una richiesta oggi il distributore **non** ha più un modulo per scontare: può
+solo accettare tutto al prezzo standard del proprio listino o rifiutare (vedi "Il flusso, passo
+per passo"). Restano invece attivi, per la scheda del singolo cliente (`/distributore/clienti`):
 
-- **accettare al prezzo di richiesta** — un pulsante, conferma alle condizioni standard del suo
-  listino, quelle che il cliente ha già visto;
-- **applicare uno sconto riga per riga** — ogni riga ha il suo campo sconto, il prezzo per il
-  cliente si ricalcola mentre lo si scrive;
-- **usare lo sconto concordato col cliente** — un campo applica la stessa percentuale a tutte le
-  righe e, se lo si spunta, resta nell'anagrafica del cliente e precompila le prossime richieste
-  di quel cliente a quel banco.
+| Ambito | Esempio | Precedenza |
+|---|---|---|
+| Linea di prodotto | TOSHIBA · RAS | 1ª (vince) |
+| Marchio | TOSHIBA | 2ª |
+| Categoria merceologica | Condizionamento | 3ª |
+| Generale | tutto il catalogo | 4ª |
 
-Le righe con sconto diverso dallo standard restano evidenziate, e il cliente vede il prezzo già
-scontato nel confronto offerte.
+Vale sempre la regola più precisa; dove non c'è nessuna regola resta lo sconto Base del listino
+del banco. Questi sconti restano solo un riferimento di lettura quando il banco risponde a una
+richiesta (`src/richieste.js`, `righeDistributore`): il codice per applicarli riga per riga
+esiste ancora (`rispondi()` accetta `sconti`/`scontoCliente`), ma nessuna route lo richiama più.
 
 ## Contributo RAEE
 
@@ -258,23 +296,28 @@ alcun servizio esterno: l'app le recapita quando è aperta in una scheda.
 ## Struttura
 
 ```
-server.js         entrypoint Express e rotte
-db/schema.sql     schema SQLite
-db/index.js       apertura DB e migrazioni leggere
-db/seed.js        dati demo (utenti, catalogo, distributori, listini)
-src/pricing.js    calcolo prezzi, servizio, IVA
-src/catalogo.js   ricerca parziale e macro categorie
-src/richieste.js  ciclo di vita richiesta → offerte → ordine (disponibilità totale/parziale)
-src/ddt.js        numerazione e dati della bolla / DDT
-src/geo.js        posizione con consenso, revoca e distanze
-src/notifiche.js  notifiche in-app
-src/format.js     date, tempi di consegna, countdown
-src/auth.js       middleware di autenticazione/ruolo
-views/            pagine EJS (cliente e distributore mobile-first)
-public/style.css  stile dell'app
-public/app.js     quantità, ricerca live, countdown, notifiche
+server.js           entrypoint Express e rotte
+db/                 db/postgres (vero, produzione) e db/sqlite (legacy, vedi CLAUDE.md)
+db/seed.js          dati demo (utenti, catalogo, distributori, listini)
+src/pricing.js      calcolo prezzi, servizio, IVA, finestre temporali configurabili
+src/catalogo.js     ricerca parziale e macro categorie
+src/richieste.js    ciclo di vita richiesta → offerte → ordine, assegnazione automatica
+src/anagrafiche.js  registrazione cliente, approvazione banco, sconti per ambito
+src/consegna.js     stima del tempo di consegna (distanza + velocità media)
+src/ddt.js          numerazione e dati della bolla / DDT
+src/geo.js          posizione con consenso, revoca e distanze
+src/notifiche.js    notifiche in-app
+src/icone.js        icone SVG di categoria
+src/sessioni.js     archivio sessioni su database
+src/format.js       date, tempi di consegna, countdown
+src/auth.js         middleware di autenticazione/ruolo
+views/              pagine EJS (cliente e distributore mobile-first)
+public/style.css    stile dell'app
+public/app.js       quantità, ricerca live, countdown, notifiche
+public/img/prodotti foto prodotto (vedi "Foto prodotto" sopra)
 ```
 
-Il database è un singolo file SQLite (`db/minuteria.db`), creato automaticamente al primo avvio.
+Il database di produzione è **Postgres su Supabase** (`DATABASE_URL` in `.env`); SQLite è un
+percorso legacy non più mantenuto (dettagli in `CLAUDE.md`).
 
 Vedi anche `SCOPE.md` per l'elenco di cosa c'è oggi e cosa è volutamente fuori.

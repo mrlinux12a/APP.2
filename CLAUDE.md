@@ -46,6 +46,20 @@ Quirk mobile da non reintrodurre: `autocomplete/autocorrect/autocapitalize="off"
 ricerca; ripristino focus dopo il redraw risultati (altrimenti la tastiera si chiude); tutte le
 barre di ricerca usano lo stesso `[data-ricerca]`, mai una navigazione mentre si scrive.
 
+## Richieste e ordini
+
+- Zona non filtra più i distributori candidati (`distributoriCandidati` in `src/richieste.js`
+  ignora il parametro `zona`): campo residuo su `distributors`/`users`, non aspettarsi che
+  limiti chi riceve una richiesta.
+- L'ordine automatico (`richieste.impostaAssegnatore`, chiamato da `aggiornaScadenza`) scatta a
+  ogni lettura della richiesta, non solo dal `setInterval` di 30s in fondo a `server.js`: su
+  Vercel quel timer non gira tra una richiesta e l'altra, quindi senza questo la richiesta
+  restava bloccata finché qualcuno non riapriva quella pagina per caso.
+- La risposta del banco (`/distributore/richieste/:id/rispondi`) oggi passa solo `rifiuta` e
+  `prezzoRichiesto`: `rispondi()` supporta ancora `righe`/`sconti`/`scontoCliente` (disponibilità
+  parziale, sconto riga per riga) ma nessuna route li usa più — non è codice morto da un refuso,
+  è la UI attuale che li ha rimossi.
+
 ## Notifiche
 
 Badge "Stato ordini" somma non lette di `ordini`+`richieste`. Ricalcolare **dopo** averle

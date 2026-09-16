@@ -9,11 +9,12 @@ Ho anche scorso clienti, notifiche e storico richieste con dati reali già prese
 
 ## Bug trovati e già corretti in questa sessione
 
-Questi non sono suggerimenti: sono guasti confermati riproducendoli dal vivo. Il codice è
-già stato corretto nella working directory (non committato, come da tua richiesta esplicita
-di non fare mai commit/push senza permesso — li trovi con `git diff`).
+**Aggiornamento 16/09/2026**: i tre punti sotto sono confermati corretti e committati (verificato
+rileggendo il codice attuale: `finestra_conferma_min` = 10 nel DB, `(await ...).mancanti` con le
+parentesi giuste, `Math.round(minuti)` nei testi). Restano qui come riferimento storico di cosa
+è successo, non più come diff da applicare.
 
-1. **`config.finestra_conferma_min` era impostato a 10 *secondi* invece di 10 *minuti`**
+1. **`config.finestra_conferma_min` era impostato a 10 *secondi* invece di 10 *minuti***
    (valore `0.1666...`, probabile refuso di un test precedente, live sul DB di produzione).
    Conseguenza reale: **quasi tutte le richieste recenti nello storico risultano "Non
    risposta"** — nessun banco reale potrebbe mai rispondere in 10 secondi. Corretto
@@ -35,6 +36,11 @@ di non fare mai commit/push senza permesso — li trovi con `git diff`).
    [src/richieste.js:180](src/richieste.js:180) con `Math.round(minuti)`.
 
 ## Bug trovato, NON ancora corretto (serve una decisione)
+
+**Ancora presente al 16/09/2026** (riverificato leggendo `src/consegna.js`): `minutiStimati()`
+ritorna `{ minuti: partenzaMinuti, ... }` quando `km === null`, ignorando del tutto
+`consegna_ore`; il chiamante in `src/richieste.js` (`rispondi()`) passa solo `partenza` a
+`consegna.minutiStimati(...)`, mai la consegna dichiarata dal banco.
 
 4. **Il tempo di consegna mostrato al cliente nella schermata di confronto offerte è
    sbagliato quando il cliente non ha condiviso la posizione** (caso comune: è opt-in).
@@ -64,10 +70,10 @@ Elencate in ordine di impatto percepito durante il test, non di difficoltà impl
 2. **La schermata di risposta a una richiesta non ha un passaggio di verifica prima di
    confermare.** Il cliente, per inviare una richiesta, passa da un riepilogo esplicito
    ("Procedi" → riepilogo → "Conferma"). Il banco invece preme un solo pulsante
-   ("Conferma con questi sconti e tempi") che scrive subito sconti, tempi di consegna e
-   accettazione — nessun "rivedi prima di confermare". Dato che qui il banco si sta
-   impegnando economicamente (sconto) e contrattualmente (tempi di consegna dichiarati),
-   ha meno rete di sicurezza del cliente sullo stesso flusso.
+   ("Accetta ordine") che chiude subito la conferma — nessun "rivedi prima di confermare".
+   *Aggiornamento 16/09/2026*: la risposta riga-per-riga e la scelta di sconti/tempi da questa
+   schermata sono state rimosse (oggi è solo accetta-tutto-standard o rifiuta, con partenza e
+   consegna fisse a 2/6 ore) — il punto sull'assenza di un passaggio di verifica resta valido.
 
 3. **"Storico richieste" è un'unica lista lunga, senza filtri né paginazione.** Con solo
    3 clienti demo e ~40 richieste di test è già scomoda da scorrere; con un banco reale con
@@ -113,11 +119,8 @@ Elencate in ordine di impatto percepito durante il test, non di difficoltà impl
     oggi, valore totale, tempo medio di risposta) aiuterebbe a capire il carico di lavoro
     senza aprire ogni richiesta/ordine singolarmente.
 
-11. **Il modulo di risposta permette sia "sconto concordato cliente" sia "sconto per
-    riga"**, con precedenza dichiarata nel README ma **non visibile nel modulo stesso** —
-    se il banco applica uno sconto riga diverso da quello concordato, non c'è un avviso
-    immediato del tipo "questo sovrascrive lo sconto concordato per questa riga" mentre lo
-    sta scrivendo.
+11. *(rimosso 16/09/2026: il modulo di risposta non ha più campi sconto, il punto non si
+    applica più — vedi README, sezione "Sconti al banco".)*
 
 12. **Il tempo per rispondere è visibile ma non ci sono promemoria**: se il banco non ha
     la scheda aperta, l'unico avviso è la notifica iniziale — nessun secondo avviso (es. a

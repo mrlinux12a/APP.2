@@ -1,6 +1,6 @@
 # Cosa c'è dentro / cosa è volutamente fuori
 
-Aggiornato al 26/08/2026 (vista cliente mobile con richiesta di disponibilità multi-distributore).
+Aggiornato al 16/09/2026 (foto prodotto dai cataloghi PDF fornitore, correzioni al flusso richiesta→ordine).
 
 ## Dentro (oggi funzionante)
 
@@ -11,11 +11,12 @@ Aggiornato al 26/08/2026 (vista cliente mobile con richiesta di disponibilità m
 - **Ricerca parziale**: ogni parola digitata viene cercata anche come frammento dentro nome,
   codice e categoria del prodotto (scrivendo `valv` escono tutte le valvole). Parte mentre si
   digita.
-- **Richiesta di disponibilità ai distributori**: premendo Procedi la richiesta arriva ai
-  rivenditori attivi nella zona del cliente che trattano tutti i prodotti richiesti
-  (AFIS SPA, BOREA SRL, CAMBIELLI SPA nei dati demo).
-- **Finestra di 10 minuti**: il distributore conferma o dichiara il materiale non disponibile.
-  La mancata risposta viene registrata come "non risposta" e **non** vale come disponibilità.
+- **Richiesta di disponibilità ai distributori**: premendo Procedi la richiesta arriva a **tutti**
+  i distributori attivi (AFIS SPA, BOREA SRL, CAMBIELLI SPA nei dati demo) — non più filtrata per
+  zona né per copertura del prodotto.
+- **Finestra di 10 minuti** (configurabile): il distributore accetta tutto al prezzo standard o
+  rifiuta. La mancata risposta viene registrata come "non risposta" e **non** vale come
+  disponibilità.
 - **Schermata di attesa** con countdown, stato per distributore e notifica all'arrivo delle
   risposte (il cliente può chiudere la schermata).
 - **Confronto offerte**: elenco dei distributori che hanno confermato, con tempo di consegna
@@ -31,11 +32,13 @@ Aggiornato al 26/08/2026 (vista cliente mobile con richiesta di disponibilità m
   richieste e gli ordini assegnati a lui.
 
 - **Vista distributore completa** (profili AFIS e CAMBIELLI, più BOREA):
-  - risposta **riga per riga** con disponibilità totale, parziale o rifiuto per indisponibilità;
-  - **partenza ordine stimata** oltre alla consegna stimata, entrambe comunicate al cliente;
+  - risposta con due sole azioni, **accetta tutto** al prezzo standard o **rifiuta**
+    (niente più risposta riga per riga né sconto da questa schermata: partenza e consegna
+    stimata sono valori fissi, 2 e 6 ore, finché non arriva un corriere collegato via API);
   - **anagrafica completa del cliente ordinante** su richiesta e ordine (ragione sociale,
     referente, indirizzo, P. IVA, C.F., SDI/PEC, telefono, email, destinazione merce);
-  - flusso ordine **Da preparare → In preparazione → Partito**.
+  - flusso ordine **Da preparare → In preparazione → Partito**; il cliente può annullare solo
+    finché resta *Da preparare*, e il banco riceve una notifica se lo fa.
 - **Bolla / DDT intestata al cliente**, con numerazione progressiva per distributore e per anno,
   pagina stampabile e link visibile anche al cliente.
 - **Geolocalizzazione in tempo reale con consenso esplicito**, su cliente e distributore, con
@@ -47,13 +50,16 @@ Aggiornato al 26/08/2026 (vista cliente mobile con richiesta di disponibilità m
   contributo RAEE, refrigerante, F-GAS e GWP. La struttura regge quanti marchi si vuole.
 - **Contributo RAEE come voce separata** in riepilogo, ordine e bolla: i listini dichiarano i
   prezzi IVA, trasporto e RAEE esclusi.
-- **Sconti al banco**: riga per riga, o uno sconto unico applicato a tutte le righe e salvabile
-  nell'anagrafica del cliente, oppure accettazione secca al prezzo di richiesta.
+- **Sconti per ambito nell'anagrafica cliente** (`/distributore/clienti`): restano visibili come
+  riferimento quando il banco risponde, ma non più modificabili da lì — vedi README, sezione
+  "Sconti al banco".
 - **Geolocalizzazione su mappa** (Leaflet servito in locale, tasselli OpenStreetMap) in tutte le
   schermate che mostrano una posizione.
 
-- **Registrazione self-service del cliente** con tutti i dati di fatturazione, scelta dei
-  distributori di riferimento e approvazione da parte del banco prima di poter ordinare.
+- **Registrazione self-service del cliente** con tutti i dati di fatturazione e scelta dei
+  distributori di riferimento. L'approvazione del banco (`/distributore/clienti`) esiste come
+  passaggio ma **non è applicata**: un cliente non approvato può comunque inviare richieste,
+  che arrivano a tutti i distributori attivi (vedi README, "Registrazione e approvazione").
 - **Sconti per ambito** concordati dal banco col singolo cliente: linea di prodotto, marchio,
   categoria merceologica o generale, con precedenza dalla regola più precisa.
 - **Punti vendita sulla mappa**: 12 banchi di AFIS, BOREA, CAMBIELLI e FIDRA a Genova, con
@@ -69,13 +75,20 @@ Aggiornato al 26/08/2026 (vista cliente mobile con richiesta di disponibilità m
 - **Riordino in un tocco** dei pezzi ordinati più spesso.
 - **Riepilogo prima di procedere**: la richiesta parte solo dopo conferma esplicita.
 - **Ordine minimo di € 33** di merce più € 10 di spedizione che non fa soglia.
-- **Finestra di 5 minuti** per scegliere fra più offerte; scaduta, l'ordine va da solo al
-  distributore con la consegna stimata più veloce (partenza dichiarata + tragitto).
+- **Finestra per scegliere fra più offerte**: parte alla prima conferma e si allunga a ogni
+  nuova conferma (mai si accorcia); scaduta (o dopo 15 minuti di tolleranza se nessuno la
+  assegna nel frattempo), l'ordine va da solo a chi copre **tutto** il materiale con la
+  consegna stimata più veloce — se nessuno copre tutto, vince comunque il più veloce. Oltre la
+  tolleranza le offerte decadono senza creare un ordine.
 - **Centro notifiche raggruppato** per Ordini / Richieste / Approvazioni con sottostati;
   una richiesta confermata diventa un ordine e si sposta nella categoria Ordini.
 - **Sconti a scalare su 5 colonne** (40+10+5 = 48,7%) per marchio, categoria e linea.
 - **Sessioni su database**: un riavvio del server non scollega più nessuno.
 - **Menu account** in alto a destra, con dentro l'uscita.
+- **Foto prodotto**: vetrina trasversale `/con-foto`, si popola da sola dai prodotti con
+  `foto_url` valorizzata. 6.118 prodotti con foto: 826 Effebi (import manuale) + 5.292 estratti
+  dai listini PDF di Caleffi, Wavin, Grohe, Giacomini e Fischer (Ariston escluso, layout non
+  affidabile; RBM in attesa di iscrizione al portale fornitore).
 
 ## Da costruire (prossimi passi)
 

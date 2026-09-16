@@ -10,7 +10,7 @@
     <% if (!currentUser || currentUser.ruolo !== 'cliente') { %>
       <a class="icona-btn" href="/notifiche" aria-label="Notifiche">
         <%- iconaNotifiche %>
-        <% if (notificheNonLette > 0) { %><span class="pallino"><%= notificheNonLette %></span><% } %>
+        <% if (typeof notificheNonLette !== 'undefined' && notificheNonLette > 0) { %><span class="pallino"><%= notificheNonLette %></span><% } %>
       </a>
     <% } %>
 
