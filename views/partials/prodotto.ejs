@@ -11,7 +11,7 @@
       <% if (p.brand_nome) { %><span class="marchio-tag" style="--marchio:<%= p.brand_colore %>"><%= p.brand_nome %></span><% } %>
       <%= p.nome %>
     </div>
-    <% if (p.varianti && p.varianti.length > 8) { %>
+    <% if (p.varianti && p.varianti.length >= 3) { %>
       <select class="selettore-variante" data-selettore-variante aria-label="Misura di <%= p.nome %>">
         <% p.varianti.forEach(function (v) { %>
           <option value="<%= v.id %>" <%= v.id === p.id ? 'selected' : '' %>><%= v.etichetta %></option>

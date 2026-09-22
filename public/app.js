@@ -222,9 +222,9 @@
     );
   }
 
-  // Oltre questa soglia una riga di chip diventa una striscia troppo lunga da scorrere:
-  // si passa a un menu a tendina, più compatto e più veloce da usare con tante misure.
-  const SOGLIA_CHIP = 8;
+  // Con 2 varianti bastano due chip affiancati; da 3 in su si passa al menu a tendina,
+  // più compatto e più veloce da usare (deve restare uguale a views/partials/prodotto.ejs).
+  const SOGLIA_CHIP = 2;
 
   function cardProdottoHtml(p) {
     const barrato = p.sconto_base_pct > 0
