@@ -330,7 +330,6 @@ ALTER TABLE macro_categorie ADD COLUMN IF NOT EXISTS in_evidenza INTEGER NOT NUL
 ALTER TABLE users ADD COLUMN IF NOT EXISTS tipo_soggetto TEXT NOT NULL DEFAULT 'impresa';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS stato_anagrafica TEXT NOT NULL DEFAULT 'attivo';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS iscritto_il TIMESTAMP;
-ALTER TABLE products ADD COLUMN IF NOT EXISTS sottocategoria TEXT NOT NULL DEFAULT '';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS geo_lat_consegna DOUBLE PRECISION;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS geo_lng_consegna DOUBLE PRECISION;
 ALTER TABLE client_discount_rules ADD COLUMN IF NOT EXISTS sconto1 DOUBLE PRECISION;
@@ -388,7 +387,6 @@ ALTER TABLE distributors ADD COLUMN IF NOT EXISTS ricezione_attiva INTEGER NOT N
 -- ---------------------------------------------------------------------------------
 CREATE INDEX IF NOT EXISTS idx_products_macro_attivo ON products(macro_slug, attivo);
 CREATE INDEX IF NOT EXISTS idx_products_brand_attivo ON products(brand_slug, attivo);
-CREATE INDEX IF NOT EXISTS idx_products_sottocategoria ON products(sottocategoria);
 CREATE INDEX IF NOT EXISTS idx_products_misura ON products(misura);
 CREATE INDEX IF NOT EXISTS idx_orders_distributor_stato ON orders(distributor_id, stato);
 CREATE INDEX IF NOT EXISTS idx_request_responses_distributor ON request_responses(distributor_id, esito);
@@ -423,3 +421,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_requests_cliente_aperta ON requests(client
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE INDEX IF NOT EXISTS idx_products_nome_trgm ON products USING GIN (LOWER(nome) gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_products_codice_trgm ON products USING GIN (LOWER(codice) gin_trgm_ops);
+
+-- sottocategoria era una singola colonna testo: non può rappresentare un prodotto a
+-- cavallo di due sottocategorie (caso reale, gestito assegnando entrambe). Sostituita da
+-- questa relazione molti-a-molti — la colonna non era mai stata popolata, nessun dato
+-- perso nel passaggio. Vedi scripts/assegna_sottocategorie.js per il popolamento.
+ALTER TABLE products DROP COLUMN IF EXISTS sottocategoria;
+
+CREATE TABLE IF NOT EXISTS product_sottocategorie (
+  product_id INTEGER NOT NULL REFERENCES products(id),
+  macro_slug TEXT NOT NULL,
+  sottocategoria_slug TEXT NOT NULL,
+  PRIMARY KEY (product_id, macro_slug, sottocategoria_slug)
+);
+CREATE INDEX IF NOT EXISTS idx_product_sottocat_lookup ON product_sottocategorie(macro_slug, sottocategoria_slug);

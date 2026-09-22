@@ -224,7 +224,7 @@ async function cercaProdotti(
     params.push(famiglia);
   }
   if (sotto) {
-    where.push('p.sottocategoria = ?');
+    where.push('EXISTS (SELECT 1 FROM product_sottocategorie ps WHERE ps.product_id = p.id AND ps.sottocategoria_slug = ?)');
     params.push(sotto);
   }
   if (misura) {
@@ -341,7 +341,8 @@ async function sottocategorieDi(macroSlug) {
   const rows = await db
     .prepare(
       `SELECT s.*, (SELECT COUNT(*) FROM products p
-                     WHERE p.macro_slug = s.macro_slug AND p.sottocategoria = s.slug AND p.attivo = 1) AS n
+                     JOIN product_sottocategorie ps ON ps.product_id = p.id
+                     WHERE ps.macro_slug = s.macro_slug AND ps.sottocategoria_slug = s.slug AND p.attivo = 1) AS n
          FROM sottocategorie s
         WHERE s.macro_slug = ?
         ORDER BY s.ordine, s.nome`
@@ -366,7 +367,7 @@ async function misureDisponibili({ macroSlug = null, sotto = null, brandSlug = n
     params.push(macroSlug);
   }
   if (sotto) {
-    where.push('p.sottocategoria = ?');
+    where.push('EXISTS (SELECT 1 FROM product_sottocategorie ps WHERE ps.product_id = p.id AND ps.sottocategoria_slug = ?)');
     params.push(sotto);
   }
   if (brandSlug) {
@@ -394,7 +395,7 @@ async function marchiNellaCategoria({ macroSlug = null, sotto = null } = {}) {
     params.push(macroSlug);
   }
   if (sotto) {
-    where.push('p.sottocategoria = ?');
+    where.push('EXISTS (SELECT 1 FROM product_sottocategorie ps WHERE ps.product_id = p.id AND ps.sottocategoria_slug = ?)');
     params.push(sotto);
   }
   return db
@@ -451,7 +452,7 @@ async function prodottiDellaCategoria(
   const where = ['p.attivo = 1', 'p.macro_slug = ?'];
   const params = [macroSlug];
   if (sotto) {
-    where.push('p.sottocategoria = ?');
+    where.push('EXISTS (SELECT 1 FROM product_sottocategorie ps WHERE ps.product_id = p.id AND ps.sottocategoria_slug = ?)');
     params.push(sotto);
   }
   if (misura) {

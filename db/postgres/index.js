@@ -34,7 +34,7 @@ function esecutore() {
 
 // Tabelle senza colonna "id" (chiave primaria naturale): un INSERT su queste tabelle
 // non può chiedere "RETURNING id", altrimenti Postgres dà errore "column id does not exist".
-const TABELLE_SENZA_ID = new Set(['session', 'config', 'macro_categorie', 'brands', 'ddt_counters']);
+const TABELLE_SENZA_ID = new Set(['session', 'config', 'macro_categorie', 'brands', 'ddt_counters', 'product_sottocategorie']);
 
 function tabellaInsert(sql) {
   const m = sql.match(/^\s*INSERT INTO\s+"?(\w+)"?/i);
