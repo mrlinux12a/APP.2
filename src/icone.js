@@ -236,6 +236,7 @@ const iconaAvviso = svg(
 const iconaChiudi = svg('<path d="M6 6l12 12M18 6 6 18"/>');
 
 module.exports = {
+  ICONE_CATEGORIA: ICONE, // letto da scripts/genera_icone_app.js per l'app nativa
   iconaCategoria,
   iconaLente,
   iconaCatalogo,

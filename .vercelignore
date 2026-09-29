@@ -1,0 +1,2 @@
+# L'app nativa (Expo) non fa parte del sito: si compila con EAS, non su Vercel.
+mobile/

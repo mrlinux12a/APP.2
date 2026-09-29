@@ -435,3 +435,17 @@ CREATE TABLE IF NOT EXISTS product_sottocategorie (
   PRIMARY KEY (product_id, macro_slug, sottocategoria_slug)
 );
 CREATE INDEX IF NOT EXISTS idx_product_sottocat_lookup ON product_sottocategorie(macro_slug, sottocategoria_slug);
+
+-- Accessi dell'app nativa (src/token_app.js): il telefono conserva il token, qui ne resta
+-- solo l'hash. revocato_il si imposta al logout dall'app; un token non usato da 60 giorni
+-- smette comunque di valere (controllo sulla data di usato_il, nessuna pulizia necessaria).
+CREATE TABLE IF NOT EXISTS app_tokens (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  token_hash TEXT NOT NULL UNIQUE,
+  dispositivo TEXT,
+  creato_il TIMESTAMP NOT NULL DEFAULT NOW(),
+  usato_il TIMESTAMP NOT NULL DEFAULT NOW(),
+  revocato_il TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_app_tokens_user ON app_tokens(user_id);

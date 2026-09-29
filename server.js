@@ -34,7 +34,11 @@ const ddt = require('./src/ddt');
 const geo = require('./src/geo');
 const anagrafiche = require('./src/anagrafiche');
 const consegna = require('./src/consegna');
+const flusso = require('./src/flusso_cliente');
 const { ArchivioSqlite } = require('./src/sessioni');
+const { TESTO_DISPONIBILITA, prodottoJson } = require('./src/prodotto_json');
+const { chiaveLogin, loginBloccato, registraTentativoFallito, azzeraTentativi } = require('./src/limite_login');
+const apiV1 = require('./src/api_v1');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -70,6 +74,12 @@ app.set('views', path.join(__dirname, 'views'));
 app.set('trust proxy', 1);
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+
+// API dell'app nativa: autenticazione con token (Authorization: Bearer), niente cookie.
+// Montata prima del controllo di origine, della sessione e del middleware che prepara i
+// dati delle viste: nessuno dei tre serve (né vale) per richieste che non vengono da un
+// browser e non portano credenziali "ambientali" sfruttabili da un sito terzo.
+app.use('/api/v1', apiV1);
 
 // Difesa in profondità contro il CSRF, in aggiunta al cookie di sessione già impostato
 // con sameSite:'lax' (che da solo blocca già la maggior parte degli invii cross-site):
@@ -282,41 +292,12 @@ app.get('/profilo', requireRole('cliente'), async (req, res) => {
   });
 });
 
-// Limite tentativi di login: senza, le credenziali si potevano provare senza alcun
-// limite (brute force / credential stuffing). In memoria di processo — su un'unica
-// istanza è sufficiente; non sopravvive a un riavvio né si condivide fra più istanze,
-// ma è già una barriera concreta dove prima non c'era nulla.
-const tentativiLogin = new Map(); // chiave "ip|utente" -> { conteggio, dal }
-const FINESTRA_LOGIN_MS = 10 * 60 * 1000;
-const MAX_TENTATIVI_LOGIN = 8;
-
-function loginBloccato(chiave) {
-  const voce = tentativiLogin.get(chiave);
-  if (!voce) return false;
-  if (Date.now() - voce.dal > FINESTRA_LOGIN_MS) {
-    tentativiLogin.delete(chiave);
-    return false;
-  }
-  return voce.conteggio >= MAX_TENTATIVI_LOGIN;
-}
-function registraTentativoFallito(chiave) {
-  const voce = tentativiLogin.get(chiave) || { conteggio: 0, dal: Date.now() };
-  voce.conteggio += 1;
-  tentativiLogin.set(chiave, voce);
-}
-setInterval(() => {
-  const ora = Date.now();
-  for (const [chiave, voce] of tentativiLogin) {
-    if (ora - voce.dal > FINESTRA_LOGIN_MS) tentativiLogin.delete(chiave);
-  }
-}, FINESTRA_LOGIN_MS).unref();
-
 app.post('/login', async (req, res) => {
   // Uno spazio digitato per sbaglio (specie a fine nome, su telefono con autocorrezione)
   // non deve far fallire l'accesso: il nome utente si confronta sempre già "ripulito".
   const username = String(req.body.username || '').trim();
   const { password } = req.body;
-  const chiave = req.ip + '|' + username.toLowerCase();
+  const chiave = chiaveLogin(req, username);
 
   if (loginBloccato(chiave)) {
     return res.status(429).render('login', { errore: 'Troppi tentativi non riusciti. Riprova tra qualche minuto.' });
@@ -327,7 +308,7 @@ app.post('/login', async (req, res) => {
     registraTentativoFallito(chiave);
     return res.render('login', { errore: 'Credenziali non valide.' });
   }
-  tentativiLogin.delete(chiave);
+  azzeraTentativi(chiave);
   req.session.user = {
     id: user.id,
     ruolo: user.ruolo,
@@ -346,12 +327,11 @@ app.post('/logout', async (req, res) => {
 // ---------- Cliente: home, ricerca, categorie ----------
 
 app.get('/home', requireRole('cliente'), async (req, res) => {
-  res.render('home', {
-    titolo: 'Ordini Minuteria',
-    inEvidenza: await catalogo.categorieInEvidenza(),
-    altre: await catalogo.altreCategorie(),
-    prodottiConFotoConta: await catalogo.contaProdottiConFoto(),
-  });
+  const [{ inEvidenza, altre }, prodottiConFotoConta] = await Promise.all([
+    catalogo.categorieHome(),
+    catalogo.contaProdottiConFoto(),
+  ]);
+  res.render('home', { titolo: 'Ordini Minuteria', inEvidenza, altre, prodottiConFotoConta });
 });
 
 app.get('/cerca', requireRole('cliente'), async (req, res) => {
@@ -368,44 +348,6 @@ app.get('/cerca', requireRole('cliente'), async (req, res) => {
     carrello: getCarrello(req),
   });
 });
-
-const TESTO_DISPONIBILITA = {
-  disponibile: 'Disponibile',
-  in_esaurimento: 'In esaurimento',
-  non_disponibile: 'Non disponibile',
-};
-
-// Un prodotto di catalogo nel formato JSON usato dalla ricerca live e dallo scroll
-// infinito: la percentuale di servizio si passa già calcolata (una volta per richiesta).
-function prodottoJson(p, servizioPct) {
-  return {
-    id: p.id,
-    codice: p.codice,
-    nome: p.nome,
-    macro_nome: p.macro_nome,
-    brand_nome: p.brand_nome,
-    brand_colore: p.brand_colore,
-    foto_url: p.foto_url || null,
-    raee: p.raee > 0 ? pricing.euro(p.raee) : null,
-    disponibilita: p.disponibilita,
-    disponibilita_testo: TESTO_DISPONIBILITA[p.disponibilita] || p.disponibilita,
-    sconto_base_pct: p.sconto_base_pct,
-    listino: pricing.euro(p.prezzo_listino),
-    prezzo: pricing.euro(pricing.prezzoClienteConPct(p, servizioPct)),
-    varianti: p.varianti
-      ? p.varianti.map((v) => ({
-          id: v.id,
-          etichetta: v.etichetta,
-          codice: v.codice,
-          disponibilita: v.disponibilita,
-          disponibilita_testo: TESTO_DISPONIBILITA[v.disponibilita] || v.disponibilita,
-          raee: v.raee > 0 ? pricing.euro(v.raee) : null,
-          listino: pricing.euro(v.prezzo_listino),
-          prezzo: pricing.euro(pricing.prezzoClienteConPct(v, servizioPct)),
-        }))
-      : null,
-  };
-}
 
 // Ricerca mentre si digita: stessa logica parziale della pagina /cerca.
 app.get('/api/cerca', requireRole('cliente'), async (req, res) => {
@@ -663,124 +605,45 @@ app.post('/carrello/svuota', requireRole('cliente'), async (req, res) => {
 // "Conferma e chiedi disponibilità": manda la richiesta ai distributori e apre l'attesa.
 // Dal carrello arrivano le quantità visibili in pagina (modo 'imposta'): anche quelle
 // scritte a mano e mai salvate, che prima andavano perse e la richiesta partiva con le vecchie.
+// La logica del flusso (qui e nelle route sotto) sta in src/flusso_cliente.js, condivisa
+// con l'API dell'app.
 app.post('/richieste', requireRole('cliente'), async (req, res) => {
-  aggiornaCarrelloDaForm(req, req.body.modo === 'imposta' ? 'imposta' : 'aggiungi');
-  return inviaRichiesta(req, res);
-});
-
-// Un solo processo di richiesta alla volta: non se ne può inviare una nuova finché una
-// precedente dello stesso cliente è ancora in attesa di risposta o da scegliere. Un ordine
-// già confermato (in consegna) invece non blocca: la nuova richiesta prende il suo posto in
-// "Stato ordini". Ritorna la richiesta bloccante (aggiornata) se ce n'è una, altrimenti null.
-async function richiestaBloccante(clienteId) {
-  const aperta = await db
-    .prepare(
-      `SELECT id FROM requests WHERE cliente_id = ? AND stato IN ('in_attesa','con_offerte') ORDER BY id DESC LIMIT 1`
-    )
-    .get(clienteId);
-  if (!aperta) return null;
-  const aggiornata = await richieste.aggiornaScadenza(aperta.id);
-  if (aggiornata && (aggiornata.stato === 'in_attesa' || aggiornata.stato === 'con_offerte')) return aggiornata;
-  return null;
-}
-
-async function inviaRichiesta(req, res) {
-  const righe = await righeCarrello(req);
-
-  // L'ordine minimo si misura sulla merce già maggiorata, spedizione esclusa.
-  const totali = await pricing.calcolaOrdine(righe);
-  const minimo = await pricing.getOrdineMinimo();
-  if (righe.length && totali.totale_finale < minimo) {
-    return res.status(400).render('errore', {
-      titolo: 'Ordine minimo non raggiunto',
-      messaggio: `L'ordine minimo è di € ${pricing.euro(minimo)} di merce (IVA esclusa). Ti mancano € ${pricing.euro(minimo - totali.totale_finale)}.`,
-      link: '/carrello',
-      linkTesto: 'Torna al riepilogo',
-    });
-  }
-
-  if (!righe.length) {
-    return res.status(400).render('errore', {
-      titolo: 'Nessun materiale',
-      messaggio: 'Seleziona almeno un prodotto prima di procedere.',
-      link: '/home',
-      linkTesto: 'Torna alla home',
-    });
-  }
-
-  const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
-
-  const bloccante = await richiestaBloccante(cliente.id);
-  if (bloccante) {
-    return res.status(400).render('errore', {
-      titolo: 'Richiesta già in corso',
-      messaggio: 'Hai già una richiesta in attesa di risposta o da scegliere: aspetta che si chiuda prima di inviarne un\'altra.',
-      link: '/richieste/' + bloccante.id,
-      linkTesto: 'Apri la richiesta in corso',
-    });
-  }
-
+  aggiornaCarrelloDaForm(req, req.body && req.body.modo === 'imposta' ? 'imposta' : 'aggiungi');
   let requestId;
   try {
-    ({ requestId } = await richieste.creaRichiesta(cliente, righe));
+    requestId = await flusso.nuovaRichiesta(req.session.user.id, await righeCarrello(req));
   } catch (e) {
-    // 23505 = violazione del vincolo unico che ammette una sola richiesta aperta per
-    // cliente (vedi schema.sql, idx_requests_cliente_aperta): un doppio tap sullo stesso
-    // invio può far passare entrambe le chiamate oltre il controllo di richiestaBloccante
-    // qui sopra (è una lettura-poi-scrittura, non atomica) prima che la seconda arrivi
-    // all'INSERT — a quel punto è il DB stesso a fermarla. Portiamo comunque il cliente
-    // sulla richiesta che è realmente stata creata, invece di un errore 500.
-    if (e && e.code === '23505') {
-      const bloccante2 = await richiestaBloccante(cliente.id);
-      if (bloccante2) return res.redirect('/richieste/' + bloccante2.id);
-    }
-    throw e;
+    if (!(e instanceof flusso.ErroreFlusso)) throw e;
+    const link =
+      e.codice === 'in_corso'
+        ? { link: '/richieste/' + e.requestId, linkTesto: 'Apri la richiesta in corso' }
+        : e.codice === 'vuota'
+          ? { link: '/home', linkTesto: 'Torna alla home' }
+          : { link: '/carrello', linkTesto: 'Torna al riepilogo' };
+    return res.status(400).render('errore', { titolo: e.titolo, messaggio: e.message, ...link });
   }
   req.session.carrello = {};
   res.redirect('/richieste/' + requestId);
-}
+});
 
 app.get('/richieste/:id', requireRole('cliente'), async (req, res) => {
   const richiesta = await richieste.aggiornaScadenza(req.params.id);
   if (!richiesta || richiesta.cliente_id !== req.session.user.id) {
     return res.status(404).render('errore', { titolo: 'Non trovata', messaggio: 'Richiesta non trovata.' });
   }
-  // Il cliente sta già guardando questa richiesta (schermata di attesa/offerte, che si
-  // auto-aggiorna): il cambio di stato non deve anche accendere il pallino in basso.
-  // res.locals.ordiniNonLetti è già stato calcolato dal middleware prima di questa route:
-  // va rifatto qui, altrimenti questa stessa risposta renderizzerebbe ancora il conteggio
-  // vecchio (da prima di aver segnato come lette le notifiche).
-  await notifiche.segnaLetteCategoria(req.session.user.id, 'richieste');
-  await notifiche.segnaLetteCategoria(req.session.user.id, 'ordini');
-  res.locals.ordiniNonLetti = 0;
   if (richiesta.stato === 'ordinata' && richiesta.order_id) {
     return res.redirect('/ordini/' + richiesta.order_id);
   }
-
-  const dati = {
-    titolo: 'Richiesta #' + richiesta.id,
-    richiesta,
-    righe: await richieste.righeRichiesta(richiesta.id),
-    risposte: await richieste.risposteRichiesta(richiesta.id),
-    secondi: await richieste.secondiRimasti(richiesta),
-    minutiRisposta: await pricing.getFinestraMinuti(),
-  };
-
-  if (richiesta.stato === 'in_attesa') return res.render('richiesta_attesa', dati);
-
-  const offerte = await richieste.offerte(richiesta.id);
-  const piuVeloce = await richieste.offertaPiuVeloce(richiesta.id);
-  const perAssegnazione = await richieste.offertaPerAssegnazione(richiesta.id);
-  return res.render('richiesta_offerte', {
-    ...dati,
-    offerte,
-    // Il conto alla rovescia vale anche con UNA sola offerta: prima compariva solo con due
-    // o più, ma l'ordine automatico partiva comunque e il cliente non ne sapeva niente.
-    secondiScelta: offerte.length ? await richieste.secondiAllAssegnazione(richiesta) : null,
-    nomeAssegnazione: perAssegnazione ? perAssegnazione.distributore_nome : null,
-    idPiuVeloce: piuVeloce ? piuVeloce.distributor_id : null,
-    consegna,
-  });
+  // Il cliente sta già guardando questa richiesta (schermata di attesa/offerte, che si
+  // auto-aggiorna): il cambio di stato non deve anche accendere il pallino in basso.
+  // dettaglioRichiesta segna lette le notifiche, ma res.locals.ordiniNonLetti è già stato
+  // calcolato dal middleware prima di questa route: va azzerato qui, altrimenti questa
+  // stessa risposta renderizzerebbe ancora il conteggio vecchio.
+  const dati = await flusso.dettaglioRichiesta(richiesta);
+  res.locals.ordiniNonLetti = 0;
+  const vista = { titolo: 'Richiesta #' + richiesta.id, ...dati };
+  if (richiesta.stato === 'in_attesa') return res.render('richiesta_attesa', vista);
+  return res.render('richiesta_offerte', { ...vista, consegna });
 });
 
 // Stato della richiesta per la schermata di attesa (polling + notifica push del browser).
@@ -801,35 +664,14 @@ app.get('/api/richieste/:id', requireRole('cliente'), async (req, res) => {
 app.post('/richieste/:id/annulla', requireRole('cliente'), async (req, res) => {
   const richiesta = await richieste.getRichiesta(req.params.id);
   if (!richiesta || richiesta.cliente_id !== req.session.user.id) return res.redirect('/ordini');
-  // Condizione dentro la UPDATE: se l'ordine automatico è partito un istante prima,
-  // l'annullamento non deve sovrascrivere 'ordinata' lasciando un ordine vivo su una
-  // richiesta che il cliente crede annullata.
-  const upd = await db
-    .prepare(`UPDATE requests SET stato = 'annullata' WHERE id = ? AND stato IN ('in_attesa', 'con_offerte', 'nessuna_offerta')`)
-    .run(richiesta.id);
-  if (!upd.changes) return res.redirect('/richieste/' + richiesta.id);
-  // Chiude anche le risposte ancora "in attesa" dal lato banco: altrimenti la
-  // richiesta annullata dal cliente resta a intasare la dashboard dei distributori
-  // come se ci fosse ancora qualcosa da confermare.
-  await db.prepare(
-    `UPDATE request_responses SET esito = 'scaduto' WHERE request_id = ? AND esito = 'in_attesa'`
-  ).run(richiesta.id);
+  if (!(await flusso.annullaRichiesta(richiesta.id))) return res.redirect('/richieste/' + richiesta.id);
   res.redirect('/ordini');
 });
 
-// Nessuno ha confermato entro la finestra: riapre la STESSA richiesta (stesso id, per
-// distributori e installatore) con una finestra fresca, invece di crearne una nuova — così
-// resta un riferimento unico nel tempo, utile per pagamenti o altro.
 app.post('/richieste/:id/reinvia', requireRole('cliente'), async (req, res) => {
   const richiesta = await richieste.getRichiesta(req.params.id);
   if (!richiesta || richiesta.cliente_id !== req.session.user.id) return res.redirect('/ordini');
-  if (richiesta.stato !== 'nessuna_offerta') return res.redirect('/richieste/' + richiesta.id);
-
-  const bloccante = await richiestaBloccante(richiesta.cliente_id);
-  if (bloccante) return res.redirect('/richieste/' + bloccante.id);
-
-  await richieste.reinviaRichiesta(richiesta.id);
-  res.redirect('/richieste/' + richiesta.id);
+  res.redirect('/richieste/' + (await flusso.reinviaRichiesta(richiesta)));
 });
 
 // Elimina richiesta (cliente) — globale: sparisce anche per tutti i distributori (da confermare + storico)
@@ -838,51 +680,14 @@ app.post('/richieste/:id/elimina', requireRole('cliente'), async (req, res) => {
   if (!richiesta || richiesta.cliente_id !== req.session.user.id) {
     return res.status(404).render('errore', { titolo: 'Non trovata', messaggio: 'Richiesta non trovata.' });
   }
-  const elimina = db.transaction(async () => {
-    // Righe bloccate fino alla fine: un ordine creato o preso in carico nel frattempo non
-    // può più essere cancellato "sotto" al distributore.
-    const attuale = await db.prepare('SELECT order_id FROM requests WHERE id = ? FOR UPDATE').get(richiesta.id);
-    if (!attuale) return null;
-    let ordineEliminato = null;
-    if (attuale.order_id) {
-      const ordine = await db.prepare('SELECT * FROM orders WHERE id = ? FOR UPDATE').get(attuale.order_id);
-      if (ordine && !ordineAnnullabileDalCliente(ordine)) throw new OrdineInLavorazione(ordine);
-      await db.prepare('UPDATE requests SET order_id = NULL WHERE id = ?').run(richiesta.id);
-      await db.prepare('DELETE FROM order_items WHERE order_id = ?').run(attuale.order_id);
-      await db.prepare('DELETE FROM orders WHERE id = ?').run(attuale.order_id);
-      ordineEliminato = ordine;
-    }
-    const rows = await db.prepare('SELECT id FROM request_responses WHERE request_id = ?').all(richiesta.id);
-    const rids = rows.map(r => r.id);
-    for (const rid of rids) await db.prepare('DELETE FROM request_response_items WHERE response_id = ?').run(rid);
-    await db.prepare('DELETE FROM request_responses WHERE request_id = ?').run(richiesta.id);
-    await db.prepare('DELETE FROM request_items WHERE request_id = ?').run(richiesta.id);
-    await db.prepare('DELETE FROM requests WHERE id = ?').run(richiesta.id);
-    return ordineEliminato;
-  });
-  let ordineEliminato;
   try {
-    ordineEliminato = await elimina();
+    await flusso.eliminaRichiesta(richiesta.id);
   } catch (e) {
-    if (e instanceof OrdineInLavorazione) return rifiutaEliminazioneOrdine(res, e.ordine);
+    if (e instanceof flusso.OrdineInLavorazione) return rifiutaEliminazioneOrdine(res, e.ordine);
     throw e;
   }
-  if (ordineEliminato) await avvisaOrdineAnnullato(ordineEliminato);
   res.redirect('/home');
 });
-
-// Il cliente può togliere un ordine solo finché il banco non l'ha preso in carico: dopo, la
-// merce è in preparazione o partita e cancellarlo lo farebbe sparire anche al distributore.
-function ordineAnnullabileDalCliente(ordine) {
-  return ordine.stato === 'inviato';
-}
-
-class OrdineInLavorazione extends Error {
-  constructor(ordine) {
-    super('ordine già preso in carico');
-    this.ordine = ordine;
-  }
-}
 
 function rifiutaEliminazioneOrdine(res, ordine) {
   return res.status(400).render('errore', {
@@ -890,17 +695,6 @@ function rifiutaEliminazioneOrdine(res, ordine) {
     messaggio: 'Il distributore ha già preso in carico questo ordine: per annullarlo contattalo direttamente.',
     link: '/ordini/' + ordine.id,
     linkTesto: "Torna all'ordine",
-  });
-}
-
-async function avvisaOrdineAnnullato(ordine) {
-  if (!ordine.distributor_id) return;
-  const cliente = await db.prepare('SELECT ragione_sociale FROM users WHERE id = ?').get(ordine.cliente_id);
-  await notifiche.notificaDistributore(ordine.distributor_id, {
-    titolo: 'Ordine annullato dal cliente',
-    testo: `${cliente ? cliente.ragione_sociale : 'Il cliente'} ha annullato l'ordine #${ordine.id} prima della presa in carico.`,
-    link: '/distributore',
-    categoria: 'ordini',
   });
 }
 
@@ -934,12 +728,10 @@ app.get('/richieste/:id/offerta/:distributorId', requireRole('cliente'), async (
   // Solo da una richiesta con offerte aperte: da una annullata o scaduta si arrivava comunque
   // al riepilogo e si poteva chiudere un ordine (la pagina offerte mostrava ancora le card).
   if (richiesta.stato !== 'con_offerte') return res.redirect('/richieste/' + richiesta.id);
-  const risposta = await db
-    .prepare(
-      `SELECT * FROM request_responses WHERE request_id = ? AND distributor_id = ? AND esito = 'confermato'`
-    )
-    .get(richiesta.id, req.params.distributorId);
-  if (!risposta) {
+
+  const modalita = req.query.modalita === 'ritiro' ? 'ritiro' : 'consegna_mezzo_grossista';
+  const riepilogo = await flusso.riepilogoOfferta(richiesta, req.params.distributorId, modalita);
+  if (!riepilogo) {
     return res.status(404).render('errore', {
       titolo: 'Offerta non valida',
       messaggio: 'Questo distributore non ha confermato la disponibilità.',
@@ -948,23 +740,12 @@ app.get('/richieste/:id/offerta/:distributorId', requireRole('cliente'), async (
     });
   }
 
-  const modalita = req.query.modalita === 'ritiro' ? 'ritiro' : 'consegna_mezzo_grossista';
-  const offerta = await richieste.calcolaOfferta(richiesta.id, req.params.distributorId, { modalita });
-  const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
-  const perAssegnazione = await richieste.offertaPerAssegnazione(richiesta.id);
-
   res.render('riepilogo', {
     titolo: "Riepilogo dell'ordine",
     richiesta,
-    risposta,
-    offerta,
     modalita,
-    cliente,
-    ivaPct: await pricing.getIvaPct(),
-    // Anche qui il cliente deve vedere quanto manca all'ordine automatico: mentre compila
-    // note e destinazione il tempo corre.
-    secondiScelta: await richieste.secondiAllAssegnazione(richiesta),
-    nomeAssegnazione: perAssegnazione ? perAssegnazione.distributore_nome : null,
+    cliente: await db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id),
+    ...riepilogo,
   });
 });
 
@@ -975,26 +756,15 @@ app.post('/ordini', requireRole('cliente'), async (req, res) => {
   if (!richiesta || richiesta.cliente_id !== req.session.user.id) {
     return res.status(404).render('errore', { titolo: 'Non trovata', messaggio: 'Richiesta non trovata.' });
   }
-  if (richiesta.stato === 'ordinata') return rispostaGiaOrdinata(res, richiesta);
-  if (!(await richieste.sceltaAncoraValida(richiesta.id))) {
-    return res.status(400).render('errore', {
-      titolo: 'Richiesta non più aperta',
-      messaggio:
-        richiesta.stato === 'annullata'
-          ? 'Hai annullato questa richiesta: non si può più ordinare da qui.'
-          : 'Le offerte di questa richiesta sono scadute: puoi reinviarla per avere conferme aggiornate.',
-      link: '/richieste/' + richiesta.id,
-      linkTesto: 'Apri la richiesta',
-    });
-  }
 
-  const distributorId = parseInt(req.body.distributor_id, 10);
-  const risposta = await db
-    .prepare(
-      `SELECT * FROM request_responses WHERE request_id = ? AND distributor_id = ? AND esito = 'confermato'`
-    )
-    .get(richiesta.id, distributorId);
-  if (!risposta) {
+  const esito = await flusso.ordinaDaOfferta(richiesta, parseInt(req.body.distributor_id, 10), {
+    modalita: req.body.modalita,
+    note: req.body.note,
+    destinazione: req.body.destinazione,
+  });
+  if (esito.esito === 'creato') return res.redirect('/ordini/' + esito.orderId + '?nuovo=1');
+  if (esito.esito === 'gia_ordinata') return rispostaGiaOrdinata(res, esito.richiesta);
+  if (esito.esito === 'offerta_non_valida') {
     return res.status(400).render('errore', {
       titolo: 'Offerta non valida',
       messaggio: 'Questo distributore non ha confermato la disponibilità.',
@@ -1002,21 +772,15 @@ app.post('/ordini', requireRole('cliente'), async (req, res) => {
       linkTesto: 'Torna alle offerte',
     });
   }
-
-  const orderId = await creaOrdineDaOfferta(richiesta, distributorId, risposta, {
-    modalita: req.body.modalita,
-    note: req.body.note,
-    destinazione: req.body.destinazione,
+  return res.status(400).render('errore', {
+    titolo: 'Richiesta non più aperta',
+    messaggio:
+      esito.richiesta.stato === 'annullata'
+        ? 'Hai annullato questa richiesta: non si può più ordinare da qui.'
+        : 'Le offerte di questa richiesta sono scadute: puoi reinviarla per avere conferme aggiornate.',
+    link: '/richieste/' + richiesta.id,
+    linkTesto: 'Apri la richiesta',
   });
-  if (orderId === null) {
-    // Un'altra chiamata concorrente ha chiuso questa richiesta un istante prima (doppio
-    // tap sullo stesso "Invia l'ordine", o l'assegnazione automatica scattata nello stesso
-    // momento): non è stato creato un secondo ordine duplicato.
-    const aggiornata = await richieste.getRichiesta(richiesta.id);
-    if (aggiornata && aggiornata.stato === 'ordinata') return rispostaGiaOrdinata(res, aggiornata);
-    return res.redirect('/richieste/' + richiesta.id);
-  }
-  res.redirect('/ordini/' + orderId + '?nuovo=1');
 });
 
 // "Invia l'ordine" su una richiesta già chiusa. Se l'ha chiusa l'ordine automatico il
@@ -1035,234 +799,17 @@ function rispostaGiaOrdinata(res, richiesta) {
   });
 }
 
-// Creazione dell'ordine a partire da un'offerta confermata: la usano sia la scelta
-// manuale del cliente sia l'assegnazione automatica allo scadere dei 5 minuti.
-async function creaOrdineDaOfferta(richiesta, distributorId, risposta, opzioni = {}) {
-  const modalita = opzioni.modalita === 'ritiro' ? 'ritiro' : 'consegna_mezzo_grossista';
-  const note = (opzioni.note || '').trim();
-  const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(richiesta.cliente_id);
-  const destinazione =
-    modalita === 'ritiro'
-      ? 'Ritiro al banco'
-      : (opzioni.destinazione || '').trim() || cliente.indirizzo_consegna || ddt.indirizzoCompleto(cliente);
-  const { totali } = await richieste.calcolaOfferta(richiesta.id, distributorId, { modalita });
-
-  const insertOrder = db.prepare(
-    `INSERT INTO orders
-       (cliente_id, stato, modalita, note, totale_netto, totale_finale,
-        request_id, distributor_id, consegna_ore, partenza_ore, destinazione,
-        costo_consegna, contributo_raee, iva, totale_ivato)
-     VALUES (?, 'inviato', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  );
-  const insertItem = db.prepare(
-    `INSERT INTO order_items
-       (order_id, product_id, codice_snapshot, nome_snapshot, quantita, prezzo_listino_snapshot,
-        sconto_pct_snapshot, prezzo_netto_unitario, subtotale, prezzo_unitario_cliente,
-        subtotale_cliente, raee_unitario, raee_riga)
-     VALUES (?, ?, ?, ?, ?, ?,
-             ?, ?, ?, ?,
-             ?, ?, ?)`
-  );
-
-  const creaOrdine = db.transaction(async () => {
-    // Blocco atomico "solo il primo vince": prima questa UPDATE non esisteva e l'ordine
-    // veniva sempre creato senza controllare se la richiesta era già stata chiusa da
-    // un'altra chiamata concorrente — un doppio tap sullo stesso invio, o l'assegnazione
-    // automatica dei 5 minuti scattata nello stesso istante di una scelta manuale,
-    // potevano creare due ordini (anche con due distributori diversi) per la stessa
-    // richiesta. Ora solo la chiamata che riesce a far passare questa UPDATE (changes=1)
-    // prosegue; l'altra trova stato già 'ordinata' e si ferma senza scrivere nulla.
-    // Vale solo da 'con_offerte' (prima bastava "non ordinata": passava anche un'annullata),
-    // e assegnata_auto si scrive qui, insieme all'ordine: prima si scriveva prima, a parte,
-    // e se la creazione si interrompeva la richiesta restava bloccata per sempre.
-    const claim = await db.prepare(
-      `UPDATE requests SET stato = 'ordinata', assegnata_auto = ?
-        WHERE id = ? AND stato = 'con_offerte'`
-    ).run(opzioni.automatico ? 1 : 0, richiesta.id);
-    if (!claim.changes) return null;
-
-    const info = await insertOrder.run(
-      richiesta.cliente_id,
-      modalita,
-      note,
-      totali.totale_netto,
-      totali.totale_finale,
-      richiesta.id,
-      distributorId,
-      risposta.consegna_ore,
-      risposta.partenza_ore,
-      destinazione,
-      totali.costo_consegna,
-      totali.contributo_raee,
-      totali.iva,
-      totali.totale_ivato
-    );
-    const orderId = Number(info.lastInsertRowid);
-    for (const riga of totali.righe) await insertItem.run(orderId, riga.product_id, riga.codice_snapshot, riga.nome_snapshot, riga.quantita, riga.prezzo_listino_snapshot, riga.sconto_pct_snapshot, riga.prezzo_netto_unitario, riga.subtotale, riga.prezzo_unitario_cliente, riga.subtotale_cliente, riga.raee_unitario, riga.raee_riga);
-    await db.prepare(`UPDATE requests SET order_id = ? WHERE id = ?`).run(orderId, richiesta.id);
-    // Chiuso l'ordine, gli altri banchi non devono più poter rispondere.
-    await db.prepare(
-      `UPDATE request_responses SET esito = 'scaduto', risposto_il = NOW()
-        WHERE request_id = ? AND esito = 'in_attesa'`
-    ).run(richiesta.id);
-    return orderId;
-  });
-
-  const orderId = await creaOrdine();
-  if (orderId === null) return null;
-
-  const distributore = await db.prepare('SELECT * FROM distributors WHERE id = ?').get(distributorId);
-  await notifiche.notificaDistributore(distributorId, {
-    titolo: 'Nuovo ordine da preparare',
-    testo: `${cliente.ragione_sociale} ha scelto ${distributore.nome} — ordine #${orderId}.`,
-    link: '/distributore/ordini/' + orderId,
-    categoria: 'ordini',
-    sottostato: 'in_approvazione',
-    order_id: orderId,
-  });
-
-  // La richiesta confermata non resta una richiesta: diventa un ordine, e la notifica
-  // del cliente lo dice esplicitamente.
-  await notifiche.notifica(richiesta.cliente_id, {
-    titolo: opzioni.automatico ? 'Ordine assegnato automaticamente' : 'Ordine inviato',
-    testo: opzioni.automatico
-      ? `Non hai scelto in tempo: l'ordine #${orderId} è andato a ${distributore.nome}, con la consegna più veloce.`
-      : `Ordine #${orderId} inviato a ${distributore.nome}.`,
-    link: '/ordini/' + orderId,
-    categoria: 'ordini',
-    sottostato: 'in_approvazione',
-    order_id: orderId,
-  });
-
-  return orderId;
-}
-
-// Finita la scelta senza decisione, l'ordine va a chi copre tutto il materiale con la
-// consegna più veloce. Lo chiama richieste.aggiornaScadenza() a ogni lettura della
-// richiesta (su Vercel i timer non girano fra una visita e l'altra) e il timer qui sotto.
-richieste.impostaAssegnatore(async (requestId) => {
-  const richiesta = await richieste.getRichiesta(requestId);
-  const migliore = await richieste.offertaPerAssegnazione(requestId);
-  if (!richiesta || !migliore) return null;
-  return creaOrdineDaOfferta(richiesta, migliore.distributor_id, migliore, { automatico: true });
-});
-
-// Tutte le richieste del cliente (più un ordine associato, quando c'è) con lo step 1-2-3
-// già calcolato — solo i campi che lo Storico mostra davvero (data, materiale, stato):
-// niente risposte dei distributori né calcolo delle offerte, che lì non servono e sono
-// il grosso del costo (offerte() da sola fa una query per ogni distributore confermato).
-// aggiornaScadenza si chiama solo sulle richieste ancora aperte, non su tutte e 50: su
-// quelle già chiuse (la maggioranza, in uno storico) costerebbe una query a vuoto.
-async function richiesteClienteConStato(clienteId) {
-  const tutte = await db
-    .prepare(`SELECT * FROM requests WHERE cliente_id = ? ORDER BY id DESC LIMIT 50`)
-    .all(clienteId);
-
-  const cardsAll = [];
-  for (const r of tutte) {
-    const rAgg =
-      r.stato === 'in_attesa' || r.stato === 'con_offerte'
-        ? (await richieste.aggiornaScadenza(r.id)) || r
-        : r;
-    const righe = await richieste.righeRichiesta(rAgg.id);
-    let step = 0;
-    let ordine = null;
-    if (rAgg.stato === 'in_attesa') step = 1;
-    else if (rAgg.stato === 'con_offerte') step = 2;
-    else if (rAgg.stato === 'ordinata') {
-      step = 3;
-      if (rAgg.order_id) ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(rAgg.order_id);
-    }
-    cardsAll.push({ richiesta: rAgg, righe, ordine, step });
-  }
-  return cardsAll;
-}
-
-// "Stato ordini": mostra sempre e solo UNA cosa, mai un elenco — quella più rilevante, in
-// ordine di priorità: in attesa > da scegliere > in consegna > scaduta senza conferme. Ogni
-// livello ha una finestra oltre la quale non conta più come "attivo" (resta comunque
-// raggiungibile dallo Storico). Se ce ne fosse più di una allo stesso livello (es. account
-// demo condiviso da più persone) si prende sempre la più recente.
-const TRE_ORE_MS = 3 * 60 * 60 * 1000;
-const VENTIQUATTRO_ORE_MS = 24 * 60 * 60 * 1000;
-
-function piuRecente(elenco) {
-  return elenco.length ? elenco.reduce((a, b) => (b.richiesta.id > a.richiesta.id ? b : a)) : null;
-}
-
-// Versione "leggera" di richiesteClienteConStato, solo per il dispatcher: qui non serve MAI
-// il dettaglio (righe, risposte, offerte) di ogni richiesta — solo stato e id, perché alla
-// fine si fa solo un redirect. Le ultime 5 bastano abbondantemente (il blocco "un solo invio
-// alla volta" impedisce comunque di avere più di una richiesta in_attesa/con_offerte insieme),
-// ed è l'unico stato che ha bisogno del controllo di scadenza lazy (aggiornaScadenza scrive
-// sul DB solo se necessario). Passa da ~150 query a poche sole per apertura pagina.
-async function richiesteAttiveClienteLeggere(clienteId) {
-  const recenti = await db
-    .prepare(
-      `SELECT id, stato, creato_il, scade_il, scelta_scade_il, order_id
-         FROM requests WHERE cliente_id = ? ORDER BY id DESC LIMIT 5`
-    )
-    .all(clienteId);
-
-  const risultati = [];
-  for (const r of recenti) {
-    const rAgg =
-      r.stato === 'in_attesa' || r.stato === 'con_offerte'
-        ? (await richieste.aggiornaScadenza(r.id)) || r
-        : r;
-
-    let step = 0;
-    let ordine = null;
-    if (rAgg.stato === 'in_attesa') step = 1;
-    else if (rAgg.stato === 'con_offerte') step = 2;
-    else if (rAgg.stato === 'ordinata') {
-      step = 3;
-      if (rAgg.order_id) {
-        ordine = await db
-          .prepare('SELECT id, stato, consegnato_il, creato_il FROM orders WHERE id = ?')
-          .get(rAgg.order_id);
-      }
-    }
-    risultati.push({ richiesta: rAgg, step, ordine });
-  }
-  return risultati;
-}
-
+// "Stato ordini": porta dritto all'unica attività in corso (vedi flusso.attivitaCorrente).
 app.get('/ordini', requireRole('cliente'), async (req, res) => {
-  await notifiche.segnaLetteCategoria(req.session.user.id, 'ordini');
-  await notifiche.segnaLetteCategoria(req.session.user.id, 'richieste');
-  const cardsAll = await richiesteAttiveClienteLeggere(req.session.user.id);
-
-  const inAttesa = cardsAll.filter((c) => c.step === 1);
-  const daScegliere = cardsAll.filter((c) => {
-    if (c.step !== 2) return false;
-    // scelta_scade_il si fissa una sola volta, all'ingresso in "con_offerte": è il
-    // riferimento esatto di quando la richiesta è entrata in questo stato.
-    if (!c.richiesta.scelta_scade_il) return true;
-    return Date.now() - new Date(c.richiesta.scelta_scade_il).getTime() <= TRE_ORE_MS;
-  });
-  const inConsegna = cardsAll.filter((c) => {
-    if (c.step !== 3 || !c.ordine || c.ordine.consegnato_il) return false;
-    return Date.now() - new Date(c.ordine.creato_il).getTime() <= VENTIQUATTRO_ORE_MS;
-  });
-  const scadute = cardsAll.filter((c) => {
-    if (c.step !== 0 || c.richiesta.stato !== 'nessuna_offerta') return false;
-    return Date.now() - new Date(c.richiesta.scade_il).getTime() <= TRE_ORE_MS;
-  });
-
-  const attivo = piuRecente(inAttesa) || piuRecente(daScegliere) || piuRecente(inConsegna) || piuRecente(scadute);
-
-  if (attivo) {
-    return res.redirect(attivo.step === 3 ? '/ordini/' + attivo.ordine.id : '/richieste/' + attivo.richiesta.id);
-  }
-
+  const attivo = await flusso.attivitaCorrente(req.session.user.id);
+  if (attivo) return res.redirect((attivo.tipo === 'ordine' ? '/ordini/' : '/richieste/') + attivo.id);
   res.render('ordini_cliente', { titolo: 'Stato ordini' });
 });
 
 // Storico unificato (tutto: in corso, scaduto, annullato, consegnato) — raggiungibile dal
 // menu account, non più dal tab "Stato ordini".
 app.get('/storico', requireRole('cliente'), async (req, res) => {
-  const cardsAll = await richiesteClienteConStato(req.session.user.id);
+  const cardsAll = await flusso.richiesteClienteConStato(req.session.user.id);
   res.render('storico', { titolo: 'Storico', cards: cardsAll });
 });
 
@@ -1285,39 +832,20 @@ app.get('/ordini/:id', requireLogin, async (req, res) => {
     res.locals.ordiniNonLetti = 0;
   }
 
-  const righe = await db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(ordine.id);
-  const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(ordine.cliente_id);
-  const distributore = ordine.distributor_id
-    ? await db.prepare('SELECT * FROM distributors WHERE id = ?').get(ordine.distributor_id)
-    : null;
-  const richiestaOrdine = ordine.request_id
-    ? await db.prepare('SELECT assegnata_auto FROM requests WHERE id = ?').get(ordine.request_id)
-    : null;
-
   res.render('ordine_dettaglio', {
     titolo: 'Ordine #' + ordine.id,
     ordine,
-    righe,
-    cliente,
-    distributore,
     nuovo: req.query.nuovo === '1',
-    // Un ordine partito da solo deve dirlo: senza, sembrava che qualcun altro l'avesse inviato.
-    assegnataAuto: !!(richiestaOrdine && richiestaOrdine.assegnata_auto),
-    annullabile: ordineAnnullabileDalCliente(ordine),
-    ivaPct: await pricing.getIvaPct(),
+    ...(await flusso.dettaglioOrdine(ordine)),
   });
 });
 
-// Il cliente conferma di aver ricevuto la merce: non cambia lo stato DB (resta 'evaso'),
-// valorizza solo consegnato_il, che è quanto basta per mostrare "Consegnato".
 app.post('/ordini/:id/consegnato', requireRole('cliente'), async (req, res) => {
   const ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!ordine || ordine.cliente_id !== req.session.user.id) {
     return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Ordine non trovato.' });
   }
-  if (ordine.stato === 'evaso' && !ordine.consegnato_il) {
-    await db.prepare('UPDATE orders SET consegnato_il = NOW() WHERE id = ?').run(ordine.id);
-  }
+  await flusso.segnaConsegnato(ordine);
   res.redirect('/ordini/' + ordine.id);
 });
 
@@ -1327,23 +855,12 @@ app.post('/ordini/:id/elimina', requireRole('cliente'), async (req, res) => {
   if (!ordine || ordine.cliente_id !== req.session.user.id) {
     return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Ordine non trovato.' });
   }
-  const elimina = db.transaction(async () => {
-    const attuale = await db.prepare('SELECT * FROM orders WHERE id = ? FOR UPDATE').get(ordine.id);
-    if (!attuale) return null;
-    if (!ordineAnnullabileDalCliente(attuale)) throw new OrdineInLavorazione(attuale);
-    if (attuale.request_id) await db.prepare('UPDATE requests SET order_id = NULL, stato = ? WHERE id = ?').run('annullata', attuale.request_id);
-    await db.prepare('DELETE FROM order_items WHERE order_id = ?').run(attuale.id);
-    await db.prepare('DELETE FROM orders WHERE id = ?').run(attuale.id);
-    return attuale;
-  });
-  let eliminato;
   try {
-    eliminato = await elimina();
+    await flusso.eliminaOrdine(ordine.id);
   } catch (e) {
-    if (e instanceof OrdineInLavorazione) return rifiutaEliminazioneOrdine(res, e.ordine);
+    if (e instanceof flusso.OrdineInLavorazione) return rifiutaEliminazioneOrdine(res, e.ordine);
     throw e;
   }
-  if (eliminato) await avvisaOrdineAnnullato(eliminato);
   res.redirect('/ordini');
 });
 

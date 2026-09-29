@@ -335,6 +335,16 @@ async function altreCategorie() {
   return cats.filter((m) => m.in_evidenza !== 1 && m.n_prodotti > 0);
 }
 
+// Le due liste della home con una sola lettura: chiamare le due funzioni sopra ripete la
+// stessa query di conteggio (la più lenta della home).
+async function categorieHome() {
+  const cats = await macroCategorie();
+  return {
+    inEvidenza: cats.filter((m) => m.in_evidenza === 1),
+    altre: cats.filter((m) => m.in_evidenza !== 1 && m.n_prodotti > 0),
+  };
+}
+
 // ---------- Sottocategorie e misure ----------
 
 async function sottocategorieDi(macroSlug) {
@@ -552,6 +562,7 @@ module.exports = {
   macroCategorie,
   categorieInEvidenza,
   altreCategorie,
+  categorieHome,
   macroCategoria,
   sottocategorieDi,
   sottocategoria,

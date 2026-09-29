@@ -1,136 +1,42 @@
-# Audit lato distributore (venditore) — 2026-09-05
+# Lato distributore (banco) — punti ancora aperti
 
-Metodo: test reale end-to-end sul DB di produzione (non ipotesi da codice letto a freddo).
-Ho vestito i panni dell'installatore (cliente demo "rossi"): aggiunto prodotti al carrello,
-inviato una richiesta di disponibilità multi-articolo, poi vestito i panni del banco (AFIS)
-per rispondere, farla scegliere dal cliente, prenderla in preparazione ed emettere la bolla.
-Ho anche scorso clienti, notifiche e storico richieste con dati reali già presenti nel DB
-(decine di richieste di test precedenti).
+Origine: audit del 05/09/2026, un test end-to-end sul DB di produzione con i panni
+dell'installatore (cliente demo) e poi del banco (AFIS): richiesta, risposta, scelta, ordine,
+bolla. Ripulito il 29/09/2026: sono rimasti solo i punti **ancora veri nel codice**. I tre bug
+di quella sessione (finestra di conferma a 10 *secondi* invece di minuti, errore 500 sul dettaglio
+ordine, minuti non arrotondati nelle notifiche) sono corretti e committati, così come il
+messaggio "Finestra di conferma chiusa" dopo una conferma riuscita, le pagine di errore con lo
+stack trace e le icone 📦/📄 dello storico: non compaiono più.
 
-## Bug trovati e già corretti in questa sessione
+## Bug non corretto (serve una decisione)
 
-**Aggiornamento 16/09/2026**: i tre punti sotto sono confermati corretti e committati (verificato
-rileggendo il codice attuale: `finestra_conferma_min` = 10 nel DB, `(await ...).mancanti` con le
-parentesi giuste, `Math.round(minuti)` nei testi). Restano qui come riferimento storico di cosa
-è successo, non più come diff da applicare.
+**Il tempo di consegna mostrato al cliente nel confronto offerte è sbagliato quando il cliente
+non ha condiviso la posizione** (la geolocalizzazione è opt-in, quindi è il caso comune).
+`minutiStimati()` in `src/consegna.js`, con `km === null`, ritorna solo `partenzaMinuti` e scarta
+la `consegna_ore` dichiarata dal banco; il chiamante (`rispondi()` in `src/richieste.js`) passa
+solo la partenza. Nel test il banco aveva dichiarato *partenza 2 ore, consegna 24 ore* ma il
+confronto mostrava "Da te in 2 ore", mentre il riepilogo ordine mostrava correttamente 1 giorno.
 
-1. **`config.finestra_conferma_min` era impostato a 10 *secondi* invece di 10 *minuti***
-   (valore `0.1666...`, probabile refuso di un test precedente, live sul DB di produzione).
-   Conseguenza reale: **quasi tutte le richieste recenti nello storico risultano "Non
-   risposta"** — nessun banco reale potrebbe mai rispondere in 10 secondi. Corretto
-   riportando il valore a `10`.
+Non è un refuso ma una scelta di comportamento: il fallback probabile è
+`Math.max(partenzaMinuti, consegna_ore * 60)`, ma va deciso se "24 ore" dichiarate dal banco
+includano già il viaggio. Ricade sul banco: il cliente riceve una promessa diversa da quella
+dichiarata.
 
-2. **La pagina `/distributore/ordini/:id` andava in errore 500** (stack trace Node grezzo
-   mostrato all'utente) per **qualsiasi ordine collegato a una richiesta** — cioè
-   praticamente tutti. Causa: [server.js:1438-1440](server.js:1438) —
-   `await richieste.calcolaOfferta(...).mancanti` legge `.mancanti` sulla Promise invece
-   che sul risultato risolto (precedenza di `.` su `await`). Corretto aggiungendo le
-   parentesi: `(await richieste.calcolaOfferta(...)).mancanti`.
-   **Impatto**: prima di questa sessione, il banco probabilmente non riusciva mai ad aprire
-   il dettaglio di un ordine collegato a una richiesta senza schiantarsi.
+## Miglioramenti da fare (in ordine di impatto percepito, non di difficoltà)
 
-3. **Le notifiche al banco mostravano un numero grezzo non arrotondato**: *"Hai
-   0.16666666666666666 minuti per confermare."* — bug generico (non solo conseguenza del
-   punto 1: si ripresenterebbe con qualunque valore non intero di
-   `finestra_conferma_min`). Corretto in [src/richieste.js:124](src/richieste.js:124) e
-   [src/richieste.js:180](src/richieste.js:180) con `Math.round(minuti)`.
+1. **Nessun passaggio di verifica prima di confermare**: il cliente passa da un riepilogo
+   esplicito, il banco preme un solo pulsante ("Accetta ordine") che chiude subito la conferma.
+2. **Nessun promemoria a ridosso della scadenza**: se il banco non ha la scheda aperta l'unico
+   avviso è la notifica iniziale; niente secondo avviso (es. a 2 minuti dalla chiusura). Spiega
+   in parte le tante "Non risposta" nello storico.
+3. **"Storico richieste" è una lista unica**, senza filtri (per stato o cliente) né paginazione:
+   con un banco reale e decine di richieste al giorno diventa inutilizzabile.
+4. **Nessun "segna tutte come lette"** nelle notifiche: con più clienti il campanello resta con un
+   badge enorme (34 non lette in pochi giorni di test).
+5. **La pagina Clienti non ha ricerca né filtro**: va bene con 3 clienti demo, non con decine o
+   centinaia di clienti approvati.
+6. **Nessuna vista d'insieme giornaliera** oltre ai 3 contatori (da confermare / da preparare /
+   in preparazione): ordini evasi oggi, valore totale, tempo medio di risposta.
 
-## Bug trovato, NON ancora corretto (serve una decisione)
-
-**Ancora presente al 16/09/2026** (riverificato leggendo `src/consegna.js`): `minutiStimati()`
-ritorna `{ minuti: partenzaMinuti, ... }` quando `km === null`, ignorando del tutto
-`consegna_ore`; il chiamante in `src/richieste.js` (`rispondi()`) passa solo `partenza` a
-`consegna.minutiStimati(...)`, mai la consegna dichiarata dal banco.
-
-4. **Il tempo di consegna mostrato al cliente nella schermata di confronto offerte è
-   sbagliato quando il cliente non ha condiviso la posizione** (caso comune: è opt-in).
-   Nella richiesta di prova, il banco ha dichiarato *partenza 2 ore, consegna 24 ore*, ma
-   la schermata "Riepilogo offerte" mostrava **"🚚 Da te in 2 ore"** invece di 1 giorno —
-   la schermata successiva (riepilogo ordine) mostra invece correttamente "1 giorno". Causa:
-   [src/consegna.js:44-57](src/consegna.js:44) — `minutiStimati()`, quando non conosce la
-   posizione del cliente (`km === null`), ritorna **solo** `partenzaMinuti`, scartando del
-   tutto la `consegna_ore` dichiarata dal banco. Il valore sbagliato viene salvato in
-   `consegna_minuti_stimati` e mostrato in
-   [views/richiesta_offerte.ejs:70](views/richiesta_offerte.ejs:70).
-   **Perché non l'ho corretto da solo**: non è un typo, è una scelta di comportamento —
-   il fallback giusto è probabilmente `Math.max(partenzaMinuti, consegnaOreDichiarata * 60)`,
-   ma andrebbe deciso insieme (es. se il banco dichiara "24 ore" intende già includere il
-   viaggio, o no?). **Impatto per il venditore**: il banco dichiara un tempo di consegna nel
-   modulo di risposta, e per una parte non piccola dei clienti (quelli senza geolocalizzazione
-   attiva) l'app mostra ai clienti una promessa completamente diversa — un problema di
-   credibilità che ricade sul banco, non sull'app.
-
-## Almeno 10 modifiche da fare lato distributore
-
-Elencate in ordine di impatto percepito durante il test, non di difficoltà implementativa.
-
-1. **Correggere la stima di consegna senza geolocalizzazione** (bug #4 sopra) — priorità
-   alta, è una promessa al cliente che il banco non sa di star facendo male.
-
-2. **La schermata di risposta a una richiesta non ha un passaggio di verifica prima di
-   confermare.** Il cliente, per inviare una richiesta, passa da un riepilogo esplicito
-   ("Procedi" → riepilogo → "Conferma"). Il banco invece preme un solo pulsante
-   ("Accetta ordine") che chiude subito la conferma — nessun "rivedi prima di confermare".
-   *Aggiornamento 16/09/2026*: la risposta riga-per-riga e la scelta di sconti/tempi da questa
-   schermata sono state rimosse (oggi è solo accetta-tutto-standard o rifiuta, con partenza e
-   consegna fisse a 2/6 ore) — il punto sull'assenza di un passaggio di verifica resta valido.
-
-3. **"Storico richieste" è un'unica lista lunga, senza filtri né paginazione.** Con solo
-   3 clienti demo e ~40 richieste di test è già scomoda da scorrere; con un banco reale con
-   decine di richieste al giorno diventa inutilizzabile in poco tempo. Manca un filtro per
-   stato (Confermata / Non risposta / In attesa) e per cliente, e manca la paginazione o lo
-   scroll infinito già presente lato cliente nel catalogo.
-
-4. **Dentro "Storico richieste" compare la voce "In attesa"** per richieste che in realtà
-   sono già scadute (il banco non ha più modo di rispondere) — vedere una richiesta ancora
-   etichettata "In attesa" dentro quello che dovrebbe essere lo storico delle richieste
-   chiuse è fuorviante: sembra ancora azionabile quando non lo è più.
-
-5. **Il messaggio "Finestra di conferma chiusa"** compare nell'intestazione della pagina
-   di dettaglio **subito dopo** che il banco ha confermato con successo — si legge come un
-   avviso di errore/mancato risultato proprio nel momento in cui l'operazione è riuscita.
-   Andrebbe distinto chiaramente il caso "hai risposto in tempo, ecco cosa hai confermato"
-   dal caso "la finestra è scaduta senza risposta".
-
-6. **Nessun modo di segnare tutte le notifiche come lette in blocco** (verificato nel
-   codice, [views/notifiche.ejs](views/notifiche.ejs) non ha questa azione). Con l'account
-   di test sono arrivate a 34 notifiche non lette in pochi giorni di utilizzo: per un banco
-   reale con più clienti il campanello rischia di restare perennemente con un badge enorme
-   e nessun modo rapido di "azzerarlo" dopo averle viste.
-
-7. **La pagina Clienti non ha ricerca né filtro**, funziona bene con 3 clienti demo ma non
-   scala: un distributore reale con decine o centinaia di clienti approvati dovrà scorrere
-   tutto a mano per trovarne uno.
-
-8. **Le pagine di errore mostrano lo stack trace Node grezzo all'utente** (visto di persona
-   sul bug #2, prima della correzione: percorso completo del file sul disco del server,
-   numeri di riga, traccia delle chiamate interne). Andrebbe sempre mostrata una pagina di
-   errore generica al banco, con il dettaglio tecnico solo nei log server — sia per
-   professionalità sia perché espone dettagli interni non necessari.
-
-9. **Le icone 📦 vs 📄 nello storico richieste non hanno un significato ovvio** senza
-   dedurlo da colore/testo accanto (sembra: 📦 = poi diventata un ordine, 📄 = solo
-   risposta/non risposta) — o si spiega/etichetta meglio, o si toglie perché ridondante
-   rispetto al badge di stato già presente.
-
-10. **Nessuna vista d'insieme "quanto sto guadagnando/quanti pezzi mi restano da preparare
-    oggi"** oltre ai 3 contatori (da confermare / da preparare / in preparazione). Per un
-    banco che gestisce più clienti in parallelo, un riepilogo giornaliero (ordini evasi
-    oggi, valore totale, tempo medio di risposta) aiuterebbe a capire il carico di lavoro
-    senza aprire ogni richiesta/ordine singolarmente.
-
-11. *(rimosso 16/09/2026: il modulo di risposta non ha più campi sconto, il punto non si
-    applica più — vedi README, sezione "Sconti al banco".)*
-
-12. **Il tempo per rispondere è visibile ma non ci sono promemoria**: se il banco non ha
-    la scheda aperta, l'unico avviso è la notifica iniziale — nessun secondo avviso (es. a
-    2 minuti dalla scadenza) per richieste ancora "in attesa" quando la finestra sta per
-    chiudersi, cosa che spiegherebbe anche perché nello storico ci sono così tante "Non
-    risposta" indipendentemente dal bug #1.
-
-## Nota metodologica
-
-I punti 1-4 dei bug sono confermati con certezza (riprodotti e, per 3 su 4, risolti). I
-punti nella lista "modifiche da fare" sono osservazioni dirette da test reale, non supposizioni
-— ma la priorità relativa fra loro è una mia valutazione soggettiva su cosa disturba di più
-un banco che usa l'app tutti i giorni: vale la pena discuterne prima di metterci mano.
+L'ordine di priorità dei punti 1-6 è una valutazione soggettiva: vale la pena discuterne prima di
+metterci mano.

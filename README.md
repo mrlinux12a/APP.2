@@ -1,8 +1,8 @@
 # Ordini Minuteria — MVP
 
-App per digitalizzare gli ordini di materiale termoidraulico tra installatori pilota e i
-distributori. La vista cliente è pensata **per il telefono**; la vista agente resta una
-pagina da scrivania.
+App per digitalizzare gli ordini di materiale termoidraulico tra installatori pilota e
+distributori. Due superfici: il **sito** (vista cliente pensata per il telefono, vista banco,
+vista agente da scrivania) e l'**app nativa** dell'installatore in `mobile/` (vedi "App nativa").
 
 ## Avvio in locale
 
@@ -10,17 +10,15 @@ Richiede **Node.js 22.5 o superiore**.
 
 ```
 npm install
-npm run seed     # crea/aggiorna utenti, catalogo e listini demo (idempotente)
+npm run seed     # crea/aggiorna utenti e dati demo (idempotente)
 npm start
 ```
 
 Apri `http://localhost:3000`.
 
-Senza un file `.env` con `DATABASE_URL` parte in **SQLite** (`db/minuteria.db`, un modulo
-integrato in Node — niente compilazioni native, vedrai un avviso "SQLite is an experimental
-feature": è normale). **Ma in questo repository `.env` c'è già**, punta al Supabase Postgres di
-produzione condiviso: `npm start` in locale scrive quindi sul DB vero, non su un file locale
-usa e getta (dettagli e limiti del percorso SQLite in `CLAUDE.md`).
+In questo repository `.env` c'è già e punta al **Supabase Postgres di produzione condiviso**:
+`npm start` in locale scrive quindi sul DB vero. Senza `.env` l'app partirebbe in SQLite, ma è
+un percorso legacy non più mantenuto (dettagli in `CLAUDE.md`).
 
 ## Credenziali demo
 
@@ -34,29 +32,22 @@ usa e getta (dettagli e limiti del percorso SQLite in `CLAUDE.md`).
 | Distributore | cambielli  | banco123   | Banco CAMBIELLI SPA |
 | Agente       | agente     | agente123  | Grossista / gestore |
 
-Queste credenziali sono solo per il test interno: vanno cambiate prima di far provare l'app ai
-clienti pilota (per ora si aggiornano a mano nel DB o rilanciando `db/seed.js` con altri dati).
+Solo per il test interno (verificate valide sul DB il 29/09/2026): vanno cambiate prima di far
+provare l'app ai clienti pilota. Sono account con storico vero: per provare cose nuove conviene
+un utente di prova a parte (vedi `CLAUDE.md`).
 
-## Come è organizzato il catalogo
+## Catalogo
 
-Le categorie sono ordinate per **frequenza d'uso in cantiere**, non per struttura di
-magazzino: chi apre l'app è un professionista che cerca un pezzo in fretta. In home
-compaiono per prime **Raccorderia, Valvolame e Minuteria**; il resto sta sotto
-"Altre categorie".
+**27.676 prodotti attivi** in 13 macro categorie (`macro_categorie`), ognuna con le sue
+sottocategorie. La relazione prodotto ↔ sottocategoria è molti-a-molti
+(`product_sottocategorie`: un articolo può stare in più sottocategorie) e si ricalcola con
+`node scripts/assegna_sottocategorie.js`. Prodotti con lo stesso nome e misure diverse sono
+raggruppati in una sola card con la scelta della misura (`product_groups`).
 
-La gerarchia è **categoria → sottocategoria → marchio**: il marchio è un filtro
-facoltativo dentro la categoria, mai il punto di partenza. Dentro una sottocategoria il
-primo filtro è la **misura** (1/2", 16mm, DN25...), estratta dalle descrizioni.
-
-La tassonomia sta in `db/tassonomia.js` (14 categorie con parole chiave e misure) e si
-applica al catalogo con:
-
-```
-node db/riclassifica.js
-```
-
-Va rilanciato dopo ogni import di listino: assegna a ogni articolo categoria,
-sottocategoria e misura.
+Il cliente arriva a un pezzo per categoria → sottocategoria → elenco paginato, oppure con la
+**ricerca**: testuale libera, parziale, tollerante ai refusi. Non ci sono chip di filtro
+(rimossi per scelta esplicita) e la misura non è una colonna: si ricava dal testo del nome, con
+i sinonimi pollici↔mm (dettagli in `CLAUDE.md`).
 
 ## Ordine minimo e spedizione
 
@@ -75,146 +66,110 @@ riferimento** fra quelli attivi.
 
 Ai banchi scelti arriva la notifica *"Nuova anagrafica da approvare"*. Il distributore apre la
 scheda del cliente, vede tutti i dati fiscali e decide: **approva** (indicando il proprio codice
-cliente) o **rifiuta** se non lo riconosce.
+cliente) o **rifiuta** se non lo riconosce. Approvato il cliente, il banco può impostare gli
+**sconti concordati** (vedi "Sconti al banco").
 
 > **Non ancora applicato**: il codice non blocca né filtra sulla base dell'approvazione — un
 > cliente registrato ma non approvato da nessun banco può comunque inviare richieste, e queste
 > arrivano a **tutti** i distributori attivi, non solo a quelli che l'hanno approvato
 > (`distributoriApprovati()` in `src/anagrafiche.js` esiste ma nessuna route la richiama). Il
-> comportamento descritto sopra ("finché nessuno approva non può ordinare") è quello inteso,
-> non quello reale: verificarlo prima di contarci in produzione.
-
-Approvato il cliente, il banco imposta gli **sconti concordati** per ambito:
-
-| Ambito | Esempio | Precedenza |
-|---|---|---|
-| Linea di prodotto | TOSHIBA · RAS | 1ª (vince) |
-| Marchio | TOSHIBA | 2ª |
-| Categoria merceologica | Condizionamento | 3ª |
-| Generale | tutto il catalogo | 4ª |
-
-Vale sempre la regola più precisa; dove non c'è nessuna regola resta lo sconto Base del listino
-del banco. Svuotando un campo la regola sparisce. Questi sconti restano un riferimento di
-lettura quando il banco vede la richiesta (vedi "Sconti al banco" più sotto: oggi non li può più
-ritoccare riga per riga da lì).
+> comportamento inteso ("finché nessuno approva non può ordinare") non è quello reale:
+> verificarlo prima di contarci in produzione.
 
 ## Punti vendita sulla mappa
 
-`/punti-vendita` mostra i banchi dei distributori su mappa, un colore per insegna, con elenco
-per insegna e distanza da te se hai condiviso la posizione. Al momento sono caricati i **12
-punti vendita di Genova** di AFIS, BOREA, CAMBIELLI e FIDRA, con indirizzi presi dai siti
-ufficiali e coordinate ricavate con Nominatim/OpenStreetMap:
-
-```
-node db/geocodifica.js          # geocodifica i punti nuovi
-node db/geocodifica.js --tutti  # rigeocodifica tutto
-```
-
-Gli indirizzi stanno in `db/punti_vendita.js`: per aggiungere altre città basta estendere
-quell'elenco e rilanciare lo script.
+`/punti-vendita` (link nel menu account) mostra i banchi dei distributori su mappa, con distanza
+da te se hai condiviso la posizione. **Oggi la tabella `store_locations` è vuota.** I 12 punti
+vendita di Genova (AFIS, BOREA, CAMBIELLI, FIDRA) sono in `db/punti_vendita.js`, con indirizzi dai
+siti ufficiali; lo script che li carica e ricava le coordinate con Nominatim è
+`db/postgres/geocodifica.js`, ma **non parte**: fa `require('./punti_vendita')` e quel file sta
+in `db/`, non in `db/postgres/`. Va corretto il percorso prima di rilanciarlo.
 
 ## Il flusso, passo per passo
 
-**Cliente** (telefono)
+**Cliente** (sito da telefono, oppure app nativa: stesse regole, condivise in
+`src/flusso_cliente.js`)
 
-1. **Home** — barra di ricerca e macro categorie merceologiche (Condizionamento, Caldaie e
-   scaldacqua, Minuteria e raccorderia).
-2. **Ricerca parziale** — basta un frammento di parola: scrivendo `valv` escono tutte le valvole,
-   in qualunque categoria. Cerca in nome, codice, categoria, marchio ed EAN, e parte mentre si
-   digita. La stessa barra c'è in **ogni elenco di selezione** (categoria, marchio, famiglia) ma
-   lì è limitata all'elenco che stai sfogliando: dentro la famiglia RAV cerchi tra i 130 articoli
-   RAV, non in tutto il catalogo. Svuotando il campo torna l'elenco paginato di partenza, e tutto
-   funziona anche senza JavaScript (la barra è un normale form GET).
-3. **Scelta del materiale** — dalla categoria si impostano le quantità e si preme **Procedi**
-   (oppure "Aggiungi e continua a scegliere" per pescare da più categorie).
-4. **Riepilogo** — "Procedi" non manda niente: mostra prima articoli, quantità, prezzi e
-   totale. La richiesta parte solo dopo **Conferma e chiedi disponibilità**.
-5. **Attesa** — la richiesta parte verso **tutti i distributori attivi** (non è più filtrata per
-   zona né per copertura del prodotto). Hanno **10 minuti** (configurabile, `finestra_conferma_min`)
-   per confermare la disponibilità al banco. Il cliente vede un countdown e riceve una notifica
-   appena arriva una risposta: può chiudere la schermata.
-6. **Offerte** — appena almeno un distributore conferma il cliente vede l'elenco di chi ha
-   confermato, con **tempo di consegna stimato e prezzo per ciascun distributore**, ordinati dal
-   più conveniente. Da qui parte (o si allunga, a ogni nuova conferma) una finestra per scegliere
-   con chi ordinare: se il cliente non sceglie in tempo, l'ordine parte da solo verso il
-   distributore che copre **tutto** il materiale con la **consegna più veloce** (fra chi copre
-   tutto; se nessuno copre tutto, vince comunque il più veloce). Oltre 15 minuti dalla scadenza
-   le offerte decadono senza creare un ordine, e il cliente può reinviare la richiesta.
-7. **Riepilogo ordine** — scelto il distributore si arriva subito al riepilogo: consegna o ritiro,
-   note, riepilogo articoli, imponibile, IVA e totale. Il pulsante **Invia l'ordine** chiude
-   l'ordine con quel distributore. Se l'assegnazione automatica scatta mentre il cliente sta
-   ancora compilando questa pagina, viene avvisato che l'ordine è già partito con i valori
-   predefiniti invece di essere lasciato a inviare una pagina ormai superata.
+1. **Home** — barra di ricerca e macro categorie.
+2. **Ricerca parziale** — basta un frammento di parola: scrivendo `valv` escono tutte le valvole.
+   Cerca in nome, codice, categoria, marchio ed EAN e parte mentre si digita. La stessa barra
+   c'è in ogni elenco, limitata a ciò che si sta sfogliando (dentro una sottocategoria si cerca
+   solo lì).
+3. **Scelta del materiale** — con gli stepper +/− si prepara la selezione; il tasto **Aggiungi**
+   in basso la sposta nel carrello.
+4. **Carrello** — articoli, quantità, merce, RAEE, spedizione e totale stimato. La richiesta
+   parte solo dopo **Conferma e chiedi disponibilità**, e solo se l'ordine minimo è raggiunto.
+5. **Attesa** — la richiesta parte verso **tutti i distributori attivi** (non filtrata per zona
+   né per copertura). Hanno **10 minuti** (`finestra_conferma_min`) per confermare la
+   disponibilità. Il cliente vede un countdown e lo stato di ogni banco, e riceve una notifica
+   a ogni risposta: può chiudere la schermata. Una sola richiesta aperta per cliente alla volta.
+6. **Offerte** — appena almeno un distributore conferma, il cliente vede chi ha confermato con
+   **tempo di consegna stimato e prezzo**, dal più conveniente (le complete prima delle
+   parziali). Parte una finestra per scegliere, che si allunga a ogni nuova conferma: se il
+   cliente non sceglie in tempo, l'ordine parte da solo verso chi copre **tutto** il materiale
+   con la **consegna più veloce** (se nessuno copre tutto, vince comunque il più veloce). Oltre
+   15 minuti dalla scadenza le offerte decadono senza creare un ordine e si può reinviare la
+   richiesta.
+7. **Riepilogo ordine** — consegna o ritiro, destinazione, note, articoli, imponibile, IVA e
+   totale; **Invia l'ordine** chiude l'ordine con quel distributore. Se l'assegnazione
+   automatica scatta mentre il cliente compila, viene avvisato che l'ordine è già partito con i
+   valori predefiniti.
+8. **Stato ordini** — mostra sempre e solo l'attività più rilevante (in attesa > da scegliere >
+   in consegna > scaduta da poco); lo **Storico** ha tutto il resto.
 
-**Distributore** (banco, telefono)
+**Distributore** (banco, telefono) — profili AFIS, BOREA, CAMBIELLI e FIDRA.
 
-Due profili operativi richiesti — **AFIS** e **CAMBIELLI** — più BOREA, che resta attivo perché
-il confronto lato cliente ne prevede tre.
+1. **Richieste** — quelle da confermare con il tempo che resta, e i contatori del banco (da
+   confermare / da preparare / in preparazione).
+2. **Risposta** — due sole azioni: **Accetta ordine** (copre tutto alle condizioni standard del
+   proprio listino) o **Rifiuta: merce non disponibile**. Partenza (2 ore) e consegna stimata
+   (6 ore) sono valori fissi finché non arriva un corriere collegato via API. Chi non risponde
+   entro la finestra risulta "non risposta", che **non** vale come disponibilità.
+3. **Ordini** — l'ordine entra in *Da preparare* → *Prendi in preparazione* → *Emetti bolla e
+   segna la merce partita*. Il cliente può annullare solo finché resta *Da preparare*, e il
+   banco riceve una notifica.
+4. **Dati del cliente** — su richiesta e ordine l'anagrafica completa dell'ordinante.
 
-1. **Richieste** — elenco di quelle da confermare con il tempo che resta, e i contatori del banco
-   (da confermare / da preparare / in preparazione).
-2. **Risposta** — due sole azioni: **Accetta ordine** (copre tutto il richiesto alle condizioni
-   standard del proprio listino, quelle già viste dal cliente) o **Rifiuta: merce non disponibile**.
-   Non c'è più una risposta riga per riga né uno sconto da concordare in questa schermata: la
-   partenza (2 ore) e la consegna stimata (6 ore) sono valori fissi finché non arriva un corriere
-   collegato via API, non una scelta del banco.
-3. **Ordini** — quando il cliente sceglie quel banco, l'ordine entra in *Da preparare* →
-   *Prendi in preparazione* → *Emetti bolla e segna la merce partita*. Il cliente può annullare un
-   ordine solo finché resta *Da preparare*: dopo, tocca contattarlo, e annullando prima il banco
-   riceve una notifica.
-4. **Dati del cliente** — su richiesta e ordine il banco vede l'anagrafica completa
-   dell'ordinante: ragione sociale, referente, indirizzo, P. IVA, codice fiscale, SDI/PEC,
-   telefono, email e destinazione della merce.
-
-Chi non risponde entro la finestra risulta "non risposta": la non risposta **non** vale come
-disponibilità.
+**Agente** — login → lista di tutti gli ordini (cliente, distributore, data, importi, stato) →
+dettaglio riga per riga. Sola lettura.
 
 ## Marchi e listini dei produttori
 
-I listini ufficiali dei produttori si caricano da Excel con un importatore generico:
+I listini dei produttori si caricano da Excel con un importatore generico, idempotente
+(rilanciarlo aggiorna, non duplica):
 
 ```
-node db/importa_listino.js --marchio toshiba --file "listino.xlsx" --sconto 30
+node db/postgres/importa_listino.js --marchio toshiba --file "listino.xlsx" --sconto 30
 ```
 
-È idempotente (rilanciarlo aggiorna, non duplica) e per ogni prodotto importa codice,
-descrizione, famiglia, EAN, contributo RAEE, refrigerante, F-GAS e GWP. Crea anche le righe
-di listino per ogni banco distributore: senza quelle nessuno può confermare il marchio.
+Per ogni prodotto importa codice, descrizione, famiglia, EAN, contributo RAEE, refrigerante,
+F-GAS e GWP, e crea le righe di listino per ogni banco (senza, nessuno può confermare il
+marchio). Un marchio nuovo richiede una voce in `MARCHI` dentro lo script, con la mappatura
+delle colonne.
 
-Per aggiungere un marchio basta una voce in `MARCHI` dentro `db/importa_listino.js` con la
-mappatura delle colonne del suo file: la struttura regge quanti marchi si vuole.
-
-**TOSHIBA** è il primo caricato — listino ufficiale 2026 Rev. 2, distribuito da T-Air Solutions
-Italy (Beijer Ref Italy): **2388 articoli** in 6 famiglie (RAS, RAV, VRF, NEXETA, ESTIA, EDEN).
-Il cliente lo trova dalla sezione *Marchi* in home: marchio → famiglia → articoli paginati.
-
-> Lo sconto Base applicato dall'importatore (`--sconto`) è un valore di configurazione, non le
-> condizioni commerciali reali: va sostituito con gli sconti veri prima di usare i prezzi con i
-> clienti.
+> **Stato attuale**: nel DB non ci sono marchi attivi né prodotti Toshiba; la sezione `/marchi`
+> esiste ma è vuota e nessuna pagina la collega (l'app nativa non la mostra). Lo sconto
+> `--sconto` è di configurazione, non le condizioni commerciali reali.
 
 ## Foto prodotto
 
-`/con-foto` è una vetrina trasversale a categorie e marchi: mostra tutti i prodotti che hanno
-già una `foto_url`, senza toglierli dalle loro categorie normali. Si popola da sola — non è un
-elenco da tenere aggiornato a mano.
-
-Le foto arrivano da due fonti:
-
-- import manuale di singole immagini (marchio Effebi, primo lotto: 826 prodotti);
-- estrazione automatica dai listini PDF dei fornitori (Caleffi, Wavin, Grohe, Giacomini,
-  Fischer: altri 5.292 prodotti), abbinando il codice fornitore stampato accanto a ogni foto
-  al `codice_fornitore` a DB. Il metodo — regole di layout diverse per ogni catalogo, verificate
-  a campione prima di scrivere sul DB — è descritto nella memoria di sessione
-  (`project_foto_cataloghi`), utile se si aggiunge un altro catalogo (es. RBM).
+`/con-foto` è una vetrina trasversale: mostra tutti i prodotti che hanno una `foto_url`, senza
+toglierli dalle loro categorie. Si popola da sola. Oggi sono **6.118** prodotti con foto:
+826 Effebi (import manuale) e 5.292 estratti dai listini PDF di Caleffi, Wavin, Grohe, Giacomini
+e Fischer, abbinando il codice fornitore stampato accanto a ogni foto al `codice_fornitore` a DB
+(Ariston escluso: layout non affidabile). Il metodo, con regole di layout diverse per ogni
+catalogo e verifica a campione prima di scrivere sul DB, è nella memoria di sessione
+`project_foto_cataloghi`.
 
 File in `public/img/prodotti/<marca>_<codice_fornitore>.webp`; `NULL` in `foto_url` non rompe
 nulla, la card mostra lo spazio vuoto.
 
 ## Sconti al banco
 
-Nella risposta a una richiesta oggi il distributore **non** ha più un modulo per scontare: può
-solo accettare tutto al prezzo standard del proprio listino o rifiutare (vedi "Il flusso, passo
-per passo"). Restano invece attivi, per la scheda del singolo cliente (`/distributore/clienti`):
+Nella risposta a una richiesta il distributore **non** ha un modulo per scontare: accetta tutto
+al prezzo standard del proprio listino o rifiuta. Restano attivi gli **sconti per ambito** nella
+scheda del singolo cliente (`/distributore/clienti`), anche **a scalare** su 5 colonne (40+10+5 =
+48,7%):
 
 | Ambito | Esempio | Precedenza |
 |---|---|---|
@@ -224,100 +179,107 @@ per passo"). Restano invece attivi, per la scheda del singolo cliente (`/distrib
 | Generale | tutto il catalogo | 4ª |
 
 Vale sempre la regola più precisa; dove non c'è nessuna regola resta lo sconto Base del listino
-del banco. Questi sconti restano solo un riferimento di lettura quando il banco risponde a una
-richiesta (`src/richieste.js`, `righeDistributore`): il codice per applicarli riga per riga
-esiste ancora (`rispondi()` accetta `sconti`/`scontoCliente`), ma nessuna route lo richiama più.
+del banco. Svuotando un campo la regola sparisce. Oggi sono solo un riferimento di lettura quando
+il banco risponde (`righeDistributore` in `src/richieste.js`): il codice per applicarli riga per
+riga esiste ancora (`rispondi()` accetta `sconti`/`scontoCliente`) ma nessuna route lo richiama.
 
 ## Contributo RAEE
 
-I listini dei produttori dichiarano i prezzi IVA, trasporto e RAEE esclusi. Il contributo RAEE
-per articolo viene importato insieme al prodotto e compare come **voce separata** nel riepilogo
-dell'ordine, nel dettaglio ordine e in bolla.
+I listini dichiarano i prezzi IVA, trasporto e RAEE esclusi. Il contributo RAEE per articolo si
+importa insieme al prodotto e compare come **voce separata** in riepilogo, ordine e bolla.
 
 ## Bolla / DDT
 
 All'emissione l'app assegna un **numero progressivo per distributore e per anno** (es. `1/2026`)
-e genera il documento di trasporto **intestato al cliente ordinante**: mittente il banco con la
-sua anagrafica, destinatario/intestatario il cliente con P. IVA, C.F., SDI/PEC e indirizzo, luogo
-di destinazione della merce, righe con codice/descrizione/U.M./quantità/prezzo, causale del
-trasporto, aspetto esteriore dei beni, colli, trasporto a cura di, data e ora di partenza,
-totali e spazi per le firme di conducente e destinatario.
+e genera il documento di trasporto **intestato al cliente ordinante**, con anagrafica di
+mittente e destinatario, destinazione della merce, righe, causale, colli, data e ora di
+partenza, totali e spazi per le firme. `/ddt/:ordine` è ottimizzata per la stampa e la vedono il
+banco che l'ha emessa, il cliente intestatario e l'agente (link nel dettaglio dell'ordine).
 
-La pagina `/ddt/:ordine` è ottimizzata per la stampa (pulsante *Stampa / salva PDF*) e la vedono
-il banco che l'ha emessa, il cliente intestatario e l'agente. Il cliente trova il link alla bolla
-nel dettaglio del suo ordine.
+## Geolocalizzazione (con consenso)
 
-## Geolocalizzazione in tempo reale (con consenso)
+Su cliente e distributore, sempre subordinata al consenso esplicito: finché non si attiva non
+viene registrata nessuna coordinata. Dopo il consenso l'app usa `watchPosition` e invia al
+massimo un aggiornamento ogni 10 secondi. La **revoca** cancella davvero le coordinate e
+interrompe le condivisioni attive. Il distributore può condividere la posizione del mezzo per
+singolo ordine, così il cliente segue la consegna. Le stime di consegna usano la distanza in
+linea d'aria (`src/consegna.js`).
 
-Attiva su **entrambi i profili**, cliente e distributore, e sempre subordinata al consenso
-esplicito: finché non si preme *Attiva la posizione in tempo reale* non viene registrata nessuna
-coordinata. Dopo il consenso l'app usa `watchPosition` e invia al massimo un aggiornamento ogni
-10 secondi.
-
-- **Cliente** — la posizione viene chiesta al browser **appena si apre l'app**: la home mostra
-  subito la mappa con dove sei e gli otto punti vendita più vicini, con la distanza di ognuno.
-  Se il permesso è già stato negato l'app non insiste.
-- **Distributore** — la posizione del banco/mezzo permette al cliente di seguire la consegna:
-  si condivide per singolo ordine con *Condividi la posizione del mezzo*.
-- **Revoca** — *Disattiva e cancella la posizione* spegne il consenso, cancella davvero le
-  coordinate salvate e interrompe le condivisioni attive. Se il permesso viene negato o tolto
-  dal browser, il server viene allineato automaticamente.
-
-Le posizioni si vedono su **mappa vera** (Leaflet servito dal progetto, tasselli
-OpenStreetMap): la propria posizione nel riquadro consenso, il mezzo e la destinazione con la
-distanza nella schermata di consegna, la destinazione della merce nella vista ordine del banco.
-Leaflet è in `public/vendor/leaflet` e viene caricato solo nelle pagine che hanno una mappa; i
-tasselli richiedono la connessione a internet e la mappa degrada a un messaggio se manca.
-
-**Agente**
-
-Login → lista di tutti gli ordini (cliente, distributore scelto, data, imponibile, totale, stato)
-→ dettaglio riga per riga. Vista di sola lettura.
+Le mappe usano Leaflet servito dal progetto (`public/vendor/leaflet`) con tasselli
+OpenStreetMap, ma **oggi le mappe sono nascoste** via CSS (ultima regola di
+`public/style.css`): schema e flussi restano attivi, non si vedono.
 
 ## Prezzi
 
 - Ogni distributore ha un proprio listino con lo **sconto Base per prodotto**: lo stesso articolo
   può costare diversamente da banco a banco.
-- Il prezzo mostrato al cliente è `listino − sconto Base` **+ 10%** di servizio, ed è sempre
-  accompagnato dalla dicitura **+ IVA**.
-- Nel riepilogo dell'ordine imponibile, IVA (22%) e totale sono esposti come voci separate;
-  l'eventuale costo di consegna dipende dal distributore.
-- Le percentuali sono configurabili nella tabella `config` (`servizio_pct`, `iva_pct`,
-  `finestra_conferma_min`) senza toccare il codice.
-- Al momento dell'ordine prezzi e sconti vengono "fotografati" nella riga ordine
-  (`order_items`), così lo storico resta corretto anche se i listini cambiano.
+- Il prezzo mostrato al cliente è `listino − sconto Base` **+ 10%** di servizio, sempre con la
+  dicitura **+ IVA**. Imponibile, IVA (22%) e totale sono voci separate nel riepilogo.
+- Le percentuali sono in `config` (`servizio_pct`, `iva_pct`, `finestra_conferma_min`), senza
+  toccare il codice.
+- All'ordine prezzi e sconti vengono "fotografati" in `order_items`: lo storico resta corretto
+  anche se i listini cambiano.
 
 ## Notifiche
 
-Le notifiche sono in-app (campanella in alto a destra) e diventano notifiche di sistema del
-telefono se l'utente preme "Attiva le notifiche" e concede il permesso al browser. Non serve
-alcun servizio esterno: l'app le recapita quando è aperta in una scheda.
+In-app (campanella in alto a destra); diventano notifiche di sistema se l'utente concede il
+permesso al browser, ma solo mentre l'app è aperta in una scheda. Le notifiche push a telefono
+spento arriveranno con l'app nativa.
+
+## App nativa (in costruzione)
+
+In `mobile/` c'è l'app per telefono, **React Native con Expo** (niente WebView). Per ora è solo
+per l'**installatore**: login, catalogo, ricerca, categorie, elementi con foto, carrello,
+richiesta di disponibilità, offerte, ordine, stato ordini e storico. Mancano le notifiche push,
+la registrazione (per ora rimanda al sito) e la cancellazione account. Banco e agente restano
+sul sito.
+
+L'app parla con il server tramite l'API JSON `/api/v1/...` (`src/api_v1.js`), con accesso a
+**token** (`Authorization: Bearer`, tabella `app_tokens`) invece del cookie di sessione.
+
+Per provarla sul telefono (stessa rete Wi-Fi del PC, app **Expo Go** installata):
+
+```
+npm start                 # il server, nel progetto principale
+cd mobile
+npm install
+npx expo start            # QR code: Expo Go (Android) o fotocamera (iPhone)
+```
+
+In sviluppo l'app trova da sola il server sul PC (porta 3000); se Windows chiede di consentire
+Node sulla rete privata, va consentito. Per una build di produzione si imposta
+`EXPO_PUBLIC_API_URL` con l'indirizzo del sito pubblicato. Le icone dell'app si generano da
+`src/icone.js` con `node scripts/genera_icone_app.js`.
 
 ## Struttura
 
 ```
-server.js           entrypoint Express e rotte
-db/                 db/postgres (vero, produzione) e db/sqlite (legacy, vedi CLAUDE.md)
-db/seed.js          dati demo (utenti, catalogo, distributori, listini)
-src/pricing.js      calcolo prezzi, servizio, IVA, finestre temporali configurabili
-src/catalogo.js     ricerca parziale e macro categorie
-src/richieste.js    ciclo di vita richiesta → offerte → ordine, assegnazione automatica
-src/anagrafiche.js  registrazione cliente, approvazione banco, sconti per ambito
-src/consegna.js     stima del tempo di consegna (distanza + velocità media)
-src/ddt.js          numerazione e dati della bolla / DDT
-src/geo.js          posizione con consenso, revoca e distanze
-src/notifiche.js    notifiche in-app
-src/icone.js        icone SVG di categoria
-src/sessioni.js     archivio sessioni su database
-src/format.js       date, tempi di consegna, countdown
-src/auth.js         middleware di autenticazione/ruolo
-views/              pagine EJS (cliente e distributore mobile-first)
-public/style.css    stile dell'app
-public/app.js       quantità, ricerca live, countdown, notifiche
-public/img/prodotti foto prodotto (vedi "Foto prodotto" sopra)
+server.js              entrypoint Express e rotte del sito
+src/api_v1.js          API JSON dell'app nativa
+src/flusso_cliente.js  richiesta → offerte → ordine → stato ordini, condiviso fra sito e app
+src/token_app.js       token di accesso dell'app (solo hash nel DB)
+src/pricing.js         prezzi, servizio, IVA, finestre temporali configurabili
+src/catalogo.js        ricerca parziale, categorie, varianti
+src/richieste.js       ciclo di vita richiesta → offerte, assegnazione automatica
+src/anagrafiche.js     registrazione cliente, approvazione banco, sconti per ambito
+src/consegna.js        stima del tempo di consegna
+src/ddt.js             numerazione e dati della bolla / DDT
+src/geo.js             posizione con consenso, revoca e distanze
+src/notifiche.js       notifiche in-app
+src/prodotto_json.js   formato JSON dei prodotti (ricerca live, scroll infinito, app)
+src/limite_login.js    limite ai tentativi di login (web e app)
+src/icone.js           icone SVG (sorgente anche per l'app)
+src/sessioni.js        archivio sessioni su database
+src/format.js          date, tempi di consegna, countdown
+src/auth.js            middleware di autenticazione/ruolo
+db/                    db/postgres (produzione) e db/sqlite (legacy, vedi CLAUDE.md)
+db/seed.js             dati demo (utenti, distributori, listini)
+scripts/               schema (apply_schema_pg.js), sottocategorie, icone app, export
+views/                 pagine EJS (cliente e distributore mobile-first)
+public/                style.css, app.js (quantità, ricerca live, countdown), img/prodotti
+mobile/                app React Native / Expo (vedi "App nativa")
 ```
 
-Il database di produzione è **Postgres su Supabase** (`DATABASE_URL` in `.env`); SQLite è un
-percorso legacy non più mantenuto (dettagli in `CLAUDE.md`).
+Il database di produzione è **Postgres su Supabase** (`DATABASE_URL` in `.env`).
 
-Vedi anche `SCOPE.md` per l'elenco di cosa c'è oggi e cosa è volutamente fuori.
+Vedi anche `SCOPE.md` per cosa c'è oggi e cosa è volutamente fuori.

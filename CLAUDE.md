@@ -54,11 +54,42 @@ barre di ricerca usano lo stesso `[data-ricerca]`, mai una navigazione mentre si
 - L'ordine automatico (`richieste.impostaAssegnatore`, chiamato da `aggiornaScadenza`) scatta a
   ogni lettura della richiesta, non solo dal `setInterval` di 30s in fondo a `server.js`: su
   Vercel quel timer non gira tra una richiesta e l'altra, quindi senza questo la richiesta
-  restava bloccata finché qualcuno non riapriva quella pagina per caso.
+  restava bloccata finché qualcuno non riapriva quella pagina per caso. L'assegnatore si
+  registra in `src/flusso_cliente.js`: uno script che usa solo `src/richieste.js` non lo ha.
 - La risposta del banco (`/distributore/richieste/:id/rispondi`) oggi passa solo `rifiuta` e
   `prezzoRichiesto`: `rispondi()` supporta ancora `righe`/`sconti`/`scontoCliente` (disponibilità
   parziale, sconto riga per riga) ma nessuna route li usa più — non è codice morto da un refuso,
   è la UI attuale che li ha rimossi.
+
+## App nativa (`mobile/`)
+
+Panoramica e avvio in README. Qui solo ciò che non si deduce dal codice.
+
+- React Native + Expo (Expo Router in `mobile/src/app/`), **niente WebView** per scelta
+  esplicita. Fase 1 solo installatore, poi banco "leggero", l'agente resta web. Le API Expo
+  cambiano a ogni SDK: guida e regole in `mobile/AGENTS.md`, doc versionata prima di scrivere.
+- `src/api_v1.js` è montata in `server.js` **prima** di controllo origine, sessione e middleware
+  `res.locals`: solo token Bearer (`src/token_app.js`), CORS aperto (nessun cookie in gioco).
+  `/api/v1/login` rifiuta i ruoli diversi da `cliente`.
+- Logica condivisa col sito, non duplicata: tutto il flusso richiesta → offerte → ordine →
+  stato ordini in **`src/flusso_cliente.js`** (le route di `server.js` fanno solo render/redirect:
+  non rimetterci logica), più `src/prodotto_json.js` e `src/limite_login.js`.
+- Carrello sul telefono (AsyncStorage per utente), totali ricalcolati dal server. Stato in
+  `mobile/src/negozio.ts` con abbonamento per selettore: con un Context normale ogni "+"
+  ridisegnava tutto l'elenco ed era lento — non tornarci.
+- Scelte grafiche volute (richieste esplicite): prezzo sempre in fondo alla card e centrato sullo
+  stepper; 2 misure affiancate su una riga, da 3 tendina; nome in Sora 600 come sul sito; righe
+  dentro una card dello stesso colore del riquadro foto.
+- Marchi assenti dall'app: `/marchi` non è linkato e nessun marchio è attivo.
+- `mobile/src/icone.ts` è **generato** da `src/icone.js` (`node scripts/genera_icone_app.js`).
+- Verifica: `npx tsc --noEmit` in `mobile/`; anteprima nel browser con la config `app-web` di
+  `.claude/launch.json` (serve anche il server su :3000). Nel pannello browser nascosto clic e
+  scroll non arrivano: leggere lo stato con `javascript_tool`.
+- Provare richiesta/offerte/ordine **senza** creare richieste vere (arrivano ai banchi reali):
+  sostituire `window.fetch` con risposte catturate dall'API su richieste esistenti e navigare con
+  `history.pushState` + evento `popstate`. Per provare il resto: utente di prova creato
+  direttamente in `users` (password casuale, nessuna notifica ai banchi) e poi cancellato; le
+  credenziali demo del README funzionano ma hanno storico vero.
 
 ## Notifiche
 
