@@ -61,6 +61,11 @@ export function ElencoProdotti({
         }
         onEndReached={caricaAltri}
         onEndReachedThreshold={0.6}
+        // Poche righe al primo disegno (le altre arrivano a piccoli gruppi): la schermata
+        // compare subito, senza bloccare il thread JS mentre scorre la transizione.
+        initialNumToRender={6}
+        maxToRenderPerBatch={6}
+        windowSize={11}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         style={{ backgroundColor: c.sfondo }}

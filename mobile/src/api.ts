@@ -3,7 +3,7 @@ import Constants from 'expo-constants';
 
 // In sviluppo il telefono raggiunge il server sul PC attraverso la rete locale: l'indirizzo
 // è lo stesso da cui Expo serve l'app (hostUri), con la porta del server Express. In
-// produzione si imposta EXPO_PUBLIC_API_URL (es. l'indirizzo del deploy su Vercel).
+// produzione si imposta EXPO_PUBLIC_API_URL (l'indirizzo del server che ospita il sito).
 function indirizzoServer(): string {
   const esplicito = process.env.EXPO_PUBLIC_API_URL;
   if (esplicito) return esplicito.replace(/\/$/, '');
@@ -12,6 +12,7 @@ function indirizzoServer(): string {
 }
 
 export const SERVER = indirizzoServer();
+const TIMEOUT_MS = 20000;
 const BASE = SERVER + '/api/v1';
 
 // Le foto prodotto nel DB sono percorsi del sito (/img/prodotti/...).
@@ -43,15 +44,23 @@ export async function chiamaApi<T>(percorso: string, opzioni: { metodo?: string;
   if (tokenCorrente) intestazioni.Authorization = 'Bearer ' + tokenCorrente;
   if (opzioni.corpo !== undefined) intestazioni['Content-Type'] = 'application/json';
 
+  // Senza un limite, con il server spento o il segnale che cade la chiamata restava appesa
+  // per minuti (spinner infinito). Dopo TIMEOUT_MS si dà errore e resta il "Riprova".
+  const interruzione = new AbortController();
+  const scadenza = setTimeout(() => interruzione.abort(), TIMEOUT_MS);
+
   let risposta: Response;
   try {
     risposta = await fetch(BASE + percorso, {
       method: opzioni.metodo || 'GET',
       headers: intestazioni,
       body: opzioni.corpo !== undefined ? JSON.stringify(opzioni.corpo) : undefined,
+      signal: interruzione.signal,
     });
   } catch {
     throw new ErroreApi('Server non raggiungibile: controlla la connessione.', 0);
+  } finally {
+    clearTimeout(scadenza);
   }
 
   let dati: any = null;

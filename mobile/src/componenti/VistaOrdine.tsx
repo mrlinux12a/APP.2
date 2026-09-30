@@ -14,12 +14,15 @@ export function VistaOrdine({
   id,
   nuovo = false,
   dopoEliminazione,
+  quandoChiusa,
 }: {
   id: number;
   nuovo?: boolean;
   dopoEliminazione?: () => void;
+  // Chiamata appena il server conferma l'annullamento, prima di ricaricare i dati.
+  quandoChiusa?: () => void;
 }) {
-  const { c, nome } = useTema();
+  const { c } = useTema();
   const clientDati = useQueryClient();
   const q = useOrdine(id);
   const [azione, setAzione] = useState<string | null>(null);
@@ -28,15 +31,24 @@ export function VistaOrdine({
   if (q.isError) return <Errore messaggio={q.error.message} riprova={() => q.refetch()} />;
   const o = q.data;
 
-  const esegui = async (quale: string, fn: () => Promise<unknown>) => {
+  // eliminato: l'ordine non esiste più, quindi non si rilegge (darebbe "Ordine non trovato") e si
+  // esce dalla schermata solo dopo aver aggiornato "Stato ordini": prima si tornava a una
+  // schermata che per un attimo mostrava ancora, in verde, l'ordine appena annullato.
+  const esegui = async (quale: string, fn: () => Promise<unknown>, eliminato = false) => {
     setAzione(quale);
     try {
       await fn();
       await Promise.all([
-        clientDati.invalidateQueries({ queryKey: ['ordine', id] }),
-        clientDati.invalidateQueries({ queryKey: ['stato-ordini'] }),
+        eliminato
+          ? clientDati.cancelQueries({ queryKey: ['ordine', id] })
+          : clientDati.invalidateQueries({ queryKey: ['ordine', id] }),
+        // La richiesta dell'ordine tolto risulta annullata: una copia vecchia in cache la mostrerebbe ordinata.
+        eliminato ? clientDati.invalidateQueries({ queryKey: ['richiesta'] }) : null,
+        // 'all': la scheda "Stato ordini" può essere sotto questa schermata, non in primo piano.
+        clientDati.invalidateQueries({ queryKey: ['stato-ordini'], refetchType: 'all' }),
         clientDati.invalidateQueries({ queryKey: ['storico'] }),
       ]);
+      if (eliminato) dopoEliminazione?.();
     } catch (e) {
       informa('Operazione non riuscita', e instanceof ErroreApi ? e.message : 'Riprova tra poco.');
     } finally {
@@ -66,9 +78,9 @@ export function VistaOrdine({
         </Avviso>
       ) : null}
 
-      <View style={[stili.hero, { backgroundColor: nome === 'chiaro' ? '#cdedd4' : c.verdeChiaro }]}>
+      <View style={[stili.hero, { backgroundColor: '#cdedd4' }]}>
         <Text style={[stili.heroBadge, { backgroundColor: c.superficie, color: c.verde }]}>{o.stato_testo}</Text>
-        <Text style={[stili.heroTempo, { color: nome === 'chiaro' ? c.verde : c.testo }]}>{o.tempo_testo}</Text>
+        <Text style={[stili.heroTempo, { color: c.verde }]}>{o.tempo_testo}</Text>
         {o.distributore ? (
           <Text style={[stili.heroSotto, { color: c.verde }]}>
             {o.distributore.nome}
@@ -119,10 +131,14 @@ export function VistaOrdine({
           tipo="discreto"
           onPress={() =>
             chiedi('Annullare questo ordine?', 'Il distributore verrà avvisato.', 'Annulla ordine', () =>
-              esegui('annulla', async () => {
-                await chiamaApi(`/ordini/${id}`, { metodo: 'DELETE' });
-                dopoEliminazione?.();
-              })
+              esegui(
+                'annulla',
+                async () => {
+                  await chiamaApi(`/ordini/${id}`, { metodo: 'DELETE' });
+                  quandoChiusa?.();
+                },
+                true
+              )
             , true)
           }
           inCorso={azione === 'annulla'}

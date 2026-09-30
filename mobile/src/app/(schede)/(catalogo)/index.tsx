@@ -7,7 +7,7 @@ import { BarraRicerca } from '@/componenti/BarraRicerca';
 import { ElencoProdotti } from '@/componenti/ElencoProdotti';
 import { Icona, IconaCategoria } from '@/componenti/Icona';
 import { Caricamento, Errore } from '@/componenti/Stato';
-import { useCatalogo, useRicerca } from '@/dati';
+import { useCatalogo, usePrecaricaCatalogo, useRicerca } from '@/dati';
 import { FONT, RAGGIO, useTema, type Colori } from '@/tema';
 
 function Tessera({ c, titolo, conta, icona, href }: { c: Colori; titolo: string; conta: number; icona: React.ReactNode; href: Href }) {
@@ -29,11 +29,13 @@ export default function Home() {
   const catalogo = useCatalogo();
   const [testo, setTesto] = useState('');
   const ricerca = useRicerca(testo);
+  const categorie: Categoria[] = catalogo.data ? [...catalogo.data.in_evidenza, ...catalogo.data.altre] : [];
+  // Le categorie si leggono in background appena c'è l'elenco: all'apertura sono già pronte.
+  usePrecaricaCatalogo(categorie);
 
   if (catalogo.isPending) return <Caricamento />;
   if (catalogo.isError) return <Errore messaggio={catalogo.error.message} riprova={() => catalogo.refetch()} />;
 
-  const categorie: Categoria[] = [...catalogo.data.in_evidenza, ...catalogo.data.altre];
   const risultati = ricerca.attiva ? ricerca.data?.risultati || [] : [];
 
   const intestazione = (
@@ -59,7 +61,7 @@ export default function Home() {
                 titolo={m.nome}
                 conta={m.n_prodotti}
                 icona={<IconaCategoria slug={m.slug} colore={c.accento} dimensione={20} />}
-                href={{ pathname: '/categoria/[slug]', params: { slug: m.slug } }}
+                href={{ pathname: '/categoria/[slug]', params: { slug: m.slug, titolo: m.nome } }}
               />
             ))}
             <Tessera

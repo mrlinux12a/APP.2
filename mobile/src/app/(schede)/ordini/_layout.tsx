@@ -1,6 +1,7 @@
 import { router, Stack } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 
+import { intestazione } from '@/componenti/BarraTitolo';
 import { PulsanteAccount } from '@/componenti/PulsanteAccount';
 import { FONT, useTema } from '@/tema';
 
@@ -11,12 +12,9 @@ export default function PilaOrdini() {
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: c.superficie },
-        headerShadowVisible: false,
-        headerTintColor: c.accento,
-        headerTitleStyle: { fontFamily: FONT.titolo, color: c.testo },
-        headerTitleAlign: 'center',
-        headerBackButtonDisplayMode: 'minimal',
+        freezeOnBlur: true,
+        // Barra uguale a quella del Carrello (vedi BarraTitolo): quella nativa era più alta.
+        header: intestazione,
         headerRight: () => <PulsanteAccount />,
         contentStyle: { backgroundColor: c.sfondo },
       }}

@@ -114,7 +114,17 @@ function SchedaOfferta({ o, richiestaId }: { o: Offerta; richiestaId: number }) 
 // direttamente l'ordine. Si aggiorna da sola ogni pochi secondi finché è aperta.
 // dopoEliminazione: dove andare quando la richiesta non esiste più (una pagina aperta dallo
 // storico torna indietro; "Stato ordini" invece si ridisegna da sola).
-export function VistaRichiesta({ id, dopoEliminazione }: { id: number; dopoEliminazione?: () => void }) {
+// quandoChiusa: chiamata appena il server conferma un annullamento o un'eliminazione, prima
+// di ricaricare i dati ("Stato ordini" ci mostra "Nessun ordine in corso").
+export function VistaRichiesta({
+  id,
+  dopoEliminazione,
+  quandoChiusa,
+}: {
+  id: number;
+  dopoEliminazione?: () => void;
+  quandoChiusa?: () => void;
+}) {
   const { c } = useTema();
   const clientDati = useQueryClient();
   const q = useRichiesta(id);
@@ -125,17 +135,25 @@ export function VistaRichiesta({ id, dopoEliminazione }: { id: number; dopoElimi
   if (q.isPending) return <Caricamento />;
   if (q.isError) return <Errore messaggio={q.error.message} riprova={() => q.refetch()} />;
   const r = q.data;
-  if (r.stato === 'ordinata' && r.order_id) return <VistaOrdine id={r.order_id} dopoEliminazione={dopoEliminazione} />;
+  if (r.stato === 'ordinata' && r.order_id) {
+    return <VistaOrdine id={r.order_id} dopoEliminazione={dopoEliminazione} quandoChiusa={quandoChiusa} />;
+  }
 
-  const esegui = async (nome: string, fn: () => Promise<unknown>) => {
+  // eliminata: la richiesta non esiste più, quindi non si rilegge (darebbe "non trovata") e si
+  // esce dalla schermata solo dopo aver aggiornato "Stato ordini", non prima.
+  const esegui = async (nome: string, fn: () => Promise<unknown>, eliminata = false) => {
     setAzione(nome);
     try {
       await fn();
       await Promise.all([
-        clientDati.invalidateQueries({ queryKey: ['richiesta', id] }),
-        clientDati.invalidateQueries({ queryKey: ['stato-ordini'] }),
+        eliminata
+          ? clientDati.cancelQueries({ queryKey: ['richiesta', id] })
+          : clientDati.invalidateQueries({ queryKey: ['richiesta', id] }),
+        // 'all': la scheda "Stato ordini" può essere sotto questa schermata, non in primo piano.
+        clientDati.invalidateQueries({ queryKey: ['stato-ordini'], refetchType: 'all' }),
         clientDati.invalidateQueries({ queryKey: ['storico'] }),
       ]);
+      if (eliminata) dopoEliminazione?.();
     } catch (e) {
       informa('Operazione non riuscita', e instanceof ErroreApi ? e.message : 'Riprova tra poco.');
     } finally {
@@ -145,14 +163,23 @@ export function VistaRichiesta({ id, dopoEliminazione }: { id: number; dopoElimi
 
   const annulla = () =>
     chiedi('Annullare la richiesta?', 'I distributori non potranno più confermare.', 'Annulla richiesta', () =>
-      esegui('annulla', () => chiamaApi(`/richieste/${id}/annulla`, { metodo: 'POST' }))
+      esegui('annulla', async () => {
+        // ok: false = non più annullabile (l'ordine automatico è partito un istante prima): si
+        // ricarica e si vede l'ordine, senza dire "nessun ordine in corso".
+        const { ok } = await chiamaApi<{ ok: boolean }>(`/richieste/${id}/annulla`, { metodo: 'POST' });
+        if (ok) quandoChiusa?.();
+      })
     , true);
   const elimina = () =>
     chiedi('Eliminare definitivamente?', 'Sparirà anche per i venditori.', 'Elimina', () =>
-      esegui('elimina', async () => {
-        await chiamaApi(`/richieste/${id}`, { metodo: 'DELETE' });
-        dopoEliminazione?.();
-      })
+      esegui(
+        'elimina',
+        async () => {
+          await chiamaApi(`/richieste/${id}`, { metodo: 'DELETE' });
+          quandoChiusa?.();
+        },
+        true
+      )
     , true);
   const reinvia = () => esegui('reinvia', () => chiamaApi(`/richieste/${id}/reinvia`, { metodo: 'POST' }));
 

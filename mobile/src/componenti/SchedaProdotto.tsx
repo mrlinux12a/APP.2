@@ -142,7 +142,12 @@ function SchedaProdottoBase({ p, ultima = false }: { p: Prodotto; ultima?: boole
       <View style={stili.laterale}>
         {p.foto_url ? (
           <Pressable onPress={() => setFotoAperta(true)} accessibilityLabel={'Foto di ' + p.nome}>
-            <Image source={urlFoto(p.foto_url)} style={[stili.foto, { backgroundColor: c.superficie }]} contentFit="contain" />
+            <Image
+              source={urlFoto(p.foto_url)}
+              style={[stili.foto, { backgroundColor: c.superficie }]}
+              contentFit="contain"
+              cachePolicy="memory-disk"
+            />
           </Pressable>
         ) : (
           <View style={stili.foto} />

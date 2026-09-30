@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { chiamaApi, ErroreApi, urlFoto } from '@/api';
@@ -60,14 +60,30 @@ export default function Carrello() {
   const chiediSvuota = () =>
     chiedi('Svuotare il carrello?', 'Togli tutti i pezzi dal carrello.', 'Svuota', () => carrello.svuota(), true);
 
+  // Richiesta partita: il carrello si svuota solo quando si lascia la scheda. Svuotarlo subito
+  // mostrava "Il carrello è vuoto / Vai al catalogo" per tutto il tempo in cui si aspetta
+  // "Stato ordini", cioè un attimo di catalogo prima dell'attesa delle risposte.
+  const partita = useRef(false);
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        if (!partita.current) return;
+        partita.current = false;
+        carrello.svuota();
+      },
+      []
+    )
+  );
+
   // "Conferma e chiedi disponibilità": la richiesta parte verso tutti i distributori attivi,
   // poi si passa a "Stato ordini", che mostra l'attesa delle risposte.
   const inviaRichiesta = async () => {
     setInvio(true);
     try {
       await chiamaApi<{ id: number }>('/richieste', { metodo: 'POST', corpo: { righe: carrello.voci() } });
-      carrello.svuota();
-      await clientDati.invalidateQueries({ queryKey: ['stato-ordini'] });
+      partita.current = true;
+      // 'all': anche se la scheda è già stata vista e non è in primo piano, così non mostra i dati vecchi.
+      await clientDati.invalidateQueries({ queryKey: ['stato-ordini'], refetchType: 'all' });
       router.navigate('/ordini');
     } catch (e) {
       if (e instanceof ErroreApi && e.dati?.codice === 'in_corso') {
@@ -144,7 +160,7 @@ export default function Carrello() {
           <Bottone
             titolo="Conferma e chiedi disponibilità"
             onPress={inviaRichiesta}
-            disabilitato={!r || !r.raggiunto || riepilogo.isFetching}
+            disabilitato={!r || !r.raggiunto || riepilogo.isFetching || riepilogo.inAttesa}
             inCorso={invio}
           />
           {r ? (

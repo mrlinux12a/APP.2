@@ -14,7 +14,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { CarrelloProvider } from '@/carrello';
 import { SessioneProvider, useSessione } from '@/sessione';
-import { FONT, TemaProvider, useTema } from '@/tema';
+import { STILE_TITOLO, useTema } from '@/tema';
 import { ErroreApi } from '@/api';
 
 const clientDati = new QueryClient({
@@ -29,7 +29,7 @@ const clientDati = new QueryClient({
 
 function Navigazione() {
   const { pronta, utente } = useSessione();
-  const { c, nome } = useTema();
+  const { c } = useTema();
 
   // All'uscita si butta la cache: chi entra dopo sullo stesso telefono non deve vedere,
   // nemmeno per un attimo, dati letti con l'account precedente.
@@ -43,14 +43,17 @@ function Navigazione() {
 
   return (
     <>
-      <StatusBar style={nome === 'chiaro' ? 'dark' : 'light'} />
+      <StatusBar style="dark" />
       <Stack
         screenOptions={{
           headerShown: false,
+          // Le schermate sotto la prima non si ridisegnano mentre sono coperte: meno lavoro
+          // per il thread JS durante le transizioni.
+          freezeOnBlur: true,
           contentStyle: { backgroundColor: c.sfondo },
           headerStyle: { backgroundColor: c.superficie },
           headerTintColor: c.accento,
-          headerTitleStyle: { fontFamily: FONT.titolo, color: c.testo },
+          headerTitleStyle: STILE_TITOLO,
         }}
       >
         <Stack.Protected guard={!!utente}>
@@ -66,7 +69,8 @@ function Navigazione() {
 }
 
 export default function Radice() {
-  const [fontPronti] = useFonts({
+  const { c } = useTema();
+  const [fontPronti, erroreFont] = useFonts({
     Sora_600SemiBold,
     Sora_700Bold,
     Sora_800ExtraBold,
@@ -78,11 +82,9 @@ export default function Radice() {
   return (
     <SafeAreaProvider>
       <QueryClientProvider client={clientDati}>
-        <TemaProvider>
-          <SessioneProvider>
-            <CarrelloProvider>{fontPronti ? <Navigazione /> : <View style={{ flex: 1, backgroundColor: '#12181f' }} />}</CarrelloProvider>
-          </SessioneProvider>
-        </TemaProvider>
+        <SessioneProvider>
+          <CarrelloProvider>{fontPronti || erroreFont ? <Navigazione /> : <View style={{ flex: 1, backgroundColor: c.sfondo }} />}</CarrelloProvider>
+        </SessioneProvider>
       </QueryClientProvider>
     </SafeAreaProvider>
   );

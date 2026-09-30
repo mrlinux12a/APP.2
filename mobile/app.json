@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": false
     },
@@ -29,6 +29,6 @@
       "expo-font"
     ],
     "scheme": "minuteria",
-    "backgroundColor": "#12181f"
+    "backgroundColor": "#f3f1ec"
   }
 }

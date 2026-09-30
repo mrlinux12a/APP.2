@@ -6,7 +6,7 @@ import { BarraRicerca } from '@/componenti/BarraRicerca';
 import { ElencoProdotti } from '@/componenti/ElencoProdotti';
 import { Icona } from '@/componenti/Icona';
 import { Caricamento, Errore } from '@/componenti/Stato';
-import { percorsoProdottiCategoria, useCategoria, useElencoPaginato, useRicerca } from '@/dati';
+import { percorsoProdottiCategoria, useCategoria, useElencoPaginato, usePrecaricaSottocategorie, useRicerca } from '@/dati';
 import { FONT, RAGGIO, useTema } from '@/tema';
 
 // Una categoria: prima l'elenco delle sottocategorie, poi (scelta una sottocategoria) i
@@ -14,7 +14,7 @@ import { FONT, RAGGIO, useTema } from '@/tema';
 // /categoria/:slug sul sito.
 export default function CategoriaSchermata() {
   const { c } = useTema();
-  const { slug, sotto: sottoParam } = useLocalSearchParams<{ slug: string; sotto?: string }>();
+  const { slug, sotto: sottoParam, titolo: titoloParam } = useLocalSearchParams<{ slug: string; sotto?: string; titolo?: string }>();
   const categoria = useCategoria(slug);
   const [testo, setTesto] = useState('');
 
@@ -25,6 +25,8 @@ export default function CategoriaSchermata() {
 
   const ricerca = useRicerca(testo, { macro: slug, sotto });
   const elenco = useElencoPaginato(percorsoProdottiCategoria(slug, sotto), sfoglia && !ricerca.attiva);
+  // Mentre si legge l'elenco delle sottocategorie si scarica già il primo elenco di ognuna.
+  usePrecaricaSottocategorie(slug, sfoglia ? [] : sottocategorie);
 
   if (categoria.isPending) return <Caricamento />;
   if (categoria.isError) return <Errore messaggio={categoria.error.message} riprova={() => categoria.refetch()} />;
@@ -56,7 +58,7 @@ export default function CategoriaSchermata() {
                 key={s.slug}
                 // push: stessa rotta con un altro parametro, va aggiunta come nuova schermata
                 // (così "indietro" torna all'elenco delle sottocategorie).
-                onPress={() => router.push({ pathname: '/categoria/[slug]', params: { slug, sotto: s.slug } })}
+                onPress={() => router.push({ pathname: '/categoria/[slug]', params: { slug, sotto: s.slug, titolo: s.nome } })}
                 accessibilityRole="link"
                 style={[
                   stili.riga,
@@ -79,7 +81,9 @@ export default function CategoriaSchermata() {
 
   return (
     <>
-      <Stack.Screen options={{ title: titolo }} />
+      {/* Di norma il titolo arriva già nel parametro (vedi _layout); qui solo se manca (collegamento
+          diretto) o è diverso: una categoria con una sola sottocategoria mostra quella. */}
+      {titolo === titoloParam ? null : <Stack.Screen options={{ title: titolo }} />}
       <ElencoProdotti
         prodotti={prodotti}
         intestazione={intestazione}

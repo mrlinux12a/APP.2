@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 
 import { usePezziNelCarrello } from '@/carrello';
+import { intestazione } from '@/componenti/BarraTitolo';
 import { Icona } from '@/componenti/Icona';
 import { FONT, useTema } from '@/tema';
 
@@ -12,14 +13,17 @@ export default function Schede() {
   return (
     <Tabs
       screenOptions={{
+        // Una scheda non in primo piano non si ridisegna finché non si torna a lei.
+        freezeOnBlur: true,
+        // Su Android, con la tastiera aperta, la barra in basso salirebbe sopra la tastiera e
+        // toglierebbe spazio ai risultati mentre si scrive (Expo, "Keyboard handling").
+        tabBarHideOnKeyboard: true,
         tabBarStyle: { backgroundColor: c.superficie, borderTopColor: c.bordo },
         tabBarActiveTintColor: c.navAttivo,
         tabBarInactiveTintColor: c.grigio,
         tabBarLabelStyle: { fontFamily: FONT.testoMedio, fontSize: 12 },
-        headerStyle: { backgroundColor: c.superficie },
-        headerShadowVisible: false,
-        headerTitleStyle: { fontFamily: FONT.titolo, color: c.testo },
-        headerTitleAlign: 'center',
+        // Stessa barra delle pile di schermate (Catalogo, Stato ordini): vedi BarraTitolo.
+        header: intestazione,
         sceneStyle: { backgroundColor: c.sfondo },
       }}
     >

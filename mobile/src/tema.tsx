@@ -1,42 +1,19 @@
-// Stessi colori del sito (variabili in cima a public/style.css): "Cantiere Notte" scuro
-// con accento ambra di default, modalità chiara con accento blu petrolio.
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-
-const scuro = {
-  accento: '#f2a71b',
-  accentoScuro: '#c9860a',
-  accentoChiaro: '#2b2313',
-  suAccento: '#12181f',
-  verde: '#5fbf63',
-  verdeChiaro: '#17261a',
-  arancio: '#ff7a52',
-  arancioChiaro: '#2c1a14',
-  rosso: '#ff6b6b',
-  rossoChiaro: '#2c1616',
-  grigio: '#93a2ad',
-  sfondo: '#12181f',
-  superficie: '#1a222b',
-  bordo: '#2a3540',
-  testo: '#eef2f5',
-  account: '#4fc3bf',
-  iconaNav: '#ffffff',
-  navAttivo: '#ffffff',
-  barrato: '#6f7c86',
-};
-
-export type Colori = typeof scuro;
-
-const chiaro: Colori = {
+// Stessi colori della modalità chiara del sito (variabili in cima a public/style.css), con
+// accento blu petrolio. L'app ha solo il tema chiaro, per scelta esplicita: niente modalità
+// scura e niente interruttore.
+const chiaro = {
   accento: '#245a8f',
   accentoScuro: '#1a4468',
   accentoChiaro: '#e3edf7',
   suAccento: '#ffffff',
-  verde: '#2f8f45',
+  // Verde, arancio e rosso sono scuriti quel tanto che serve a portare il testo sul proprio
+  // badge a 4.5:1 (prima 3.55, 3.04 e 4.34): sono i colori di "Disponibile", "In esaurimento" e
+  // "Non disponibile". Stessi valori del tema chiaro di public/style.css.
+  verde: '#297c3c',
   verdeChiaro: '#e3f3e6',
-  arancio: '#d9622e',
+  arancio: '#ab4d24',
   arancioChiaro: '#fbe6da',
-  rosso: '#c23b3b',
+  rosso: '#bd3a3a',
   rossoChiaro: '#fbe4e2',
   grigio: '#6b6a5f',
   sfondo: '#f3f1ec',
@@ -48,6 +25,8 @@ const chiaro: Colori = {
   navAttivo: '#245a8f',
   barrato: '#a7aeb8',
 };
+
+export type Colori = typeof chiaro;
 
 export const FONT = {
   // Nome dei prodotti: come .prodotto .nome sul sito (Sora 600).
@@ -61,40 +40,13 @@ export const FONT = {
 
 export const RAGGIO = 14;
 
-type NomeTema = 'scuro' | 'chiaro';
+// Titolo delle barre in alto: come .appbar .titolo del sito (Sora 700, 1.05rem ≈ 17px).
+// Senza una dimensione esplicita Android usa 20 e la barra risulta più grossa di quella web.
+export const STILE_TITOLO = { fontFamily: FONT.titolo, fontSize: 17, color: chiaro.testo };
 
-type ValoreTema = { nome: NomeTema; c: Colori; cambia: () => void };
+const VALORE = { c: chiaro };
 
-const ContestoTema = createContext<ValoreTema>({ nome: 'scuro', c: scuro, cambia: () => {} });
-
-// Come sul sito: scuro di default, "chiaro" solo se scelto esplicitamente (e ricordato).
-export function TemaProvider({ children }: { children: ReactNode }) {
-  const [nome, setNome] = useState<NomeTema>('scuro');
-
-  useEffect(() => {
-    AsyncStorage.getItem('tema')
-      .then((salvato) => {
-        if (salvato === 'chiaro') setNome('chiaro');
-      })
-      .catch(() => {});
-  }, []);
-
-  const valore = useMemo<ValoreTema>(
-    () => ({
-      nome,
-      c: nome === 'chiaro' ? chiaro : scuro,
-      cambia: () => {
-        const nuovo = nome === 'chiaro' ? 'scuro' : 'chiaro';
-        setNome(nuovo);
-        AsyncStorage.setItem('tema', nuovo).catch(() => {});
-      },
-    }),
-    [nome]
-  );
-
-  return <ContestoTema.Provider value={valore}>{children}</ContestoTema.Provider>;
-}
-
+// Resta un hook (come quando c'era anche il tema scuro) per non toccare ogni schermata.
 export function useTema() {
-  return useContext(ContestoTema);
+  return VALORE;
 }

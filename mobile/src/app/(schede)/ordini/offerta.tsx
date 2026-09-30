@@ -39,7 +39,9 @@ export default function RiepilogoOrdine() {
   const aggiornaTutto = () =>
     Promise.all([
       clientDati.invalidateQueries({ queryKey: ['richiesta', richiestaId] }),
-      clientDati.invalidateQueries({ queryKey: ['stato-ordini'] }),
+      // 'all': "Stato ordini" sta sotto questa schermata, non in primo piano: senza, tornandoci
+      // si vedrebbe per un attimo la richiesta di prima.
+      clientDati.invalidateQueries({ queryKey: ['stato-ordini'], refetchType: 'all' }),
       clientDati.invalidateQueries({ queryKey: ['storico'] }),
     ]);
 
