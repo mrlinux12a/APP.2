@@ -10,15 +10,42 @@ Richiede **Node.js 22.5 o superiore**.
 
 ```
 npm install
-npm run seed     # crea/aggiorna utenti e dati demo (idempotente)
 npm start
 ```
 
-Apri `http://localhost:3000`.
+Apri `http://localhost:3000`. Il DB di produzione ha già utenti e catalogo: `npm run seed`
+(dati demo, idempotente) serve solo su un DB vuoto, e **riscrive le password degli utenti demo**
+ai valori della tabella qui sotto. `npm install` non lo lancia più.
 
-In questo repository `.env` c'è già e punta al **Supabase Postgres di produzione condiviso**:
-`npm start` in locale scrive quindi sul DB vero. Senza `.env` l'app partirebbe in SQLite, ma è
-un percorso legacy non più mantenuto (dettagli in `CLAUDE.md`).
+Sulla tua macchina `.env` punta al **Supabase Postgres di produzione condiviso**: `npm start` in
+locale scrive quindi sul DB vero. Senza `.env` l'app partirebbe in SQLite, ma è un percorso
+legacy non più mantenuto (dettagli in `CLAUDE.md`).
+
+## Produzione (VPS)
+
+Il sito gira su una VPS con Node.js 22.5 o superiore, collegata allo stesso Supabase. `.env` non è
+nel repository: va creato a mano sul server con
+
+```
+DATABASE_URL=...      # stringa di connessione Postgres (pooler di Supabase)
+SESSION_SECRET=...    # firma i cookie di login: se cambia, tutti devono rifare l'accesso
+PORT=3000             # facoltativa
+```
+
+Per aggiornare dopo un nuovo commit:
+
+```
+git pull
+npm ci
+# riavvia il processo (npm start)
+```
+
+`npm ci` non si può saltare: le dipendenze cambiano (es. `compression`) e senza il server non
+parte. Se il commit tocca lo schema (`db/postgres/schema.sql`), va applicato una volta con
+`node scripts/apply_schema_pg.js`.
+
+Da sistemare, se non è già stato fatto (vedi `SCOPE.md`): un servizio che tenga acceso il
+processo e lo riavvii da solo, e HTTPS con un dominio davanti al sito.
 
 ## Credenziali demo
 
@@ -157,9 +184,8 @@ delle colonne.
 toglierli dalle loro categorie. Si popola da sola. Oggi sono **6.118** prodotti con foto:
 826 Effebi (import manuale) e 5.292 estratti dai listini PDF di Caleffi, Wavin, Grohe, Giacomini
 e Fischer, abbinando il codice fornitore stampato accanto a ogni foto al `codice_fornitore` a DB
-(Ariston escluso: layout non affidabile). Il metodo, con regole di layout diverse per ogni
-catalogo e verifica a campione prima di scrivere sul DB, è nella memoria di sessione
-`project_foto_cataloghi`.
+(Ariston escluso: layout non affidabile). Ogni catalogo ha regole di layout diverse e i
+risultati sono stati verificati a campione prima di scrivere sul DB.
 
 File in `public/img/prodotti/<marca>_<codice_fornitore>.webp`; `NULL` in `foto_url` non rompe
 nulla, la card mostra lo spazio vuoto.
@@ -247,9 +273,18 @@ npx expo start            # QR code: Expo Go (Android) o fotocamera (iPhone)
 ```
 
 In sviluppo l'app trova da sola il server sul PC (porta 3000); se Windows chiede di consentire
-Node sulla rete privata, va consentito. Per una build di produzione si imposta
-`EXPO_PUBLIC_API_URL` con l'indirizzo del sito pubblicato. Le icone dell'app si generano da
-`src/icone.js` con `node scripts/genera_icone_app.js`.
+Node sulla rete privata, va consentito. Per farla parlare con un altro server (la VPS) si scrive in
+`mobile/.env.local`:
+
+```
+EXPO_PUBLIC_API_URL=http://indirizzo-del-server:3000
+```
+
+Expo legge i `.env` solo da `mobile/` (quello alla radice è del server). Un indirizzo `http://`
+va bene con Expo Go; in un'app compilata Android e iOS bloccano il traffico non cifrato, quindi
+per la build serve HTTPS. L'aspetto è solo chiaro (niente modalità scura). Le icone delle
+categorie si generano da `src/icone.js` con `node scripts/genera_icone_app.js`; `icon.png` e
+`splash-icon.png` sono ancora i segnaposto di Expo.
 
 ## Struttura
 
@@ -270,10 +305,12 @@ src/prodotto_json.js   formato JSON dei prodotti (ricerca live, scroll infinito,
 src/limite_login.js    limite ai tentativi di login (web e app)
 src/icone.js           icone SVG (sorgente anche per l'app)
 src/sessioni.js        archivio sessioni su database
+src/memo.js            cache a scadenza (60 s) per letture che il server non scrive mai
 src/format.js          date, tempi di consegna, countdown
 src/auth.js            middleware di autenticazione/ruolo
-db/                    db/postgres (produzione) e db/sqlite (legacy, vedi CLAUDE.md)
-db/seed.js             dati demo (utenti, distributori, listini)
+db/                    db/postgres (produzione, con schema e funzioni della ricerca) e
+                       db/sqlite (legacy, vedi CLAUDE.md)
+db/seed.js             dati demo (utenti, distributori, legami cliente-banco)
 scripts/               schema (apply_schema_pg.js), sottocategorie, icone app, export
 views/                 pagine EJS (cliente e distributore mobile-first)
 public/                style.css, app.js (quantità, ricerca live, countdown), img/prodotti

@@ -122,6 +122,35 @@
   });
 
   // ---------- Carrello: modifica quantità e rimozione ----------
+  // Più tocchi ravvicinati su + e − fanno un solo salvataggio e un solo ricaricamento: prima
+  // ogni tocco ricaricava tutta la pagina (cinque tocchi, cinque ricaricamenti da mezzo
+  // secondo l'uno). Le quantità si mandano una alla volta: richieste in parallelo sulla stessa
+  // sessione si sovrascriverebbero a vicenda.
+  const quantitaDaSalvare = {};
+  let timerSalvataggioCarrello = null;
+  function programmaSalvataggioCarrello(id, qty) {
+    quantitaDaSalvare[id] = qty;
+    clearTimeout(timerSalvataggioCarrello);
+    timerSalvataggioCarrello = setTimeout(function () {
+      const voci = Object.keys(quantitaDaSalvare).map(function (k) { return { id: k, qty: quantitaDaSalvare[k] }; });
+      Object.keys(quantitaDaSalvare).forEach(function (k) { delete quantitaDaSalvare[k]; });
+      voci
+        .reduce(function (catena, voce) {
+          return catena.then(function () {
+            return fetch('/api/carrello/imposta', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(voce),
+            })
+              .then(function (r) { return r.json(); })
+              .then(function (d) { aggiornaBadgeCarrello(d.pezzi); });
+          });
+        }, Promise.resolve())
+        .catch(function () { /* la pagina si ricarica comunque e mostra il carrello vero */ })
+        .then(function () { if (!invioCarrelloInCorso) window.location.reload(); });
+    }, 400);
+  }
+
   document.addEventListener('click', function (e) {
     const btn = e.target.closest('[data-passo-carrello]');
     if (!btn) return;
@@ -137,18 +166,7 @@
     input.value = nuovo;
     const meno = stepper.querySelector('[data-passo-carrello="-1"]');
     if (meno) meno.disabled = nuovo <= 1;
-    // aggiorna via API
-    fetch('/api/carrello/imposta', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: id, qty: nuovo }),
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        aggiornaBadgeCarrello(d.pezzi);
-        window.location.reload();
-      })
-      .catch(function () { window.location.reload(); });
+    programmaSalvataggioCarrello(id, nuovo);
   });
 
   document.addEventListener('click', function (e) {

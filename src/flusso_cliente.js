@@ -461,25 +461,39 @@ async function richiesteClienteConStato(clienteId) {
   const tutte = await db
     .prepare(`SELECT * FROM requests WHERE cliente_id = ? ORDER BY id DESC LIMIT 50`)
     .all(clienteId);
+  if (!tutte.length) return [];
 
-  const cardsAll = [];
+  // La scadenza si aggiorna solo per le richieste ancora aperte (di solito zero o una).
+  const aggiornate = [];
   for (const r of tutte) {
-    const rAgg =
-      r.stato === 'in_attesa' || r.stato === 'con_offerte'
-        ? (await richieste.aggiornaScadenza(r.id)) || r
-        : r;
-    const righe = await richieste.righeRichiesta(rAgg.id);
+    aggiornate.push(
+      r.stato === 'in_attesa' || r.stato === 'con_offerte' ? (await richieste.aggiornaScadenza(r.id)) || r : r
+    );
+  }
+
+  // Righe e ordini di tutte le richieste con due letture in tutto, non due per richiesta:
+  // erano circa 100 query di fila, oltre 3 secondi per aprire lo storico.
+  const righePerRichiesta = await richieste.righeRichieste(aggiornate.map((r) => r.id));
+  const idOrdini = aggiornate.filter((r) => r.stato === 'ordinata' && r.order_id).map((r) => r.order_id);
+  const ordiniPerId = new Map();
+  if (idOrdini.length) {
+    const ordini = await db
+      .prepare(`SELECT * FROM orders WHERE id IN (${idOrdini.map(() => '?').join(',')})`)
+      .all(...idOrdini);
+    for (const o of ordini) ordiniPerId.set(Number(o.id), o);
+  }
+
+  return aggiornate.map((rAgg) => {
     let step = 0;
     let ordine = null;
     if (rAgg.stato === 'in_attesa') step = 1;
     else if (rAgg.stato === 'con_offerte') step = 2;
     else if (rAgg.stato === 'ordinata') {
       step = 3;
-      if (rAgg.order_id) ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(rAgg.order_id);
+      if (rAgg.order_id) ordine = ordiniPerId.get(Number(rAgg.order_id)) || null;
     }
-    cardsAll.push({ richiesta: rAgg, righe, ordine, step });
-  }
-  return cardsAll;
+    return { richiesta: rAgg, righe: righePerRichiesta.get(Number(rAgg.id)) || [], ordine, step };
+  });
 }
 
 // "Stato ordini": mostra sempre e solo UNA cosa, mai un elenco — quella più rilevante, in
@@ -500,44 +514,59 @@ function piuRecente(elenco) {
 // comunque di avere più di una richiesta in_attesa/con_offerte insieme), ed è l'unico stato
 // che ha bisogno del controllo di scadenza lazy (aggiornaScadenza scrive sul DB solo se
 // necessario). Passa da ~150 query a poche sole per apertura pagina.
-async function richiesteAttiveClienteLeggere(clienteId) {
-  const recenti = await db
+function leggiRichiesteRecenti(clienteId) {
+  return db
     .prepare(
       `SELECT id, stato, creato_il, scade_il, scelta_scade_il, order_id
          FROM requests WHERE cliente_id = ? ORDER BY id DESC LIMIT 5`
     )
     .all(clienteId);
+}
 
-  const risultati = [];
+async function richiesteAttiveClienteLeggere(recenti) {
+  // La scadenza si aggiorna solo per le richieste ancora aperte (di solito zero o una).
+  const aggiornate = [];
   for (const r of recenti) {
-    const rAgg =
-      r.stato === 'in_attesa' || r.stato === 'con_offerte'
-        ? (await richieste.aggiornaScadenza(r.id)) || r
-        : r;
+    aggiornate.push(
+      r.stato === 'in_attesa' || r.stato === 'con_offerte' ? (await richieste.aggiornaScadenza(r.id)) || r : r
+    );
+  }
 
+  // Gli ordini delle richieste già ordinate con una sola lettura, non una per richiesta.
+  const idOrdini = aggiornate.filter((r) => r.stato === 'ordinata' && r.order_id).map((r) => r.order_id);
+  const ordiniPerId = new Map();
+  if (idOrdini.length) {
+    const ordini = await db
+      .prepare(`SELECT id, stato, consegnato_il, creato_il FROM orders WHERE id IN (${idOrdini.map(() => '?').join(',')})`)
+      .all(...idOrdini);
+    for (const o of ordini) ordiniPerId.set(Number(o.id), o);
+  }
+
+  return aggiornate.map((rAgg) => {
     let step = 0;
     let ordine = null;
     if (rAgg.stato === 'in_attesa') step = 1;
     else if (rAgg.stato === 'con_offerte') step = 2;
     else if (rAgg.stato === 'ordinata') {
       step = 3;
-      if (rAgg.order_id) {
-        ordine = await db
-          .prepare('SELECT id, stato, consegnato_il, creato_il FROM orders WHERE id = ?')
-          .get(rAgg.order_id);
-      }
+      if (rAgg.order_id) ordine = ordiniPerId.get(Number(rAgg.order_id)) || null;
     }
-    risultati.push({ richiesta: rAgg, step, ordine });
-  }
-  return risultati;
+    return { richiesta: rAgg, step, ordine };
+  });
 }
 
 // L'attività da mostrare in "Stato ordini": { tipo: 'ordine'|'richiesta', id } o null.
 // Segna anche come lette le notifiche di richieste/ordini.
 async function attivitaCorrente(clienteId) {
-  await notifiche.segnaLetteCategoria(clienteId, 'ordini');
-  await notifiche.segnaLetteCategoria(clienteId, 'richieste');
-  const cardsAll = await richiesteAttiveClienteLeggere(clienteId);
+  // I due "segna come lette" e la lettura delle ultime richieste non dipendono l'uno
+  // dall'altro: partono insieme (un giro al DB invece di tre). Le scadenze si aggiornano DOPO,
+  // come prima: le notifiche che possono creare (es. "nessuna conferma") restano da leggere.
+  const [, , recenti] = await Promise.all([
+    notifiche.segnaLetteCategoria(clienteId, 'ordini'),
+    notifiche.segnaLetteCategoria(clienteId, 'richieste'),
+    leggiRichiesteRecenti(clienteId),
+  ]);
+  const cardsAll = await richiesteAttiveClienteLeggere(recenti);
 
   const inAttesa = cardsAll.filter((c) => c.step === 1);
   const daScegliere = cardsAll.filter((c) => {

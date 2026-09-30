@@ -1,13 +1,16 @@
 const db = require('../db');
+const { conCache } = require('./memo');
 
 function round2(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-async function getConfigNum(chiave, fallback) {
+// La configurazione (percentuale di servizio, IVA, finestre) non cambia mentre l'app gira:
+// si legge una volta al minuto invece che a ogni richiesta.
+const getConfigNum = conCache(60 * 1000, async (chiave, fallback) => {
   const row = await db.prepare('SELECT valore FROM config WHERE chiave = ?').get(chiave);
   return row ? parseFloat(row.valore) : fallback;
-}
+});
 
 async function getServizioPct() {
   return getConfigNum('servizio_pct', 10);

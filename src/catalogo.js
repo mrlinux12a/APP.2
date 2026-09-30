@@ -1,4 +1,5 @@
 const db = require('../db');
+const { conCache } = require('./memo');
 
 const PER_PAGINA = 40;
 
@@ -15,26 +16,68 @@ function etichettaVariante(variante_valori) {
 // mostrati come una sola card con un selettore di varianti, invece che una riga per
 // ciascuna misura. Un prodotto senza gruppo (o i cui "fratelli" non sono più attivi)
 // resta invariato: zero rischio per il catalogo esistente.
-async function raggruppaVarianti(righe) {
-  const idGruppi = [...new Set(righe.filter((r) => r.gruppo_id).map((r) => r.gruppo_id))];
-  if (!idGruppi.length) return righe;
+// Le query di ricerca ed elenco leggono i membri del gruppo (le varianti) insieme alle righe, come
+// colonna JSON "_gruppo": un giro al DB in meno, ~50 ms su ogni ricerca ed elenco. Si manda UNA volta
+// per gruppo, sulla prima riga di quel gruppo nell'ordine dei risultati: ripetuta su ogni riga, la
+// stessa lista di 58 misure viaggiava decine di volte e per certe ricerche costava più della
+// seconda query che sostituiva. Stessi campi che raggruppaVarianti leggeva prima; le righe senza
+// "_gruppo" (altri chiamanti) ripiegano su quella query.
+function membriDelGruppo(alias) {
+  return `(SELECT json_build_object(
+              'nome_rappresentativo', g.nome_rappresentativo,
+              'membri', (SELECT json_agg(json_build_object(
+                            'prodotto_id', q.id, 'nome', q.nome, 'codice', q.codice,
+                            'variante_valori', q.variante_valori, 'prezzo_listino', q.prezzo_listino,
+                            'sconto_base_pct', q.sconto_base_pct, 'disponibilita', q.disponibilita, 'raee', q.raee)
+                          ORDER BY q.prezzo_listino, q.id)
+                         FROM products q WHERE q.gruppo_id = g.id AND q.attivo = 1))
+            FROM product_groups g WHERE g.id = ${alias}.gruppo_id)`;
+}
 
-  const placeholders = idGruppi.map(() => '?').join(',');
-  const gruppi = await db
-    .prepare(
-      `SELECT g.id, g.nome_rappresentativo,
-              p.id AS prodotto_id, p.nome, p.codice, p.variante_valori,
-              p.prezzo_listino, p.sconto_base_pct, p.disponibilita, p.raee
-         FROM product_groups g
-         JOIN products p ON p.gruppo_id = g.id
-        WHERE g.id IN (${placeholders}) AND p.attivo = 1`
-    )
-    .all(...idGruppi);
+// Avvolge una SELECT già ordinata e limitata aggiungendo "_gruppo". _ord numera le righe
+// nell'ordine della query interna, _primo segna la prima di ogni gruppo: solo lì si calcolano
+// e si mandano i membri. Non aggiunge parametri: i "?" restano quelli della query interna.
+function conMembriDelGruppo(interna) {
+  return `SELECT r.*, CASE WHEN r._primo THEN ${membriDelGruppo('r')} END AS _gruppo
+            FROM (SELECT t.*, (t.gruppo_id IS NOT NULL
+                               AND ROW_NUMBER() OVER (PARTITION BY t.gruppo_id ORDER BY t._ord) = 1) AS _primo
+                    FROM (SELECT s.*, ROW_NUMBER() OVER () AS _ord FROM (${interna}) s) t) r
+           ORDER BY r._ord`;
+}
+
+// Le colonne di servizio di conMembriDelGruppo non fanno parte del prodotto.
+function senzaColonneDiServizio(righe) {
+  return righe.map(({ _gruppo, _ord, _primo, ...resto }) => resto);
+}
+
+async function raggruppaVarianti(righe) {
+  const conGruppo = righe.filter((r) => r.gruppo_id);
+  if (!conGruppo.length) return senzaColonneDiServizio(righe);
 
   const perGruppo = new Map();
-  for (const m of gruppi) {
-    if (!perGruppo.has(m.id)) perGruppo.set(m.id, { nome_rappresentativo: m.nome_rappresentativo, membri: [] });
-    perGruppo.get(m.id).membri.push(m);
+  for (const r of conGruppo) {
+    if (r._gruppo) {
+      perGruppo.set(r.gruppo_id, { nome_rappresentativo: r._gruppo.nome_rappresentativo, membri: r._gruppo.membri || [] });
+    }
+  }
+  if (conGruppo.some((r) => !perGruppo.has(r.gruppo_id))) {
+    perGruppo.clear();
+    const idGruppi = [...new Set(conGruppo.map((r) => r.gruppo_id))];
+    const placeholders = idGruppi.map(() => '?').join(',');
+    const gruppi = await db
+      .prepare(
+        `SELECT g.id, g.nome_rappresentativo,
+                p.id AS prodotto_id, p.nome, p.codice, p.variante_valori,
+                p.prezzo_listino, p.sconto_base_pct, p.disponibilita, p.raee
+           FROM product_groups g
+           JOIN products p ON p.gruppo_id = g.id
+          WHERE g.id IN (${placeholders}) AND p.attivo = 1`
+      )
+      .all(...idGruppi);
+    for (const m of gruppi) {
+      if (!perGruppo.has(m.id)) perGruppo.set(m.id, { nome_rappresentativo: m.nome_rappresentativo, membri: [] });
+      perGruppo.get(m.id).membri.push(m);
+    }
   }
 
   const giaMostrati = new Set();
@@ -72,7 +115,7 @@ async function raggruppaVarianti(righe) {
       })),
     });
   }
-  return risultato;
+  return senzaColonneDiServizio(risultato);
 }
 
 // Equivalenze pollici -> mm SOLO per le taglie gas/impianti a pressione: verificato sui
@@ -179,8 +222,10 @@ function correggiParolaChiave(termine) {
 // pool.on('connect', ...) è stato provato e scartato: il listener è asincrono e il pool
 // può assegnare quella stessa connessione a un'altra query prima che la SET finisca,
 // causando due query concorrenti sullo stesso client (confermato da un avviso di
-// deprecazione di pg proprio su questo). Si resta quindi sulla funzione esplicita,
-// con scansione sequenziale — più lenta ma senza rischi di concorrenza.
+// deprecazione di pg proprio su questo). La ricerca lenta resta quindi sulla funzione
+// esplicita, con scansione sequenziale. Quella veloce (eseguiRicerca) usa l'indice senza
+// stato di sessione: la funzione SQL ricerca_simili porta la soglia nella sua clausola SET,
+// che vale solo durante la chiamata (vedi db/postgres/schema.sql).
 const SOGLIA_MINIMA_FUZZY = 4;
 const SOGLIA_FUZZY = 0.45;
 
@@ -194,12 +239,43 @@ function frammentoDiametroMm(valoriMm) {
 // Ricerca "parziale": ogni parola digitata deve comparire, anche solo come frammento,
 // dentro nome / codice / categoria / marchio del prodotto. Scrivendo "valv" escono tutte
 // le valvole; scrivendo "toshiba estia" escono le pompe di calore ESTIA.
-async function cercaProdotti(
+//
+// Due modi di eseguirla, con gli stessi risultati:
+//  - veloce: le parole che l'indice sa cercare (3+ caratteri) diventano insiemi di id
+//    (funzioni SQL ricerca_esatti / ricerca_simili, vedi db/postgres/schema.sql) che si
+//    intersecano sull'indice; le altre (misure, parole di 1-2 caratteri) filtrano le poche
+//    righe rimaste. ~45 ms nel DB.
+//  - lenta: la vecchia query con sei LIKE in OR per parola e scansione dell'intera tabella,
+//    ~220 ms. Resta come ripiego se le funzioni SQL non ci sono (schema non aggiornato).
+let ricercaVeloceAttiva = true;
+
+async function cercaProdotti(query, opzioni = {}) {
+  if (ricercaVeloceAttiva) {
+    try {
+      return await eseguiRicerca(query, opzioni, true);
+    } catch (e) {
+      if (e.code !== '42883') throw e; // 42883 = funzione inesistente
+      ricercaVeloceAttiva = false;
+      console.warn(
+        '[ricerca] funzioni SQL non trovate: uso la ricerca lenta. Applica lo schema: node scripts/apply_schema_pg.js'
+      );
+    }
+  }
+  return eseguiRicerca(query, opzioni, false);
+}
+
+// Stessa espressione dell'indice idx_products_ricerca_trgm: scritta identica lo usa.
+function testoRicerca(alias) {
+  return `ricerca_testo(${alias}.nome, ${alias}.codice, ${alias}.categoria, ${alias}.ean, ${alias}.macro_slug, ${alias}.brand_slug)`;
+}
+
+async function eseguiRicerca(
   query,
   {
     macroSlug = null, brandSlug = null, famiglia = null, sotto = null, misura = null,
     materiale = null, diametro = null, limite = 100,
-  } = {}
+  } = {},
+  veloce = true
 ) {
   const termini = sostituisciFrazioniAParole(String(query || '').toLowerCase())
     .split(/\s+/)
@@ -250,6 +326,23 @@ async function cercaProdotti(
     }
   }
 
+  // Nella ricerca lenta ogni parola è una condizione in AND sulla riga (finisce in where); in
+  // quella veloce le parole che l'indice sa cercare diventano "candidati" da intersecare e le
+  // altre restano condizioni sulle righe rimaste (filtri).
+  const filtri = [];
+  const paramsFiltri = [];
+  const candidati = [];
+  const paramsCandidati = [];
+  const aggiungi = (condizione, ...valori) => {
+    if (veloce) {
+      filtri.push(condizione);
+      paramsFiltri.push(...valori);
+    } else {
+      where.push(condizione);
+      params.push(...valori);
+    }
+  };
+
   for (const t of termini) {
     const bloccoBase = `(LOWER(p.nome) LIKE ? OR LOWER(p.codice) LIKE ? OR LOWER(COALESCE(p.categoria, '')) LIKE ?
         OR LOWER(COALESCE(m.nome, '')) LIKE ? OR LOWER(COALESCE(b.nome, '')) LIKE ?
@@ -264,8 +357,7 @@ async function cercaProdotti(
     // correggiParolaChiave tollera anche i refusi su queste parole-comando (es. "pollicq").
     const patternGenerico = PAROLE_GENERICHE_MISURA[correggiParolaChiave(t)];
     if (patternGenerico) {
-      where.push('p.nome ~* ?');
-      params.push(patternGenerico);
+      aggiungi('p.nome ~* ?', patternGenerico);
       continue;
     }
 
@@ -276,18 +368,28 @@ async function cercaProdotti(
     // significherebbe altro).
     const equivalenti = EQUIVALENZE_POLLICI_MM[chiaveEquivalenza(t)];
     if (equivalenti) {
-      where.push(`(${bloccoBase} OR p.nome ~* ?)`);
-      params.push(...paramsBase, frammentoDiametroMm(equivalenti));
+      if (veloce) aggiungi(`(${testoRicerca('p')} LIKE ? OR p.nome ~* ?)`, like, frammentoDiametroMm(equivalenti));
+      else aggiungi(`(${bloccoBase} OR p.nome ~* ?)`, ...paramsBase, frammentoDiametroMm(equivalenti));
     } else if (t.length >= SOGLIA_MINIMA_FUZZY) {
       // Tollera i refusi di battitura (es. "valvla" invece di "valvola"): oltre al
       // confronto esatto di sempre, prova anche una corrispondenza per somiglianza
       // (pg_trgm) su una parola del nome. Solo dai 4 caratteri in su: sotto, la
       // somiglianza è troppo rumorosa (quasi tutto assomiglierebbe a quasi tutto).
-      where.push(`(${bloccoBase} OR word_similarity(?, LOWER(p.nome)) > ${SOGLIA_FUZZY})`);
-      params.push(...paramsBase, t);
+      if (veloce) {
+        candidati.push('SELECT ricerca_simili(?)');
+        paramsCandidati.push(t);
+      } else {
+        aggiungi(`(${bloccoBase} OR word_similarity(?, LOWER(p.nome)) > ${SOGLIA_FUZZY})`, ...paramsBase, t);
+      }
+    } else if (veloce && t.length === 3) {
+      // 3 caratteri: il minimo che l'indice trigram sa cercare.
+      candidati.push('SELECT ricerca_esatti(?)');
+      paramsCandidati.push(t);
+    } else if (veloce) {
+      // 1-2 caratteri (es. "16", "3"): l'indice non li aiuta, si controllano le righe rimaste.
+      aggiungi(`${testoRicerca('p')} LIKE ?`, like);
     } else {
-      where.push(bloccoBase);
-      params.push(...paramsBase);
+      aggiungi(bloccoBase, ...paramsBase);
     }
   }
 
@@ -298,23 +400,43 @@ async function cercaProdotti(
     : '';
   const paramsOrdine = primoTermine ? [primoTermine, primoTermine] : [];
 
-  const righeGrezze = await db
-    .prepare(
-      `SELECT p.*, m.nome AS macro_nome, b.nome AS brand_nome, b.colore AS brand_colore
-         FROM products p
-         LEFT JOIN macro_categorie m ON m.slug = p.macro_slug
-         LEFT JOIN brands b ON b.slug = p.brand_slug
-        WHERE ${where.join(' AND ')}
-        ORDER BY ${ordinePrefisso} p.categoria, p.nome
-        LIMIT ?`
-    )
-    .all(...params, ...paramsOrdine, limite);
+  const colonne = 'p.*, m.nome AS macro_nome, b.nome AS brand_nome, b.colore AS brand_colore';
+  const join = 'LEFT JOIN macro_categorie m ON m.slug = p.macro_slug LEFT JOIN brands b ON b.slug = p.brand_slug';
+  // In fondo prezzo e id: a parità di categoria e nome l'ordine era arbitrario (cambiava col piano
+  // di esecuzione), e da lì dipende quale variante fa da "default" nella scheda di un gruppo. Ora
+  // a parità di nome vince la più economica, poi l'id: stesso criterio del selettore delle misure.
+  const ordine = `ORDER BY ${ordinePrefisso} p.categoria, p.nome, p.prezzo_listino, p.id LIMIT ?`;
+
+  let sql;
+  let paramsQuery;
+  if (veloce && candidati.length) {
+    // Prima si restringe ai candidati dell'indice, poi si applicano i filtri (misure, parole
+    // corte) alle sole righe rimaste: senza OFFSET 0 il planner fonde i due livelli e
+    // valuta i filtri su tutte le 27.676 righe.
+    const sorgente = `(SELECT p.* FROM products p
+                        WHERE ${where.join(' AND ')} AND p.id IN (${candidati.join(' INTERSECT ')})
+                        OFFSET 0)`;
+    sql = `SELECT ${colonne} FROM ${sorgente} p ${join}
+            ${filtri.length ? 'WHERE ' + filtri.join(' AND ') : ''}
+            ${ordine}`;
+    paramsQuery = [...params, ...paramsCandidati, ...paramsFiltri, ...paramsOrdine, limite];
+  } else {
+    sql = `SELECT ${colonne} FROM products p ${join}
+            WHERE ${[...where, ...filtri].join(' AND ')}
+            ${ordine}`;
+    paramsQuery = [...params, ...paramsFiltri, ...paramsOrdine, limite];
+  }
+
+  const righeGrezze = await db.prepare(conMembriDelGruppo(sql)).all(...paramsQuery);
   return raggruppaVarianti(righeGrezze);
 }
 
 // ---------- Macro categorie ----------
 
-async function macroCategorie() {
+// macroCategorie, sottocategorieDi, macroCategoria e contaProdottiConFoto sono in cache per
+// 60 secondi (vedi memo.js): il server non le modifica mai, e i conteggi sono la parte più
+// lenta di home e categorie. Una modifica fatta da script compare entro un minuto.
+const macroCategorie = conCache(60 * 1000, async function macroCategorie() {
   return db
     .prepare(
       `SELECT m.*, (SELECT COUNT(*) FROM products p WHERE p.macro_slug = m.slug AND p.attivo = 1) AS n_prodotti
@@ -322,7 +444,7 @@ async function macroCategorie() {
         ORDER BY m.priorita, m.ordine, m.nome`
     )
     .all();
-}
+});
 
 // Le categorie che in cantiere si cercano più spesso: vanno in cima alla home.
 async function categorieInEvidenza() {
@@ -347,7 +469,7 @@ async function categorieHome() {
 
 // ---------- Sottocategorie e misure ----------
 
-async function sottocategorieDi(macroSlug) {
+const sottocategorieDi = conCache(60 * 1000, async function sottocategorieDi(macroSlug) {
   const rows = await db
     .prepare(
       `SELECT s.*, (SELECT COUNT(*) FROM products p
@@ -359,7 +481,7 @@ async function sottocategorieDi(macroSlug) {
     )
     .all(macroSlug);
   return rows.filter((s) => s.n > 0);
-}
+});
 
 async function sottocategoria(macroSlug, slug) {
   return db
@@ -419,33 +541,44 @@ async function marchiNellaCategoria({ macroSlug = null, sotto = null } = {}) {
     .all(...params);
 }
 
-async function macroCategoria(slug) {
+const macroCategoria = conCache(60 * 1000, async function macroCategoria(slug) {
   return db.prepare('SELECT * FROM macro_categorie WHERE slug = ?').get(slug);
-}
+});
 
 // ---------- Elenchi paginati ----------
 
+// Il totale di un elenco cambia solo quando si importa il catalogo: si ricorda per 60 s (come
+// macroCategorie) e vale per tutte le pagine dello stesso elenco, che prima lo ricalcolavano
+// a ogni pagina scorsa.
+const contaRighe = conCache(60 * 1000, async (where, params) => {
+  const row = await db.prepare(`SELECT COUNT(*) AS n FROM products p WHERE ${where}`).get(...params);
+  return row ? Number(row.n) : 0;
+});
+
 async function paginato({ where, params, pagina = 1, perPagina = PER_PAGINA }) {
-  const row = await db
-    .prepare(
-      `SELECT COUNT(*) AS n FROM products p WHERE ${where}`
-    )
-    .get(...params);
-  const totale = row ? Number(row.n) : 0;
+  const leggiPagina = (p) =>
+    db
+      .prepare(
+        conMembriDelGruppo(
+          `SELECT p.*, b.nome AS brand_nome, b.colore AS brand_colore
+             FROM products p
+             LEFT JOIN brands b ON b.slug = p.brand_slug
+            WHERE ${where}
+            ORDER BY p.nome, p.prezzo_listino, p.id
+            LIMIT ? OFFSET ?`
+        )
+      )
+      .all(...params, perPagina, (p - 1) * perPagina);
+
+  // Totale e pagina partono insieme: prima erano in fila, una andata e ritorno al DB in più
+  // a ogni apertura di un elenco.
+  const richiesta = Math.max(1, parseInt(pagina, 10) || 1);
+  const [totale, prima] = await Promise.all([contaRighe(where, params), leggiPagina(richiesta)]);
 
   const pagine = Math.max(1, Math.ceil(totale / perPagina));
-  const p = Math.min(Math.max(1, parseInt(pagina, 10) || 1), pagine);
-
-  const righeGrezze = await db
-    .prepare(
-      `SELECT p.*, b.nome AS brand_nome, b.colore AS brand_colore
-         FROM products p
-         LEFT JOIN brands b ON b.slug = p.brand_slug
-        WHERE ${where}
-        ORDER BY p.nome
-        LIMIT ? OFFSET ?`
-    )
-    .all(...params, perPagina, (p - 1) * perPagina);
+  const p = Math.min(richiesta, pagine);
+  // Pagina oltre l'ultima (raro): si legge quella giusta.
+  const righeGrezze = p === richiesta ? prima : await leggiPagina(p);
   const righe = await raggruppaVarianti(righeGrezze);
 
   return { righe, totale, pagina: p, pagine, perPagina };
@@ -498,12 +631,12 @@ async function prodottiConFoto({ pagina = 1 } = {}) {
   return paginato({ where: 'p.attivo = 1 AND p.foto_url IS NOT NULL', params: [], pagina });
 }
 
-async function contaProdottiConFoto() {
+const contaProdottiConFoto = conCache(60 * 1000, async function contaProdottiConFoto() {
   const row = await db
     .prepare('SELECT COUNT(*) AS n FROM products WHERE attivo = 1 AND foto_url IS NOT NULL')
     .get();
   return row ? Number(row.n) : 0;
-}
+});
 
 // ---------- Marchi ----------
 

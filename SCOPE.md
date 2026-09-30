@@ -1,6 +1,6 @@
 # Cosa c'è dentro / cosa è volutamente fuori
 
-Aggiornato al 29/09/2026 (app nativa per l'installatore; tolti i punti che non erano più veri).
+Aggiornato al 30/09/2026 (sito in produzione su una VPS, app nativa per l'installatore).
 
 ## Dentro (oggi funzionante)
 
@@ -33,7 +33,8 @@ Aggiornato al 29/09/2026 (app nativa per l'installatore; tolti i punti che non e
   un ordine solo finché è *Da preparare*, e conferma la consegna.
 - **App nativa** (React Native / Expo, `mobile/`): login, catalogo, ricerca, categorie, elementi
   con foto, carrello, richiesta, offerte, ordine, stato ordini e storico. Stesso database e
-  stesse regole del sito (`src/flusso_cliente.js`).
+  stesse regole del sito (`src/flusso_cliente.js`). Solo tema chiaro; categorie e sottocategorie
+  si aprono già piene e l'app entra senza aspettare la rete.
 
 **Distributore (banco)**
 
@@ -67,6 +68,8 @@ Aggiornato al 29/09/2026 (app nativa per l'installatore; tolti i punti che non e
 - **Isolamento dati**: un cliente vede solo i propri ordini, un distributore solo le proprie
   richieste e gli ordini assegnati a lui.
 - **Sessioni su database** (un riavvio non scollega nessuno) e menu account in alto a destra.
+- **Produzione su una VPS** (Node, `npm start`), collegata allo stesso Supabase; non più su
+  Vercel. Come si aggiorna: README, "Produzione (VPS)".
 - **Marchi con listini dei produttori** caricabili da Excel con un importatore generico
   (`db/postgres/importa_listino.js`). Oggi nel DB non ci sono marchi attivi.
 
@@ -77,8 +80,17 @@ Aggiornato al 29/09/2026 (app nativa per l'installatore; tolti i punti che non e
 - Registrazione in app (oggi rimanda al sito) e **cancellazione dell'account** dall'app, richiesta
   da Apple; privacy policy pubblicata, anche per la posizione.
 - Versione "leggera" per il **banco**: push, accetta/rifiuta, elenco ordini con cambio stato.
-- Build per i clienti pilota (TestFlight / test interno di Google Play) e indirizzo di
-  produzione (`EXPO_PUBLIC_API_URL`).
+- Build per i clienti pilota (TestFlight / test interno di Google Play), con `EXPO_PUBLIC_API_URL`
+  su un indirizzo **HTTPS**: le build bloccano il traffico `http://` verso un IP.
+- **Logo e splash** dell'app: `icon.png` e `splash-icon.png` sono ancora i segnaposto di Expo.
+
+**Produzione (VPS)**
+- Un servizio (systemd o pm2) che tenga acceso il processo e lo riavvii da solo, invece di
+  `npm start` a mano (se non è già stato messo).
+- **HTTPS con un dominio** davanti al sito (reverse proxy con certificato): necessario anche per
+  l'app compilata.
+- **Utenti demo**: le password sono note (README) e `npm run seed` le riscrive; vanno cambiate o
+  tolte prima di far provare il sito ai clienti pilota.
 
 **Sito e dati**
 - **Metodi di pagamento in app** — oggi il riepilogo dice "alle condizioni concordate con il
@@ -124,6 +136,8 @@ Aggiornato al 29/09/2026 (app nativa per l'installatore; tolti i punti che non e
 
 ## Scelte di scope già confermate con l'utente
 
+- 29/09/2026 — **Il sito passa da Vercel a una VPS**, con lo stesso Supabase.
+- 29/09/2026 — **L'app ha solo il tema chiaro**: niente modalità scura e niente interruttore.
 - 29/09/2026 — **L'app usa lo stesso database del sito** (Supabase di produzione): niente DB di
   test separato.
 - 26/09/2026 — **App nativa in React Native (Expo)**, con **prima solo l'installatore**; il banco

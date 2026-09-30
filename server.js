@@ -1,11 +1,14 @@
 require('dotenv').config();
 const express = require('express');
+const compression = require('compression');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 const crypto = require('crypto');
 
 const db = require('./db');
+// Connessioni al DB già aperte e tenute sveglie (solo Postgres): vedi db/postgres/index.js.
+if (typeof db.mantieniCalde === 'function') db.mantieniCalde();
 // auto-seed se DB vuoto (dopo clone/pull basta npm start)
 (async () => {
   try {
@@ -72,6 +75,9 @@ app.set('views', path.join(__dirname, 'views'));
 // Necessario per leggere il vero IP del client (usato dal limite tentativi di login)
 // quando l'app gira dietro un proxy/load balancer (es. Vercel).
 app.set('trust proxy', 1);
+// Comprime HTML, JSON, CSS e JS (sotto 1 KB no): la ricerca in JSON passa da ~46 KB a pochi KB,
+// che su rete mobile è la parte più lenta. Le foto sono già compresse (webp) e restano intatte.
+app.use(compression());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
@@ -108,6 +114,11 @@ app.use((req, res, next) => {
   next();
 });
 
+// Foto e librerie cambiano di rado: il browser (e l'app) le tiene 7 giorni invece di
+// richiederle a ogni pagina. CSS e JS restano con la sola verifica (ETag), così una modifica si
+// vede subito.
+app.use('/img', express.static(path.join(__dirname, 'public', 'img'), { maxAge: '7d' }));
+app.use('/vendor', express.static(path.join(__dirname, 'public', 'vendor'), { maxAge: '7d' }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(
   session({

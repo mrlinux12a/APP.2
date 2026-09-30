@@ -7,6 +7,18 @@ const isSupabase = DATABASE_URL.includes('supabase.co');
 const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: isSupabase ? { rejectUnauthorized: false } : false,
+  // Di default pg chiude i client rimasti fermi 10 secondi: con traffico a scatti (una
+  // persona che tocca lo schermo ogni tanto) la richiesta dopo ogni pausa apriva una
+  // connessione nuova verso il pooler, TCP + TLS + login = ~330-420 ms misurati, contro ~45 ms
+  // di una query su una connessione già aperta. Il pooler di Supabase tiene aperte quelle
+  // inattive per minuti (provato fino a 90 s), quindi le teniamo anche noi.
+  idleTimeoutMillis: 5 * 60 * 1000,
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10 * 1000,
+  // Senza un limite una connessione che non si stabilisce lasciava la richiesta appesa.
+  connectionTimeoutMillis: 15 * 1000,
+  // Gli script (importazioni, seed) escono appena finiscono, senza aspettare i client fermi.
+  allowExitOnIdle: true,
 });
 
 // Senza questo handler, un client idle del pool che perde la connessione (capita spesso
@@ -198,6 +210,17 @@ function transaction(fn) {
   };
 }
 
+// Apre subito qualche connessione e la tiene sveglia con una query minuscola ogni minuto:
+// le prime richieste dopo l'avvio (o dopo una lunga pausa) trovano già connessioni pronte.
+// Si chiama dal server, non dagli script: a loro non serve.
+const CONNESSIONI_CALDE = 3;
+function mantieniCalde() {
+  const scalda = () =>
+    Promise.all(Array.from({ length: CONNESSIONI_CALDE }, () => pool.query('SELECT 1'))).catch(() => {});
+  scalda();
+  setInterval(scalda, 60 * 1000).unref();
+}
+
 const db = {
   prepare,
   exec,
@@ -220,6 +243,7 @@ const db = {
   transaction,
   pool,
   ensureInit,
+  mantieniCalde,
 };
 
 module.exports = db;

@@ -19,9 +19,27 @@ async function creaToken(userId, dispositivo) {
   return token;
 }
 
+// Ogni chiamata dell'app verifica il token sul DB: una lettura in più prima ancora di
+// rispondere. Un token valido si ricorda per un minuto (vale anche per l'aggiornamento di
+// "usato_il", che comunque avviene al massimo una volta l'ora); logout e revoca lo tolgono
+// subito. Un utente disattivato smette di entrare entro un minuto.
+const DURATA_RICORDO_MS = 60 * 1000;
+const ricordati = new Map(); // hash del token -> { riga, scade }
+
+function ricorda(hash, riga) {
+  const adesso = Date.now();
+  ricordati.set(hash, { riga, scade: adesso + DURATA_RICORDO_MS });
+  if (ricordati.size > 1000) {
+    for (const [k, v] of ricordati) if (v.scade <= adesso) ricordati.delete(k);
+  }
+}
+
 // Restituisce l'utente (attivo) a cui appartiene il token, o null.
 async function utenteDaToken(token) {
   if (!token) return null;
+  const hash = hashToken(token);
+  const ricordato = ricordati.get(hash);
+  if (ricordato && ricordato.scade > Date.now()) return ricordato.riga;
   const riga = await db
     .prepare(
       `SELECT t.id AS token_id, t.usato_il, u.*
@@ -32,8 +50,9 @@ async function utenteDaToken(token) {
           AND t.usato_il > NOW() - INTERVAL '${GIORNI_INATTIVITA} days'
           AND u.attivo = 1`
     )
-    .get(hashToken(token));
+    .get(hash);
   if (!riga) return null;
+  ricorda(hash, riga);
   // Rinnova la scadenza al massimo una volta l'ora: non serve una scrittura per ogni
   // chiamata dell'app, basta sapere che il token è ancora in uso.
   db.prepare(
@@ -46,6 +65,7 @@ async function utenteDaToken(token) {
 
 async function revocaToken(token) {
   if (!token) return;
+  ricordati.delete(hashToken(token));
   await db
     .prepare('UPDATE app_tokens SET revocato_il = NOW() WHERE token_hash = ? AND revocato_il IS NULL')
     .run(hashToken(token));

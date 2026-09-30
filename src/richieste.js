@@ -19,6 +19,25 @@ async function righeRichiesta(requestId) {
     .all(requestId);
 }
 
+// Le righe di più richieste con una sola lettura: Map id richiesta -> righe, nello stesso
+// ordine di righeRichiesta(). Chi elenca molte richieste (storico) non deve fare una query
+// ciascuna: con il DB su un altro server erano oltre 3 secondi per 50 richieste.
+async function righeRichieste(requestIds) {
+  const perRichiesta = new Map(requestIds.map((id) => [Number(id), []]));
+  if (!requestIds.length) return perRichiesta;
+  const righe = await db
+    .prepare(
+      `SELECT ri.*, p.codice, p.nome, p.categoria
+         FROM request_items ri
+         JOIN products p ON p.id = ri.product_id
+        WHERE ri.request_id IN (${requestIds.map(() => '?').join(',')})
+        ORDER BY ri.request_id, p.categoria, p.nome`
+    )
+    .all(...requestIds);
+  for (const r of righe) perRichiesta.get(Number(r.request_id)).push(r);
+  return perRichiesta;
+}
+
 async function risposteRichiesta(requestId) {
   return db
     .prepare(
@@ -731,6 +750,7 @@ module.exports = {
   scontoCliente,
   getRichiesta,
   righeRichiesta,
+  righeRichieste,
   risposteRichiesta,
   getRisposta,
   secondiRimasti,

@@ -6,9 +6,12 @@ const db = require('../db');
 
 const DURATA_PREDEFINITA = 1000 * 60 * 60 * 24 * 30; // 30 giorni
 
+const INTERVALLO_TOUCH_MS = 10 * 60 * 1000;
+
 class ArchivioSqlite extends session.Store {
   constructor() {
     super();
+    this.ultimoTouch = new Map(); // sid -> istante dell'ultimo rinnovo scritto sul DB
     // crea tabella session se manca (per sqlite e postgres)
     const isPg = !!process.env.DATABASE_URL;
     const createSql = isPg
@@ -60,16 +63,31 @@ class ArchivioSqlite extends session.Store {
       .catch(err => callback(err));
   }
 
+  // Con rolling: true express-session chiama touch a ogni richiesta e ASPETTA che finisca prima di
+  // chiudere la risposta: un UPDATE sul DB (un giro di rete, ~50 ms) su ogni pagina. La scadenza
+  // è a 30 giorni: rinnovarla al massimo ogni 10 minuti per sessione cambia solo di pochi
+  // minuti quando scade, e toglie quell'attesa dal 99% delle richieste.
   touch(sid, sess, callback) {
+    const adesso = Date.now();
+    const ultimo = this.ultimoTouch.get(sid);
+    if (ultimo && adesso - ultimo < INTERVALLO_TOUCH_MS) return callback(null);
+
     const isPg = !!process.env.DATABASE_URL;
     const expire = this.scadenza(sess);
     const expireParam = isPg ? expire : this.formatoSqlite(expire);
     db.prepare('UPDATE session SET expire = ? WHERE sid = ?').run(expireParam, sid)
-      .then(() => callback(null))
+      .then(() => {
+        this.ultimoTouch.set(sid, adesso);
+        if (this.ultimoTouch.size > 5000) {
+          for (const [k, v] of this.ultimoTouch) if (adesso - v >= INTERVALLO_TOUCH_MS) this.ultimoTouch.delete(k);
+        }
+        callback(null);
+      })
       .catch(err => callback(err));
   }
 
   destroy(sid, callback) {
+    this.ultimoTouch.delete(sid);
     db.prepare('DELETE FROM session WHERE sid = ?').run(sid)
       .then(() => callback(null))
       .catch(err => callback(err || null));

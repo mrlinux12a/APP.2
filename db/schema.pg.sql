@@ -449,3 +449,41 @@ CREATE TABLE IF NOT EXISTS app_tokens (
   revocato_il TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_app_tokens_user ON app_tokens(user_id);
+
+-- Ricerca veloce (catalogo.js, cercaProdotti). Prima ogni ricerca faceva una scansione di tutte
+-- le 27.676 righe (~220 ms nel DB): le condizioni erano messe in OR su sei colonne e sulla
+-- somiglianza, e in quella forma gli indici pg_trgm sopra non si possono usare.
+-- Qui: (1) un testo unico cercabile con il suo indice GIN, (2) due funzioni che restituiscono
+-- gli id dei prodotti che contengono un termine. La ricerca interseca gli id dei termini
+-- sull'indice e applica gli altri filtri alle poche righe rimaste: ~45 ms invece di ~220.
+-- Stessi risultati di prima (verificato su 25 ricerche), con una differenza voluta: il
+-- marchio e la categoria si cercano dallo slug (stesse parole del nome) e non più dalla
+-- tabella brands.
+-- ATTENZIONE: ricerca_testo è nell'indice: se si cambia il suo corpo l'indice va ricreato.
+CREATE OR REPLACE FUNCTION ricerca_testo(nome text, codice text, categoria text, ean text, macro text, brand text)
+RETURNS text LANGUAGE sql IMMUTABLE
+AS $$ SELECT lower(coalesce(nome, '') || ' ' || coalesce(codice, '') || ' ' || coalesce(categoria, '') || ' ' || coalesce(ean, '') || ' ' || coalesce(macro, '') || ' ' || coalesce(brand, '')) $$;
+
+CREATE INDEX IF NOT EXISTS idx_products_ricerca_trgm ON products
+  USING GIN (ricerca_testo(nome, codice, categoria, ean, macro_slug, brand_slug) gin_trgm_ops);
+
+-- Prodotti che contengono il termine (anche a metà parola), termine di almeno 3 caratteri.
+CREATE OR REPLACE FUNCTION ricerca_esatti(termine text) RETURNS SETOF integer
+LANGUAGE sql STABLE
+AS $$ SELECT id FROM public.products
+       WHERE attivo = 1
+         AND public.ricerca_testo(nome, codice, categoria, ean, macro_slug, brand_slug) LIKE '%' || termine || '%' $$;
+
+-- Come sopra, più i refusi di battitura: parola del nome simile al termine (soglia 0.45, la
+-- stessa di sempre). L'operatore %> può usare l'indice, ma legge la soglia dall'impostazione
+-- pg_trgm.word_similarity_threshold: con il pooler in modalità transazione una SET di
+-- sessione non è affidabile, invece la clausola SET di una funzione vale per la sola durata
+-- della chiamata, senza stato condiviso. 0.450001 e non 0.45: %> confronta con >=, la
+-- funzione word_similarity() usata prima con >.
+CREATE OR REPLACE FUNCTION ricerca_simili(termine text) RETURNS SETOF integer
+LANGUAGE sql STABLE
+SET pg_trgm.word_similarity_threshold = '0.450001'
+AS $$ SELECT id FROM public.products
+       WHERE attivo = 1
+         AND (public.ricerca_testo(nome, codice, categoria, ean, macro_slug, brand_slug) LIKE '%' || termine || '%'
+              OR lower(nome) %> termine) $$;
