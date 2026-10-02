@@ -27,7 +27,7 @@ function Distributori({ risposte }: { risposte: Richiesta['risposte'] }) {
         >
           <View style={{ flex: 1 }}>
             <Text style={[stili.pillNome, { color: c.testo }]}>{r.distributore}</Text>
-            <Text style={[stili.meta, { color: c.grigio }]}>{r.filiale}</Text>
+            {r.filiale ? <Text style={[stili.meta, { color: c.grigio }]}>{r.filiale}</Text> : null}
           </View>
           <StatoBadge testo={r.esito_testo} tono={tonoEsito(r.esito)} />
         </View>
@@ -62,7 +62,7 @@ function SchedaOfferta({ o, richiestaId }: { o: Offerta; richiestaId: number }) 
       <View style={stili.offertaTesta}>
         <View style={{ flex: 1 }}>
           <Text style={[stili.offertaNome, { color: c.testo }]}>{o.distributore}</Text>
-          <Text style={[stili.meta, { color: c.grigio }]}>{o.filiale}</Text>
+          {o.filiale ? <Text style={[stili.meta, { color: c.grigio }]}>{o.filiale}</Text> : null}
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={[stili.offertaValore, { color: c.accento }]}>€ {o.imponibile}</Text>

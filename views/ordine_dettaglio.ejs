@@ -32,7 +32,9 @@
             ? 'Consegnato il ' + fmt.dataOra(ordine.consegnato_il)
             : (ordine.modalita === 'ritiro'
                 ? 'Pronto per il ritiro al banco'
-                : (ordine.consegna_ore ? 'Arriva entro ' + fmt.tempoConsegna(ordine.consegna_ore) : 'Tempi di consegna da confermare'));
+                : (ordine.corriere_arrivo_il
+                    ? 'Consegna prevista entro le ' + fmt.oraRoma(ordine.corriere_arrivo_il)
+                    : (ordine.consegna_ore ? 'Arriva entro ' + fmt.tempoConsegna(ordine.consegna_ore) : 'Tempi di consegna da confermare')));
         %>
         <div class="ordine-hero verde">
           <span class="badge"><%= statoLabel %></span>

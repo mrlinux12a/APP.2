@@ -487,3 +487,59 @@ AS $$ SELECT id FROM public.products
        WHERE attivo = 1
          AND (public.ricerca_testo(nome, codice, categoria, ean, macro_slug, brand_slug) LIKE '%' || termine || '%'
               OR lower(nome) %> termine) $$;
+
+-- ---------- Ditte e filiali ----------
+-- Una ditta (es. Borea) ha più filiali; ogni filiale è una riga di `distributors` (ditta_id) e i
+-- suoi dipendenti sono utenti `users` con ruolo 'distributore' e distributor_id = la filiale.
+-- L'installatore vede solo la ditta: la filiale conta per chi risponde e da dove parte l'ordine.
+CREATE TABLE IF NOT EXISTS ditte (
+  id SERIAL PRIMARY KEY,
+  nome TEXT NOT NULL UNIQUE,
+  ragione_sociale TEXT NOT NULL DEFAULT '',
+  partita_iva TEXT NOT NULL DEFAULT '',
+  indirizzo TEXT NOT NULL DEFAULT '',
+  cap TEXT NOT NULL DEFAULT '',
+  citta TEXT NOT NULL DEFAULT '',
+  provincia TEXT NOT NULL DEFAULT '',
+  telefono TEXT NOT NULL DEFAULT '',
+  email TEXT NOT NULL DEFAULT '',
+  sdi_pec TEXT NOT NULL DEFAULT '',
+  attivo INTEGER NOT NULL DEFAULT 1,
+  creato_il TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE distributors ADD COLUMN IF NOT EXISTS ditta_id INTEGER REFERENCES ditte(id);
+-- `nome` è il nome della ditta e si ripete per ogni sua filiale: unica è la coppia nome + filiale.
+ALTER TABLE distributors DROP CONSTRAINT IF EXISTS distributors_nome_key;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_distributors_nome_filiale ON distributors(nome, filiale);
+CREATE INDEX IF NOT EXISTS idx_distributors_ditta ON distributors(ditta_id);
+
+-- Nome e cognome del dipendente (per gli altri ruoli restano vuoti: lì vale ragione_sociale).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS nome TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS cognome TEXT NOT NULL DEFAULT '';
+
+-- Chi, fra i dipendenti della filiale, ha risposto alla richiesta.
+ALTER TABLE request_responses ADD COLUMN IF NOT EXISTS risposto_da INTEGER REFERENCES users(id);
+
+-- Gruppo WhatsApp dei corrieri: coda dei messaggi (da inviare / inviati) e risposta del corriere.
+CREATE TABLE IF NOT EXISTS whatsapp_messaggi (
+  id SERIAL PRIMARY KEY,
+  order_id INTEGER,
+  tipo TEXT NOT NULL DEFAULT 'ordine',
+  testo TEXT NOT NULL,
+  stato TEXT NOT NULL DEFAULT 'da_inviare' CHECK (stato IN ('da_inviare', 'inviato')),
+  wa_msg_id TEXT,
+  tentativi INTEGER NOT NULL DEFAULT 0,
+  errore TEXT,
+  creato_il TIMESTAMP NOT NULL DEFAULT NOW(),
+  inviato_il TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_messaggi_wa_id ON whatsapp_messaggi(wa_msg_id);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_messaggi_order ON whatsapp_messaggi(order_id);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_messaggi_coda ON whatsapp_messaggi(id) WHERE stato = 'da_inviare';
+
+-- Tempo di consegna scritto dal corriere nel gruppo (TIMESTAMPTZ: l'orario d'arrivo è un istante vero).
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS corriere_minuti INTEGER;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS corriere_arrivo_il TIMESTAMPTZ;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS corriere_risposto_il TIMESTAMPTZ;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS corriere_nome TEXT NOT NULL DEFAULT '';

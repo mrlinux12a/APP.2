@@ -33,6 +33,13 @@ function oraSola(sqlUtc) {
   return d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 }
 
+// Ora italiana fissa, per gli orari d'arrivo dati dal corriere: la VPS può essere in UTC.
+function oraRoma(data) {
+  const d = toDate(data);
+  if (!d) return '—';
+  return d.toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' });
+}
+
 // "36 ore" -> "1 giorno e 12 ore", per rendere leggibili i tempi di consegna dichiarati.
 function tempoConsegna(ore) {
   if (ore === null || ore === undefined) return '—';
@@ -51,4 +58,4 @@ function mmss(secondi) {
   return `${String(m).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
 
-module.exports = { dataOra, dataSola, oraSola, tempoConsegna, mmss };
+module.exports = { dataOra, dataSola, oraSola, oraRoma, tempoConsegna, mmss };

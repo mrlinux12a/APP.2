@@ -42,6 +42,7 @@ const { ArchivioSqlite } = require('./src/sessioni');
 const { TESTO_DISPONIBILITA, prodottoJson } = require('./src/prodotto_json');
 const { chiaveLogin, loginBloccato, registraTentativoFallito, azzeraTentativi } = require('./src/limite_login');
 const apiV1 = require('./src/api_v1');
+const whatsapp = require('./src/whatsapp');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -238,10 +239,17 @@ app.get('/login', async (req, res) => {
 
 // ---------- Registrazione cliente ----------
 
+// Una voce per ditta: con più filiali (es. Borea) l'installatore sceglie la ditta, non la
+// filiale. L'id è quello della prima filiale; alla registrazione il legame si crea con tutte.
 async function distributoriSelezionabili() {
   return db
-    .prepare('SELECT id, nome, filiale, zona FROM distributors WHERE attivo = 1 ORDER BY nome')
-    .all();
+    .prepare(
+      `SELECT DISTINCT ON (COALESCE(ditta_id, -id)) id, nome, zona
+         FROM distributors WHERE attivo = 1
+        ORDER BY COALESCE(ditta_id, -id), id`
+    )
+    .all()
+    .then((righe) => righe.sort((a, b) => a.nome.localeCompare(b.nome)));
 }
 
 app.get('/registrati', async (req, res) => {
@@ -277,7 +285,10 @@ app.post('/registrati', async (req, res) => {
     });
   }
 
-  const cliente = await anagrafiche.iscriviCliente(req.body, distributoriScelti);
+  const cliente = await anagrafiche.iscriviCliente(
+    req.body,
+    await anagrafiche.conTutteLeFiliali(distributoriScelti)
+  );
   req.session.user = {
     id: cliente.id,
     ruolo: cliente.ruolo,
@@ -663,7 +674,9 @@ app.get('/api/richieste/:id', requireRole('cliente'), async (req, res) => {
   if (!richiesta || richiesta.cliente_id !== req.session.user.id) {
     return res.status(404).json({ errore: 'non trovata' });
   }
-  const risposte = await richieste.risposteRichiesta(richiesta.id);
+  // Una voce per ditta: con due filiali la pagina (un solo badge per nome) mostrerebbe l'ultima
+  // in elenco, anche "Nessuna risposta" per la filiale chiusa dopo la conferma dell'altra.
+  const risposte = richieste.raggruppaRisposteDitta(await richieste.risposteRichiesta(richiesta.id));
   res.json({
     stato: richiesta.stato,
     secondi: await richieste.secondiRimasti(richiesta),
@@ -843,11 +856,14 @@ app.get('/ordini/:id', requireLogin, async (req, res) => {
     res.locals.ordiniNonLetti = 0;
   }
 
+  const dettaglio = await flusso.dettaglioOrdine(ordine);
+  // Il cliente vede la ditta, non la filiale; banchi e agente sì (da dove parte il pacco).
+  if (req.session.user.ruolo === 'cliente') dettaglio.distributore = flusso.senzaFiliale(dettaglio.distributore);
   res.render('ordine_dettaglio', {
     titolo: 'Ordine #' + ordine.id,
     ordine,
     nuovo: req.query.nuovo === '1',
-    ...(await flusso.dettaglioOrdine(ordine)),
+    ...dettaglio,
   });
 });
 
@@ -1135,6 +1151,7 @@ app.post('/distributore/richieste/:id/rispondi', requireRole('distributore'), as
   const esitoRisposta = await richieste.rispondi(req.params.id, req.session.user.distributor_id, {
     rifiuta: req.body.azione === 'rifiuta',
     prezzoRichiesto: req.body.azione === 'prezzo_richiesto',
+    utenteId: req.session.user.id,
     // Tempi non più scelti dal banco: partenza/consegna stimata restano un default fisso
     // finché non saranno calcolati dal corriere collegato via API.
     partenza_ore: req.body.partenza_ore || 2,
@@ -1439,6 +1456,9 @@ setInterval(async () => {
     console.error('Errore nel controllo scadenze:', err.message);
   }
 }, 30 * 1000).unref();
+
+// Gruppo WhatsApp dei corrieri: si collega solo con WHATSAPP_ATTIVO=1 (vedi src/whatsapp.js).
+whatsapp.avvia();
 
 app.listen(PORT, () => {
   console.log(`Server minuteria in ascolto su http://localhost:${PORT}`);

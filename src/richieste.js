@@ -41,13 +41,29 @@ async function righeRichieste(requestIds) {
 async function risposteRichiesta(requestId) {
   return db
     .prepare(
-      `SELECT rr.*, d.nome AS distributore_nome, d.filiale, d.zona, d.costo_consegna
+      `SELECT rr.*, d.nome AS distributore_nome, d.filiale, d.zona, d.costo_consegna, d.ditta_id
          FROM request_responses rr
          JOIN distributors d ON d.id = rr.distributor_id
         WHERE rr.request_id = ?
-        ORDER BY d.nome`
+        ORDER BY d.nome, d.id`
     )
     .all(requestId);
+}
+
+// Per l'installatore una ditta è una voce sola, anche se la richiesta è partita verso più
+// filiali: vale la risposta "migliore" (confermata, poi in attesa, poi non disponibile, poi
+// scaduta) e la filiale non si mostra. Senza ditta (ditta_id vuoto) ogni riga resta a sé.
+const PRIORITA_ESITO = { confermato: 0, in_attesa: 1, non_disponibile: 2, scaduto: 3 };
+function raggruppaRisposteDitta(risposte) {
+  const gruppi = new Map();
+  for (const r of risposte) {
+    const chiave = r.ditta_id ? 'd' + r.ditta_id : 'f' + r.distributor_id;
+    const attuale = gruppi.get(chiave);
+    if (!attuale || (PRIORITA_ESITO[r.esito] ?? 9) < (PRIORITA_ESITO[attuale.esito] ?? 9)) {
+      gruppi.set(chiave, { ...r, filiale: '' });
+    }
+  }
+  return [...gruppi.values()];
 }
 
 async function getRisposta(requestId, distributorId) {
@@ -55,6 +71,25 @@ async function getRisposta(requestId, distributorId) {
     .prepare('SELECT * FROM request_responses WHERE request_id = ? AND distributor_id = ?')
     .get(requestId, distributorId);
 }
+
+// Un'altra filiale della stessa ditta ha già confermato questa richiesta? (Una ditta con più
+// filiali risponde una volta sola: vince la prima che conferma.)
+async function altraFilialeHaConfermato(requestId, distributorId, rispostaId) {
+  const gia = await db
+    .prepare(
+      `SELECT 1 AS x
+         FROM request_responses o
+         JOIN distributors od ON od.id = o.distributor_id
+         JOIN distributors md ON md.id = ?
+        WHERE o.request_id = ? AND o.esito = 'confermato' AND o.id <> ?
+          AND md.ditta_id IS NOT NULL AND od.ditta_id = md.ditta_id
+        LIMIT 1`
+    )
+    .get(distributorId, requestId, rispostaId);
+  return !!gia;
+}
+
+const ERRORE_ALTRA_FILIALE = 'Un’altra filiale della tua ditta ha già confermato questa richiesta.';
 
 // Secondi che mancano alla scadenza della finestra di conferma (0 se gia' scaduta).
 async function secondiRimasti(richiesta) {
@@ -415,6 +450,8 @@ async function rispondi(
     prezzoRichiesto = false,
     scontoCliente = null,
     salvaScontoCliente = false,
+    // Il dipendente che risponde (per sapere chi, dentro la filiale, ha accettato).
+    utenteId = null,
   }
 ) {
   // Controllo "veloce" solo per uscire prima nel caso comune: non è quello che decide se la
@@ -435,7 +472,13 @@ async function rispondi(
 
   const risposta = await getRisposta(requestId, distributorId);
   if (!risposta) return { ok: false, errore: 'Richiesta non assegnata a questo distributore.' };
-  if (risposta.esito !== 'in_attesa') return { ok: false, errore: 'Hai già risposto a questa richiesta.' };
+  if (risposta.esito !== 'in_attesa') {
+    // Chiusa perché un'altra filiale della ditta ha confermato: non è che questa abbia già risposto.
+    if (risposta.esito === 'scaduto' && (await altraFilialeHaConfermato(requestId, distributorId, risposta.id))) {
+      return { ok: false, errore: ERRORE_ALTRA_FILIALE };
+    }
+    return { ok: false, errore: 'Hai già risposto a questa richiesta.' };
+  }
 
   // Sconto standard del banco su ogni prodotto: è il riferimento sia per il "prezzo di
   // richiesta" sia per capire se il banco ha applicato una condizione migliore.
@@ -486,6 +529,17 @@ async function rispondi(
       : Math.round(Math.min(90, Math.max(0, parseFloat(String(scontoCliente).replace(',', '.')) || 0)) * 10) / 10;
 
   const salva = db.transaction(async () => {
+    // Le risposte della stessa richiesta si mettono in fila: "vince la prima filiale della
+    // ditta" vale anche se due dipendenti premono nello stesso istante (senza il blocco,
+    // entrambe vedrebbero "nessuno ha ancora confermato" e confermerebbero tutte e due).
+    await db.prepare('SELECT id FROM requests WHERE id = ? FOR UPDATE').get(requestId);
+
+    // Una ditta con più filiali risponde una volta sola: la prima che conferma tiene la
+    // richiesta (e da lì parte l'ordine), le altre filiali della stessa ditta si chiudono.
+    if (esito === 'confermato' && (await altraFilialeHaConfermato(requestId, distributorId, risposta.id))) {
+      return 'altra_filiale';
+    }
+
     // La condizione di scadenza vive qui, dentro la UPDATE, non in un controllo separato
     // prima: così l'accettazione o il rifiuto di "la finestra è ancora aperta" è atomico
     // insieme alla scrittura, e non può più essere scavalcato da aggiornaScadenza() che
@@ -493,7 +547,7 @@ async function rispondi(
     const upd = await db.prepare(
       `UPDATE request_responses
           SET esito = ?, copertura = ?, partenza_ore = ?, consegna_ore = ?, note = ?,
-              sconto_cliente_pct = ?, risposto_il = NOW()
+              sconto_cliente_pct = ?, risposto_il = NOW(), risposto_da = ?
         WHERE id = ? AND esito = 'in_attesa'
           AND request_id IN (SELECT id FROM requests WHERE scade_il > NOW())`
     ).run(
@@ -503,9 +557,21 @@ async function rispondi(
       esito === 'confermato' ? consegnaOre : null,
       note || null,
       esito === 'confermato' && !prezzoRichiesto ? profilo : null,
+      utenteId,
       risposta.id
     );
     if (!upd.changes) return false;
+
+    if (esito === 'confermato') {
+      await db.prepare(
+        `UPDATE request_responses
+            SET esito = 'scaduto', risposto_il = NOW()
+          WHERE request_id = ? AND esito = 'in_attesa' AND id <> ?
+            AND distributor_id IN (SELECT id FROM distributors
+                                    WHERE ditta_id IS NOT NULL
+                                      AND ditta_id = (SELECT ditta_id FROM distributors WHERE id = ?))`
+      ).run(requestId, risposta.id, distributorId);
+    }
 
     await db.prepare('DELETE FROM request_response_items WHERE response_id = ?').run(risposta.id);
     const ins = db.prepare(
@@ -529,6 +595,7 @@ async function rispondi(
     return true;
   });
   const salvata = await salva();
+  if (salvata === 'altra_filiale') return { ok: false, errore: ERRORE_ALTRA_FILIALE };
   if (!salvata) {
     // La UPDATE atomica non ha trovato la riga nelle condizioni attese: capiamo il motivo
     // esatto solo per dare un messaggio preciso, la decisione è già presa.
@@ -752,6 +819,7 @@ module.exports = {
   righeRichiesta,
   righeRichieste,
   risposteRichiesta,
+  raggruppaRisposteDitta,
   getRisposta,
   secondiRimasti,
   secondiAllAssegnazione,

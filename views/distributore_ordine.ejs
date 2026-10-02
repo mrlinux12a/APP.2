@@ -28,6 +28,15 @@
             <span class="dettaglio">Consegna dichiarata: <%= fmt.tempoConsegna(ordine.consegna_ore) %></span>
           </span>
         </div>
+        <% if (ordine.corriere_arrivo_il) { %>
+          <div class="riga-lista">
+            <span class="icona"><%- iconaConsegna %></span>
+            <span class="corpo">
+              <span class="etichetta">Corriere<%= ordine.corriere_nome ? ': ' + ordine.corriere_nome : '' %></span>
+              <span class="dettaglio">Consegna dal cliente entro le <%= fmt.oraRoma(ordine.corriere_arrivo_il) %> (<%= ordine.corriere_minuti %> min dalla risposta)</span>
+            </span>
+          </div>
+        <% } %>
         <div class="riga-lista">
           <span class="icona"><%- iconaConsegna %></span>
           <span class="corpo">

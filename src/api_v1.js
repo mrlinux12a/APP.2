@@ -401,11 +401,14 @@ router.get('/ordini/:id', richiedeCliente, async (req, res) => {
       ? 'Consegnato il ' + format.dataOra(ordine.consegnato_il)
       : ordine.modalita === 'ritiro'
         ? 'Pronto per il ritiro al banco'
-        : ordine.consegna_ore
-          ? 'Arriva entro ' + format.tempoConsegna(ordine.consegna_ore)
-          : 'Tempi di consegna da confermare',
+        : ordine.corriere_arrivo_il
+          ? 'Consegna prevista entro le ' + format.oraRoma(ordine.corriere_arrivo_il)
+          : ordine.consegna_ore
+            ? 'Arriva entro ' + format.tempoConsegna(ordine.consegna_ore)
+            : 'Tempi di consegna da confermare',
     creato_il: format.dataOra(ordine.creato_il),
-    distributore: d.distributore ? { nome: d.distributore.nome, filiale: d.distributore.filiale } : null,
+    // Solo la ditta: la filiale da cui parte l'ordine non si mostra all'installatore.
+    distributore: d.distributore ? { nome: d.distributore.nome, filiale: '' } : null,
     modalita: ordine.modalita,
     modalita_testo: ordine.modalita === 'ritiro' ? 'Ritiro al banco' : 'Consegna con mezzo del distributore',
     tempi_testo:

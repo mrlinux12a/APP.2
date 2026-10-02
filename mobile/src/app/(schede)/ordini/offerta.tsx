@@ -87,7 +87,7 @@ export default function RiepilogoOrdine() {
         <SezioneTitolo>Dettagli dell'ordine</SezioneTitolo>
         <Card fitta>
           <RigaInfo etichetta={o.cliente.ragione_sociale} dettaglio={o.cliente.telefono || 'Telefono non impostato'} />
-          <RigaInfo etichetta={o.distributore.nome} dettaglio={`${o.distributore.filiale} · zona ${o.distributore.zona}`} />
+          <RigaInfo etichetta={o.distributore.nome} dettaglio={[o.distributore.filiale, `zona ${o.distributore.zona}`].filter(Boolean).join(' · ')} />
           <RigaInfo
             etichetta={'Partenza ordine stimata: ' + o.partenza_testo}
             dettaglio={`Consegna stimata in ${o.consegna_testo} — tempi dichiarati dal banco`}

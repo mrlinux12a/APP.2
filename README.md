@@ -54,14 +54,18 @@ processo e lo riavvii da solo, e HTTPS con un dominio davanti al sito.
 | Cliente      | rossi      | cliente123 | Rossi Impianti Srl |
 | Cliente      | bianchi    | cliente123 | Idraulica Bianchi |
 | Cliente      | verdi      | cliente123 | Termoidraulica Verdi |
-| Distributore | afis       | banco123   | Banco AFIS SPA |
-| Distributore | borea      | banco123   | Banco BOREA SRL |
-| Distributore | cambielli  | banco123   | Banco CAMBIELLI SPA |
+| Distributore | fegino     | banco123   | Dipendente Borea, filiale Fegino |
+| Distributore | staglieno  | banco123   | Dipendente Borea, filiale Staglieno |
+| Distributore | borea      | banco123   | Borea (vecchio utente unico, filiale Fegino) |
 | Agente       | agente     | agente123  | Grossista / gestore |
 
-Solo per il test interno (verificate valide sul DB il 29/09/2026): vanno cambiate prima di far
+Solo per il test interno (verificate valide sul DB il 30/09/2026): vanno cambiate prima di far
 provare l'app ai clienti pilota. Sono account con storico vero: per provare cose nuove conviene
 un utente di prova a parte (vedi `CLAUDE.md`).
+
+`afis`, `cambielli` e `fidra` sono **disattivati** dal 30/09/2026 (`attivo = 0` su distributore e
+utente, storico intatto): per ora l'unico banco è Borea. Si riattivano rimettendo `attivo = 1`.
+Il seed (`npm run seed`) li ricrea e riattiva: non lanciarlo sul DB condiviso.
 
 ## Catalogo
 
@@ -251,6 +255,65 @@ OpenStreetMap, ma **oggi le mappe sono nascoste** via CSS (ultima regola di
 In-app (campanella in alto a destra); diventano notifiche di sistema se l'utente concede il
 permesso al browser, ma solo mentre l'app è aperta in una scheda. Le notifiche push a telefono
 spento arriveranno con l'app nativa.
+
+## Gruppo WhatsApp dei corrieri
+
+Quando un ordine **con consegna** parte verso il banco (scelta del cliente o assegnazione
+automatica), nel gruppo WhatsApp arriva un messaggio con il numero d'ordine, il **ritiro merce**
+(via della filiale che ha accettato) e la **consegna merce** (destinazione dell'ordine). Chi lo
+prende risponde **al messaggio** con la parola chiave e i minuti, per esempio `preso 30`
+(anche `preso 1 ora e 15`, `preso 1h30`, `preso mezz'ora`). Il sistema legge il tempo, lo salva
+sull'ordine (`corriere_minuti`, `corriere_arrivo_il`), avvisa cliente e banco, e nel gruppo
+conferma. Vale la **prima** risposta: chi arriva dopo trova scritto che l'ordine è già preso.
+Senza la parola chiave un messaggio è una chiacchiera e viene ignorato. Il "ritiro al banco" non
+manda niente. Se il bot è il numero di chi risponde, quello che scrive dal proprio telefono vale
+come risposta; non valgono i messaggi che il bot stesso manda nel gruppo.
+
+Usa Baileys, una libreria **non ufficiale**: il server si comporta come un dispositivo collegato a
+un numero WhatsApp. Serve un **numero dedicato** (con il proprio, il ban blocca anche il telefono)
+che faccia parte del gruppo; WhatsApp può bloccare il numero in qualsiasi momento. Spento finché
+non c'è `WHATSAPP_ATTIVO=1`, e va acceso **in un solo posto, la VPS**: due istanze collegate
+leggerebbero lo stesso gruppo e risponderebbero due volte, e un server locale (stesso DB di
+produzione) scriverebbe nel gruppo vero per ogni ordine di prova. Nel `.env` della VPS:
+
+```
+WHATSAPP_ATTIVO=1
+WHATSAPP_GRUPPO=...           # nome esatto del gruppo oppure il suo id (xxx@g.us)
+WHATSAPP_PAROLA_CHIAVE=preso  # facoltativa
+WHATSAPP_NUMERO=39333...      # facoltativa: collega con un codice invece del QR
+```
+
+Primo avvio: `npm start` stampa nel terminale un QR (o, con `WHATSAPP_NUMERO`, un codice da 8
+caratteri). Sul telefono del numero dedicato: *Dispositivi collegati → Collega un dispositivo*
+(col codice: *Collega con numero di telefono*). Il QR è grande, serve un terminale alto e largo, e si
+rinnova ogni 20 secondi: se non si legge, il codice è più comodo. Se si passa da un metodo all'altro
+dopo un tentativo fallito, cancellare prima `whatsapp_auth/`.
+Senza `WHATSAPP_GRUPPO` il server, una volta collegato, stampa nome e id dei gruppi del numero.
+La sessione sta in `whatsapp_auth/` (non in git: sono le credenziali del numero; se si cancella
+bisogna ricollegare). I messaggi passano da una coda (`whatsapp_messaggi`): se il collegamento è
+giù partono appena torna. Prima del primo avvio va applicato il blocco "Gruppo WhatsApp dei
+corrieri" di `db/postgres/schema.sql` (già applicato al DB di produzione il 30/09/2026).
+
+**Prova con un ordine finto**, senza toccare banchi e clienti veri: crea un gruppo di prova (il
+numero dedicato + un altro telefono che risponde) e lancia, dal PC e senza `WHATSAPP_ATTIVO` nel
+`.env`:
+
+```
+node scripts/prova_whatsapp.js --gruppo="Nome del gruppo di prova"
+```
+
+Manda nel gruppo un messaggio marcato PROVA, aspetta la risposta `preso 30` (scritta da un altro
+numero, citando il messaggio), stampa cosa ha letto e cancella i dati di prova. Senza `--gruppo`
+elenca i gruppi del numero.
+
+**Tenerlo sempre acceso senza rifare il QR**: la sessione è la cartella `whatsapp_auth/`, e un
+riavvio o un reboot non chiedono di ricollegare nulla. Per passare dal PC alla VPS si copia quella
+cartella (`scp -r whatsapp_auth utente@vps:/percorso/APP.2/`, poi `chmod 700` sul server) e si
+**cancella quella sul PC**: le stesse credenziali in due posti si scollegano a vicenda. Sulla VPS
+il processo va tenuto vivo con un servizio che lo riavvii (pm2 o systemd). Serve rifare il
+collegamento solo se il telefono resta offline per circa 14 giorni, se il dispositivo viene
+rimosso da *Dispositivi collegati* o se si cancella la cartella: il log dice "sessione chiusa dal
+telefono".
 
 ## App nativa (in costruzione)
 

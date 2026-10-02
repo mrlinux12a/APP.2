@@ -1,26 +1,67 @@
 # CLAUDE.md — contesto di lavoro per Claude
 
 Orientamento rapido dopo un reset di contesto. Flusso completo in **README.md**, cosa manca
-in **SCOPE.md**. Qui solo ciò che non sta già scritto lì.
+in **SCOPE.md**, punti aperti lato banco in **AUDIT_DISTRIBUTORE.md**. Qui solo ciò che non sta
+già scritto lì.
 
 ## Stack e ambiente
 
 - Node/Express + EJS, niente build, JS vanilla in `public/app.js`.
 - DB: `db/index.js` sceglie Postgres se c'è `DATABASE_URL`, altrimenti SQLite — **in pratica
   gira solo su Postgres** (sintassi diretta in `server.js`/`src/*.js`). SQLite è legacy/rotto.
-- **Produzione: una VPS** (`npm start`; non più Vercel), stesso Supabase. `.env` non è in git: sulla
-  VPS va creato a mano (`DATABASE_URL`, `SESSION_SECRET`, `PORT` facoltativa, default 3000). Dopo
-  un `git pull` serve `npm ci` (senza, manca `compression` e il server non parte) e il riavvio.
-  `npm install` non lancia più il seed: `npm run seed` è manuale e **riscrive le password demo**.
+- **Produzione: una VPS** (`npm start`), stesso Supabase. `.env` non è in git: sulla VPS va creato a
+  mano (`DATABASE_URL`, `SESSION_SECRET`, `PORT` facoltativa, default 3000). Dopo un `git pull` serve
+  `npm ci` (senza, manca `compression` e il server non parte) e il riavvio. `npm install` non lancia
+  il seed: `npm run seed` è manuale, **riscrive le password demo** e riattiva i banchi disattivati.
 - `.env` locale punta al **Supabase di produzione condiviso**, nessun DB di test — girare in
   locale scrive sul DB vero, e il server locale esegue anche il timer delle scadenze (30 s) come
   la VPS: fermarlo quando non serve.
 - Server locale **senza auto-reload**: dopo modifiche a `server.js`/file `require`-ati serve
   riavvio manuale (`.ejs`/`public/*` no).
 - Modifiche schema in **entrambi** `db/postgres/schema.sql` e `db/schema.pg.sql` (root, copie
-  identiche), poi `node scripts/apply_schema_pg.js` (transazione unica: un pezzo fallito annulla
-  tutto).
+  identiche; il file ha fine riga CRLF), poi `node scripts/apply_schema_pg.js` (transazione unica:
+  un pezzo fallito annulla tutto). **Col ruolo attuale l'intero file non si applica**: `CREATE OR
+  REPLACE FUNCTION ricerca_simili` dà "permission denied to set parameter
+  pg_trgm.word_similarity_threshold". Per un blocco nuovo: leggere `schema.sql` dal suo commento
+  fino in fondo e lanciarlo da solo (è così che si è applicato "Ditte e filiali").
 - Mai `pool.on('connect', async ...)`: causa query concorrenti sullo stesso client.
+
+## Ditte, filiali, dipendenti (solo Borea, dal 30/09/2026)
+
+`ditte` → filiali → dipendenti. Niente tabelle nuove per le ultime due: **una filiale è una riga di
+`distributors`** (`ditta_id`; `nome` = nome della ditta e si ripete, unica è la coppia `nome` +
+`filiale`) e **un dipendente è una riga di `users`** ruolo `distributore` con `distributor_id` = la
+sua filiale (una sola) e `nome`/`cognome`. Login, token app, sessioni e notifiche restano su `users`.
+- **Oggi l'unico banco attivo è Borea** (filiali Fegino e Staglieno, utenti `fegino`, `staglieno` e
+  il vecchio `borea`). AFIS, Cambielli e Fidra sono **disattivati** (`attivo = 0`, non cancellati:
+  lo storico li referenzia). Credenziali in README. `scripts/imposta_borea_filiali.js` è la
+  migrazione una tantum: prova a secco di default (transazione + ROLLBACK), `--applica` conferma.
+- L'installatore vede **solo la ditta** ("Borea"): mai la filiale (`flusso_cliente.senzaFiliale`,
+  `raggruppaRisposteDitta`, `anagrafiche.legamiDelCliente`; l'app nasconde `filiale` se vuota). La
+  filiale la vedono banchi e agente (DDT, pannello banco). Il blanking sta nei punti **solo cliente**:
+  `/ordini/:id` è condivisa fra ruoli, per questo lì si fa per ruolo e non in `dettaglioOrdine`.
+- Una richiesta parte verso **ogni filiale** attiva con `ricezione_attiva` (una riga di
+  `request_responses` ciascuna) e la notifica arriva a tutti i dipendenti. **Vince la prima filiale
+  che conferma**: `rispondi()` blocca la richiesta (`FOR UPDATE`), chiude le altre filiali della
+  stessa ditta (`scaduto`) e registra chi ha risposto (`risposto_da`). Un rifiuto di una filiale non
+  chiude la ditta finché un'altra deve ancora rispondere. L'ordine nasce con `orders.distributor_id`
+  = la filiale che ha accettato: da lì parte il pacco e solo i suoi dipendenti lo vedono.
+- Prezzi uguali: listino (`distributor_products`, 27.676 righe) e legami cliente
+  (`client_distributors`) di Staglieno sono **copie** di Fegino. Un nuovo import di listino va
+  scritto su tutte le filiali della ditta. Sconti (`client_discount_rules`) e numerazione DDT
+  (`ddt_counters`) sono per filiale, non per ditta.
+- Un `distributors` senza `ditta_id` (per esempio creato dal seed) funziona: ogni riga è una ditta a
+  sé. Il seed (`db/postgres/seed.js`) non crea ditte.
+- Coordinate (da Nominatim/OpenStreetMap): Fegino = civico 1/7 rosso di Via Castel Morrone;
+  Staglieno **approssimata** sul civico 9 (l'11R non è in OSM). Stanno in `distributors.geo_*` e in
+  `store_locations` (una riga per filiale: la legge la pagina `/punti-vendita` e, per prima, la
+  stima di partenza in `src/consegna.js`). `geo.salvaPosizione` sovrascrive `distributors.geo_*`
+  con la posizione live di un dipendente che preme "Attiva la posizione" (per il tracciamento):
+  provando i login dal PC le filiali finivano nello stesso punto, a km dall'indirizzo.
+  `store_locations` non viene toccata.
+- **Da decidere**: con "ritiro al banco" il cliente non sa in quale filiale ritirare (la filiale è
+  nascosta); la pagina mappa mostra invece "Borea · Fegino" e "Borea · Staglieno"; manca un ruolo di
+  responsabile che veda gli ordini di tutte le filiali.
 
 ## Catalogo
 
@@ -76,7 +117,7 @@ di query in sequenza**, non la loro complessità. Mai query dentro un ciclo (N+1
 - Carrello web: +/− raggruppano i tocchi (un salvataggio, un ricaricamento), con le quantità
   mandate una alla volta: richieste parallele sulla stessa sessione si sovrascrivono.
 
-## Aspetto grafico
+## Aspetto grafico (sito web)
 
 Stile "Cantiere Notte" (scuro/ambra) + modalità chiara vera (`data-tema` su `<html>`,
 `localStorage('tema')`). Icone SVG in `src/icone.js` (13 icone categoria provvisorie). Variabili CSS
@@ -95,14 +136,40 @@ in cima a `public/style.css`. DDT resta bianca (stampa).
 - Zona non filtra più i distributori candidati (`distributoriCandidati` in `src/richieste.js`
   ignora il parametro `zona`): campo residuo su `distributors`/`users`, non aspettarsi che
   limiti chi riceve una richiesta.
+- Il DB ammette **una sola richiesta aperta** (`in_attesa`/`con_offerte`) per cliente
+  (`idx_requests_cliente_aperta`): negli script di prova chiudere (`flusso.annullaRichiesta`) quella
+  precedente prima di crearne un'altra.
 - L'ordine automatico (`richieste.impostaAssegnatore`, chiamato da `aggiornaScadenza`) scatta a
-  ogni lettura della richiesta, non solo dal `setInterval` di 30 s in fondo a `server.js`: il sito
-  ha girato su Vercel, dove quel timer non gira tra una richiesta e l'altra. L'assegnatore si
-  registra in `src/flusso_cliente.js`: uno script che usa solo `src/richieste.js` non lo ha.
-- La risposta del banco (`/distributore/richieste/:id/rispondi`) oggi passa solo `rifiuta` e
-  `prezzoRichiesto`: `rispondi()` supporta ancora `righe`/`sconti`/`scontoCliente` (disponibilità
-  parziale, sconto riga per riga) ma nessuna route li usa più — non è codice morto da un refuso,
-  è la UI attuale che li ha rimossi.
+  ogni lettura della richiesta, non solo dal `setInterval` di 30 s in fondo a `server.js`. L'assegnatore
+  si registra in `src/flusso_cliente.js`: uno script che usa solo `src/richieste.js` non lo ha.
+- La risposta del banco (`/distributore/richieste/:id/rispondi`) oggi passa solo `rifiuta`,
+  `prezzoRichiesto` e `utenteId`: `rispondi()` supporta ancora `righe`/`sconti`/`scontoCliente`
+  (disponibilità parziale, sconto riga per riga) ma nessuna route li usa più — non è codice morto
+  da un refuso, è la UI attuale che li ha rimossi.
+
+## Gruppo WhatsApp dei corrieri (`src/whatsapp.js`)
+
+Flusso e variabili in README. Qui solo ciò che non si deduce dal codice.
+- **Mai acceso in locale**: `WHATSAPP_ATTIVO=1` solo sulla VPS, mai nel `.env` locale. Il `.env` locale
+  punta al DB di produzione: un ordine fatto in locale, con il modulo acceso, scriverebbe nel gruppo
+  vero; e due istanze accese leggono lo stesso gruppo (risposte doppie, coda inviata due volte: lo
+  svuotamento non "prenota" le righe). Spento, `accodaOrdine` non scrive nemmeno in coda. Per provare
+  dal PC c'è `scripts/prova_whatsapp.js`, che si accende da solo e usa un ordine finto.
+- Baileys è **7.0.0-rc14** (l'ultima; la 6.x è il tag `legacy`), ESM: caricato con `import()` dentro
+  `collega()`. Non ufficiale: il numero può essere bloccato. Logger muto finto (passare pino non serve).
+- L'orario d'arrivo del corriere sta in colonne `TIMESTAMPTZ` (`corriere_arrivo_il`), a differenza
+  del resto dello schema (TIMESTAMP UTC senza fuso): si mostra con `format.oraRoma`, ora italiana
+  fissa perché la VPS può essere in UTC.
+- Il bot è il numero personale dell'utente, quindi ciò che scrive dal telefono arriva come messaggio
+  `fromMe` e **vale come risposta**. I messaggi del bot (ordine, conferme) contengono «preso» e un
+  `#id`: restano fuori perché Baileys li emette come `append` (si elabora solo `notify`) e, in più,
+  per id (`inviatiDalBot` e `whatsapp_messaggi.wa_msg_id`). Non togliere questi controlli.
+- La risposta si abbina all'ordine dal messaggio **citato** (`wa_msg_id` in `whatsapp_messaggi`), o da
+  `#id` nel testo se quell'ordine ha un nostro messaggio. Senza parola chiave è chiacchiera: ignorata.
+- Non coperto: l'annullo dell'ordine da parte del cliente **non** scrive nel gruppo (chi risponde
+  dopo trova "non esiste più"); l'ordine per ritiro al banco non manda nulla.
+- Prova senza gruppo vero: `impostaSocket` in `_prova` mette un socket finto; ordini di prova sul banco
+  AFIS (id 1, disattivato: nessun utente attivo riceve notifiche), poi cancellare per id.
 
 ## App nativa (`mobile/`)
 
@@ -123,10 +190,14 @@ Panoramica e avvio in README. Qui solo ciò che non si deduce dal codice.
   attesa fra un tocco e l'altro). Stato in `mobile/src/negozio.ts` con abbonamento per
   selettore: con un Context normale ogni "+" ridisegnava tutto l'elenco — non tornarci.
 - Scelte grafiche volute (richieste esplicite): **solo tema chiaro** (niente modalità scura né
-  interruttore; `useTema()` restituisce solo `{ c }`); titoli delle barre a 17px (`STILE_TITOLO`,
-  come `.appbar .titolo`: senza dimensione Android usa 20); prezzo sempre in fondo alla card e
-  centrato sullo stepper; 2 misure affiancate su una riga, da 3 tendina; nome in Sora 600 come sul
-  sito; righe dentro una card dello stesso colore del riquadro foto.
+  interruttore; `useTema()` restituisce solo `{ c }`); titoli delle barre a 17px (`STILE_TITOLO`);
+  prezzo sempre in fondo alla card e centrato sullo stepper; 2 misure affiancate su una riga, da 3
+  tendina; nome in Sora 600 come sul sito; righe dentro una card dello stesso colore del riquadro foto.
+- **Barra del titolo**: una sola per tutte le schermate, `src/componenti/BarraTitolo.tsx` (opzione
+  `header: intestazione` in pile e schede). La barra nativa delle pile era più alta di quella JS del
+  Carrello su telefono (sul web non si vede: lì sono entrambe JS) e cambiare il font non serviva.
+  Altezza 44 iOS / 64 Android + barra di stato: per cambiarla si tocca solo quel file. Non rimettere
+  `headerStyle`/`headerTitleStyle` nelle pile.
 - Categorie e sottocategorie si aprono già piene: `usePrecaricaCatalogo` e
   `usePrecaricaSottocategorie` (`src/dati.ts`) leggono in background dettagli e prima pagina con le
   prime foto, 3 richieste alla volta, con le stesse opzioni delle query (stessa chiave → stessa
@@ -135,42 +206,50 @@ Panoramica e avvio in README. Qui solo ciò che non si deduce dal codice.
 - Avvio: la sessione si ripristina **senza aspettare la rete** (`src/sessione.tsx`): utente salvato
   in SecureStore insieme al token, `/me` verifica in background (401 → esce, rete assente → resta
   dentro).
-- Niente schermate intermedie sbagliate nei passaggi (lampi segnalati dall'utente): il carrello si
-  svuota solo **dopo** aver lasciato la scheda (prima compariva "Carrello vuoto / Vai al catalogo"
-  mentre si aspettava "Stato ordini"); annullare/eliminare un ordine o una richiesta aggiorna
-  `['stato-ordini']` (con `refetchType: 'all'`, la scheda sta sotto, non in primo piano) **prima** di
+- **Niente schermate intermedie sbagliate** (lampi segnalati dall'utente): il carrello si svuota solo
+  dopo aver lasciato la scheda (prima compariva "Carrello vuoto / Vai al catalogo" mentre si
+  aspettava "Stato ordini"). Annullare/eliminare un ordine o una richiesta aggiorna
+  `['stato-ordini']` (con `refetchType: 'all'`: la scheda sta sotto, non in primo piano) **prima** di
   uscire e non rilegge l'elemento tolto (404 → "non trovato"). Dopo un annullamento "Stato ordini"
-  resta su "Nessun ordine in corso" (richiesta esplicita) finché non si lascia la scheda: altrimenti
-  passava all'attività successiva per priorità, anche un ordine di ieri ancora aperto (entro 24 h),
-  in verde, che sembrava la richiesta appena annullata "confermata" (`quandoChiusa`).
-- **Barra del titolo**: una sola per tutte le schermate, `src/componenti/BarraTitolo.tsx` (opzione
-  `header: intestazione` in pile e schede). La barra nativa delle pile era più alta di quella JS del
-  Carrello su telefono (sul web non si vede: lì sono entrambe JS), e cambiare il font non serviva.
-  Altezza 44 iOS / 64 Android + barra di stato, come la vecchia barra del Carrello: per
-  cambiarla si tocca solo quel file. Non rimettere `headerStyle`/`headerTitleStyle` nelle pile.
+  resta su "Nessun ordine in corso" (richiesta esplicita, `quandoChiusa`) finché non si lascia la
+  scheda: altrimenti passava a un ordine di ieri ancora aperto (entro 24 h), in verde, che sembrava
+  la richiesta appena annullata "confermata".
 - Tastiera Android: `KeyboardAvoidingView behavior={undefined}` è la scelta raccomandata dalla
   guida Expo, non cambiarla; con le schede in basso serve `tabBarHideOnKeyboard`.
 - `icon.png` e `splash-icon.png` sono ancora i segnaposto di Expo: senza un logo vero la splash
   nativa non è configurata.
 - Marchi assenti dall'app: `/marchi` non è linkato e nessun marchio è attivo.
 - `mobile/src/icone.ts` è **generato** da `src/icone.js` (`node scripts/genera_icone_app.js`).
-- Verifica: `npx tsc --noEmit` in `mobile/`; anteprima nel browser con la config `app-web` di
-  `.claude/launch.json` (serve anche il server su :3000). Nel pannello browser nascosto clic e
-  scroll non arrivano: leggere lo stato con `javascript_tool`. Il `popstate` sintetico rimonta
-  `SessioneProvider` e azzera la cache: per provare il precaricamento ricaricare la pagina e
-  cliccare gli elementi.
-- Provare richiesta/offerte/ordine **senza** creare richieste vere (arrivano ai banchi reali):
-  sostituire `window.fetch` con risposte catturate dall'API su richieste esistenti e navigare con
-  `history.pushState` + evento `popstate`. Per provare il resto: utente di prova creato
-  direttamente in `users` (password casuale, nessuna notifica ai banchi) e poi cancellato; le
-  credenziali demo del README funzionano ma hanno storico vero.
+- Verifica: `npx tsc --noEmit` in `mobile/` (il lint `expo lint` ha errori già presenti: apostrofi
+  nei testi e un `setState` in un effect). Anteprima nel browser: se la porta 8081 è già occupata
+  dall'Expo dell'utente, `preview_start` rifiuta: aprire direttamente `http://localhost:8081`. Senza
+  login: in `localStorage` mettere `token_accesso` e `utente_accesso` (JSON utente), sostituire
+  `window.fetch` con risposte finte (`/me`, `/stato-ordini`...) e lanciare
+  `history.pushState` + `popstate` (rimonta `SessioneProvider`; azzera la cache). Nel pannello
+  browser nascosto clic e scroll non arrivano: leggere lo stato con `javascript_tool`. Le misure
+  delle barre native (Android/iOS) **non si vedono sul web**.
+- Provare richiesta/offerte/ordine **senza** richieste vere (arrivano ai banchi reali): risposte
+  finte come sopra. Per provare il resto con il DB: cliente di prova creato in `users` (password
+  casuale), richieste con `richieste.creaRichiesta`, poi **cancellare tutto** quello creato
+  (richieste, risposte, ordini, notifiche, cliente); le notifiche finiscono agli utenti del banco, che
+  ora sono interni. Le credenziali demo del README funzionano ma hanno storico vero.
 
 ## Notifiche
 
 Badge "Stato ordini" somma non lette di `ordini`+`richieste`. Ricalcolare **dopo** averle
 marcate lette se la route fa render diretto (non redirect), altrimenti resta il valore vecchio.
 
-## File temporanei
+## Script e file temporanei
 
-Script una tantum nello scratchpad di sessione o in root con prefisso `_tmp_` (mai in git) —
-cancellarli dopo l'uso.
+- Script una tantum in root con prefisso `_tmp_` o nello scratchpad di sessione: il `.gitignore` **non**
+  li copre (un `git add -A` li prenderebbe, e `scripts/_tmp_icone_review.html` è perfino tracciato):
+  cancellarli dopo l'uso.
+- Per parlare col DB da uno script: `require('dotenv').config()` e `pg` con `ssl: {
+  rejectUnauthorized: false }`, oppure `require('./db')` per usare i moduli del progetto. Cambi di
+  dati sul DB condiviso: prova a secco in transazione con ROLLBACK, poi conferma; copia delle righe
+  toccate fuori dal repo.
+- Pulire dopo una prova **per id o per link**, non per data: `creato_il` è un `timestamp` UTC senza
+  fuso e un `Date` locale di JS lo confronta con 2 ore di scarto (le notifiche ai banchi restavano).
+- Una sessione web **resta valida anche dopo `attivo = 0`** (il login controlla `attivo`, la
+  sessione no): chi si disattiva va tolto anche dalla tabella `session` (lo fa
+  `scripts/imposta_borea_filiali.js`). I token dell'app invece si controllano a ogni richiesta.

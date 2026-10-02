@@ -154,16 +154,46 @@ async function iscriviCliente(dati, distributoriScelti) {
 
 // ---------- Legami cliente ↔ distributore ----------
 
-async function legamiDelCliente(clienteId) {
-  return db
+// Le filiali attive delle ditte a cui appartengono gli id dati (più gli id stessi, se senza
+// ditta): l'installatore sceglie la ditta, il legame da approvare si crea con ogni filiale.
+async function conTutteLeFiliali(ids) {
+  if (!ids.length) return [];
+  const righe = await db
     .prepare(
-      `SELECT cd.*, d.nome AS distributore, d.filiale
+      `SELECT d.id FROM distributors d
+        WHERE d.attivo = 1
+          AND (d.id = ANY(?::int[])
+               OR (d.ditta_id IS NOT NULL
+                   AND d.ditta_id IN (SELECT ditta_id FROM distributors WHERE id = ANY(?::int[]))))
+        ORDER BY d.id`
+    )
+    .all(ids, ids);
+  return righe.map((r) => Number(r.id));
+}
+
+// Per il cliente una ditta è una voce sola, anche con più filiali: vale lo stato migliore
+// (approvato, poi in attesa, poi rifiutato) e la filiale non si mostra.
+const PRIORITA_LEGAME = { approvato: 0, in_attesa: 1, rifiutato: 2 };
+
+async function legamiDelCliente(clienteId) {
+  const righe = await db
+    .prepare(
+      `SELECT cd.*, d.nome AS distributore, d.filiale, d.ditta_id
          FROM client_distributors cd
          JOIN distributors d ON d.id = cd.distributor_id
         WHERE cd.cliente_id = ?
-        ORDER BY d.nome`
+        ORDER BY d.nome, d.id`
     )
     .all(clienteId);
+  const gruppi = new Map();
+  for (const r of righe) {
+    const chiave = r.ditta_id ? 'd' + r.ditta_id : 'f' + r.distributor_id;
+    const attuale = gruppi.get(chiave);
+    if (!attuale || (PRIORITA_LEGAME[r.stato] ?? 9) < (PRIORITA_LEGAME[attuale.stato] ?? 9)) {
+      gruppi.set(chiave, { ...r, filiale: '' });
+    }
+  }
+  return [...gruppi.values()];
 }
 
 async function clientiDelDistributore(distributorId) {
@@ -333,6 +363,7 @@ module.exports = {
   formattaScalare,
   validaIscrizione,
   iscriviCliente,
+  conTutteLeFiliali,
   legamiDelCliente,
   clientiDelDistributore,
   legame,

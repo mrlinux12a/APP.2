@@ -64,8 +64,7 @@ async function upsertDistributor(d) {
      VALUES (?, ?, ?, ?, ?, 1,
              ?, ?, ?, ?, ?, ?,
              ?, ?)
-     ON CONFLICT(nome) DO UPDATE SET
-       filiale = excluded.filiale,
+     ON CONFLICT(nome, filiale) DO UPDATE SET
        zona = excluded.zona,
        consegna_ore_default = excluded.consegna_ore_default,
        costo_consegna = excluded.costo_consegna,
@@ -79,7 +78,7 @@ async function upsertDistributor(d) {
        telefono = excluded.telefono,
        email = excluded.email`
   ).run(d.nome, d.filiale, d.zona, d.consegna_ore_default, d.costo_consegna, d.ragione_sociale, d.partita_iva, d.indirizzo, d.cap, d.citta, d.provincia, d.telefono, d.email);
-  return db.prepare('SELECT * FROM distributors WHERE nome = ?').get(d.nome);
+  return db.prepare('SELECT * FROM distributors WHERE nome = ? AND filiale = ?').get(d.nome, d.filiale);
 }
 
 // ---------- Distributori ----------

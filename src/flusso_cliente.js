@@ -7,6 +7,7 @@ const pricing = require('./pricing');
 const richieste = require('./richieste');
 const notifiche = require('./notifiche');
 const ddt = require('./ddt');
+const whatsapp = require('./whatsapp');
 
 // Errore "previsto" del flusso (ordine minimo, richiesta già aperta...): il chiamante lo
 // mostra così com'è. codice serve a chi deve decidere dove mandare l'utente.
@@ -122,6 +123,12 @@ async function nuovaRichiesta(clienteId, righe) {
 
 // ---------- Richiesta: lettura, annullamento, reinvio, eliminazione ----------
 
+// L'installatore vede solo la ditta (es. "Borea"): la filiale che risponde e da cui parte
+// l'ordine conta per i banchi, non per lui. Copia di una riga `distributors` senza filiale.
+function senzaFiliale(distributore) {
+  return distributore ? { ...distributore, filiale: '' } : distributore;
+}
+
 // Tutto quello che serve per mostrare una richiesta (attesa o offerte). Segna anche come
 // lette le notifiche di richieste/ordini: il cliente sta guardando proprio questa.
 async function dettaglioRichiesta(richiesta) {
@@ -131,7 +138,8 @@ async function dettaglioRichiesta(richiesta) {
   const dati = {
     richiesta,
     righe: await richieste.righeRichiesta(richiesta.id),
-    risposte: await richieste.risposteRichiesta(richiesta.id),
+    // Una ditta con più filiali è una voce sola.
+    risposte: richieste.raggruppaRisposteDitta(await richieste.risposteRichiesta(richiesta.id)),
     secondi: await richieste.secondiRimasti(richiesta),
     minutiRisposta: await pricing.getFinestraMinuti(),
     offerte: [],
@@ -141,7 +149,10 @@ async function dettaglioRichiesta(richiesta) {
   };
   if (richiesta.stato === 'in_attesa' || richiesta.stato === 'ordinata') return dati;
 
-  const offerte = await richieste.offerte(richiesta.id);
+  const offerte = (await richieste.offerte(richiesta.id)).map((o) => ({
+    ...o,
+    distributore: senzaFiliale(o.distributore),
+  }));
   const piuVeloce = await richieste.offertaPiuVeloce(richiesta.id);
   const perAssegnazione = await richieste.offertaPerAssegnazione(richiesta.id);
   return {
@@ -255,7 +266,7 @@ async function riepilogoOfferta(richiesta, distributorId, modalita) {
   const perAssegnazione = await richieste.offertaPerAssegnazione(richiesta.id);
   return {
     risposta,
-    offerta,
+    offerta: { ...offerta, distributore: senzaFiliale(offerta.distributore) },
     ivaPct: await pricing.getIvaPct(),
     // Anche qui il cliente deve vedere quanto manca all'ordine automatico: mentre compila
     // note e destinazione il tempo corre.
@@ -362,6 +373,13 @@ async function creaOrdineDaOfferta(richiesta, distributorId, risposta, opzioni =
     sottostato: 'in_approvazione',
     order_id: orderId,
   });
+
+  // Gruppo WhatsApp dei corrieri. Un guasto lì non deve far fallire un ordine già creato.
+  try {
+    await whatsapp.accodaOrdine(orderId);
+  } catch (err) {
+    console.error('WhatsApp, ordine #' + orderId + ' non accodato:', err.message);
+  }
 
   return orderId;
 }
@@ -592,6 +610,7 @@ async function attivitaCorrente(clienteId) {
 
 module.exports = {
   ErroreFlusso,
+  senzaFiliale,
   OrdineInLavorazione,
   richiestaBloccante,
   righeDaQuantita,
