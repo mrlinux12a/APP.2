@@ -181,6 +181,8 @@ export type RiepilogoOfferta = {
   cliente: { ragione_sociale: string; telefono: string | null };
   indirizzo_consegna: string;
   distributore: { id: number; nome: string; filiale: string; zona: string };
+  // Con il corriere: partenza_testo è vuoto e consegna_testo è il tempo totale scritto da lui.
+  corriere: boolean;
   partenza_testo: string;
   consegna_testo: string;
   mancanti: { nome: string; mancano: number }[];

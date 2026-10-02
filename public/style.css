@@ -1,32 +1,9 @@
 :root {
-  /* Modalità scura di default: "Cantiere Notte", accento ambra (alta visibilità da cantiere). */
-  --blu: #f2a71b;
-  --blu-scuro: #c9860a;
-  --blu-chiaro: #2b2313;
-  --su-blu: #12181f; /* testo sopra l'accento: scuro sull'ambra (bianco darebbe contrasto 2:1) */
-  --verde: #5fbf63;
-  --verde-chiaro: #17261a;
-  --arancio: #ff7a52;
-  --arancio-chiaro: #2c1a14;
-  --rosso: #ff6b6b;
-  --rosso-chiaro: #2c1616;
-  --grigio: #93a2ad;
-  --sfondo: #12181f;
-  --surface: #1a222b;
-  --bordo: #2a3540;
-  --testo: #eef2f5;
-  --account: #4fc3bf;
-  --icona-nav: #ffffff;
-  --raggio: 14px;
-  --barra-bassa: 62px;
-}
-
-:root[data-tema="chiaro"] {
-  /* Modalità chiara: bianco caldo (non abbagliante), accento blu petrolio. */
+  /* Un solo tema, chiaro: bianco caldo (non abbagliante), accento blu petrolio. */
   --blu: #245a8f;
   --blu-scuro: #1a4468;
   --blu-chiaro: #e3edf7;
-  --su-blu: #ffffff;
+  --su-blu: #ffffff; /* testo sopra l'accento */
   /* Verde, arancio e rosso scuriti quel tanto che serve a portare il testo sul proprio badge a
      4.5:1 (prima 3.55, 3.04 e 4.34). Stessi valori di mobile/src/tema.tsx. */
   --verde: #297c3c;
@@ -42,6 +19,8 @@
   --testo: #232019;
   --account: #0f9d93;
   --icona-nav: #000000;
+  --raggio: 14px;
+  --barra-bassa: 62px;
 }
 
 * { box-sizing: border-box; }
@@ -576,8 +555,8 @@ a { color: var(--blu); }
 .ordine-hero .tempo { font-size: 1.1rem; font-weight: 700; color: var(--testo); }
 .ordine-hero .sotto { font-size: 0.85rem; margin-top: 3px; }
 .ordine-hero.verde .sotto { color: var(--verde); }
-:root[data-tema="chiaro"] .ordine-hero.verde { background: #cdedd4; }
-:root[data-tema="chiaro"] .ordine-hero.verde .tempo { color: var(--verde); }
+.ordine-hero.verde { background: #cdedd4; }
+.ordine-hero.verde .tempo { color: var(--verde); }
 
 .link-discreto {
   display: block;
@@ -639,7 +618,6 @@ a { color: var(--blu); }
 }
 .navbar a .ico { display: block; font-size: 1.25rem; line-height: 1.2; color: var(--icona-nav); }
 .navbar a.attivo { color: var(--blu); font-weight: 700; }
-:root:not([data-tema="chiaro"]) .navbar a.attivo { color: #ffffff; }
 .navbar a .pallino.pallino-azzurro { background: #2e97e6; }
 .navbar a .pallino {
   position: absolute;

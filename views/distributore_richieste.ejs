@@ -3,7 +3,7 @@
 <head>
   <%- include('partials/app_head', { titolo }) %>
 </head>
-<body data-loggato="1" data-auto-refresh="15000">
+<body data-loggato="1" data-auto-refresh="15000" data-versione="<%= JSON.stringify(contatori) %>">
   <div class="app app-largo">
     <%- include('partials/appbar', { titolo, intestazione: distributore.nome, indietro: null }) %>
 
@@ -98,11 +98,6 @@
         <a class="nota" href="/distributore/ordini" style="display:block;">Vedi tutti gli ordini →</a>
       <% } %>
 
-      <%- include('partials/geolocalizzazione', {
-            ruolo: 'distributore',
-            titoloBox: 'Posizione del banco',
-            spiegazione: 'Con il tuo consenso il banco condivide la posizione in tempo reale: serve a calcolare la distanza dal cantiere del cliente e, quando la merce parte, a far seguire la consegna al cliente.'
-          }) %>
     </div>
   </div>
 

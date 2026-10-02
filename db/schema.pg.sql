@@ -543,3 +543,19 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS corriere_minuti INTEGER;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS corriere_arrivo_il TIMESTAMPTZ;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS corriere_risposto_il TIMESTAMPTZ;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS corriere_nome TEXT NOT NULL DEFAULT '';
+
+-- WhatsApp: il corriere prende la consegna PRIMA che l'offerta arrivi all'installatore. Lo stato sta
+-- sulla risposta del banco: NULL = nessun corriere richiesto (modulo spento), 'in_attesa' = il banco ha
+-- accettato e nel gruppo si aspetta "preso <minuti>" (l'installatore non la vede), 'preso', 'scaduto'.
+ALTER TABLE request_responses ADD COLUMN IF NOT EXISTS corriere_stato TEXT;
+ALTER TABLE request_responses ADD COLUMN IF NOT EXISTS corriere_minuti INTEGER;
+ALTER TABLE request_responses ADD COLUMN IF NOT EXISTS corriere_nome TEXT NOT NULL DEFAULT '';
+ALTER TABLE request_responses ADD COLUMN IF NOT EXISTS corriere_preso_il TIMESTAMPTZ;
+
+ALTER TABLE whatsapp_messaggi ADD COLUMN IF NOT EXISTS request_id INTEGER;
+ALTER TABLE whatsapp_messaggi ADD COLUMN IF NOT EXISTS response_id INTEGER;
+ALTER TABLE whatsapp_messaggi ADD COLUMN IF NOT EXISTS preso_il TIMESTAMPTZ;
+ALTER TABLE whatsapp_messaggi DROP CONSTRAINT IF EXISTS whatsapp_messaggi_stato_check;
+ALTER TABLE whatsapp_messaggi ADD CONSTRAINT whatsapp_messaggi_stato_check
+  CHECK (stato IN ('da_inviare', 'inviato', 'da_eliminare', 'eliminato', 'annullato'));
+CREATE INDEX IF NOT EXISTS idx_whatsapp_messaggi_request ON whatsapp_messaggi(request_id);

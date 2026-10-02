@@ -19,8 +19,10 @@
                 <span class="etichetta">Richiesta #<%= r.id %> — <%= r.cliente_nome %></span>
                 <span class="dettaglio"><%= r.pezzi %> pz · <%= fmt.dataOra(r.creato_il) %></span>
               </span>
-              <span class="stato-badge stato-<%= r.esito %>">
-                <%= r.esito === 'confermato' ? 'Confermata' : (r.esito === 'non_disponibile' ? 'Non disponibile' : (r.esito === 'scaduto' ? 'Non risposta' : 'In attesa')) %>
+              <% const attesaCorriere = r.esito === 'confermato' && r.corriere_stato === 'in_attesa'; %>
+              <% const senzaCorriere = r.esito === 'confermato' && r.corriere_stato === 'scaduto'; %>
+              <span class="stato-badge stato-<%= attesaCorriere ? 'in_attesa' : (senzaCorriere ? 'scaduto' : r.esito) %>">
+                <%= attesaCorriere ? 'In attesa del corriere' : (senzaCorriere ? 'Nessun corriere' : (r.esito === 'confermato' ? 'Confermata' : (r.esito === 'non_disponibile' ? 'Non disponibile' : (r.esito === 'scaduto' ? 'Non risposta' : 'In attesa')))) %>
               </span>
             </a>
           <% }); %>

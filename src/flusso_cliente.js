@@ -182,6 +182,14 @@ async function annullaRichiesta(requestId) {
   await db.prepare(
     `UPDATE request_responses SET esito = 'scaduto' WHERE request_id = ? AND esito = 'in_attesa'`
   ).run(requestId);
+  await db.prepare(
+    `UPDATE request_responses SET corriere_stato = 'scaduto' WHERE request_id = ? AND corriere_stato = 'in_attesa'`
+  ).run(requestId);
+  // Nel gruppo WhatsApp il messaggio sparisce (o, se un corriere l'aveva già preso, gli si scrive
+  // che la richiesta è annullata).
+  await whatsapp
+    .ritiraRichiesta(requestId, { motivo: 'il cliente ha annullato la richiesta' })
+    .catch((err) => console.error('WhatsApp, ritiro messaggio:', err.message));
   return true;
 }
 
@@ -211,6 +219,8 @@ class OrdineInLavorazione extends Error {
 }
 
 async function avvisaOrdineAnnullato(ordine) {
+  // Se un corriere aveva già preso la consegna, nel gruppo si scrive che non serve più.
+  await whatsapp.avvisaAnnulloOrdine(ordine).catch((err) => console.error('WhatsApp, annullo ordine:', err.message));
   if (!ordine.distributor_id) return;
   const cliente = await db.prepare('SELECT ragione_sociale FROM users WHERE id = ?').get(ordine.cliente_id);
   await notifiche.notificaDistributore(ordine.distributor_id, {
@@ -247,7 +257,14 @@ async function eliminaRichiesta(requestId) {
     return ordineEliminato;
   });
   const ordineEliminato = await elimina();
-  if (ordineEliminato) await avvisaOrdineAnnullato(ordineEliminato);
+  if (ordineEliminato) {
+    // I messaggi della richiesta erano già a posto quando è nato l'ordine: ora basta dire che è annullato.
+    await avvisaOrdineAnnullato(ordineEliminato);
+  } else {
+    await whatsapp
+      .ritiraRichiesta(requestId, { motivo: 'il cliente ha eliminato la richiesta' })
+      .catch((err) => console.error('WhatsApp, ritiro messaggio:', err.message));
+  }
 }
 
 // ---------- Scelta dell'offerta e ordine ----------
@@ -257,7 +274,9 @@ async function eliminaRichiesta(requestId) {
 async function riepilogoOfferta(richiesta, distributorId, modalita) {
   const risposta = await db
     .prepare(
-      `SELECT * FROM request_responses WHERE request_id = ? AND distributor_id = ? AND esito = 'confermato'`
+      `SELECT * FROM request_responses
+        WHERE request_id = ? AND distributor_id = ? AND esito = 'confermato'
+          AND (corriere_stato IS NULL OR corriere_stato = 'preso')`
     )
     .get(richiesta.id, distributorId);
   if (!risposta) return null;
@@ -340,10 +359,24 @@ async function creaOrdineDaOfferta(richiesta, distributorId, risposta, opzioni =
     const orderId = Number(info.lastInsertRowid);
     for (const riga of totali.righe) await insertItem.run(orderId, riga.product_id, riga.codice_snapshot, riga.nome_snapshot, riga.quantita, riga.prezzo_listino_snapshot, riga.sconto_pct_snapshot, riga.prezzo_netto_unitario, riga.subtotale, riga.prezzo_unitario_cliente, riga.subtotale_cliente, riga.raee_unitario, riga.raee_riga);
     await db.prepare(`UPDATE requests SET order_id = ? WHERE id = ?`).run(orderId, richiesta.id);
+    // Con il corriere il tempo di consegna è quello scritto nel gruppo ("preso 30"): conta da
+    // adesso, cioè da quando l'installatore ha confermato.
+    if (risposta.corriere_stato === 'preso') {
+      await db.prepare(
+        `UPDATE orders
+            SET corriere_minuti = ?, corriere_nome = ?, corriere_risposto_il = ?,
+                corriere_arrivo_il = NOW() + (? * INTERVAL '1 minute')
+          WHERE id = ?`
+      ).run(risposta.corriere_minuti, risposta.corriere_nome || '', risposta.corriere_preso_il, risposta.corriere_minuti, orderId);
+    }
     // Chiuso l'ordine, gli altri banchi non devono più poter rispondere.
     await db.prepare(
       `UPDATE request_responses SET esito = 'scaduto', risposto_il = NOW()
         WHERE request_id = ? AND esito = 'in_attesa'`
+    ).run(richiesta.id);
+    await db.prepare(
+      `UPDATE request_responses SET corriere_stato = 'scaduto'
+        WHERE request_id = ? AND corriere_stato = 'in_attesa'`
     ).run(richiesta.id);
     return orderId;
   });
@@ -374,11 +407,14 @@ async function creaOrdineDaOfferta(richiesta, distributorId, risposta, opzioni =
     order_id: orderId,
   });
 
-  // Gruppo WhatsApp dei corrieri. Un guasto lì non deve far fallire un ordine già creato.
+  // Gruppo WhatsApp dei corrieri: i messaggi degli altri banchi spariscono, e chi ha preso la
+  // consegna sa che l'ordine è confermato (o che il cliente ritira al banco). Un guasto lì non
+  // deve far fallire un ordine già creato.
   try {
-    await whatsapp.accodaOrdine(orderId);
+    await whatsapp.ritiraRichiesta(richiesta.id, { tranne: risposta.id });
+    await whatsapp.avvisaOrdine(orderId, risposta);
   } catch (err) {
-    console.error('WhatsApp, ordine #' + orderId + ' non accodato:', err.message);
+    console.error('WhatsApp, ordine #' + orderId + ' non comunicato al gruppo:', err.message);
   }
 
   return orderId;
@@ -395,7 +431,9 @@ async function ordinaDaOfferta(richiesta, distributorId, opzioni) {
 
   const risposta = await db
     .prepare(
-      `SELECT * FROM request_responses WHERE request_id = ? AND distributor_id = ? AND esito = 'confermato'`
+      `SELECT * FROM request_responses
+        WHERE request_id = ? AND distributor_id = ? AND esito = 'confermato'
+          AND (corriere_stato IS NULL OR corriere_stato = 'preso')`
     )
     .get(richiesta.id, distributorId);
   if (!risposta) return { esito: 'offerta_non_valida' };

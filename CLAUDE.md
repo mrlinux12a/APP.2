@@ -23,7 +23,8 @@ già scritto lì.
   un pezzo fallito annulla tutto). **Col ruolo attuale l'intero file non si applica**: `CREATE OR
   REPLACE FUNCTION ricerca_simili` dà "permission denied to set parameter
   pg_trgm.word_similarity_threshold". Per un blocco nuovo: leggere `schema.sql` dal suo commento
-  fino in fondo e lanciarlo da solo (è così che si è applicato "Ditte e filiali").
+  fino in fondo e lanciarlo da solo (è così che si è applicato "Ditte e filiali"): lo fa
+  `node scripts/applica_blocco_schema.js "<commento d'inizio>" [--applica]` (a secco senza il flag).
 - Mai `pool.on('connect', async ...)`: causa query concorrenti sullo stesso client.
 
 ## Ditte, filiali, dipendenti (solo Borea, dal 30/09/2026)
@@ -55,10 +56,11 @@ sua filiale (una sola) e `nome`/`cognome`. Login, token app, sessioni e notifich
 - Coordinate (da Nominatim/OpenStreetMap): Fegino = civico 1/7 rosso di Via Castel Morrone;
   Staglieno **approssimata** sul civico 9 (l'11R non è in OSM). Stanno in `distributors.geo_*` e in
   `store_locations` (una riga per filiale: la legge la pagina `/punti-vendita` e, per prima, la
-  stima di partenza in `src/consegna.js`). `geo.salvaPosizione` sovrascrive `distributors.geo_*`
-  con la posizione live di un dipendente che preme "Attiva la posizione" (per il tracciamento):
-  provando i login dal PC le filiali finivano nello stesso punto, a km dall'indirizzo.
-  `store_locations` non viene toccata.
+  stima di partenza in `src/consegna.js`). Prima `geo.salvaPosizione` sovrascriveva
+  `distributors.geo_*` con la posizione live di un dipendente: provando i login dal PC le filiali
+  finivano nello stesso punto, a km dall'indirizzo. Ora la posizione del dispositivo non si raccoglie
+  più (rimossi routes, box e codice del browser): se `distributors.geo_*` non coincide con
+  `store_locations`, riallinearlo da lì.
 - **Da decidere**: con "ritiro al banco" il cliente non sa in quale filiale ritirare (la filiale è
   nascosta); la pagina mappa mostra invece "Borea · Fegino" e "Borea · Staglieno"; manca un ruolo di
   responsabile che veda gli ordini di tutte le filiali.
@@ -119,12 +121,11 @@ di query in sequenza**, non la loro complessità. Mai query dentro un ciclo (N+1
 
 ## Aspetto grafico (sito web)
 
-Stile "Cantiere Notte" (scuro/ambra) + modalità chiara vera (`data-tema` su `<html>`,
-`localStorage('tema')`). Icone SVG in `src/icone.js` (13 icone categoria provvisorie). Variabili CSS
-in cima a `public/style.css`. DDT resta bianca (stampa).
-- Testo sopra l'accento = `var(--su-blu)` (scuro sull'ambra, bianco sul blu): `#fff` sull'ambra dà
-  contrasto 2:1. Nel tema chiaro verde/arancio/rosso sono scuriti per portare i badge a 4.5:1
-  (stessi valori in `mobile/src/tema.tsx`).
+**Solo tema chiaro** (richiesta esplicita del 02/10/2026: tolta la modalità scura "Cantiere Notte",
+l'interruttore e lo script `data-tema`; non rimetterli). Icone SVG in `src/icone.js` (13 icone categoria
+provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
+- Verde/arancio/rosso sono scuriti per portare i badge a 4.5:1 (stessi valori in
+  `mobile/src/tema.tsx`).
 - I `<button>` non ereditano il font (`button { font-family: inherit }`); campi input ≥16px, sotto
   Safari iPhone ingrandisce la pagina al tocco.
 - Quirk mobile da non reintrodurre: `autocomplete/autocorrect/autocapitalize="off"` sui campi
@@ -147,14 +148,31 @@ in cima a `public/style.css`. DDT resta bianca (stampa).
   (disponibilità parziale, sconto riga per riga) ma nessuna route li usa più — non è codice morto
   da un refuso, è la UI attuale che li ha rimossi.
 
+## Installatori in Via Puggia 22/3 (provvisorio)
+
+Tutti gli installatori sono in Via Puggia 22/3, Genova (`src/sede_installatori.js`, coordinate OSM):
+`indirizzo_consegna` + `geo_*` con `geo_consenso = 1`, per chi c'è (`scripts/imposta_installatori_puggia.js`)
+e per chi si iscrive (`anagrafiche.iscriviCliente`, il modulo non chiede più l'indirizzo di consegna).
+La sede legale resta quella dichiarata. La posizione del dispositivo non si raccoglie: niente
+`navigator.geolocation`, niente `/api/posizione`. Quando torneranno gli indirizzi veri togliere i due
+punti d'uso.
+
+## Aggiornamento automatico del banco
+
+Le pagine del banco (home, ordini, clienti, dettaglio richiesta) hanno `data-versione` = i contatori
+con cui sono state disegnate e chiedono ogni 5 s `/api/distributore/novita` (gli stessi contatori, più
+ultima richiesta/ordine e corrieri in attesa): se cambiano si ricaricano, anche se la scheda era in
+secondo piano (aspettano di tornare visibili o che finisca la digitazione). Prima era una ricarica a
+tempo che saltava le schede nascoste. Le risposte hanno `Cache-Control: private, no-cache`.
+
 ## Gruppo WhatsApp dei corrieri (`src/whatsapp.js`)
 
 Flusso e variabili in README. Qui solo ciò che non si deduce dal codice.
 - **Mai acceso in locale**: `WHATSAPP_ATTIVO=1` solo sulla VPS, mai nel `.env` locale. Il `.env` locale
   punta al DB di produzione: un ordine fatto in locale, con il modulo acceso, scriverebbe nel gruppo
   vero; e due istanze accese leggono lo stesso gruppo (risposte doppie, coda inviata due volte: lo
-  svuotamento non "prenota" le righe). Spento, `accodaOrdine` non scrive nemmeno in coda. Per provare
-  dal PC c'è `scripts/prova_whatsapp.js`, che si accende da solo e usa un ordine finto.
+  svuotamento non "prenota" le righe). Spento, `accodaRitiroConsegna` non scrive nemmeno in coda. Per
+  provare dal PC c'è `scripts/prova_whatsapp.js`, che si accende da solo e usa una richiesta finta.
 - Baileys è **7.0.0-rc14** (l'ultima; la 6.x è il tag `legacy`), ESM: caricato con `import()` dentro
   `collega()`. Non ufficiale: il numero può essere bloccato. Logger muto finto (passare pino non serve).
 - L'orario d'arrivo del corriere sta in colonne `TIMESTAMPTZ` (`corriere_arrivo_il`), a differenza
@@ -164,12 +182,22 @@ Flusso e variabili in README. Qui solo ciò che non si deduce dal codice.
   `fromMe` e **vale come risposta**. I messaggi del bot (ordine, conferme) contengono «preso» e un
   `#id`: restano fuori perché Baileys li emette come `append` (si elabora solo `notify`) e, in più,
   per id (`inviatiDalBot` e `whatsapp_messaggi.wa_msg_id`). Non togliere questi controlli.
-- La risposta si abbina all'ordine dal messaggio **citato** (`wa_msg_id` in `whatsapp_messaggi`), o da
+- **Il messaggio parte quando il banco accetta**, non alla nascita dell'ordine (`richieste.rispondi` →
+  `whatsapp.accodaRitiroConsegna`). Lo stato sta su `request_responses.corriere_stato` (NULL = nessun
+  corriere richiesto / modulo spento, `in_attesa`, `preso`, `scaduto`): le query che l'installatore vede
+  filtrano con `OFFERTA_VISIBILE` (richieste.js) e `raggruppaRisposteDitta` mostra "in attesa"/"nessuna
+  risposta". Una nuova query sulle offerte deve usare lo stesso filtro. `corriereHaPreso` è atomica (la
+  finestra è dentro la UPDATE). Chi ritira i messaggi (`ritiraRichiesta`) scrive solo righe: li
+  elimina/manda l'istanza collegata, dalla coda (`da_eliminare`, ~60 s se a scadere è un altro server).
+- Dopo il "preso" la prima filiale che ha accettato resta l'unica: le altre della ditta sono già chiuse,
+  quindi se nessun corriere risponde non c'è un secondo tentativo con l'altra filiale.
+- La risposta si abbina alla richiesta dal messaggio **citato** (`wa_msg_id` in `whatsapp_messaggi`), o da
   `#id` nel testo se quell'ordine ha un nostro messaggio. Senza parola chiave è chiacchiera: ignorata.
-- Non coperto: l'annullo dell'ordine da parte del cliente **non** scrive nel gruppo (chi risponde
-  dopo trova "non esiste più"); l'ordine per ritiro al banco non manda nulla.
-- Prova senza gruppo vero: `impostaSocket` in `_prova` mette un socket finto; ordini di prova sul banco
-  AFIS (id 1, disattivato: nessun utente attivo riceve notifiche), poi cancellare per id.
+- Dopo il "preso" gli avvisi nel gruppo ("confermato", "ritira al banco", "annullato") sono messaggi
+  `esito` accodati da `avvisaOrdine`, `avvisaAnnulloOrdine` e `ritiraRichiesta(..., { motivo })`.
+- Prova senza gruppo vero: `impostaSocket` in `_prova` mette un socket finto; richieste di prova sul
+  banco AFIS (id 1, disattivato: nessun utente attivo riceve notifiche), poi cancellare per id.
+  Con il gruppo vero: `scripts/prova_whatsapp.js`.
 
 ## App nativa (`mobile/`)
 
@@ -241,8 +269,8 @@ marcate lette se la route fa render diretto (non redirect), altrimenti resta il 
 
 ## Script e file temporanei
 
-- Script una tantum in root con prefisso `_tmp_` o nello scratchpad di sessione: il `.gitignore` **non**
-  li copre (un `git add -A` li prenderebbe, e `scripts/_tmp_icone_review.html` è perfino tracciato):
+- Script una tantum in root con prefisso `_tmp_` o nello scratchpad di sessione: il `.gitignore` copre solo
+  `_tmp_backup_*.json`, **non** gli altri (un `git add -A` li prenderebbe, e `scripts/_tmp_icone_review.html` è perfino tracciato):
   cancellarli dopo l'uso.
 - Per parlare col DB da uno script: `require('dotenv').config()` e `pg` con `ssl: {
   rejectUnauthorized: false }`, oppure `require('./db')` per usare i moduli del progetto. Cambi di

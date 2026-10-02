@@ -102,8 +102,11 @@
                   <%= ordine.modalita === 'ritiro' ? 'Ritiro al banco' : 'Consegna con mezzo del distributore' %>
                 </span>
                 <span class="dettaglio">
+                  <% if (ordine.corriere_arrivo_il) { %>Consegna con corriere, prevista entro le <%= fmt.oraRoma(ordine.corriere_arrivo_il) %>
+                  <% } else { %>
                   <% if (ordine.partenza_ore) { %>Partenza stimata: <%= fmt.tempoConsegna(ordine.partenza_ore) %> · <% } %>
                   <%= ordine.consegna_ore ? 'consegna stimata: ' + fmt.tempoConsegna(ordine.consegna_ore) : 'tempo da concordare' %>
+                  <% } %>
                 </span>
               </span>
             </div>
@@ -189,8 +192,11 @@
                 <%= ordine.modalita === 'ritiro' ? 'Ritiro al banco' : 'Consegna con mezzo del distributore' %>
               </span>
               <span class="dettaglio">
+                <% if (ordine.corriere_arrivo_il) { %>Consegna con corriere, prevista entro le <%= fmt.oraRoma(ordine.corriere_arrivo_il) %>
+                <% } else { %>
                 <% if (ordine.partenza_ore) { %>Partenza stimata: <%= fmt.tempoConsegna(ordine.partenza_ore) %> · <% } %>
                 <%= ordine.consegna_ore ? 'consegna stimata: ' + fmt.tempoConsegna(ordine.consegna_ore) : 'tempo da concordare' %>
+                <% } %>
               </span>
             </span>
           </div>

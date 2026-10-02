@@ -63,8 +63,8 @@ Aggiornato al 30/09/2026 (sito in produzione su una VPS, app nativa per l'instal
 - **Notifiche in-app** raggruppate per Ordini / Richieste / Approvazioni con sottostati
   (una richiesta confermata diventa un ordine e passa in Ordini), promuovibili a notifica di
   sistema mentre il sito è aperto.
-- **Geolocalizzazione con consenso esplicito** su cliente e distributore, revoca che cancella
-  le coordinate; il cliente segue il mezzo in consegna. Le **mappe sono oggi nascoste** via CSS.
+- **Posizione degli installatori fissa** (Via Puggia 22/3, Genova) e dei banchi del punto vendita: la
+  posizione del dispositivo non si raccoglie più (dal 02/10/2026). Le **mappe sono oggi nascoste** via CSS.
 - **Isolamento dati**: un cliente vede solo i propri ordini, un distributore solo le proprie
   richieste e gli ordini assegnati a lui.
 - **Sessioni su database** (un riavvio non scollega nessuno) e menu account in alto a destra.
@@ -136,6 +136,12 @@ Aggiornato al 30/09/2026 (sito in produzione su una VPS, app nativa per l'instal
 
 ## Scelte di scope già confermate con l'utente
 
+- 02/10/2026 — **Il corriere prende la consegna su WhatsApp prima dell'offerta**: quando il banco accetta,
+  nel gruppo parte il messaggio con prelievo e consegna; l'installatore vede la conferma solo se qualcuno
+  risponde "preso <minuti totali>" entro il timer, e quel tempo è il tempo di consegna. Se il timer scade, il
+  messaggio si cancella dal gruppo e per l'installatore nessun banco ha accettato.
+- 02/10/2026 — **Tutti gli installatori in Via Puggia 22/3** e **niente più posizione del dispositivo**.
+- 02/10/2026 — **Anche il sito ha solo il tema chiaro**: tolti modalità scura e interruttore.
 - 29/09/2026 — **Il sito passa da Vercel a una VPS**, con lo stesso Supabase.
 - 29/09/2026 — **L'app ha solo il tema chiaro**: niente modalità scura e niente interruttore.
 - 29/09/2026 — **L'app usa lo stesso database del sito** (Supabase di produzione): niente DB di

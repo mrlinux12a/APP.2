@@ -1,5 +1,6 @@
 const db = require('../db');
 const bcrypt = require('bcryptjs');
+const sede = require('./sede_installatori');
 
 // Registrazione dei clienti, approvazione da parte dei distributori indicati come
 // referenti e sconti concordati per ambito (generale, marchio, categoria, famiglia).
@@ -93,10 +94,12 @@ async function iscriviCliente(dati, distributoriScelti) {
         `INSERT INTO users
            (ruolo, username, password_hash, ragione_sociale, email, telefono, zona,
             partita_iva, codice_fiscale, indirizzo, cap, citta, provincia, sdi_pec,
-            indirizzo_consegna, referente, tipo_soggetto, stato_anagrafica, iscritto_il)
+            indirizzo_consegna, referente, tipo_soggetto, stato_anagrafica, iscritto_il,
+            geo_consenso, geo_lat, geo_lng)
          VALUES (?, ?, ?, ?, ?, ?, ?,
                  ?, ?, ?, ?, ?, ?, ?,
-                 ?, ?, ?, 'in_attesa', NOW())`
+                 ?, ?, ?, 'in_attesa', NOW(),
+                 1, ?, ?)`
       )
       .run(
         'cliente',
@@ -113,9 +116,11 @@ async function iscriviCliente(dati, distributoriScelti) {
         pulisci(dati.citta),
         pulisci(dati.provincia).toUpperCase().slice(0, 2),
         pulisci(dati.sdi_pec),
-        pulisci(dati.indirizzo_consegna),
+        sede.indirizzoConsegna,
         pulisci(dati.referente),
-        dati.tipo_soggetto
+        dati.tipo_soggetto,
+        sede.lat,
+        sede.lng
       );
 
     const clienteId = Number(info.lastInsertRowid);

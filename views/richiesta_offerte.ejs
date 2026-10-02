@@ -71,7 +71,9 @@
             </div>
           <% } %>
 
-          <div class="tempo"><%- iconaOrario %> Parte dalla filiale entro <%= fmt.tempoConsegna(o.partenza_ore) %></div>
+          <% if (!o.corriere_minuti) { %>
+            <div class="tempo"><%- iconaOrario %> Parte dalla filiale entro <%= fmt.tempoConsegna(o.partenza_ore) %></div>
+          <% } %>
           <div class="tempo">
             <%- iconaConsegna %> Da te in <strong><%= consegna.inParole(o.consegna_minuti_stimati) %></strong>
             <% if (o.distributore.id === idPiuVeloce && offerte.length > 1) { %>

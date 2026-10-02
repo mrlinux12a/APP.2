@@ -1,43 +1,8 @@
 const db = require('../db');
 
-// Geolocalizzazione in tempo reale, sempre subordinata al consenso esplicito dell'utente:
-// niente viene registrato finché non preme "Attiva la posizione", e la revoca cancella
-// davvero le coordinate salvate.
-
-async function salvaPosizione(userId, { lat, lng, precisione }) {
-  const la = Number(lat);
-  const ln = Number(lng);
-  if (!Number.isFinite(la) || !Number.isFinite(ln)) return null;
-  if (la < -90 || la > 90 || ln < -180 || ln > 180) return null;
-
-  await db.prepare(
-    `UPDATE users
-        SET geo_consenso = 1, geo_lat = ?, geo_lng = ?, geo_precisione = ?,
-            geo_aggiornata_il = NOW()
-      WHERE id = ?`
-  ).run(la, ln, Number.isFinite(Number(precisione)) ? Number(precisione) : null, userId);
-
-  // Il banco eredita la posizione dell'operatore che lo presidia: è quella che il cliente
-  // vede muoversi quando la merce è in consegna.
-  const utente = await db.prepare('SELECT ruolo, distributor_id FROM users WHERE id = ?').get(userId);
-  if (utente && utente.ruolo === 'distributore' && utente.distributor_id) {
-    await db.prepare('UPDATE distributors SET geo_lat = ?, geo_lng = ? WHERE id = ?').run(
-      la,
-      ln,
-      utente.distributor_id
-    );
-  }
-  return { lat: la, lng: ln };
-}
-
-async function revoca(userId) {
-  await db.prepare(
-    `UPDATE users
-        SET geo_consenso = 0, geo_lat = NULL, geo_lng = NULL, geo_precisione = NULL,
-            geo_aggiornata_il = NULL
-      WHERE id = ?`
-  ).run(userId);
-}
+// Posizione e distanze. La posizione del dispositivo non si raccoglie più: quella di ogni
+// installatore è fissa (src/sede_installatori.js) e quella dei banchi è del punto vendita, quindi
+// qui restano solo la lettura e il calcolo delle distanze.
 
 async function statoUtente(userId) {
   const u = await db
@@ -75,4 +40,4 @@ function formattaDistanza(km) {
   return `${km.toString().replace('.', ',')} km`;
 }
 
-module.exports = { salvaPosizione, revoca, statoUtente, distanzaKm, formattaDistanza };
+module.exports = { statoUtente, distanzaKm, formattaDistanza };

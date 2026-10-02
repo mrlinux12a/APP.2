@@ -542,189 +542,6 @@
   }
 })();
 
-/* Geolocalizzazione in tempo reale — sempre e solo dopo consenso esplicito.
-   Nessuna coordinata parte prima che l'utente prema "Attiva la posizione". */
-(function () {
-  'use strict';
-
-  const box = document.querySelector('[data-geo]');
-  const supportata = 'geolocation' in navigator;
-  let watchId = null;
-  let ultimoInvio = 0;
-
-  function scriviStato(testo) {
-    if (!box) return;
-    const el = box.querySelector('[data-geo-stato]');
-    if (el) el.textContent = testo;
-  }
-
-  function segnaAttiva(attiva) {
-    if (!box) return;
-    const badge = box.querySelector('[data-geo-badge]');
-    if (badge) {
-      badge.textContent = attiva ? 'Consenso dato' : 'Spenta';
-      badge.className = 'stato-badge ' + (attiva ? 'stato-confermato' : 'stato-scaduto');
-    }
-    const on = box.querySelector('[data-geo-attiva]');
-    const off = box.querySelector('[data-geo-revoca]');
-    if (on) on.hidden = attiva;
-    if (off) off.hidden = !attiva;
-  }
-
-  // Essendo un'app multipagina (non una SPA), ogni navigazione riparte da zero e
-  // richiamerebbe l'API di posizione del browser ad ogni pagina: su origini non sicure
-  // (http) alcuni browser (Safari iOS) non ricordano il consenso da una pagina all'altra
-  // e ri-chiedono il permesso di continuo. Questo throttle a livello di sessione evita di
-  // richiamare l'API se abbiamo già un fix recente, per ridurre quanto è possibile quante
-  // volte la richiediamo — non risolve un'origine non sicura, ma aiuta comunque su https.
-  const CHIAVE_ULTIMO_FIX = 'geo_ultimo_fix_ts';
-  function fixRecente() {
-    try {
-      const t = parseInt(sessionStorage.getItem(CHIAVE_ULTIMO_FIX), 10);
-      return Number.isFinite(t) && Date.now() - t < 20000;
-    } catch (e) { return false; }
-  }
-  function segnaFixOra() {
-    try { sessionStorage.setItem(CHIAVE_ULTIMO_FIX, String(Date.now())); } catch (e) {}
-  }
-
-  function invia(pos) {
-    const ora = Date.now();
-    segnaFixOra();
-    // Non tempestiamo il server: al massimo un aggiornamento ogni 10 secondi.
-    if (ora - ultimoInvio < 10000) return;
-    ultimoInvio = ora;
-    fetch('/api/posizione', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude,
-        precisione: pos.coords.accuracy,
-      }),
-    })
-      .then(function (r) { return r.json(); })
-      .then(function () {
-        scriviStato('Attiva — posizione aggiornata ora');
-        window.dispatchEvent(new CustomEvent('posizione-aggiornata', {
-          detail: { lat: pos.coords.latitude, lng: pos.coords.longitude, precisione: pos.coords.accuracy },
-        }));
-      })
-      .catch(function () { /* riprova al prossimo rilevamento */ });
-  }
-
-  function fermaWatch() {
-    if (watchId !== null) {
-      navigator.geolocation.clearWatch(watchId);
-      watchId = null;
-    }
-  }
-
-  function avviaWatch() {
-    if (!supportata || watchId !== null) return;
-    watchId = navigator.geolocation.watchPosition(
-      invia,
-      function (err) {
-        if (err.code === err.PERMISSION_DENIED) {
-          scriviStato('Permesso negato dal browser: la posizione resta spenta.');
-          segnaAttiva(false);
-          fermaWatch();
-          // Permesso tolto nel browser: allineiamo il server e cancelliamo le coordinate.
-          fetch('/api/posizione/revoca', { method: 'POST' });
-        } else {
-          scriviStato('Posizione momentaneamente non disponibile.');
-        }
-      },
-      { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 }
-    );
-  }
-
-  if (box) {
-    const attivaBtn = box.querySelector('[data-geo-attiva]');
-    const revocaBtn = box.querySelector('[data-geo-revoca]');
-
-    if (!supportata) {
-      scriviStato('Questo dispositivo non espone la posizione al browser.');
-      if (attivaBtn) attivaBtn.disabled = true;
-    }
-
-    if (attivaBtn) {
-      attivaBtn.addEventListener('click', function () {
-        scriviStato('In attesa del permesso del browser...');
-        // Il consenso vero è quello che il browser chiede qui.
-        navigator.geolocation.getCurrentPosition(
-          function (pos) {
-            ultimoInvio = 0;
-            invia(pos);
-            segnaAttiva(true);
-            avviaWatch();
-          },
-          function () {
-            scriviStato('Permesso negato: nessuna posizione è stata registrata.');
-            segnaAttiva(false);
-          },
-          { enableHighAccuracy: true, timeout: 20000 }
-        );
-      });
-    }
-
-    if (revocaBtn) {
-      revocaBtn.addEventListener('click', function () {
-        fermaWatch();
-        fetch('/api/posizione/revoca', { method: 'POST' }).then(function () {
-          segnaAttiva(false);
-          scriviStato('Non attiva: la posizione salvata è stata cancellata.');
-          window.dispatchEvent(new CustomEvent('posizione-revocata'));
-        });
-      });
-    }
-
-    // Consenso già dato in una sessione precedente: riprendiamo senza nuovi popup.
-    // Se abbiamo già un fix recentissimo (arrivato dalla pagina precedente) evitiamo di
-    // richiamare subito l'API del browser: meno occasioni di ri-chiedere il permesso.
-    if (box.dataset.consenso === '1') {
-      if (fixRecente()) scriviStato('Attiva — posizione aggiornata di recente');
-      else avviaWatch();
-    } else if (supportata) {
-      // Prima volta: la posizione si attiva appena si entra nell'app. Il permesso lo
-      // chiede comunque il browser; se è già stato negato non insistiamo.
-      const chiedi = function () {
-        scriviStato('Sto cercando la tua posizione...');
-        navigator.geolocation.getCurrentPosition(
-          function (pos) {
-            ultimoInvio = 0;
-            invia(pos);
-            segnaAttiva(true);
-            avviaWatch();
-          },
-          function (err) {
-            scriviStato(
-              err.code === err.PERMISSION_DENIED
-                ? 'Permesso negato: nessuna posizione è stata registrata.'
-                : 'Posizione non disponibile in questo momento.'
-            );
-            segnaAttiva(false);
-          },
-          { enableHighAccuracy: true, timeout: 20000 }
-        );
-      };
-
-      if (navigator.permissions && navigator.permissions.query) {
-        navigator.permissions
-          .query({ name: 'geolocation' })
-          .then(function (p) {
-            if (p.state !== 'denied') chiedi();
-            else scriviStato('Permesso bloccato nelle impostazioni del browser.');
-          })
-          .catch(chiedi);
-      } else {
-        chiedi();
-      }
-    }
-  }
-
-})();
-
 /* Nome utente: si scrive tutto attaccato, quindi spazi e maiuscole spariscono da soli. */
 (function () {
   'use strict';
@@ -815,33 +632,6 @@
 
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') apri(false);
-  });
-})();
-
-/* Interruttore chiaro/scuro nell'appbar: cambia subito e ricorda la scelta. */
-(function () {
-  'use strict';
-
-  const bottone = document.querySelector('[data-tema-toggle]');
-  if (!bottone) return;
-
-  const etichettaScuro = bottone.querySelector('[data-tema-scuro]');
-  const etichettaChiaro = bottone.querySelector('[data-tema-chiaro]');
-
-  function mostraEtichetta() {
-    const chiaro = document.documentElement.getAttribute('data-tema') === 'chiaro';
-    etichettaScuro.toggleAttribute('hidden', chiaro);
-    etichettaChiaro.toggleAttribute('hidden', !chiaro);
-  }
-  mostraEtichetta();
-
-  bottone.addEventListener('click', function () {
-    const chiaroOra = document.documentElement.getAttribute('data-tema') === 'chiaro';
-    const nuovo = chiaroOra ? 'scuro' : 'chiaro';
-    if (nuovo === 'chiaro') document.documentElement.setAttribute('data-tema', 'chiaro');
-    else document.documentElement.removeAttribute('data-tema');
-    try { localStorage.setItem('tema', nuovo); } catch (e) {}
-    mostraEtichetta();
   });
 })();
 
@@ -963,20 +753,69 @@ document.addEventListener('submit', function (e) {
   }, 0);
 }, true);
 
-/* Pagine liste del venditore (home, ordini da evadere, clienti): si ricaricano da sole
-   così le richieste/ordini appena arrivati compaiono senza dover premere F5. Salta il giro
-   se la scheda è in background o se l'utente ha il focus su un campo, per non interrompere
-   nulla che stia scrivendo. */
+/* Pagine del venditore (home, ordini da evadere, clienti, dettaglio richiesta): richieste e ordini
+   appena arrivati compaiono senza premere F5. Ogni pochi secondi chiede al server due numeri
+   leggeri (/api/distributore/novita) e li confronta con quelli con cui la pagina è stata disegnata
+   (data-versione): se sono cambiati si ricarica. Non dipende da una ricarica a tempo, che si salta
+   quando la scheda è in secondo piano. Se la scheda è nascosta o l'utente sta scrivendo in un
+   campo aspetta, e ricarica appena torna in primo piano o esce dal campo. */
 (function () {
   'use strict';
   const ms = parseInt(document.body.dataset.autoRefresh, 10);
   if (!ms) return;
 
-  setInterval(function () {
+  const versionePagina = document.body.dataset.versione || null;
+  let inCorso = false;
+  let daRicaricare = false;
+  let erroriDiFila = 0;
+
+  function suCampo() {
     const attivo = document.activeElement;
-    const suCampo = attivo && ['INPUT', 'TEXTAREA', 'SELECT'].includes(attivo.tagName);
-    if (!document.hidden && !suCampo) window.location.reload();
-  }, ms);
+    return !!attivo && ['INPUT', 'TEXTAREA', 'SELECT'].includes(attivo.tagName);
+  }
+
+  function ricarica() {
+    if (document.hidden || suCampo()) {
+      daRicaricare = true;
+      return;
+    }
+    window.location.reload();
+  }
+
+  function riprendi() {
+    if (daRicaricare && !document.hidden && !suCampo()) window.location.reload();
+  }
+
+  function controlla() {
+    if (inCorso) return;
+    inCorso = true;
+    fetch('/api/distributore/novita', { cache: 'no-store', credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        erroriDiFila = 0;
+        if (versionePagina !== null && JSON.stringify(d) !== versionePagina) ricarica();
+      })
+      .catch(function () {
+        // Il controllo leggero non risponde (sessione scaduta, proxy, rete): si torna alla
+        // ricarica a tempo, che almeno porta alla pagina di accesso o all'elenco aggiornato.
+        erroriDiFila += 1;
+        if (erroriDiFila >= 3) ricarica();
+      })
+      .then(function () { inCorso = false; });
+  }
+
+  setInterval(controlla, Math.min(ms, 5000));
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) return;
+    riprendi();
+    controlla();
+  });
+  document.addEventListener('focusout', function () { setTimeout(riprendi, 300); });
+  window.addEventListener('online', controlla);
+  // Tornando con "indietro" il browser può rimostrare la pagina com'era: va ridisegnata.
+  window.addEventListener('pageshow', function (e) {
+    if (e.persisted) window.location.reload();
+  });
 })();
 
 /* Foto prodotto a schermo intero: un tap sulla miniatura la apre ingrandita. Delegato su

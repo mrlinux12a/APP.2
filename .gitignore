@@ -14,3 +14,6 @@ whatsapp_auth/
 .claude/
 .vercel
 .env*
+
+# Copie di sicurezza degli script che toccano il DB di produzione
+_tmp_backup_*.json

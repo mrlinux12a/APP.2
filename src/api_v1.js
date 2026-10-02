@@ -259,7 +259,8 @@ router.get('/richieste/:id', richiedeCliente, async (req, res) => {
             consegna: o.totali.costo_consegna > 0 ? pricing.euro(o.totali.costo_consegna) : null,
             copertura: o.copertura,
             mancanti: o.mancanti.map((m) => ({ nome: m.nome, mancano: m.mancano })),
-            partenza_testo: format.tempoConsegna(o.partenza_ore),
+            // Con il corriere i minuti sono i suoi (totali): niente partenza dichiarata dal banco.
+            partenza_testo: o.corriere_minuti ? '' : format.tempoConsegna(o.partenza_ore),
             arrivo_testo: consegna.inParole(o.consegna_minuti_stimati),
             note: o.note || null,
             piu_veloce: o.distributore.id === d.idPiuVeloce && d.offerte.length > 1,
@@ -319,8 +320,12 @@ router.get('/richieste/:id/offerte/:distributorId', richiedeCliente, async (req,
     cliente: { ragione_sociale: cliente.ragione_sociale, telefono: cliente.telefono || null },
     indirizzo_consegna: cliente.indirizzo_consegna || '',
     distributore: { id: offerta.distributore.id, nome: offerta.distributore.nome, filiale: offerta.distributore.filiale, zona: offerta.distributore.zona },
-    partenza_testo: format.tempoConsegna(risposta.partenza_ore),
-    consegna_testo: format.tempoConsegna(risposta.consegna_ore),
+    // Con il corriere: tempo totale scritto da lui, al posto dei tempi dichiarati dal banco.
+    corriere: !!risposta.corriere_minuti,
+    partenza_testo: risposta.corriere_minuti ? '' : format.tempoConsegna(risposta.partenza_ore),
+    consegna_testo: risposta.corriere_minuti
+      ? consegna.inParole(risposta.corriere_minuti)
+      : format.tempoConsegna(risposta.consegna_ore),
     mancanti: offerta.mancanti.map((m) => ({ nome: m.nome, mancano: m.mancano })),
     righe: offerta.totali.righe.map((x) => ({
       quantita: x.quantita,
@@ -411,9 +416,10 @@ router.get('/ordini/:id', richiedeCliente, async (req, res) => {
     distributore: d.distributore ? { nome: d.distributore.nome, filiale: '' } : null,
     modalita: ordine.modalita,
     modalita_testo: ordine.modalita === 'ritiro' ? 'Ritiro al banco' : 'Consegna con mezzo del distributore',
-    tempi_testo:
-      (ordine.partenza_ore ? 'Partenza stimata: ' + format.tempoConsegna(ordine.partenza_ore) + ' · ' : '') +
-      (ordine.consegna_ore ? 'consegna stimata: ' + format.tempoConsegna(ordine.consegna_ore) : 'tempo da concordare'),
+    tempi_testo: ordine.corriere_arrivo_il
+      ? 'Consegna con corriere, prevista entro le ' + format.oraRoma(ordine.corriere_arrivo_il)
+      : (ordine.partenza_ore ? 'Partenza stimata: ' + format.tempoConsegna(ordine.partenza_ore) + ' · ' : '') +
+        (ordine.consegna_ore ? 'consegna stimata: ' + format.tempoConsegna(ordine.consegna_ore) : 'tempo da concordare'),
     destinazione: ordine.destinazione || null,
     note: ordine.note || null,
     ddt: ordine.ddt_numero ? { numero: ordine.ddt_numero, data: format.dataSola(ordine.ddt_data) } : null,

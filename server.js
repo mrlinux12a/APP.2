@@ -73,6 +73,8 @@ if (!sessionSecret) {
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
+// Dove stanno tutti gli installatori, per ora (vedi src/sede_installatori.js).
+app.locals.sede = require('./src/sede_installatori');
 // Necessario per leggere il vero IP del client (usato dal limite tentativi di login)
 // quando l'app gira dietro un proxy/load balancer (es. Vercel).
 app.set('trust proxy', 1);
@@ -176,6 +178,10 @@ app.use(async (req, res, next) => {
   res.locals.geo = geoStato;
   // I contatori del banco servono alla barra di navigazione di tutte le pagine distributore.
   res.locals.contatori = contatori;
+  // Pagine e risposte dell'app sono dati di chi è collegato: il browser (o un proxy davanti alla
+  // VPS) non deve riproporre una copia vecchia, altrimenti richieste e ordini nuovi non si vedono
+  // finché non si forza il refresh. Con ETag il ricontrollo costa poco.
+  res.set('Cache-Control', 'private, no-cache');
   next();
 });
 
@@ -264,7 +270,7 @@ app.get('/registrati', async (req, res) => {
   });
 });
 
-app.post('/registrati', async (req, res) => {
+app.post('/registrati', async (req, res, next) => {
   const scelti = []
     .concat(req.body.distributori || [])
     .map((v) => parseInt(v, 10))
@@ -297,7 +303,8 @@ app.post('/registrati', async (req, res) => {
     zona: cliente.zona,
     distributor_id: null,
   };
-  res.redirect('/profilo?benvenuto=1');
+  // Come per il login: prima si salva la sessione, poi si va al profilo.
+  req.session.save((err) => (err ? next(err) : res.redirect('/profilo?benvenuto=1')));
 });
 
 // ---------- Profilo del cliente ----------
@@ -314,7 +321,7 @@ app.get('/profilo', requireRole('cliente'), async (req, res) => {
   });
 });
 
-app.post('/login', async (req, res) => {
+app.post('/login', async (req, res, next) => {
   // Uno spazio digitato per sbaglio (specie a fine nome, su telefono con autocorrezione)
   // non deve far fallire l'accesso: il nome utente si confronta sempre già "ripulito".
   const username = String(req.body.username || '').trim();
@@ -339,7 +346,9 @@ app.post('/login', async (req, res) => {
     zona: user.zona,
     distributor_id: user.distributor_id,
   };
-  res.redirect('/');
+  // La sessione si salva PRIMA del redirect: express-session manda la risposta e salva dopo, e se il
+  // browser rilegge subito la pagina (succede) la sessione non c'è ancora e si torna al login.
+  req.session.save((err) => (err ? next(err) : res.redirect('/')));
 });
 
 app.post('/logout', async (req, res) => {
@@ -769,6 +778,7 @@ app.get('/richieste/:id/offerta/:distributorId', requireRole('cliente'), async (
     richiesta,
     modalita,
     cliente: await db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id),
+    consegna,
     ...riepilogo,
   });
 });
@@ -935,24 +945,10 @@ app.get('/api/notifiche/push', requireLogin, async (req, res) => {
   res.json({ notifiche: await notifiche.daMostrare(req.session.user.id) });
 });
 
-// ---------- Geolocalizzazione (solo con consenso esplicito) ----------
+// ---------- Posizione ----------
 
-// Il browser chiede il permesso all'utente; qui arriva la posizione solo dopo che l'ha dato.
-app.post('/api/posizione', requireLogin, async (req, res) => {
-  const salvata = await geo.salvaPosizione(req.session.user.id, {
-    lat: req.body.lat,
-    lng: req.body.lng,
-    precisione: req.body.precisione,
-  });
-  if (!salvata) return res.status(400).json({ ok: false, errore: 'Coordinate non valide.' });
-  res.json({ ok: true, ...await geo.statoUtente(req.session.user.id) });
-});
-
-// Revoca: spegne il consenso e cancella davvero le coordinate salvate.
-app.post('/api/posizione/revoca', requireLogin, async (req, res) => {
-  await geo.revoca(req.session.user.id);
-  res.json({ ok: true, consenso: false });
-});
+// La posizione del dispositivo non si raccoglie più: gli installatori stanno tutti in Via Puggia 22/3
+// (src/sede_installatori.js) e i banchi hanno la posizione del punto vendita (store_locations).
 
 // ---------- Distributore: banco ----------
 
@@ -976,12 +972,17 @@ async function contatoriBanco(distributorId) {
     db.prepare(
       `SELECT
          COUNT(*) FILTER (WHERE stato = 'inviato') AS da_preparare,
-         COUNT(*) FILTER (WHERE stato = 'in_evasione') AS in_preparazione
+         COUNT(*) FILTER (WHERE stato = 'in_evasione') AS in_preparazione,
+         COALESCE(MAX(id), 0) AS ultimo
          FROM orders WHERE distributor_id = ?`
     ).get(distributorId),
     db.prepare(
-      `SELECT COUNT(*) AS n FROM request_responses rr JOIN requests r ON r.id = rr.request_id
-        WHERE rr.distributor_id = ? AND rr.esito = 'in_attesa' AND r.scade_il > NOW()`
+      `SELECT COUNT(*) FILTER (WHERE rr.esito = 'in_attesa' AND r.scade_il > NOW()) AS n,
+              COALESCE(MAX(r.id) FILTER (WHERE rr.esito = 'in_attesa' AND r.scade_il > NOW()), 0) AS ultima,
+              COUNT(*) FILTER (WHERE rr.corriere_stato = 'in_attesa') AS attesa_corriere
+         FROM request_responses rr JOIN requests r ON r.id = rr.request_id
+        WHERE rr.distributor_id = ?
+          AND ((rr.esito = 'in_attesa' AND r.scade_il > NOW()) OR rr.corriere_stato = 'in_attesa')`
     ).get(distributorId),
     db.prepare(
       `SELECT COUNT(*) AS n FROM client_distributors WHERE distributor_id = ? AND stato = 'in_attesa'`
@@ -992,8 +993,20 @@ async function contatoriBanco(distributorId) {
     daPreparare: Number(ordini.da_preparare),
     inPreparazione: Number(ordini.in_preparazione),
     daApprovare: Number(daApprovareRow.n),
+    // Non si vedono in pagina: servono a /api/distributore/novita per accorgersi che qualcosa è
+    // cambiato anche quando i conteggi restano uguali (una richiesta scade e un'altra arriva, un
+    // corriere prende la consegna).
+    ultimaRichiesta: Number(daRispondereRow.ultima),
+    ultimoOrdine: Number(ordini.ultimo),
+    inAttesaCorriere: Number(daRispondereRow.attesa_corriere),
   };
 }
+
+// Controllo leggero per le pagine del banco (public/app.js, data-versione): restituisce gli stessi
+// numeri che la pagina ha ricevuto, e il browser si ricarica solo se sono cambiati.
+app.get('/api/distributore/novita', requireRole('distributore'), (req, res) => {
+  res.json(res.locals.contatori || {});
+});
 
 app.get('/distributore', requireRole('distributore'), async (req, res) => {
   // Niente più sweep completo di tutte le richieste aperte del sistema ad ogni apertura
@@ -1081,7 +1094,7 @@ app.get('/distributore/storico', requireRole('distributore'), async (req, res) =
 
   const elenco = await db
     .prepare(
-      `SELECT r.*, rr.esito, u.ragione_sociale AS cliente_nome,
+      `SELECT r.*, rr.esito, rr.corriere_stato, u.ragione_sociale AS cliente_nome,
               EXTRACT(EPOCH FROM (r.scade_il - NOW()))::int AS secondi,
               (SELECT SUM(quantita) FROM request_items ri WHERE ri.request_id = r.id) AS pezzi
          FROM request_responses rr

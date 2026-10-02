@@ -79,10 +79,7 @@
         <label for="sdi_pec">Codice SDI o PEC per la fattura elettronica</label>
         <input type="text" id="sdi_pec" name="sdi_pec" value="<%= dati.sdi_pec || '' %>">
 
-        <label for="indirizzo_consegna">Indirizzo di consegna abituale</label>
-        <input type="text" id="indirizzo_consegna" name="indirizzo_consegna"
-               placeholder="Se diverso dalla sede: cantiere, magazzino..."
-               value="<%= dati.indirizzo_consegna || '' %>">
+        <p class="nota">Per ora tutte le consegne vanno in <%= sede.indirizzoConsegna %>.</p>
 
         <div class="sezione-titolo">Contatti</div>
 

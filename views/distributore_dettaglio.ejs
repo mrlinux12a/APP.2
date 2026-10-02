@@ -3,7 +3,7 @@
 <head>
   <%- include('partials/app_head', { titolo }) %>
 </head>
-<body data-loggato="1">
+<body data-loggato="1" data-auto-refresh="15000" data-versione="<%= JSON.stringify(contatori) %>">
   <div class="app">
     <%- include('partials/appbar', { titolo, intestazione: 'Richiesta #' + richiesta.id, indietro: '/distributore' }) %>
 
@@ -67,6 +67,22 @@
           <% if (risposta.note) { %><br>Note: <%= risposta.note %><% } %>
         </div>
 
+        <% if (risposta.corriere_stato === 'in_attesa') { %>
+          <div class="avviso avviso-attenzione">
+            In attesa che un corriere prenda la consegna nel gruppo WhatsApp. Il cliente vede la tua
+            conferma solo quando qualcuno risponde.
+          </div>
+        <% } else if (risposta.corriere_stato === 'preso') { %>
+          <div class="avviso avviso-ok">
+            Consegna presa<%= risposta.corriere_nome ? ' da ' + risposta.corriere_nome : '' %>:
+            <strong><%= risposta.corriere_minuti %> minuti</strong> in totale, dal ritiro alla consegna.
+          </div>
+        <% } else if (risposta.corriere_stato === 'scaduto' && richiesta.stato !== 'annullata') { %>
+          <div class="avviso avviso-attenzione">
+            Nessun corriere ha preso la consegna in tempo: per il cliente è come se non avessi accettato.
+          </div>
+        <% } %>
+
         <div class="sezione-titolo">Cosa hai confermato</div>
         <div class="card">
           <% offerta.righe.forEach(function (r) { %>
@@ -100,6 +116,8 @@
           <div class="avviso avviso-attenzione">Il cliente ha scelto un altro distributore.</div>
         <% } else if (richiesta.stato === 'annullata') { %>
           <div class="avviso avviso-attenzione">Il cliente ha annullato la richiesta: nessun ordine.</div>
+        <% } else if (risposta.corriere_stato === 'in_attesa' || risposta.corriere_stato === 'scaduto') { %>
+          <%# lo stato del corriere è già spiegato sopra %>
         <% } else if (richiesta.stato === 'nessuna_offerta') { %>
           <div class="avviso avviso-attenzione">Il cliente non ha scelto in tempo e le offerte sono scadute: nessun ordine.</div>
         <% } else { %>

@@ -1,20 +1,27 @@
 const path = require('path');
 const db = require('../db');
-const notifiche = require('./notifiche');
 const consegna = require('./consegna');
 const format = require('./format');
+const ddt = require('./ddt');
 
 // Gruppo WhatsApp dei corrieri.
 //
-// Quando un ordine con consegna parte dal banco, nel gruppo arriva un messaggio con l'indirizzo
-// di ritiro (la filiale che ha accettato) e quello di consegna (l'installatore). Chi lo prende
-// risponde al messaggio scrivendo la parola chiave e i minuti ("preso 30"): il sistema legge il
-// tempo, lo salva sull'ordine e avvisa cliente e banco.
+// Quando un banco accetta una richiesta, PRIMA che l'offerta arrivi all'installatore, nel gruppo
+// parte un messaggio con le due tappe: prelievo merci (la filiale che ha accettato) e consegna
+// (l'installatore). L'installatore non vede l'offerta finché qualcuno nel gruppo non risponde al
+// messaggio con la parola chiave e i minuti totali ("preso 30"): solo allora la risposta del banco
+// diventa un'offerta, con quel tempo come tempo di consegna. Se la finestra della richiesta scade
+// senza che nessuno risponda, il messaggio viene eliminato dal gruppo e per l'installatore è come
+// se nessun banco avesse accettato.
 //
-// Libreria non ufficiale (Baileys): si collega come dispositivo di un numero dedicato e scrive
-// nel gruppo. Il modulo è spento finché non c'è WHATSAPP_ATTIVO=1, che va messo in un solo posto
+// La logica di stato (offerta nascosta, "preso", scadenza) sta in richieste.js: qui solo il
+// gruppo, cioè messaggi in uscita, risposte in ingresso e la connessione.
+//
+// Libreria non ufficiale (Baileys): si collega come dispositivo del numero scelto e scrive nel
+// gruppo. Il modulo è spento finché non c'è WHATSAPP_ATTIVO=1, che va messo in un solo posto
 // (la VPS): due istanze leggerebbero lo stesso gruppo e risponderebbero due volte. Un server locale,
-// che usa lo stesso DB di produzione, non deve né collegarsi né accodare messaggi.
+// che usa lo stesso DB di produzione, non deve né collegarsi né accodare messaggi: con il modulo
+// spento i banchi accettano come prima, senza corriere.
 //
 // Variabili d'ambiente:
 //   WHATSAPP_ATTIVO          1 per accenderlo
@@ -86,60 +93,203 @@ function leggiRisposta(testo, parola = parolaChiave()) {
 
 // ---------- Testi dei messaggi ----------
 
-function indirizzoBanco(d) {
-  return [d.indirizzo, d.zona].filter(Boolean).join(', ') || d.filiale;
+function linkMappa(lat, lng) {
+  if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng)) || lat === null || lng === null) return '';
+  return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
 }
 
-function testoOrdine(ordine, distributore) {
+function tappa(titolo, nome, indirizzo, lat, lng) {
+  const righe = [titolo];
+  if (nome) righe.push(nome);
+  if (indirizzo) righe.push(indirizzo);
+  const link = linkMappa(lat, lng);
+  if (link) righe.push(`📍 ${link}`);
+  return righe.join('\n');
+}
+
+function testoRitiroConsegna({ richiestaId, banco, consegnaA }) {
+  const p = parolaChiave();
   return [
-    `📦 Ordine #${ordine.id}`,
-    `Ritiro merce: ${indirizzoBanco(distributore)}`,
-    `Consegna merce: ${ordine.destinazione}`,
+    `🚚 Richiesta #${richiestaId}: nuova consegna`,
     '',
-    `Rispondi a questo messaggio con «${parolaChiave()} <minuti>» (es. ${parolaChiave()} 30) per prenderlo: i minuti sono il tempo della consegna.`,
+    tappa('1️⃣ PRELIEVO MERCI', banco.nome, banco.indirizzo, banco.lat, banco.lng),
+    '',
+    tappa('2️⃣ CONSEGNA MERCE', null, consegnaA.indirizzo, consegnaA.lat, consegnaA.lng),
+    '',
+    `Per prenderla rispondi a questo messaggio con «${p} <minuti>» (es. ${p} 30). I minuti sono il tempo totale, dal ritiro alla consegna.`,
   ].join('\n');
+}
+
+// Dove si ritira: la filiale che ha accettato. Vale il punto vendita (store_locations), che è
+// l'indirizzo vero; la riga del distributore resta come ripiego.
+async function datiRitiro(distributorId) {
+  const d = await db.prepare('SELECT * FROM distributors WHERE id = ?').get(distributorId);
+  const s = await db
+    .prepare(
+      `SELECT indirizzo, citta, geo_lat, geo_lng FROM store_locations
+        WHERE distributor_id = ? AND attivo = 1 AND geo_lat IS NOT NULL ORDER BY id LIMIT 1`
+    )
+    .get(distributorId);
+  return {
+    nome: [d.nome, d.filiale].filter(Boolean).join(' — '),
+    indirizzo: s
+      ? [s.indirizzo, s.citta].filter(Boolean).join(', ')
+      : [d.indirizzo, d.zona].filter(Boolean).join(', '),
+    lat: s ? s.geo_lat : d.geo_lat,
+    lng: s ? s.geo_lng : d.geo_lng,
+  };
+}
+
+// Dove si consegna: l'indirizzo dell'installatore (per ora uguale per tutti, vedi sede_installatori.js).
+async function datiConsegna(clienteId) {
+  const c = await db.prepare('SELECT * FROM users WHERE id = ?').get(clienteId);
+  return {
+    indirizzo: (c.indirizzo_consegna || '').trim() || ddt.indirizzoCompleto(c),
+    lat: c.geo_lat,
+    lng: c.geo_lng,
+  };
 }
 
 // ---------- Coda dei messaggi ----------
 
-// Accoda il messaggio di un ordine appena creato. Non scrive nulla se il modulo è spento, se
-// l'ordine è un ritiro al banco (nessun corriere) o se manca l'indirizzo di consegna.
-async function accodaOrdine(orderId) {
+// Messaggio "nuova consegna" per la risposta con cui un banco ha accettato. Non scrive nulla se il
+// modulo è spento (e allora il banco accetta senza corriere, vedi richieste.rispondi).
+async function accodaRitiroConsegna(requestId, responseId) {
   if (!attivo()) return null;
-  const ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
-  if (!ordine || ordine.modalita === 'ritiro' || !ordine.distributor_id) return null;
-  if (!(ordine.destinazione || '').trim()) return null;
-  const distributore = await db.prepare('SELECT * FROM distributors WHERE id = ?').get(ordine.distributor_id);
-  if (!distributore) return null;
+  const richiesta = await db.prepare('SELECT * FROM requests WHERE id = ?').get(requestId);
+  const risposta = await db.prepare('SELECT * FROM request_responses WHERE id = ?').get(responseId);
+  if (!richiesta || !risposta) return null;
 
+  const testo = testoRitiroConsegna({
+    richiestaId: richiesta.id,
+    banco: await datiRitiro(risposta.distributor_id),
+    consegnaA: await datiConsegna(richiesta.cliente_id),
+  });
   const info = await db
-    .prepare(`INSERT INTO whatsapp_messaggi (order_id, tipo, testo) VALUES (?, 'ordine', ?)`)
-    .run(ordine.id, testoOrdine(ordine, distributore));
+    .prepare(`INSERT INTO whatsapp_messaggi (request_id, response_id, tipo, testo) VALUES (?, ?, 'ritiro_consegna', ?)`)
+    .run(richiesta.id, risposta.id, testo);
   svuotaCoda().catch((err) => console.error('WhatsApp, invio:', err.message));
   return Number(info.lastInsertRowid);
+}
+
+// La richiesta non ha più bisogno del corriere (scaduta, annullata, ordine andato altrove): i
+// messaggi che nessuno ha preso spariscono dal gruppo e nessuno può più rispondere, a quelli già
+// presi si scrive il motivo (se c'è) perché il corriere non parta per niente. Non guarda se il
+// modulo è acceso: con il DB condiviso scrive solo righe, le manda l'istanza collegata.
+// `tranne`: id di una risposta da lasciare com'è (quella che ha vinto).
+async function ritiraRichiesta(requestId, { motivo = null, tranne = null } = {}) {
+  const ritirati = await db
+    .prepare(
+      `UPDATE whatsapp_messaggi
+          SET stato = CASE WHEN stato = 'da_inviare' THEN 'annullato' ELSE 'da_eliminare' END
+        WHERE request_id = ? AND tipo = 'ritiro_consegna' AND preso_il IS NULL
+          AND stato IN ('da_inviare', 'inviato')
+          AND (?::int IS NULL OR response_id IS DISTINCT FROM ?::int)`
+    )
+    .run(requestId, tranne, tranne);
+
+  let avvisati = { changes: 0 };
+  if (motivo) {
+    avvisati = await db
+      .prepare(
+        `INSERT INTO whatsapp_messaggi (request_id, response_id, tipo, testo)
+         SELECT m.request_id, m.response_id, 'esito', ?
+           FROM whatsapp_messaggi m
+          WHERE m.request_id = ? AND m.tipo = 'ritiro_consegna' AND m.preso_il IS NOT NULL
+            AND m.stato = 'inviato'
+            AND NOT EXISTS (SELECT 1 FROM whatsapp_messaggi e
+                             WHERE e.request_id = m.request_id AND e.tipo = 'esito'
+                               AND e.response_id IS NOT DISTINCT FROM m.response_id)`
+      )
+      .run(`❌ Richiesta #${requestId} annullata: ${motivo}. Non devi più fare questa consegna.`, requestId);
+  }
+
+  if (ritirati.changes || avvisati.changes) {
+    svuotaCoda().catch((err) => console.error('WhatsApp, invio:', err.message));
+  }
+}
+
+async function accodaEsito(requestId, responseId, testo) {
+  await db
+    .prepare(`INSERT INTO whatsapp_messaggi (request_id, response_id, tipo, testo) VALUES (?, ?, 'esito', ?)`)
+    .run(requestId, responseId, testo);
+  svuotaCoda().catch((err) => console.error('WhatsApp, invio:', err.message));
+}
+
+// L'installatore ha confermato (o l'ordine è partito da solo): chi ha preso la consegna deve saperlo.
+// Se il cliente ritira al banco la consegna non serve più.
+async function avvisaOrdine(orderId, risposta) {
+  if (!risposta || risposta.corriere_stato !== 'preso') return;
+  const ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+  if (!ordine) return;
+  const testo =
+    ordine.modalita === 'ritiro'
+      ? `ℹ️ Richiesta #${ordine.request_id}: il cliente ritira al banco, la consegna non serve più.`
+      : `✅ Richiesta #${ordine.request_id}: il cliente ha confermato (ordine #${ordine.id}). Ritira la merce e consegna entro le ${format.oraRoma(ordine.corriere_arrivo_il)}.`;
+  await accodaEsito(ordine.request_id, risposta.id, testo);
+}
+
+// L'installatore annulla un ordine che aveva già un corriere.
+async function avvisaAnnulloOrdine(ordine) {
+  if (!ordine || ordine.corriere_minuti === null || ordine.corriere_minuti === undefined) return;
+  await accodaEsito(
+    ordine.request_id,
+    null,
+    `❌ Ordine #${ordine.id} (richiesta #${ordine.request_id}) annullato dal cliente: la consegna non serve più.`
+  );
 }
 
 async function inviaMessaggiInCoda() {
   const gruppo = await gruppoId();
   if (!gruppo) return;
-  const righe = await db
+
+  const daInviare = await db
     .prepare(
       `SELECT * FROM whatsapp_messaggi
         WHERE stato = 'da_inviare' AND tentativi < ?
         ORDER BY id`
     )
     .all(TENTATIVI_MAX);
-  for (const riga of righe) {
+  for (const riga of daInviare) {
     try {
       const inviato = await sock.sendMessage(gruppo, { text: riga.testo });
-      await db
-        .prepare(`UPDATE whatsapp_messaggi SET stato = 'inviato', wa_msg_id = ?, inviato_il = NOW(), errore = NULL WHERE id = ?`)
+      const ok = await db
+        .prepare(
+          `UPDATE whatsapp_messaggi SET stato = 'inviato', wa_msg_id = ?, inviato_il = NOW(), errore = NULL
+            WHERE id = ? AND stato = 'da_inviare'`
+        )
         .run(inviato.key.id, riga.id);
+      if (!ok.changes) {
+        // Annullato proprio mentre partiva: lo tolgo subito dal gruppo.
+        await sock.sendMessage(gruppo, { delete: inviato.key });
+        await db
+          .prepare(`UPDATE whatsapp_messaggi SET wa_msg_id = ?, stato = 'eliminato' WHERE id = ?`)
+          .run(inviato.key.id, riga.id);
+      }
     } catch (err) {
       await db
         .prepare(`UPDATE whatsapp_messaggi SET tentativi = tentativi + 1, errore = ? WHERE id = ?`)
         .run(String(err.message).slice(0, 300), riga.id);
       console.error(`WhatsApp, messaggio ${riga.id} non inviato:`, err.message);
+    }
+  }
+
+  const daEliminare = await db
+    .prepare(
+      `SELECT * FROM whatsapp_messaggi
+        WHERE stato = 'da_eliminare' AND wa_msg_id IS NOT NULL AND tentativi < ?
+        ORDER BY id`
+    )
+    .all(TENTATIVI_MAX);
+  for (const riga of daEliminare) {
+    try {
+      await sock.sendMessage(gruppo, { delete: { remoteJid: gruppo, fromMe: true, id: riga.wa_msg_id } });
+      await db.prepare(`UPDATE whatsapp_messaggi SET stato = 'eliminato', errore = NULL WHERE id = ?`).run(riga.id);
+    } catch (err) {
+      await db
+        .prepare(`UPDATE whatsapp_messaggi SET tentativi = tentativi + 1, errore = ? WHERE id = ?`)
+        .run(String(err.message).slice(0, 300), riga.id);
+      console.error(`WhatsApp, messaggio ${riga.id} non eliminato:`, err.message);
     }
   }
 }
@@ -171,50 +321,13 @@ function svuotaCoda() {
 
 // ---------- Risposta del corriere ----------
 
-// Il primo che risponde prende l'ordine. Esiti:
-//   { esito: 'preso', ordine }    tempo salvato
-//   { esito: 'gia_preso', ordine } qualcun altro l'aveva già preso
-//   { esito: 'inesistente' }      ordine annullato o cancellato
-async function registraRisposta(orderId, minuti, nome) {
-  const arrivo = new Date(Date.now() + minuti * 60 * 1000);
-  const preso = await db
-    .prepare(
-      `UPDATE orders
-          SET corriere_minuti = ?, corriere_arrivo_il = ?, corriere_risposto_il = NOW(), corriere_nome = ?
-        WHERE id = ? AND corriere_minuti IS NULL`
-    )
-    .run(minuti, arrivo, nome, orderId);
-  const ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
-  if (!ordine) return { esito: 'inesistente' };
-  if (!preso.changes) return { esito: 'gia_preso', ordine };
-
-  const quando = format.oraRoma(arrivo);
-  await notifiche.notifica(ordine.cliente_id, {
-    titolo: 'Consegna in arrivo',
-    testo: `Il corriere consegna l'ordine #${ordine.id} entro le ${quando} (circa ${consegna.inParole(minuti)}).`,
-    link: '/ordini/' + ordine.id,
-    categoria: 'ordini',
-    order_id: ordine.id,
-  });
-  if (ordine.distributor_id) {
-    await notifiche.notificaDistributore(ordine.distributor_id, {
-      titolo: 'Corriere per il ritiro',
-      testo: `Ordine #${ordine.id}: ${nome || 'il corriere'} ha preso la consegna, arriva dal cliente entro le ${quando}.`,
-      link: '/distributore/ordini/' + ordine.id,
-      categoria: 'ordini',
-      order_id: ordine.id,
-    });
-  }
-  return { esito: 'preso', ordine, quando };
-}
-
 function testoDelMessaggio(contenuto) {
   if (!contenuto) return '';
   return contenuto.conversation || (contenuto.extendedTextMessage && contenuto.extendedTextMessage.text) || '';
 }
 
 // Id dei messaggi scritti dal bot nel gruppo (conferme e avvisi): contengono la parola chiave e un
-// numero d'ordine, quindi se tornassero indietro come messaggi "miei" verrebbero letti come risposte.
+// numero di richiesta, quindi se tornassero indietro come messaggi "miei" verrebbero letti come risposte.
 const inviatiDalBot = new Set();
 
 async function rispondi(msg, testo) {
@@ -229,8 +342,9 @@ async function rispondi(msg, testo) {
   }
 }
 
-// Un messaggio arrivato nel gruppo: se risponde a un nostro messaggio d'ordine (o cita il suo
-// numero, "#12") e contiene la parola chiave, legge i minuti. Il resto del gruppo è ignorato.
+// Un messaggio arrivato nel gruppo: se risponde a un nostro messaggio "nuova consegna" (o cita il
+// numero della richiesta, "#12") e contiene la parola chiave, legge i minuti. Il resto del gruppo
+// è ignorato.
 async function gestisciMessaggio(msg) {
   if (!msg || !msg.message) return;
   if (msg.key.fromMe) {
@@ -245,25 +359,23 @@ async function gestisciMessaggio(msg) {
   const letta = leggiRisposta(testo);
   if (!letta.risposta) return;
 
-  let orderId = null;
+  let riga = null;
   const info = contenuto.extendedTextMessage && contenuto.extendedTextMessage.contextInfo;
   if (info && info.stanzaId) {
-    const riga = await db
-      .prepare(`SELECT order_id FROM whatsapp_messaggi WHERE wa_msg_id = ? AND tipo = 'ordine'`)
+    riga = await db
+      .prepare(`SELECT * FROM whatsapp_messaggi WHERE wa_msg_id = ? AND tipo = 'ritiro_consegna'`)
       .get(info.stanzaId);
-    if (riga) orderId = riga.order_id;
   }
-  if (!orderId) {
+  if (!riga) {
     const cita = testo.match(/#(\d+)/);
     if (cita) {
-      const riga = await db
-        .prepare(`SELECT order_id FROM whatsapp_messaggi WHERE order_id = ? AND tipo = 'ordine' LIMIT 1`)
+      riga = await db
+        .prepare(`SELECT * FROM whatsapp_messaggi WHERE request_id = ? AND tipo = 'ritiro_consegna' ORDER BY id DESC LIMIT 1`)
         .get(Number(cita[1]));
-      if (riga) orderId = riga.order_id;
     }
   }
-  // Parola chiave senza un ordine a cui riferirla: probabilmente parla d'altro.
-  if (!orderId) return;
+  // Parola chiave senza una consegna a cui riferirla: probabilmente parla d'altro.
+  if (!riga) return;
 
   if (letta.minuti === null) {
     await rispondi(msg, `Non ho capito i minuti: scrivi per esempio «${parolaChiave()} 30».`);
@@ -271,14 +383,18 @@ async function gestisciMessaggio(msg) {
   }
 
   const nome = (msg.pushName || (msg.key.fromMe && sock.user && sock.user.name) || '').trim().slice(0, 60);
-  const esito = await registraRisposta(orderId, letta.minuti, nome);
+  const esito = await require('./richieste').corriereHaPreso(riga.response_id, letta.minuti, nome);
   if (esito.esito === 'preso') {
-    await rispondi(msg, `✅ Ordine #${orderId} preso: consegna entro le ${esito.quando} (${consegna.inParole(letta.minuti)}).`);
+    await db.prepare('UPDATE whatsapp_messaggi SET preso_il = NOW() WHERE id = ?').run(riga.id);
+    await rispondi(
+      msg,
+      `✅ Preso! Richiesta #${riga.request_id}: ${consegna.inParole(letta.minuti)} in totale. Aspetto la conferma del cliente e ti scrivo qui appena arriva.`
+    );
   } else if (esito.esito === 'gia_preso') {
-    const da = esito.ordine.corriere_nome ? ` da ${esito.ordine.corriere_nome}` : '';
-    await rispondi(msg, `L'ordine #${orderId} è già stato preso${da}.`);
+    const da = esito.nome ? ` da ${esito.nome}` : '';
+    await rispondi(msg, `La richiesta #${riga.request_id} è già stata presa${da}.`);
   } else {
-    await rispondi(msg, `L'ordine #${orderId} non esiste più: è stato annullato.`);
+    await rispondi(msg, `La richiesta #${riga.request_id} è scaduta: non è più disponibile.`);
   }
 }
 
@@ -423,4 +539,21 @@ function avvia() {
   setInterval(() => svuotaCoda().catch((err) => console.error('WhatsApp, invio:', err.message)), 60 * 1000).unref();
 }
 
-module.exports = { avvia, attivo, pronto, gruppoId, elencaGruppi, accodaOrdine, leggiRisposta, leggiMinuti, testoOrdine, registraRisposta, gestisciMessaggio, svuotaCoda, _prova: { impostaSocket(s, g) { sock = s; connesso = !!s; gruppo = g || null; } } };
+module.exports = {
+  avvia,
+  attivo,
+  pronto,
+  gruppoId,
+  elencaGruppi,
+  accodaRitiroConsegna,
+  ritiraRichiesta,
+  avvisaOrdine,
+  avvisaAnnulloOrdine,
+  leggiRisposta,
+  leggiMinuti,
+  testoRitiroConsegna,
+  gestisciMessaggio,
+  svuotaCoda,
+  // Solo per le prove: mette un socket finto al posto di quello vero.
+  _prova: { impostaSocket(s, g) { sock = s; connesso = !!s; gruppo = g || null; } },
+};

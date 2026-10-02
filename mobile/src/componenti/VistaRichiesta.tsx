@@ -77,10 +77,12 @@ function SchedaOfferta({ o, richiestaId }: { o: Offerta; richiestaId: number }) 
           Mancano {o.mancanti.map((m) => `${m.mancano} pz di ${m.nome}`).join(', ')}
         </Text>
       ) : null}
-      <View style={stili.offertaRiga}>
-        <Icona nome="orario" colore={c.testo} dimensione={18} />
-        <Text style={[stili.offertaTesto, { color: c.testo }]}>Parte dalla filiale entro {o.partenza_testo}</Text>
-      </View>
+      {o.partenza_testo ? (
+        <View style={stili.offertaRiga}>
+          <Icona nome="orario" colore={c.testo} dimensione={18} />
+          <Text style={[stili.offertaTesto, { color: c.testo }]}>Parte dalla filiale entro {o.partenza_testo}</Text>
+        </View>
+      ) : null}
       <View style={stili.offertaRiga}>
         <Icona nome="consegna" colore={c.testo} dimensione={18} />
         <Text style={[stili.offertaTesto, { color: c.testo }]}>

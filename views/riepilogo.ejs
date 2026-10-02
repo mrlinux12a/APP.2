@@ -45,8 +45,13 @@
           <div class="riga-lista">
             <span class="icona"><%- iconaOrario %></span>
             <span class="corpo">
-              <span class="etichetta">Partenza ordine stimata: <%= fmt.tempoConsegna(risposta.partenza_ore) %></span>
-              <span class="dettaglio">Consegna stimata in <%= fmt.tempoConsegna(risposta.consegna_ore) %> — tempi dichiarati dal banco</span>
+              <% if (risposta.corriere_minuti) { %>
+                <span class="etichetta">Consegna con corriere</span>
+                <span class="dettaglio">Consegna stimata in <%= consegna.inParole(risposta.corriere_minuti) %> — tempo indicato dal corriere</span>
+              <% } else { %>
+                <span class="etichetta">Partenza ordine stimata: <%= fmt.tempoConsegna(risposta.partenza_ore) %></span>
+                <span class="dettaglio">Consegna stimata in <%= fmt.tempoConsegna(risposta.consegna_ore) %> — tempi dichiarati dal banco</span>
+              <% } %>
             </span>
           </div>
         </div>

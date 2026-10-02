@@ -3,7 +3,7 @@
 <head>
   <%- include('partials/app_head', { titolo }) %>
 </head>
-<body data-loggato="1" data-auto-refresh="15000">
+<body data-loggato="1" data-auto-refresh="15000" data-versione="<%= JSON.stringify(contatori) %>">
   <div class="app">
     <%- include('partials/appbar', { titolo, intestazione: 'Clienti', indietro: '/distributore' }) %>
 

@@ -134,7 +134,8 @@ in `db/`, non in `db/postgres/`. Va corretto il percorso prima di rilanciarlo.
    né per copertura). Hanno **10 minuti** (`finestra_conferma_min`) per confermare la
    disponibilità. Il cliente vede un countdown e lo stato di ogni banco, e riceve una notifica
    a ogni risposta: può chiudere la schermata. Una sola richiesta aperta per cliente alla volta.
-6. **Offerte** — appena almeno un distributore conferma, il cliente vede chi ha confermato con
+6. **Offerte** — appena almeno un distributore conferma (con il gruppo WhatsApp acceso: appena un
+   corriere prende la consegna, vedi "Gruppo WhatsApp dei corrieri"), il cliente vede chi ha confermato con
    **tempo di consegna stimato e prezzo**, dal più conveniente (le complete prima delle
    parziali). Parte una finestra per scegliere, che si allunga a ogni nuova conferma: se il
    cliente non sceglie in tempo, l'ordine parte da solo verso chi copre **tutto** il materiale
@@ -226,14 +227,14 @@ mittente e destinatario, destinazione della merce, righe, causale, colli, data e
 partenza, totali e spazi per le firme. `/ddt/:ordine` è ottimizzata per la stampa e la vedono il
 banco che l'ha emessa, il cliente intestatario e l'agente (link nel dettaglio dell'ordine).
 
-## Geolocalizzazione (con consenso)
+## Posizione
 
-Su cliente e distributore, sempre subordinata al consenso esplicito: finché non si attiva non
-viene registrata nessuna coordinata. Dopo il consenso l'app usa `watchPosition` e invia al
-massimo un aggiornamento ogni 10 secondi. La **revoca** cancella davvero le coordinate e
-interrompe le condivisioni attive. Il distributore può condividere la posizione del mezzo per
-singolo ordine, così il cliente segue la consegna. Le stime di consegna usano la distanza in
-linea d'aria (`src/consegna.js`).
+La posizione del dispositivo **non si raccoglie più**, né sul sito né nell'app. Per ora tutti gli
+installatori stanno in **Via Puggia 22/3, Genova** (`src/sede_installatori.js`): è il loro indirizzo di
+consegna e la posizione da cui si calcolano distanza e tragitto. I banchi usano il punto vendita
+(`store_locations`). Chi è già iscritto si allinea con `node scripts/imposta_installatori_puggia.js`
+(prova a secco, `--applica` per confermare); chi si iscrive da ora la riceve da solo. Le stime di
+consegna usano la distanza in linea d'aria (`src/consegna.js`).
 
 Le mappe usano Leaflet servito dal progetto (`public/vendor/leaflet`) con tasselli
 OpenStreetMap, ma **oggi le mappe sono nascoste** via CSS (ultima regola di
@@ -258,16 +259,30 @@ spento arriveranno con l'app nativa.
 
 ## Gruppo WhatsApp dei corrieri
 
-Quando un ordine **con consegna** parte verso il banco (scelta del cliente o assegnazione
-automatica), nel gruppo WhatsApp arriva un messaggio con il numero d'ordine, il **ritiro merce**
-(via della filiale che ha accettato) e la **consegna merce** (destinazione dell'ordine). Chi lo
-prende risponde **al messaggio** con la parola chiave e i minuti, per esempio `preso 30`
-(anche `preso 1 ora e 15`, `preso 1h30`, `preso mezz'ora`). Il sistema legge il tempo, lo salva
-sull'ordine (`corriere_minuti`, `corriere_arrivo_il`), avvisa cliente e banco, e nel gruppo
-conferma. Vale la **prima** risposta: chi arriva dopo trova scritto che l'ordine è già preso.
-Senza la parola chiave un messaggio è una chiacchiera e viene ignorato. Il "ritiro al banco" non
-manda niente. Se il bot è il numero di chi risponde, quello che scrive dal proprio telefono vale
-come risposta; non valgono i messaggi che il bot stesso manda nel gruppo.
+Quando un banco **accetta** una richiesta, PRIMA che l'offerta arrivi all'installatore, nel gruppo
+WhatsApp parte un messaggio con le due tappe: **prelievo merci** (nome, indirizzo e link alla mappa
+della filiale che ha accettato) e **consegna** (indirizzo e mappa dell'installatore). Chi la prende
+risponde **al messaggio** con la parola chiave e i minuti **totali** (dal ritiro alla consegna), per
+esempio `preso 30` (anche `preso 1 ora e 15`, `preso 1h30`, `preso mezz'ora`).
+
+- **Finché nessuno risponde** l'installatore non sa niente: la richiesta resta "in attesa" con il
+  timer che scorre, come se nessun banco avesse accettato (`request_responses.corriere_stato =
+  'in_attesa'`: l'offerta è nascosta in ogni query che l'installatore vede).
+- **Se qualcuno risponde entro il timer** l'offerta diventa visibile, e il tempo di consegna è quello
+  scritto nel messaggio. Il bot conferma nel gruppo; vale la **prima** risposta, chi arriva dopo
+  trova scritto che è già presa. Quando l'installatore conferma (o l'ordine parte da solo) l'ordine
+  eredita quel tempo (`corriere_minuti`, `corriere_arrivo_il` = da adesso) e nel gruppo arriva
+  l'avviso "il cliente ha confermato". Se invece ritira al banco, l'avviso dice che la consegna non
+  serve più.
+- **Se il timer scade senza risposta** la richiesta torna "nessuna offerta", il messaggio viene
+  **eliminato dal gruppo** e nessuno può più rispondere (la risposta tardiva è rifiutata anche prima
+  che l'eliminazione arrivi). Lo stesso se il cliente annulla: se un corriere aveva già preso la
+  consegna, nel gruppo gli si scrive che non parte più.
+- Senza la parola chiave un messaggio è una chiacchiera e viene ignorato. Se il bot è il numero di
+  chi risponde, quello che scrive dal proprio telefono vale come risposta; non valgono i messaggi che
+  il bot stesso manda nel gruppo.
+- **Modulo spento** (`WHATSAPP_ATTIVO` non impostato, come in locale): i banchi accettano e
+  l'installatore vede subito l'offerta, senza corriere.
 
 Usa Baileys, una libreria **non ufficiale**: il server si comporta come un dispositivo collegato a
 un numero WhatsApp. Serve un **numero dedicato** (con il proprio, il ban blocca anche il telefono)
@@ -291,20 +306,24 @@ dopo un tentativo fallito, cancellare prima `whatsapp_auth/`.
 Senza `WHATSAPP_GRUPPO` il server, una volta collegato, stampa nome e id dei gruppi del numero.
 La sessione sta in `whatsapp_auth/` (non in git: sono le credenziali del numero; se si cancella
 bisogna ricollegare). I messaggi passano da una coda (`whatsapp_messaggi`): se il collegamento è
-giù partono appena torna. Prima del primo avvio va applicato il blocco "Gruppo WhatsApp dei
-corrieri" di `db/postgres/schema.sql` (già applicato al DB di produzione il 30/09/2026).
+giù partono appena torna. Prima del primo avvio vanno applicati i due blocchi WhatsApp in fondo a
+`db/postgres/schema.sql` (già applicati al DB di produzione il 30/09 e il 02/10/2026):
+`node scripts/applica_blocco_schema.js "-- WhatsApp: il corriere prende la consegna PRIMA" --applica`
+(senza `--applica` prova a secco; il primo blocco comincia con "-- Gruppo WhatsApp dei corrieri: coda
+dei messaggi").
 
-**Prova con un ordine finto**, senza toccare banchi e clienti veri: crea un gruppo di prova (il
-numero dedicato + un altro telefono che risponde) e lancia, dal PC e senza `WHATSAPP_ATTIVO` nel
-`.env`:
+**Prova con una richiesta finta**, senza toccare banchi e clienti veri: crea un gruppo di prova (il
+numero del bot + un altro telefono che risponde, o il telefono stesso del bot) e lancia, dal PC e
+senza `WHATSAPP_ATTIVO` nel `.env`:
 
 ```
 node scripts/prova_whatsapp.js --gruppo="Nome del gruppo di prova"
 ```
 
-Manda nel gruppo un messaggio marcato PROVA, aspetta la risposta `preso 30` (scritta da un altro
-numero, citando il messaggio), stampa cosa ha letto e cancella i dati di prova. Senza `--gruppo`
-elenca i gruppi del numero.
+Manda nel gruppo il messaggio delle due tappe, aspetta la risposta `preso 30` (citando il messaggio)
+e stampa cosa ha letto. Se non rispondi entro `--finestra` minuti (default 3) verifica che il messaggio
+venga eliminato dal gruppo; con `--ordina` dopo il "preso" l'installatore conferma l'ordine e arriva
+l'avviso. Alla fine cancella i dati di prova. Senza `--gruppo` elenca i gruppi del numero.
 
 **Tenerlo sempre acceso senza rifare il QR**: la sessione è la cartella `whatsapp_auth/`, e un
 riavvio o un reboot non chiedono di ricollegare nulla. Per passare dal PC alla VPS si copia quella
@@ -362,7 +381,7 @@ src/richieste.js       ciclo di vita richiesta → offerte, assegnazione automat
 src/anagrafiche.js     registrazione cliente, approvazione banco, sconti per ambito
 src/consegna.js        stima del tempo di consegna
 src/ddt.js             numerazione e dati della bolla / DDT
-src/geo.js             posizione con consenso, revoca e distanze
+src/geo.js             lettura della posizione e distanze
 src/notifiche.js       notifiche in-app
 src/prodotto_json.js   formato JSON dei prodotti (ricerca live, scroll infinito, app)
 src/limite_login.js    limite ai tentativi di login (web e app)

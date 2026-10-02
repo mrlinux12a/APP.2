@@ -68,7 +68,7 @@
             <span class="corpo">
               <span class="etichetta">Dove consegnare</span>
               <span class="dettaglio">
-                <%= cliente.geo_consenso ? 'Posizione condivisa dal cliente' : 'Il cliente non ha condiviso la posizione' %>
+                <%= cliente.geo_lat !== null ? 'Posizione del cliente' : 'Posizione del cliente non disponibile' %>
               </span>
             </span>
           </div>
