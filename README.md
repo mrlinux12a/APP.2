@@ -30,22 +30,26 @@ nel repository: va creato a mano sul server con
 DATABASE_URL=...      # stringa di connessione Postgres (pooler di Supabase)
 SESSION_SECRET=...    # firma i cookie di login: se cambia, tutti devono rifare l'accesso
 PORT=3000             # facoltativa
+DISTRIBUTORE_PREDEFINITO=BOREA SRL   # facoltativa: a chi si collegano i nuovi clienti (vedi "Registrazione e approvazione")
 ```
 
-Per aggiornare dopo un nuovo commit:
+Il processo gira sotto **pm2** (nome `minuteria`). Per aggiornare dopo un nuovo commit:
 
 ```
 git pull
 npm ci
-# riavvia il processo (npm start)
+pm2 restart minuteria
 ```
 
-`npm ci` non si può saltare: le dipendenze cambiano (es. `compression`) e senza il server non
-parte. Se il commit tocca lo schema (`db/postgres/schema.sql`), va applicato una volta con
-`node scripts/apply_schema_pg.js`.
+`npm ci` non si può saltare: le dipendenze cambiano (es. `compression`, `baileys`) e senza il
+server non parte. Node non rilegge il codice da solo: dopo ogni `git pull` serve il riavvio. Se il
+commit tocca lo schema (`db/postgres/schema.sql`), il blocco nuovo si applica una volta sola (vedi
+`CLAUDE.md`). Resta da fare l'HTTPS con un dominio davanti al sito (vedi `SCOPE.md`): serve anche
+perché funzionino il service worker (`public/sw.js`), le notifiche su Chrome Android e l'installazione
+sulla schermata Home (`public/manifest.webmanifest`); in HTTP semplice il sito va, ma senza queste tre cose.
 
-Da sistemare, se non è già stato fatto (vedi `SCOPE.md`): un servizio che tenga acceso il
-processo e lo riavvii da solo, e HTTPS con un dominio davanti al sito.
+Le prove automatiche (`npm test`, senza dipendenze nuove) non toccano il database vero: vedi la sezione
+«Audit web del 05/10/2026» di `CLAUDE.md`.
 
 ## Credenziali demo
 
@@ -90,12 +94,24 @@ Entrambi i valori stanno in `config` (`ordine_minimo`, `spedizione_fissa`).
 
 La pagina di ingresso ha due schede: **Accedi** e **Registrati**.
 
-Chi si registra compila l'anagrafica completa della propria impresa o ditta individuale —
-ragione sociale, referente, **partita IVA, codice fiscale, sede legale, CAP, città, provincia,
-codice SDI o PEC**, indirizzo di consegna abituale, contatti — e sceglie i **distributori di
-riferimento** fra quelli attivi.
+Chi si registra compila l'anagrafica completa della propria impresa o ditta individuale in **tre
+passi** (un solo modulo, mostrato un passo alla volta da `public/app.js`; senza JavaScript i tre
+blocchi si vedono insieme): *La tua impresa* (forma giuridica, ragione sociale, referente, contatti),
+*Dati di fatturazione* (**partita IVA, codice fiscale, sede legale, CAP, città, provincia, codice SDI
+o PEC**) e *Accesso* (nome utente e password). Non sceglie il distributore: ogni nuovo cliente è
+collegato automaticamente al **distributore predefinito**, con tutte le sue filiali. Finita la
+registrazione si apre `/benvenuto` (anagrafica pronta, distributore, "Vai al catalogo").
 
-Ai banchi scelti arriva la notifica *"Nuova anagrafica da approvare"*. Il distributore apre la
+Il distributore predefinito è **BOREA SRL**. Per cambiarlo, nel `.env`:
+
+```
+DISTRIBUTORE_PREDEFINITO=BOREA SRL    # nome della ditta (come in distributors.nome) oppure l'id di una sua filiale
+```
+
+Se non corrisponde a nessun banco attivo la registrazione riesce lo stesso, senza legami, e il
+server scrive un errore nel log (`[registrazione] distributore predefinito ... non trovato`).
+
+A ogni filiale del distributore arriva la notifica *"Nuova anagrafica da approvare"*. Il distributore apre la
 scheda del cliente, vede tutti i dati fiscali e decide: **approva** (indicando il proprio codice
 cliente) o **rifiuta** se non lo riconosce. Approvato il cliente, il banco può impostare gli
 **sconti concordati** (vedi "Sconti al banco").
@@ -109,12 +125,12 @@ cliente) o **rifiuta** se non lo riconosce. Approvato il cliente, il banco può 
 
 ## Punti vendita sulla mappa
 
-`/punti-vendita` (link nel menu account) mostra i banchi dei distributori su mappa, con distanza
-da te se hai condiviso la posizione. **Oggi la tabella `store_locations` è vuota.** I 12 punti
-vendita di Genova (AFIS, BOREA, CAMBIELLI, FIDRA) sono in `db/punti_vendita.js`, con indirizzi dai
-siti ufficiali; lo script che li carica e ricava le coordinate con Nominatim è
-`db/postgres/geocodifica.js`, ma **non parte**: fa `require('./punti_vendita')` e quel file sta
-in `db/`, non in `db/postgres/`. Va corretto il percorso prima di rilanciarlo.
+`/punti-vendita` (link nel menu account) mostra i banchi su mappa. `store_locations` ha oggi **2
+righe**: le filiali Borea (Fegino e Staglieno), con coordinate OpenStreetMap; da lì leggono anche
+la stima di consegna e il messaggio ai corrieri. Gli altri punti vendita (AFIS, Cambielli, Fidra,
+disattivati) sono solo in `db/punti_vendita.js`: lo script che li carica,
+`db/postgres/geocodifica.js`, **non parte** (fa `require('./punti_vendita')` ma il file sta in
+`db/`, non in `db/postgres/`).
 
 ## Il flusso, passo per passo
 
@@ -128,26 +144,31 @@ in `db/`, non in `db/postgres/`. Va corretto il percorso prima di rilanciarlo.
    solo lì).
 3. **Scelta del materiale** — con gli stepper +/− si prepara la selezione; il tasto **Aggiungi**
    in basso la sposta nel carrello.
-4. **Carrello** — articoli, quantità, merce, RAEE, spedizione e totale stimato. La richiesta
-   parte solo dopo **Conferma e chiedi disponibilità**, e solo se l'ordine minimo è raggiunto.
+4. **Carrello e pagamento** — per ogni articolo `2 × € 59,95 / cad. → € 119,90` con stepper e
+   *Rimuovi*; **Svuota carrello** è un tasto piccolo e rosso in alto a destra, con conferma. Sotto:
+   destinazione della merce (di partenza l'indirizzo di consegna abituale), note per il distributore
+   e, in fondo, il riepilogo (merce, RAEE, spedizione, imponibile, IVA, **totale da pagare**) e
+   **Paga e invia la richiesta**, attivo solo con l'ordine minimo raggiunto. Il pagamento è
+   **simulato** (nessun provider né addebito: `src/pagamenti.js`, colonne `pagamento_*` su
+   `requests`) e va rimborsato se la richiesta si chiude senza ordine. Consegna sempre con il
+   corriere: il ritiro al banco non esiste più.
 5. **Attesa** — la richiesta parte verso **tutti i distributori attivi** (non filtrata per zona
    né per copertura). Hanno **10 minuti** (`finestra_conferma_min`) per confermare la
-   disponibilità. Il cliente vede un countdown e lo stato di ogni banco, e riceve una notifica
-   a ogni risposta: può chiudere la schermata. Una sola richiesta aperta per cliente alla volta.
-6. **Offerte** — appena almeno un distributore conferma (con il gruppo WhatsApp acceso: appena un
-   corriere prende la consegna, vedi "Gruppo WhatsApp dei corrieri"), il cliente vede chi ha confermato con
-   **tempo di consegna stimato e prezzo**, dal più conveniente (le complete prima delle
-   parziali). Parte una finestra per scegliere, che si allunga a ogni nuova conferma: se il
-   cliente non sceglie in tempo, l'ordine parte da solo verso chi copre **tutto** il materiale
-   con la **consegna più veloce** (se nessuno copre tutto, vince comunque il più veloce). Oltre
-   15 minuti dalla scadenza le offerte decadono senza creare un ordine e si può reinviare la
-   richiesta.
-7. **Riepilogo ordine** — consegna o ritiro, destinazione, note, articoli, imponibile, IVA e
-   totale; **Invia l'ordine** chiude l'ordine con quel distributore. Se l'assegnazione
-   automatica scatta mentre il cliente compila, viene avvisato che l'ordine è già partito con i
-   valori predefiniti.
-8. **Stato ordini** — mostra sempre e solo l'attività più rilevante (in attesa > da scegliere >
-   in consegna > scaduta da poco); lo **Storico** ha tutto il resto.
+   disponibilità e, con il gruppo WhatsApp acceso, trovare un corriere. Il cliente vede un
+   countdown e lo stato di ogni banco: può chiudere la schermata. Una sola richiesta aperta per
+   cliente alla volta; può annullarla (pagamento rimborsato).
+6. **Ordine automatico** — l'installatore **non sceglie né conferma più niente**. L'ordine nasce da
+   solo quando una risposta del banco diventa valida: appena **un corriere prende la consegna**
+   nel gruppo (vedi "Gruppo WhatsApp dei corrieri") o, a modulo spento, appena il banco accetta.
+   All'installatore arriva "Ordine confermato" con il tempo di consegna stimato (quello scritto
+   dal corriere). Se nessun banco accetta o nessun corriere prende la consegna entro la finestra,
+   la richiesta si chiude ("Nessuna conferma ricevuta"), il **pagamento torna** e si può
+   reinviare (si paga di nuovo lo stesso importo).
+7. **Stato ordini** — mostra sempre e solo l'attività più rilevante (in attesa > in consegna >
+   scaduta da poco); lo **Storico** ha tutto il resto. Sul sito l'icona nella barra in basso segue la
+   fase: anello con conto alla rovescia (in attesa), furgone con i minuti all'arrivo (in consegna),
+   "!" (nessuna risposta). Per ora l'ordine si può ancora annullare finché il banco non lo prende in
+   carico (rimborso): lasciato per la fase di prova.
 
 **Distributore** (banco, telefono) — profili AFIS, BOREA, CAMBIELLI e FIDRA.
 
@@ -259,7 +280,7 @@ spento arriveranno con l'app nativa.
 
 ## Gruppo WhatsApp dei corrieri
 
-Quando un banco **accetta** una richiesta, PRIMA che l'offerta arrivi all'installatore, nel gruppo
+L'installatore ha già pagato quando manda la richiesta. Quando un banco **accetta**, nel gruppo
 WhatsApp parte un messaggio con le due tappe: **prelievo merci** (nome, indirizzo e link alla mappa
 della filiale che ha accettato) e **consegna** (indirizzo e mappa dell'installatore). Chi la prende
 risponde **al messaggio** con la parola chiave e i minuti **totali** (dal ritiro alla consegna), per
@@ -267,22 +288,22 @@ esempio `preso 30` (anche `preso 1 ora e 15`, `preso 1h30`, `preso mezz'ora`).
 
 - **Finché nessuno risponde** l'installatore non sa niente: la richiesta resta "in attesa" con il
   timer che scorre, come se nessun banco avesse accettato (`request_responses.corriere_stato =
-  'in_attesa'`: l'offerta è nascosta in ogni query che l'installatore vede).
-- **Se qualcuno risponde entro il timer** l'offerta diventa visibile, e il tempo di consegna è quello
-  scritto nel messaggio. Il bot conferma nel gruppo; vale la **prima** risposta, chi arriva dopo
-  trova scritto che è già presa. Quando l'installatore conferma (o l'ordine parte da solo) l'ordine
-  eredita quel tempo (`corriere_minuti`, `corriere_arrivo_il` = da adesso) e nel gruppo arriva
-  l'avviso "il cliente ha confermato". Se invece ritira al banco, l'avviso dice che la consegna non
-  serve più.
-- **Se il timer scade senza risposta** la richiesta torna "nessuna offerta", il messaggio viene
-  **eliminato dal gruppo** e nessuno può più rispondere (la risposta tardiva è rifiutata anche prima
-  che l'eliminazione arrivi). Lo stesso se il cliente annulla: se un corriere aveva già preso la
-  consegna, nel gruppo gli si scrive che non parte più.
+  'in_attesa'`: la risposta del banco non vale come offerta in nessuna query dell'installatore).
+- **Se qualcuno risponde entro il timer** l'**ordine nasce subito**, da solo, con il tempo scritto
+  nel messaggio come tempo di consegna (`corriere_minuti`, `corriere_arrivo_il` = da adesso), e
+  all'installatore arriva "Ordine confermato". Vale la **prima** risposta, chi arriva dopo trova
+  scritto che è già presa. **Dopo il "preso" il bot non scrive più nel gruppo**: solo la risposta al
+  "preso" ("✅ Preso! ... consegna entro le HH:MM"). L'unico altro messaggio possibile è l'avviso di
+  annullo, se l'installatore annulla un ordine che aveva già un corriere (annullo lasciato per la
+  fase di prova).
+- **Se il timer scade senza risposta** la richiesta si chiude senza ordine, il pagamento torna
+  all'installatore, il messaggio viene **eliminato dal gruppo** e nessuno può più rispondere (la
+  risposta tardiva è rifiutata anche prima che l'eliminazione arrivi). Lo stesso se il cliente annulla.
 - Senza la parola chiave un messaggio è una chiacchiera e viene ignorato. Se il bot è il numero di
   chi risponde, quello che scrive dal proprio telefono vale come risposta; non valgono i messaggi che
   il bot stesso manda nel gruppo.
 - **Modulo spento** (`WHATSAPP_ATTIVO` non impostato, come in locale): i banchi accettano e
-  l'installatore vede subito l'offerta, senza corriere.
+  l'ordine nasce subito, senza corriere (con i tempi di consegna stimati dal banco).
 
 Usa Baileys, una libreria **non ufficiale**: il server si comporta come un dispositivo collegato a
 un numero WhatsApp. Serve un **numero dedicato** (con il proprio, il ban blocca anche il telefono)
@@ -322,14 +343,15 @@ node scripts/prova_whatsapp.js --gruppo="Nome del gruppo di prova"
 
 Manda nel gruppo il messaggio delle due tappe, aspetta la risposta `preso 30` (citando il messaggio)
 e stampa cosa ha letto. Se non rispondi entro `--finestra` minuti (default 3) verifica che il messaggio
-venga eliminato dal gruppo; con `--ordina` dopo il "preso" l'installatore conferma l'ordine e arriva
-l'avviso. Alla fine cancella i dati di prova. Senza `--gruppo` elenca i gruppi del numero.
+venga eliminato dal gruppo (e il pagamento finto rimborsato). Dopo il "preso" l'ordine nasce da solo e lo
+script lo stampa: nel gruppo deve arrivare solo la risposta del bot. Alla fine cancella i dati di prova.
+Senza `--gruppo` elenca i gruppi del numero.
 
 **Tenerlo sempre acceso senza rifare il QR**: la sessione è la cartella `whatsapp_auth/`, e un
 riavvio o un reboot non chiedono di ricollegare nulla. Per passare dal PC alla VPS si copia quella
 cartella (`scp -r whatsapp_auth utente@vps:/percorso/APP.2/`, poi `chmod 700` sul server) e si
 **cancella quella sul PC**: le stesse credenziali in due posti si scollegano a vicenda. Sulla VPS
-il processo va tenuto vivo con un servizio che lo riavvii (pm2 o systemd). Serve rifare il
+il processo è tenuto vivo da pm2. Serve rifare il
 collegamento solo se il telefono resta offline per circa 14 giorni, se il dispositivo viene
 rimosso da *Dispositivi collegati* o se si cancella la cartella: il log dice "sessione chiusa dal
 telefono".
@@ -337,10 +359,9 @@ telefono".
 ## App nativa (in costruzione)
 
 In `mobile/` c'è l'app per telefono, **React Native con Expo** (niente WebView). Per ora è solo
-per l'**installatore**: login, catalogo, ricerca, categorie, elementi con foto, carrello,
-richiesta di disponibilità, offerte, ordine, stato ordini e storico. Mancano le notifiche push,
-la registrazione (per ora rimanda al sito) e la cancellazione account. Banco e agente restano
-sul sito.
+per l'**installatore**: login, catalogo, ricerca, categorie, elementi con foto, carrello con
+pagamento simulato e richiesta, ordine, stato ordini e storico. Mancano le notifiche push, la
+registrazione (per ora rimanda al sito) e la cancellazione account. Banco e agente restano sul sito.
 
 L'app parla con il server tramite l'API JSON `/api/v1/...` (`src/api_v1.js`), con accesso a
 **token** (`Authorization: Bearer`, tabella `app_tokens`) invece del cookie di sessione.
@@ -373,11 +394,13 @@ categorie si generano da `src/icone.js` con `node scripts/genera_icone_app.js`; 
 ```
 server.js              entrypoint Express e rotte del sito
 src/api_v1.js          API JSON dell'app nativa
-src/flusso_cliente.js  richiesta → offerte → ordine → stato ordini, condiviso fra sito e app
+src/flusso_cliente.js  richiesta pagata → ordine → stato ordini, condiviso fra sito e app
 src/token_app.js       token di accesso dell'app (solo hash nel DB)
 src/pricing.js         prezzi, servizio, IVA, finestre temporali configurabili
 src/catalogo.js        ricerca parziale, categorie, varianti
-src/richieste.js       ciclo di vita richiesta → offerte, assegnazione automatica
+src/richieste.js       ciclo di vita della richiesta: risposte dei banchi, scadenza, ordine automatico
+src/pagamenti.js       pagamento dell'installatore (simulato): incasso, rimborso
+src/whatsapp.js        gruppo WhatsApp dei corrieri (Baileys): messaggi, "preso", coda
 src/anagrafiche.js     registrazione cliente, approvazione banco, sconti per ambito
 src/consegna.js        stima del tempo di consegna
 src/ddt.js             numerazione e dati della bolla / DDT
@@ -390,10 +413,12 @@ src/sessioni.js        archivio sessioni su database
 src/memo.js            cache a scadenza (60 s) per letture che il server non scrive mai
 src/format.js          date, tempi di consegna, countdown
 src/auth.js            middleware di autenticazione/ruolo
+src/sede_installatori.js  indirizzo e coordinate fissi degli installatori (provvisorio)
 db/                    db/postgres (produzione, con schema e funzioni della ricerca) e
                        db/sqlite (legacy, vedi CLAUDE.md)
 db/seed.js             dati demo (utenti, distributori, legami cliente-banco)
-scripts/               schema (apply_schema_pg.js), sottocategorie, icone app, export
+scripts/               schema (apply_schema_pg.js, applica_blocco_schema.js), sottocategorie, icone app,
+                       export, prova_whatsapp.js, migrazioni una tantum (filiali Borea, Via Puggia)
 views/                 pagine EJS (cliente e distributore mobile-first)
 public/                style.css, app.js (quantità, ricerca live, countdown), img/prodotti
 mobile/                app React Native / Expo (vedi "App nativa")

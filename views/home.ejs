@@ -7,50 +7,45 @@
   <div class="app">
     <%- include('partials/appbar', { titolo, intestazione: 'Catalogo', indietro: null }) %>
 
-    <div class="contenuto">
-      <h1 class="domanda">Cosa ti serve?</h1>
-      <form class="barra-ricerca grande" method="GET" action="/cerca">
-        <span class="lente"><%- iconaLente %></span>
-        <input type="search" name="q" enterkeyhint="search" data-ricerca
-               placeholder="Es. valvola sfera 3/4, raccordo 16, guarnizione"
-               aria-label="Cerca un pezzo"
-               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-        <button type="submit">Cerca</button>
-      </form>
-      <p class="nota sotto-ricerca">
-        Scrivi anche solo un pezzo di parola o la misura: <strong>valv 3/4</strong> basta.
-      </p>
+    <div class="contenuto home-cliente">
+      <%# Richiesta in attesa o ordine in consegna (vuota se non c'è niente): stessi dati dell'icona in basso. %>
+      <%- include('partials/stato_home') %>
+
+      <%# Resta fisso sotto l'appbar quando si scorre. %>
+      <div class="ricerca-fissa">
+        <h1 class="domanda">Cosa ti serve?</h1>
+        <form class="barra-ricerca barra-home" method="GET" action="/cerca">
+          <span class="lente"><%- iconaLente %></span>
+          <input type="search" name="q" enterkeyhint="search" data-ricerca
+                 placeholder="Nome o misura: valv 3/4"
+                 aria-label="Cerca un pezzo"
+                 autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+          <%# Non ancora attivo: foto e codice a barre arriveranno dopo. Nessun handler, solo il segnaposto. %>
+          <button type="button" class="btn-inquadra" disabled aria-disabled="true"
+                  aria-label="Cerca con una foto o il codice a barre" title="Presto disponibile"><%- iconaInquadra %></button>
+          <button type="submit" class="btn-cerca">Cerca</button>
+        </form>
+      </div>
 
       <div id="risultati">
-        <div class="griglia-evidenza">
-          <% inEvidenza.forEach(function (m) { %>
-            <a class="tessera-grande" href="/categoria/<%= m.slug %>">
-              <span class="emoji"><%- iconaCategoria(m.slug) %></span>
+        <div class="griglia-categorie">
+          <%# Una parola da 15+ lettere ("Condizionamento") non sta in 110px a 13.5px: scheda con corpo ridotto, invece di spezzarla. %>
+          <% const parolaLunga = (nome) => nome.split(/\s+/).some((p) => p.length > 14); %>
+          <% inEvidenza.concat(altre).forEach(function (m) { %>
+            <a class="cat<%= parolaLunga(m.nome) ? ' cat-lunga' : '' %>" href="/categoria/<%= m.slug %>">
+              <span class="cat-ico"><%- iconaCategoria(m.slug) %></span>
               <span class="nome"><%= m.nome %></span>
-              <span class="desc"><%= m.descrizione %></span>
-              <span class="conta"><%= m.n_prodotti %> articoli</span>
             </a>
           <% }); %>
-        </div>
-
-        <div class="sezione-titolo">Categorie</div>
-        <div class="griglia-macro">
-          <% altre.forEach(function (m) { %>
-            <a class="tessera" href="/categoria/<%= m.slug %>">
-              <span class="tessera-ico"><%- iconaCategoria(m.slug) %></span>
-              <span class="nome"><%= m.nome %></span>
-              <span class="conta"><%= m.n_prodotti %> articoli</span>
-            </a>
-          <% }); %>
-          <a class="tessera" href="/con-foto">
-            <span class="tessera-ico"><%- iconaCatalogo %></span>
+          <a class="cat" href="/con-foto">
+            <span class="cat-ico"><%- iconaCatalogo %></span>
             <span class="nome">Elementi con foto</span>
-            <span class="conta"><%= prodottiConFotoConta %> articoli</span>
           </a>
         </div>
 
         <p class="nota">
-          I prezzi in app sono IVA esclusa. La disponibilità viene confermata dal banco prima di chiudere l'ordine.
+          I prezzi in app sono IVA esclusa. Paghi quando mandi la richiesta; il banco conferma la disponibilità
+          e, se nessuno conferma, il pagamento ti viene rimborsato.
         </p>
       </div>
     </div>
@@ -72,6 +67,6 @@
   </div>
 
   <%- include('partials/nav', { attivo: 'home' }) %>
-  <script src="/app.js" defer></script>
+  <script src="<%= asset('/app.js') %>" defer></script>
 </body>
 </html>

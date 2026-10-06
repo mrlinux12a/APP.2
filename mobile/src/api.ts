@@ -118,13 +118,19 @@ export type Prodotto = {
 
 export type Pagina = { risultati: Prodotto[]; pagina: number; pagine: number; totale: number };
 
-// ---------- Flusso richiesta -> offerte -> ordine ----------
+// ---------- Flusso richiesta pagata -> ordine ----------
 
 export type RiepilogoCarrello = {
   merce: string;
   raee: string | null;
   spedizione: string;
-  totale: string;
+  imponibile: string;
+  iva: string;
+  iva_pct: number;
+  // Quello che l'installatore paga all'invio della richiesta (pagamento simulato per ora).
+  totale_ivato: string;
+  // Destinazione di partenza: l'indirizzo di consegna abituale.
+  indirizzo_consegna: string;
   minimo: string;
   manca_al_minimo: string;
   raggiunto: boolean;
@@ -132,24 +138,19 @@ export type RiepilogoCarrello = {
   non_piu_disponibili: number[];
 };
 
-export type StatoRichiesta = 'in_attesa' | 'con_offerte' | 'nessuna_offerta' | 'ordinata' | 'annullata';
+// in_attesa: banchi e corrieri stanno rispondendo; ordinata: l'ordine è nato (c'è order_id);
+// nessuna_offerta: chiusa senza ordine (pagamento rimborsato); annullata: l'ha annullata l'installatore.
+export type StatoRichiesta = 'in_attesa' | 'nessuna_offerta' | 'ordinata' | 'annullata';
 
 export type RigaSemplice = { quantita: number; nome: string; codice: string };
 
-export type Offerta = {
-  distributore_id: number;
-  distributore: string;
-  filiale: string;
-  imponibile: string;
-  merce: string;
-  consegna: string | null;
-  copertura: 'totale' | 'parziale';
-  mancanti: { nome: string; mancano: number }[];
-  partenza_testo: string;
-  arrivo_testo: string;
-  note: string | null;
-  piu_veloce: boolean;
-  piu_conveniente: boolean;
+// Il pagamento fatto all'invio della richiesta. null per le richieste del vecchio flusso.
+export type Pagamento = {
+  stato: 'pagato' | 'rimborsato';
+  stato_testo: string;
+  importo: string;
+  simulato: boolean;
+  pagato_il: string | null;
 };
 
 export type Richiesta = {
@@ -161,36 +162,7 @@ export type Richiesta = {
   minuti_risposta: number;
   righe: RigaSemplice[];
   risposte: { distributore: string; filiale: string; esito: string; esito_testo: string }[];
-  offerte: Offerta[];
-  offerte_scadute: boolean;
-  secondi_scelta: number | null;
-  nome_assegnazione: string | null;
-};
-
-export type Totali = {
-  merce: string;
-  raee: string | null;
-  consegna: string | null;
-  imponibile: string;
-  iva: string;
-  totale_ivato: string;
-};
-
-export type RiepilogoOfferta = {
-  modalita: 'consegna_mezzo_grossista' | 'ritiro';
-  cliente: { ragione_sociale: string; telefono: string | null };
-  indirizzo_consegna: string;
-  distributore: { id: number; nome: string; filiale: string; zona: string };
-  // Con il corriere: partenza_testo è vuoto e consegna_testo è il tempo totale scritto da lui.
-  corriere: boolean;
-  partenza_testo: string;
-  consegna_testo: string;
-  mancanti: { nome: string; mancano: number }[];
-  righe: (RigaSemplice & { prezzo: string; subtotale: string })[];
-  totali: Totali;
-  iva_pct: number;
-  secondi_scelta: number | null;
-  nome_assegnazione: string | null;
+  pagamento: Pagamento | null;
 };
 
 export type Ordine = {
@@ -210,7 +182,7 @@ export type Ordine = {
   righe: (RigaSemplice & { subtotale: string })[];
   totali: { merce: string; raee: string | null; consegna: string | null; iva: string; totale: string };
   iva_pct: number;
-  assegnata_auto: boolean;
+  pagamento: Pagamento | null;
   annullabile: boolean;
   da_confermare_consegna: boolean;
 };

@@ -1,0 +1,28 @@
+<%
+  // Riga compatta della pagina categoria: foto 56x56, nome, prezzo e stepper − N + che scrive
+  // subito nel carrello. Deve restare uguale a rigaCompattaHtml in public/app.js (stesse classi e
+  // stessi attributi: la ricerca live e lo scroll infinito disegnano le righe da lì).
+  // Con le varianti (misure) il blocco "Misura" sta fra nome e prezzo, e il CSS mette prezzo e stepper
+  // sulla stessa riga in fondo, a tutta larghezza: l'HTML è lo stesso delle righe senza varianti.
+  const qta = (typeof carrello !== 'undefined' && carrello && carrello[p.id]) ? carrello[p.id] : 0;
+%>
+<div class="riga-prod" data-prodotto="<%= p.id %>" data-riga-compatta
+     <% if (p.varianti) { %>data-varianti='<%= JSON.stringify(p.varianti.map(function (v) {
+          return { id: v.id, etichetta: v.etichetta, codice: v.codice, disponibilita: v.disponibilita,
+                   disponibilita_testo: testoDisponibilita[v.disponibilita] || v.disponibilita,
+                   raee: v.raee > 0 ? euro(v.raee) : null, sconto_base_pct: v.sconto_base_pct,
+                   listino: euro(v.prezzo_listino), prezzo: euro(prezzoCliente(v)) };
+        })) %>'<% } %>>
+  <% if (p.foto_url) { %>
+    <img class="prodotto-foto riga-foto" src="<%= p.foto_url %>" alt="" loading="lazy">
+  <% } else { %>
+    <div class="riga-foto riga-foto-vuota" aria-hidden="true"><%- iconaOrdini %></div>
+  <% } %>
+  <div class="riga-info">
+    <div class="riga-nome"><% if (p.brand_nome) { %><span class="marchio-tag" style="--marchio:<%= p.brand_colore %>"><%= p.brand_nome %></span> <% } %><%= p.nome %></div>
+    <% if (p.varianti) { %><%- include('misura', { p }) %><% } %>
+    <div class="riga-stato" data-riga-stato <%= p.disponibilita === 'disponibile' ? 'hidden' : '' %>><span class="badge badge-<%= p.disponibilita %>" data-riga-badge><%= testoDisponibilita[p.disponibilita] %></span></div>
+    <div class="riga-prezzo" data-riga-prezzo><% if (p.sconto_base_pct > 0) { %><span class="barrato">€ <%= euro(p.prezzo_listino) %></span><% } %><span class="importo">€ <%= euro(prezzoCliente(p)) %></span> <span class="iva">+ IVA</span><% if (p.raee > 0) { %><span class="raee">RAEE € <%= euro(p.raee) %></span><% } %></div>
+  </div>
+  <div class="riga-azioni" data-riga-azioni><% if (p.disponibilita !== 'non_disponibile') { %><div class="riga-stepper<%= qta > 0 ? ' attivo' : '' %>" data-riga-stepper="<%= p.id %>" role="group" aria-label="Quantità nel carrello"><button type="button" class="riga-passo" data-riga-passo="-1" aria-label="Togli uno" <%= qta > 0 ? '' : 'disabled' %>><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12"/></svg></button><span class="riga-qta" data-riga-qta="<%= p.id %>" aria-live="polite"><%= qta %></span><button type="button" class="riga-passo" data-riga-passo="1" aria-label="Aggiungi uno"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 6v12M6 12h12"/></svg></button></div><% } %></div>
+</div>

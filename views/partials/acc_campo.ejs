@@ -1,0 +1,21 @@
+<%
+  // Un campo dei moduli di accesso e registrazione (classi acc-*). Parametri: id (vale anche come name), etichetta,
+  // tipo (text, email, tel, password), valore, hint (riga grigia sotto il campo), sbagliato (campo con un errore del
+  // server) e attributi (oggetto nome -> valore; true per gli attributi senza valore, come required).
+  const id = locals.id;
+  const tipo = locals.tipo || 'text';
+  const attributi = locals.attributi || {};
+%>
+<div class="acc-campo<%= locals.sbagliato ? ' sbagliato' : '' %>">
+  <label for="<%= id %>"><%= locals.etichetta %></label>
+  <% if (tipo === 'password') { %><div class="acc-pwd"><% } %>
+  <input type="<%= tipo %>" id="<%= id %>" name="<%= id %>"<% if (locals.valore) { %> value="<%= locals.valore %>"<% } %><% if (locals.sbagliato) { %> aria-invalid="true"<% } %><% if (locals.hint) { %> aria-describedby="<%= id %>-hint"<% } %><% Object.keys(attributi).forEach(function (k) { %> <%= k %><% if (attributi[k] !== true) { %>="<%= attributi[k] %>"<% } %><% }); %>>
+  <% if (tipo === 'password') { %>
+    <%# Senza JavaScript il pulsante non farebbe niente: parte nascosto e lo mostra lo script (public/app.js). %>
+    <button type="button" class="acc-occhio" data-mostra-password hidden aria-label="Mostra password" aria-pressed="false">
+      <span class="acc-occhio-on"><%- iconaOcchio %></span><span class="acc-occhio-off"><%- iconaOcchioBarrato %></span>
+    </button>
+    </div>
+  <% } %>
+  <% if (locals.hint) { %><p class="acc-hint" id="<%= id %>-hint"><%= locals.hint %></p><% } %>
+</div>

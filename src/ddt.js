@@ -19,15 +19,24 @@ async function prossimoNumero(distributorId, anno) {
   return `${row.ultimo}/${anno}`;
 }
 
-// Emette la bolla e segna la merce come partita. Idempotente: se il DDT esiste già
-// non viene rinumerato.
+// Emette la bolla e segna la merce come partita. Idempotente: se il DDT esiste già non viene
+// rinumerato. Ritorna { numero, nuovo }: `nuovo` è false se la bolla c'era già.
+//
+// Il controllo "esiste già?" si rifà dentro la transazione, con la riga dell'ordine bloccata: due invii
+// quasi contemporanei (doppio tocco su "Emetti bolla") passavano entrambi il controllo sull'oggetto letto
+// all'inizio della richiesta e assegnavano due numeri, lasciando un buco nella numerazione progressiva
+// del distributore (che per le bolle va tenuta senza salti).
 async function emetti(ordine, { colli, aspetto, trasporto, causale, note }) {
-  if (ordine.ddt_numero) return ordine.ddt_numero;
+  if (ordine.ddt_numero) return { numero: ordine.ddt_numero, nuovo: false };
 
   const row = await db.prepare("SELECT EXTRACT(YEAR FROM NOW())::int AS a").get();
   const anno = Number(row.a);
 
   const esegui = db.transaction(async () => {
+    const attuale = await db.prepare('SELECT ddt_numero FROM orders WHERE id = ? FOR UPDATE').get(ordine.id);
+    if (!attuale) throw new Error('Ordine non trovato: ' + ordine.id);
+    if (attuale.ddt_numero) return { numero: attuale.ddt_numero, nuovo: false };
+
     const numero = await prossimoNumero(ordine.distributor_id, anno);
     await db.prepare(
       `UPDATE orders
@@ -37,14 +46,14 @@ async function emetti(ordine, { colli, aspetto, trasporto, causale, note }) {
         WHERE id = ?`
     ).run(
       numero,
-      Math.max(1, parseInt(colli, 10) || 1),
-      aspetto || 'Colli',
-      trasporto || 'mittente',
-      causale || 'Vendita',
-      (note || '').trim(),
+      Math.max(1, Math.min(999, parseInt(colli, 10) || 1)),
+      String(aspetto || 'Colli').slice(0, 100),
+      String(trasporto || 'mittente').slice(0, 100),
+      String(causale || 'Vendita').slice(0, 100),
+      String(note || '').trim().slice(0, 500),
       ordine.id
     );
-    return numero;
+    return { numero, nuovo: true };
   });
 
   return esegui();

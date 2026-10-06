@@ -3,28 +3,15 @@
      <% if (p.varianti) { %>data-varianti='<%= JSON.stringify(p.varianti.map(function (v) {
           return { id: v.id, etichetta: v.etichetta, codice: v.codice, disponibilita: v.disponibilita,
                    disponibilita_testo: testoDisponibilita[v.disponibilita] || v.disponibilita,
-                   raee: v.raee, listino: euro(v.prezzo_listino), prezzo: euro(prezzoCliente(v)),
-                   sconto: v.sconto_base_pct };
+                   raee: v.raee > 0 ? euro(v.raee) : null, sconto_base_pct: v.sconto_base_pct,
+                   listino: euro(v.prezzo_listino), prezzo: euro(prezzoCliente(v)) };
         })) %>'<% } %>>
   <div class="info">
     <div class="nome">
       <% if (p.brand_nome) { %><span class="marchio-tag" style="--marchio:<%= p.brand_colore %>"><%= p.brand_nome %></span><% } %>
       <%= p.nome %>
     </div>
-    <% if (p.varianti && p.varianti.length >= 3) { %>
-      <select class="selettore-variante" data-selettore-variante aria-label="Misura di <%= p.nome %>">
-        <% p.varianti.forEach(function (v) { %>
-          <option value="<%= v.id %>" <%= v.id === p.id ? 'selected' : '' %>><%= v.etichetta %></option>
-        <% }); %>
-      </select>
-    <% } else if (p.varianti) { %>
-      <div class="chip-riga varianti-riga">
-        <% p.varianti.forEach(function (v) { %>
-          <button type="button" class="chip chip-variante <%= v.id === p.id ? 'attivo' : '' %>"
-                  data-variante-id="<%= v.id %>"><%= v.etichetta %></button>
-        <% }); %>
-      </div>
-    <% } %>
+    <% if (p.varianti) { %><%- include('misura', { p }) %><% } %>
     <div class="meta" data-riga-meta>
       <span data-riga-codice hidden><%= p.codice %></span><% if (p.categoria) { %><%= p.categoria %><% } %>
       <span class="badge badge-<%= p.disponibilita %>" data-riga-badge><%= testoDisponibilita[p.disponibilita] %></span>
@@ -55,7 +42,7 @@
         <div class="prodotto-azioni">
           <div class="stepper">
             <button type="button" data-passo="-1" aria-label="Togli">−</button>
-            <input type="number" min="0" step="1" inputmode="numeric" data-qta data-prodotto-qta="<%= p.id %>"
+            <input type="number" min="0" max="9999" step="1" inputmode="numeric" data-qta data-prodotto-qta="<%= p.id %>"
                    value="0" aria-label="Quantità <%= p.nome %>">
             <button type="button" data-passo="1" aria-label="Aggiungi">+</button>
           </div>

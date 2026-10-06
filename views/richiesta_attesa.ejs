@@ -1,3 +1,13 @@
+<%
+  // Anello: stessa durata e stessa formula di partials/nav_ordini.ejs (e dello script in fondo a quel file,
+  // che muove ogni [data-countdown] e [data-arco] della pagina: l'anello e il numero qui sotto e l'icona
+  // "In attesa · mm:ss" della navbar sono un solo conto alla rovescia). Circonferenza = 2 * PI * 64.
+  const CIRC_ATTESA = 402.12;
+  const inizioFinestra = fmt.toDate(richiesta.creato_il);
+  const fineFinestra = fmt.toDate(richiesta.scade_il);
+  const durataFinestra = inizioFinestra && fineFinestra ? Math.max(1, Math.round((fineFinestra - inizioFinestra) / 1000)) : 600;
+  const offsetAnello = (CIRC_ATTESA * (1 - secondi / durataFinestra)).toFixed(2);
+%>
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -8,53 +18,72 @@
     <%- include('partials/appbar', { titolo, intestazione: 'Verifica disponibilità', indietro: '/home' }) %>
 
     <div class="contenuto" data-attesa="<%= richiesta.id %>" data-secondi="<%= secondi %>">
-      <div class="card attesa">
-        <div class="cerchio-attesa"><span id="countdown"><%= fmt.mmss(secondi) %></span></div>
-        <div style="font-weight:700; font-size:1.05rem;">Stiamo chiedendo al banco</div>
-        <p class="sottotitolo" style="margin-top:6px;">
-          I distributori hanno <%= Math.round(minutiRisposta) %> minuti per confermare la
-          disponibilità del materiale. Ti avvisiamo con una notifica appena rispondono:
-          puoi anche chiudere questa schermata.
-        </p>
-        <button class="btn btn-chiaro btn-blocco" type="button" data-abilita-notifiche>
-          Attiva le notifiche sul telefono
-        </button>
+      <%# 1. Timer e passaggi %>
+      <div class="card att-card att-timer">
+        <div class="att-anello">
+          <svg viewBox="0 0 148 148" aria-hidden="true">
+            <circle class="traccia" cx="74" cy="74" r="64"/>
+            <circle class="avanzamento" data-arco data-circ="<%= CIRC_ATTESA %>" cx="74" cy="74" r="64" style="stroke-dashoffset: <%= offsetAnello %>"/>
+          </svg>
+          <span class="att-tempo" data-countdown><%= fmt.mmss(secondi) %></span>
+        </div>
+        <h2 class="att-titolo"><span class="att-punto" aria-hidden="true"></span>Stiamo chiedendo al banco</h2>
+        <ol class="att-passi">
+          <li class="att-passo att-fatto">
+            <span class="att-barretta"></span>
+            <span class="att-etichetta"><span class="att-spunta" aria-hidden="true"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>Inviata</span>
+          </li>
+          <li class="att-passo att-corrente" aria-current="step">
+            <span class="att-barretta"></span>
+            <span class="att-etichetta">Conferma banco</span>
+          </li>
+          <li class="att-passo">
+            <span class="att-barretta"></span>
+            <span class="att-etichetta">In consegna</span>
+          </li>
+        </ol>
       </div>
 
-      <div class="sezione-titolo">Distributori interpellati</div>
-      <div class="card card-fitta" id="stato-distributori">
+      <%# 2. Banco interpellato (una scheda per banco). Lo script della pagina aggiorna l'etichetta di stato
+          cercando [data-distributore] dentro #stato-distributori. %>
+      <div id="stato-distributori">
         <% risposte.forEach(function (r) { %>
-          <div class="pill-distributore">
-            <div>
-              <div class="nome"><%= r.distributore_nome %></div>
-              <div class="filiale"><%= r.filiale %></div>
+          <div class="card att-card att-banco">
+            <span class="att-icona" aria-hidden="true"><%- iconaNegozio %></span>
+            <div class="att-banco-testo">
+              <div class="att-occhiello">Banco interpellato</div>
+              <div class="att-banco-nome"><%= r.distributore_nome %></div>
             </div>
-            <span class="stato-badge stato-<%= r.esito %>" data-distributore="<%= r.distributore_nome %>">
-              <%= r.esito === 'in_attesa' ? 'In attesa' : (r.esito === 'confermato' ? 'Disponibile' : (r.esito === 'non_disponibile' ? 'Non disponibile' : 'Nessuna risposta')) %>
-            </span>
-          </div>
-        <% }); %>
-      </div>
-      <p class="nota">
-        Se un distributore non risponde entro i <%= Math.round(minutiRisposta) %> minuti la richiesta risulta non confermata:
-        il materiale potrebbe esserci ma non essere reperibile al banco.
-      </p>
-
-      <div class="sezione-titolo">Materiale richiesto</div>
-      <div class="card">
-        <% righe.forEach(function (r) { %>
-          <div class="riga-articolo">
-            <div class="qta"><%= r.quantita %>×</div>
-            <div class="desc">
-              <%= r.nome %>
-              <div class="meta">Cod. <%= r.codice %></div>
-            </div>
+            <span class="stato-badge stato-<%= r.esito %>" data-distributore="<%= r.distributore_nome %>"><%= r.esito === 'in_attesa' ? 'Sta verificando' : (r.esito === 'confermato' ? 'Disponibile' : (r.esito === 'non_disponibile' ? 'Non disponibile' : 'Nessuna risposta')) %></span>
           </div>
         <% }); %>
       </div>
 
+      <%# 3. Materiale richiesto e importo pagato %>
+      <div class="card att-card att-materiale">
+        <div class="att-occhiello">Materiale richiesto</div>
+        <ul class="att-righe">
+          <% righe.forEach(function (r) { %>
+            <li class="att-riga">
+              <span class="att-qta"><%= r.quantita %>×</span>
+              <div class="att-desc">
+                <div class="att-nome"><%= r.nome %></div>
+                <div class="att-cod">Cod. <%= r.codice %></div>
+              </div>
+            </li>
+          <% }); %>
+        </ul>
+        <% if (richiesta.pagamento_stato === 'pagato') { %>
+          <div class="att-pagato">
+            <span>Pagato</span>
+            <strong>€ <%= euro(richiesta.pagamento_importo) %></strong>
+          </div>
+        <% } %>
+      </div>
+
+      <%# 4. Annulla %>
       <form method="POST" action="/richieste/<%= richiesta.id %>/annulla">
-        <button class="btn btn-chiaro btn-blocco" type="submit">Annulla la richiesta</button>
+        <button class="att-annulla" type="submit">Annulla la richiesta</button>
       </form>
       <form method="POST" action="/richieste/<%= richiesta.id %>/elimina" onsubmit="return confirm('Eliminare definitivamente? Sparirà anche per i venditori.')">
         <button class="btn btn-rosso btn-blocco" type="submit" style="margin-top:8px;">Elimina definitivamente</button>
@@ -63,6 +92,6 @@
   </div>
 
   <%- include('partials/nav', { attivo: 'ordini' }) %>
-  <script src="/app.js" defer></script>
+  <script src="<%= asset('/app.js') %>" defer></script>
 </body>
 </html>

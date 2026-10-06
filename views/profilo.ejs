@@ -1,19 +1,40 @@
+<%
+  // Pagina di sola lettura: ogni dato mancante nasconde la sua voce invece di lasciarla vuota.
+  const pulito = (v) => String(v == null ? '' : v).trim();
+
+  const tipo = tipi[cliente.tipo_soggetto] || '';
+  const referente = pulito(cliente.referente);
+  // Un solo distributore: lo sceglie anagrafiche.distributoreDiRiferimento (la route lo passa come `distributore`),
+  // la stessa regola del menu del profilo.
+
+  const piva = pulito(cliente.partita_iva);
+  const cf = pulito(cliente.codice_fiscale);
+  const sdi = pulito(cliente.sdi_pec);
+  const viaSede = pulito(cliente.indirizzo);
+  const provincia = pulito(cliente.provincia);
+  const cittaSede = [pulito(cliente.cap), pulito(cliente.citta), provincia ? '(' + provincia + ')' : ''].filter(Boolean).join(' ');
+  const telefono = pulito(cliente.telefono);
+  const email = pulito(cliente.email);
+%>
 <!DOCTYPE html>
 <html lang="it">
 <head>
   <%- include('partials/app_head', { titolo }) %>
 </head>
 <body data-loggato="1">
-  <div class="app">
+  <div class="app app-anagrafica">
     <%- include('partials/appbar', { titolo, intestazione: 'La mia anagrafica', indietro: '/home' }) %>
 
-    <div class="contenuto">
-      <% if (benvenuto) { %>
-        <div class="avviso avviso-ok">
-          <strong>Anagrafica creata.</strong> I distributori che hai scelto devono confermare
-          che sei loro cliente: ti arriva una notifica appena rispondono.
+    <div class="contenuto anag">
+      <section class="an-scheda an-nome">
+        <%- include('partials/iniziali', { nome: cliente.ragione_sociale, persona: cliente.referente, misura: 56 }) %>
+        <div class="an-nome-testi">
+          <div class="an-ragione"><%= cliente.ragione_sociale %></div>
+          <% if (referente || tipo) { %>
+            <div class="an-sotto"><%= [referente, tipo].filter(Boolean).join(' · ') %></div>
+          <% } %>
         </div>
-      <% } %>
+      </section>
 
       <% if (cliente.stato_anagrafica === 'in_attesa') { %>
         <div class="avviso avviso-attenzione">
@@ -22,81 +43,103 @@
         </div>
       <% } %>
 
-      <div class="sezione-titolo">Distributori di riferimento</div>
-      <div class="card card-fitta">
-        <% legami.forEach(function (l) { %>
-          <div class="riga-lista">
-            <span class="icona"><%- iconaNegozio %></span>
-            <span class="corpo">
-              <span class="etichetta"><%= l.distributore %></span>
-              <span class="dettaglio">
-                <%= l.filiale %>
-                <% if (l.stato === 'approvato' && l.codice_cliente) { %>
-                  · codice cliente <%= l.codice_cliente %>
-                <% } %>
-              </span>
-              <% if (l.note) { %><span class="dettaglio">Nota: <%= l.note %></span><% } %>
-            </span>
-            <span class="stato-badge stato-<%= l.stato === 'approvato' ? 'confermato' : (l.stato === 'rifiutato' ? 'non_disponibile' : 'in_attesa') %>">
-              <%= l.stato === 'approvato' ? 'Approvato' : (l.stato === 'rifiutato' ? 'Non riconosciuto' : 'In attesa') %>
-            </span>
+      <% if (distributore) { %>
+        <section class="an-scheda">
+          <h2 class="an-titolo">Distributore di riferimento</h2>
+          <div class="an-riga">
+            <span class="an-icona an-icona-blu" aria-hidden="true"><%- iconaNegozio %></span>
+            <div class="an-testi">
+              <div class="an-distributore"><%= distributore.distributore %></div>
+              <% if (distributore.stato === 'approvato' && distributore.codice_cliente) { %>
+                <div class="an-dettaglio">Codice cliente <strong><%= distributore.codice_cliente %></strong></div>
+              <% } %>
+            </div>
           </div>
-        <% }); %>
-        <% if (!legami.length) { %>
-          <div class="riga-lista"><span class="corpo">Nessun distributore indicato.</span></div>
+        </section>
+      <% } %>
+
+      <section class="an-scheda">
+        <h2 class="an-titolo">Dati di fatturazione</h2>
+
+        <div class="an-riga">
+          <span class="an-icona" aria-hidden="true"><%- iconaAzienda %></span>
+          <div class="an-testi">
+            <div class="an-etichetta">Ragione sociale</div>
+            <div class="an-valore"><%= cliente.ragione_sociale %></div>
+            <% if (tipo || referente) { %>
+              <div class="an-dettaglio"><%= [tipo, referente ? 'referente ' + referente : ''].filter(Boolean).join(' · ') %></div>
+            <% } %>
+          </div>
+        </div>
+
+        <% if (piva || cf || sdi) { %>
+          <div class="an-riga an-fiscali">
+            <% if (piva) { %>
+              <div class="an-testi">
+                <div class="an-etichetta">Partita IVA</div>
+                <div class="an-valore an-cifre"><%= piva %></div>
+              </div>
+            <% } %>
+            <% if (cf) { %>
+              <div class="an-testi">
+                <div class="an-etichetta">Codice fiscale</div>
+                <div class="an-valore an-cifre"><%= cf %></div>
+              </div>
+            <% } %>
+            <% if (sdi) { %>
+              <%# Una PEC è lunga: occupa tutta la riga invece di andare a capo in mezza colonna. %>
+              <div class="an-testi<%= sdi.indexOf('@') !== -1 ? ' an-largo' : '' %>">
+                <div class="an-etichetta">Codice SDI / PEC</div>
+                <div class="an-valore an-cifre"><%= sdi %></div>
+              </div>
+            <% } %>
+          </div>
         <% } %>
-      </div>
 
-      <div class="sezione-titolo">Dati di fatturazione</div>
-      <div class="card card-fitta">
-        <div class="riga-lista">
-          <span class="icona"><%- iconaAzienda %></span>
-          <span class="corpo">
-            <span class="etichetta"><%= cliente.ragione_sociale %></span>
-            <span class="dettaglio">
-              <%= tipi[cliente.tipo_soggetto] || '—' %><% if (cliente.referente) { %> · <%= cliente.referente %><% } %>
-            </span>
-          </span>
-        </div>
-        <div class="riga-lista">
-          <span class="icona"><%- iconaFiscale %></span>
-          <span class="corpo">
-            <span class="etichetta">P. IVA <%= cliente.partita_iva || '—' %></span>
-            <span class="dettaglio">
-              C.F. <%= cliente.codice_fiscale || '—' %><% if (cliente.sdi_pec) { %> · SDI/PEC <%= cliente.sdi_pec %><% } %>
-            </span>
-          </span>
-        </div>
-        <div class="riga-lista">
-          <span class="icona"><%- iconaPosizione %></span>
-          <span class="corpo">
-            <span class="etichetta">Sede legale</span>
-            <span class="dettaglio"><%= indirizzoCliente || '—' %></span>
-          </span>
-        </div>
-        <div class="riga-lista">
-          <span class="icona"><%- iconaDestinazione %></span>
-          <span class="corpo">
-            <span class="etichetta">Consegna abituale</span>
-            <span class="dettaglio"><%= cliente.indirizzo_consegna || 'Come sede legale' %></span>
-          </span>
-        </div>
-        <div class="riga-lista">
-          <span class="icona"><%- iconaTelefono %></span>
-          <span class="corpo">
-            <span class="etichetta"><%= cliente.telefono || '—' %></span>
-            <span class="dettaglio"><%= cliente.email || '—' %></span>
-          </span>
-        </div>
-      </div>
+        <% if (viaSede || cittaSede) { %>
+          <div class="an-riga">
+            <span class="an-icona" aria-hidden="true"><%- iconaPosizione %></span>
+            <div class="an-testi">
+              <div class="an-etichetta">Sede legale</div>
+              <% if (viaSede) { %><div class="an-valore"><%= viaSede %></div><% } %>
+              <% if (cittaSede) { %><div class="an-dettaglio"><%= cittaSede %></div><% } %>
+            </div>
+          </div>
+        <% } %>
+      </section>
 
-      <p class="nota">
-        Per correggere i dati di fatturazione scrivi al distributore o all'agente: la modifica
-        dall'app non è ancora prevista.
-      </p>    </div>
+      <% if (telefono || email) { %>
+        <section class="an-scheda">
+          <h2 class="an-titolo">Contatti</h2>
+          <% if (telefono) { %>
+            <div class="an-riga">
+              <span class="an-icona" aria-hidden="true"><%- iconaTelefono %></span>
+              <div class="an-testi">
+                <div class="an-etichetta">Telefono</div>
+                <div class="an-valore"><%= telefono %></div>
+              </div>
+            </div>
+          <% } %>
+          <% if (email) { %>
+            <div class="an-riga">
+              <span class="an-icona" aria-hidden="true"><%- iconaEmail %></span>
+              <div class="an-testi">
+                <div class="an-etichetta">Email</div>
+                <div class="an-valore"><%= email %></div>
+              </div>
+            </div>
+          <% } %>
+        </section>
+      <% } %>
+
+      <p class="an-nota">
+        <span class="an-nota-icona" aria-hidden="true"><%- iconaInfo %></span>
+        <span>Per correggere i dati scrivi al tuo distributore o all'agente.</span>
+      </p>
+    </div>
   </div>
 
   <%- include('partials/nav', { attivo: '' }) %>
-  <script src="/app.js" defer></script>
+  <script src="<%= asset('/app.js') %>" defer></script>
 </body>
 </html>

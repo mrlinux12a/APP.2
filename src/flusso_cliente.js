@@ -1,4 +1,5 @@
-// Flusso dell'installatore: richiesta di disponibilità -> offerte dei banchi -> ordine.
+// Flusso dell'installatore: richiesta pagata -> banco accetta -> corriere prende la consegna -> ordine.
+// L'installatore paga e manda la richiesta, poi non decide più niente: l'ordine nasce da solo.
 // Prima stava dentro le route di server.js; spostato qui perché lo usano sia le pagine del
 // sito sia l'API dell'app (src/api_v1.js), che devono seguire esattamente le stesse regole.
 // Qui solo la logica: come rispondere (pagina, redirect o JSON) lo decide chi chiama.
@@ -8,6 +9,10 @@ const richieste = require('./richieste');
 const notifiche = require('./notifiche');
 const ddt = require('./ddt');
 const whatsapp = require('./whatsapp');
+const pagamenti = require('./pagamenti');
+const consegna = require('./consegna');
+const format = require('./format');
+const { QUANTITA_MASSIMA, leggiId, leggiQuantita } = require('./input');
 
 // Errore "previsto" del flusso (ordine minimo, richiesta già aperta...): il chiamante lo
 // mostra così com'è. codice serve a chi deve decidere dove mandare l'utente.
@@ -23,9 +28,10 @@ class ErroreFlusso extends Error {
 // ---------- Invio della richiesta ----------
 
 // Un solo processo di richiesta alla volta: non se ne può inviare una nuova finché una
-// precedente dello stesso cliente è ancora in attesa di risposta o da scegliere. Un ordine
-// già confermato (in consegna) invece non blocca: la nuova richiesta prende il suo posto in
-// "Stato ordini". Ritorna la richiesta bloccante (aggiornata) se ce n'è una, altrimenti null.
+// precedente dello stesso cliente è ancora in attesa di risposta. Un ordine già confermato
+// (in consegna) invece non blocca: la nuova richiesta prende il suo posto in "Stato ordini".
+// Ritorna la richiesta bloccante (aggiornata) se ce n'è una, altrimenti null. 'con_offerte' è
+// lo stato del vecchio flusso: aggiornaScadenza la chiude.
 async function richiestaBloccante(clienteId) {
   const aperta = await db
     .prepare(
@@ -42,10 +48,11 @@ async function richiestaBloccante(clienteId) {
 // che vive sul telefono): prodotti riletti dal DB, solo quelli ancora attivi.
 async function righeDaQuantita(voci) {
   const quantita = new Map();
-  for (const v of voci || []) {
-    const id = parseInt(v && v.id, 10);
-    const q = Math.max(0, parseInt(v && v.quantita, 10) || 0);
-    if (id && q > 0) quantita.set(id, (quantita.get(id) || 0) + q);
+  // `voci` viene dal corpo JSON della richiesta: se non è un elenco si tratta come vuoto.
+  for (const v of Array.isArray(voci) ? voci : []) {
+    const id = leggiId(v && v.id);
+    const q = leggiQuantita(v && v.quantita);
+    if (id && q > 0) quantita.set(id, Math.min(QUANTITA_MASSIMA, (quantita.get(id) || 0) + q));
   }
   if (!quantita.size) return [];
   const ids = [...quantita.keys()];
@@ -58,16 +65,18 @@ async function righeDaQuantita(voci) {
   return prodotti.map((prodotto) => ({ prodotto, quantita: quantita.get(prodotto.id) }));
 }
 
-// Totali del carrello come li mostra la pagina Carrello del sito (merce, RAEE, spedizione,
-// ordine minimo).
+// Totali del carrello come li mostra la pagina Carrello del sito (merce, RAEE, spedizione, IVA,
+// totale da pagare, ordine minimo). `totali` include la spedizione: totale_ivato è quello che
+// l'installatore paga.
 async function riepilogoCarrello(righe) {
-  const totali = await pricing.calcolaOrdine(righe);
-  const minimo = await pricing.getOrdineMinimo();
   const spedizione = await pricing.getSpedizioneFissa();
+  const totali = await pricing.calcolaOrdine(righe, { costoConsegna: spedizione });
+  const minimo = await pricing.getOrdineMinimo();
   return {
     totali,
     minimo,
     spedizione,
+    ivaPct: await pricing.getIvaPct(),
     // La soglia si misura sulla sola merce: la spedizione si somma dopo.
     mancaAlMinimo: pricing.round2(Math.max(0, minimo - totali.totale_finale)),
     raggiunto: totali.totale_finale >= minimo,
@@ -75,10 +84,13 @@ async function riepilogoCarrello(righe) {
   };
 }
 
-// Crea la richiesta di disponibilità e la manda ai distributori. Ritorna l'id creato.
-async function nuovaRichiesta(clienteId, righe) {
+// Paga e invia la richiesta ai distributori. Ritorna l'id creato. `destinazione` e `note` sono quelle
+// del carrello (la destinazione, se vuota, è l'indirizzo di consegna abituale del cliente): da qui
+// l'ordine nasce da solo, senza altre scelte. Il pagamento è simulato (vedi pagamenti.js) e vale il
+// totale IVA inclusa che il carrello ha mostrato.
+async function nuovaRichiesta(clienteId, righe, { destinazione = '', note = '' } = {}) {
   // L'ordine minimo si misura sulla merce già maggiorata, spedizione esclusa.
-  const totali = await pricing.calcolaOrdine(righe);
+  const totali = await pricing.calcolaOrdine(righe, { costoConsegna: await pricing.getSpedizioneFissa() });
   const minimo = await pricing.getOrdineMinimo();
   if (righe.length && totali.totale_finale < minimo) {
     throw new ErroreFlusso(
@@ -98,13 +110,17 @@ async function nuovaRichiesta(clienteId, righe) {
     throw new ErroreFlusso(
       'in_corso',
       'Richiesta già in corso',
-      "Hai già una richiesta in attesa di risposta o da scegliere: aspetta che si chiuda prima di inviarne un'altra.",
+      "Hai già una richiesta in attesa di risposta: aspetta che si chiuda prima di inviarne un'altra.",
       { requestId: bloccante.id }
     );
   }
 
   try {
-    const { requestId } = await richieste.creaRichiesta(cliente, righe);
+    const { requestId } = await richieste.creaRichiesta(cliente, righe, {
+      destinazione: String(destinazione || '').trim().slice(0, 300) || cliente.indirizzo_consegna || ddt.indirizzoCompleto(cliente),
+      note: String(note || '').trim().slice(0, 500),
+      importo: totali.totale_ivato,
+    });
     return requestId;
   } catch (e) {
     // 23505 = violazione del vincolo unico che ammette una sola richiesta aperta per
@@ -129,53 +145,34 @@ function senzaFiliale(distributore) {
   return distributore ? { ...distributore, filiale: '' } : distributore;
 }
 
-// Tutto quello che serve per mostrare una richiesta (attesa o offerte). Segna anche come
-// lette le notifiche di richieste/ordini: il cliente sta guardando proprio questa.
+// Tutto quello che serve per mostrare una richiesta (attesa, chiusa senza ordine, annullata). Segna
+// anche come lette le notifiche di richieste/ordini: il cliente sta guardando proprio questa. Il
+// pagamento (pagamento_stato, pagamento_importo...) sta sulla riga `richiesta`.
 async function dettaglioRichiesta(richiesta) {
   await notifiche.segnaLetteCategoria(richiesta.cliente_id, 'richieste');
   await notifiche.segnaLetteCategoria(richiesta.cliente_id, 'ordini');
 
-  const dati = {
+  return {
     richiesta,
     righe: await richieste.righeRichiesta(richiesta.id),
     // Una ditta con più filiali è una voce sola.
     risposte: richieste.raggruppaRisposteDitta(await richieste.risposteRichiesta(richiesta.id)),
     secondi: await richieste.secondiRimasti(richiesta),
     minutiRisposta: await pricing.getFinestraMinuti(),
-    offerte: [],
-    secondiScelta: null,
-    nomeAssegnazione: null,
-    idPiuVeloce: null,
-  };
-  if (richiesta.stato === 'in_attesa' || richiesta.stato === 'ordinata') return dati;
-
-  const offerte = (await richieste.offerte(richiesta.id)).map((o) => ({
-    ...o,
-    distributore: senzaFiliale(o.distributore),
-  }));
-  const piuVeloce = await richieste.offertaPiuVeloce(richiesta.id);
-  const perAssegnazione = await richieste.offertaPerAssegnazione(richiesta.id);
-  return {
-    ...dati,
-    offerte,
-    // Il conto alla rovescia vale anche con UNA sola offerta: prima compariva solo con due
-    // o più, ma l'ordine automatico partiva comunque e il cliente non ne sapeva niente.
-    secondiScelta: offerte.length ? await richieste.secondiAllAssegnazione(richiesta) : null,
-    nomeAssegnazione: perAssegnazione ? perAssegnazione.distributore_nome : null,
-    idPiuVeloce: piuVeloce ? piuVeloce.distributor_id : null,
   };
 }
 
-// Ritorna false se la richiesta non era più annullabile (es. l'ordine automatico è
-// partito un istante prima).
+// Ritorna false se la richiesta non era più annullabile (es. l'ordine è nato un istante prima).
 async function annullaRichiesta(requestId) {
-  // Condizione dentro la UPDATE: se l'ordine automatico è partito un istante prima,
-  // l'annullamento non deve sovrascrivere 'ordinata' lasciando un ordine vivo su una
-  // richiesta che il cliente crede annullata.
+  // Condizione dentro la UPDATE: se l'ordine è nato un istante prima, l'annullamento non deve
+  // sovrascrivere 'ordinata' lasciando un ordine vivo su una richiesta che il cliente crede annullata.
   const upd = await db
     .prepare(`UPDATE requests SET stato = 'annullata' WHERE id = ? AND stato IN ('in_attesa', 'con_offerte', 'nessuna_offerta')`)
     .run(requestId);
   if (!upd.changes) return false;
+  // Il pagamento torna all'installatore (se era già stato rimborsato perché la richiesta era chiusa
+  // senza ordine, non succede niente).
+  await pagamenti.rimborsa(requestId);
   // Chiude anche le risposte ancora "in attesa" dal lato banco: altrimenti la
   // richiesta annullata dal cliente resta a intasare la dashboard dei distributori
   // come se ci fosse ancora qualcosa da confermare.
@@ -239,6 +236,9 @@ async function eliminaRichiesta(requestId) {
     // può più essere cancellato "sotto" al distributore.
     const attuale = await db.prepare('SELECT order_id FROM requests WHERE id = ? FOR UPDATE').get(requestId);
     if (!attuale) return null;
+    // La riga della richiesta sparisce, ma il pagamento prima si restituisce: con un provider vero il
+    // rimborso va chiesto qui, prima della cancellazione.
+    await pagamenti.rimborsa(requestId);
     let ordineEliminato = null;
     if (attuale.order_id) {
       const ordine = await db.prepare('SELECT * FROM orders WHERE id = ? FOR UPDATE').get(attuale.order_id);
@@ -248,9 +248,10 @@ async function eliminaRichiesta(requestId) {
       await db.prepare('DELETE FROM orders WHERE id = ?').run(attuale.order_id);
       ordineEliminato = ordine;
     }
-    const rows = await db.prepare('SELECT id FROM request_responses WHERE request_id = ?').all(requestId);
-    const rids = rows.map(r => r.id);
-    for (const rid of rids) await db.prepare('DELETE FROM request_response_items WHERE response_id = ?').run(rid);
+    await db.prepare(
+      `DELETE FROM request_response_items
+        WHERE response_id IN (SELECT id FROM request_responses WHERE request_id = ?)`
+    ).run(requestId);
     await db.prepare('DELETE FROM request_responses WHERE request_id = ?').run(requestId);
     await db.prepare('DELETE FROM request_items WHERE request_id = ?').run(requestId);
     await db.prepare('DELETE FROM requests WHERE id = ?').run(requestId);
@@ -267,44 +268,19 @@ async function eliminaRichiesta(requestId) {
   }
 }
 
-// ---------- Scelta dell'offerta e ordine ----------
+// ---------- Ordine ----------
 
-// Riepilogo dell'ordine con il distributore scelto. null se quel distributore non ha
-// confermato la disponibilità.
-async function riepilogoOfferta(richiesta, distributorId, modalita) {
-  const risposta = await db
-    .prepare(
-      `SELECT * FROM request_responses
-        WHERE request_id = ? AND distributor_id = ? AND esito = 'confermato'
-          AND (corriere_stato IS NULL OR corriere_stato = 'preso')`
-    )
-    .get(richiesta.id, distributorId);
-  if (!risposta) return null;
-
-  const offerta = await richieste.calcolaOfferta(richiesta.id, distributorId, { modalita });
-  const perAssegnazione = await richieste.offertaPerAssegnazione(richiesta.id);
-  return {
-    risposta,
-    offerta: { ...offerta, distributore: senzaFiliale(offerta.distributore) },
-    ivaPct: await pricing.getIvaPct(),
-    // Anche qui il cliente deve vedere quanto manca all'ordine automatico: mentre compila
-    // note e destinazione il tempo corre.
-    secondiScelta: await richieste.secondiAllAssegnazione(richiesta),
-    nomeAssegnazione: perAssegnazione ? perAssegnazione.distributore_nome : null,
-  };
-}
-
-// Creazione dell'ordine a partire da un'offerta confermata: la usano sia la scelta
-// manuale del cliente sia l'assegnazione automatica allo scadere dei 5 minuti.
-async function creaOrdineDaOfferta(richiesta, distributorId, risposta, opzioni = {}) {
-  const modalita = opzioni.modalita === 'ritiro' ? 'ritiro' : 'consegna_mezzo_grossista';
-  const note = (opzioni.note || '').trim();
+// L'installatore non sceglie niente dopo aver pagato: l'ordine nasce da solo quando una risposta del
+// banco diventa valida, cioè quando il corriere prende la consegna nel gruppo WhatsApp (o, a modulo
+// spento, appena il banco accetta). Destinazione e note sono quelle scritte nel carrello, salvate
+// sulla richiesta; il pagamento è già sulla richiesta (vedi pagamenti.js).
+async function creaOrdineDaRisposta(richiesta, risposta) {
+  const distributorId = risposta.distributor_id;
+  const modalita = 'consegna_mezzo_grossista';
+  const note = (richiesta.note || '').trim();
   const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(richiesta.cliente_id);
-  const destinazione =
-    modalita === 'ritiro'
-      ? 'Ritiro al banco'
-      : (opzioni.destinazione || '').trim() || cliente.indirizzo_consegna || ddt.indirizzoCompleto(cliente);
-  const { totali } = await richieste.calcolaOfferta(richiesta.id, distributorId, { modalita });
+  const destinazione = (richiesta.destinazione || '').trim() || cliente.indirizzo_consegna || ddt.indirizzoCompleto(cliente);
+  const { totali } = await richieste.calcolaOfferta(richiesta.id, distributorId);
 
   const insertOrder = db.prepare(
     `INSERT INTO orders
@@ -324,20 +300,12 @@ async function creaOrdineDaOfferta(richiesta, distributorId, risposta, opzioni =
   );
 
   const creaOrdine = db.transaction(async () => {
-    // Blocco atomico "solo il primo vince": prima questa UPDATE non esisteva e l'ordine
-    // veniva sempre creato senza controllare se la richiesta era già stata chiusa da
-    // un'altra chiamata concorrente — un doppio tap sullo stesso invio, o l'assegnazione
-    // automatica dei 5 minuti scattata nello stesso istante di una scelta manuale,
-    // potevano creare due ordini (anche con due distributori diversi) per la stessa
-    // richiesta. Ora solo la chiamata che riesce a far passare questa UPDATE (changes=1)
-    // prosegue; l'altra trova stato già 'ordinata' e si ferma senza scrivere nulla.
-    // Vale solo da 'con_offerte' (prima bastava "non ordinata": passava anche un'annullata),
-    // e assegnata_auto si scrive qui, insieme all'ordine: prima si scriveva prima, a parte,
-    // e se la creazione si interrompeva la richiesta restava bloccata per sempre.
+    // Blocco atomico "solo il primo vince": la richiesta passa a 'ordinata' una volta sola, anche se
+    // un corriere e il timer (o due corrieri) arrivano nello stesso istante. Chi non riesce a far
+    // passare questa UPDATE (changes=0) si ferma senza scrivere nulla.
     const claim = await db.prepare(
-      `UPDATE requests SET stato = 'ordinata', assegnata_auto = ?
-        WHERE id = ? AND stato = 'con_offerte'`
-    ).run(opzioni.automatico ? 1 : 0, richiesta.id);
+      `UPDATE requests SET stato = 'ordinata' WHERE id = ? AND stato = 'in_attesa'`
+    ).run(richiesta.id);
     if (!claim.changes) return null;
 
     const info = await insertOrder.run(
@@ -359,8 +327,8 @@ async function creaOrdineDaOfferta(richiesta, distributorId, risposta, opzioni =
     const orderId = Number(info.lastInsertRowid);
     for (const riga of totali.righe) await insertItem.run(orderId, riga.product_id, riga.codice_snapshot, riga.nome_snapshot, riga.quantita, riga.prezzo_listino_snapshot, riga.sconto_pct_snapshot, riga.prezzo_netto_unitario, riga.subtotale, riga.prezzo_unitario_cliente, riga.subtotale_cliente, riga.raee_unitario, riga.raee_riga);
     await db.prepare(`UPDATE requests SET order_id = ? WHERE id = ?`).run(orderId, richiesta.id);
-    // Con il corriere il tempo di consegna è quello scritto nel gruppo ("preso 30"): conta da
-    // adesso, cioè da quando l'installatore ha confermato.
+    // Con il corriere il tempo di consegna è quello scritto nel gruppo ("preso 30"): conta da adesso,
+    // cioè da quando l'ordine è confermato.
     if (risposta.corriere_stato === 'preso') {
       await db.prepare(
         `UPDATE orders
@@ -385,34 +353,36 @@ async function creaOrdineDaOfferta(richiesta, distributorId, risposta, opzioni =
   if (orderId === null) return null;
 
   const distributore = await db.prepare('SELECT * FROM distributors WHERE id = ?').get(distributorId);
+  const conCorriere = risposta.corriere_stato === 'preso' && risposta.corriere_minuti;
+  const arrivo = conCorriere ? format.oraRoma(new Date(Date.now() + risposta.corriere_minuti * 60 * 1000)) : null;
+
+  // Al banco l'ordine arriva già pagato: deve solo prepararlo.
   await notifiche.notificaDistributore(distributorId, {
     titolo: 'Nuovo ordine da preparare',
-    testo: `${cliente.ragione_sociale} ha scelto ${distributore.nome} — ordine #${orderId}.`,
+    testo: `${cliente.ragione_sociale} — ordine #${orderId}, già pagato.${arrivo ? ` Consegna prevista entro le ${arrivo}.` : ''}`,
     link: '/distributore/ordini/' + orderId,
     categoria: 'ordini',
     sottostato: 'in_approvazione',
     order_id: orderId,
   });
 
-  // La richiesta confermata non resta una richiesta: diventa un ordine, e la notifica
-  // del cliente lo dice esplicitamente.
+  // La richiesta confermata non resta una richiesta: diventa un ordine, e la notifica del cliente lo
+  // dice con il tempo stimato.
   await notifiche.notifica(richiesta.cliente_id, {
-    titolo: opzioni.automatico ? 'Ordine assegnato automaticamente' : 'Ordine inviato',
-    testo: opzioni.automatico
-      ? `Non hai scelto in tempo: l'ordine #${orderId} è andato a ${distributore.nome}, con la consegna più veloce.`
-      : `Ordine #${orderId} inviato a ${distributore.nome}.`,
+    titolo: 'Ordine confermato',
+    testo: conCorriere
+      ? `${distributore.nome} prepara il tuo ordine #${orderId}. Consegna prevista entro le ${arrivo} (${consegna.inParole(risposta.corriere_minuti)}).`
+      : `${distributore.nome} prepara il tuo ordine #${orderId}. Consegna stimata in ${consegna.inParole(risposta.consegna_minuti_stimati)}.`,
     link: '/ordini/' + orderId,
     categoria: 'ordini',
     sottostato: 'in_approvazione',
     order_id: orderId,
   });
 
-  // Gruppo WhatsApp dei corrieri: i messaggi degli altri banchi spariscono, e chi ha preso la
-  // consegna sa che l'ordine è confermato (o che il cliente ritira al banco). Un guasto lì non
-  // deve far fallire un ordine già creato.
+  // Gruppo WhatsApp dei corrieri: i messaggi degli altri banchi spariscono. Al corriere che ha preso la
+  // consegna non si scrive altro. Un guasto lì non deve far fallire un ordine già creato.
   try {
     await whatsapp.ritiraRichiesta(richiesta.id, { tranne: risposta.id });
-    await whatsapp.avvisaOrdine(orderId, risposta);
   } catch (err) {
     console.error('WhatsApp, ordine #' + orderId + ' non comunicato al gruppo:', err.message);
   }
@@ -420,45 +390,10 @@ async function creaOrdineDaOfferta(richiesta, distributorId, risposta, opzioni =
   return orderId;
 }
 
-// Il cliente sceglie un'offerta e invia l'ordine. Esiti:
-//   { esito: 'creato', orderId }
-//   { esito: 'gia_ordinata', richiesta }  (chiusa da un doppio tap o dall'ordine automatico)
-//   { esito: 'non_aperta', richiesta }    (annullata o offerte scadute)
-//   { esito: 'offerta_non_valida' }       (quel distributore non ha confermato)
-async function ordinaDaOfferta(richiesta, distributorId, opzioni) {
-  if (richiesta.stato === 'ordinata') return { esito: 'gia_ordinata', richiesta };
-  if (!(await richieste.sceltaAncoraValida(richiesta.id))) return { esito: 'non_aperta', richiesta };
-
-  const risposta = await db
-    .prepare(
-      `SELECT * FROM request_responses
-        WHERE request_id = ? AND distributor_id = ? AND esito = 'confermato'
-          AND (corriere_stato IS NULL OR corriere_stato = 'preso')`
-    )
-    .get(richiesta.id, distributorId);
-  if (!risposta) return { esito: 'offerta_non_valida' };
-
-  const orderId = await creaOrdineDaOfferta(richiesta, distributorId, risposta, opzioni);
-  if (orderId === null) {
-    // Un'altra chiamata concorrente ha chiuso questa richiesta un istante prima (doppio
-    // tap sullo stesso "Invia l'ordine", o l'assegnazione automatica scattata nello stesso
-    // momento): non è stato creato un secondo ordine duplicato.
-    const aggiornata = await richieste.getRichiesta(richiesta.id);
-    if (aggiornata && aggiornata.stato === 'ordinata') return { esito: 'gia_ordinata', richiesta: aggiornata };
-    return { esito: 'non_aperta', richiesta: aggiornata || richiesta };
-  }
-  return { esito: 'creato', orderId };
-}
-
-// Finita la scelta senza decisione, l'ordine va a chi copre tutto il materiale con la
-// consegna più veloce. Lo chiama richieste.aggiornaScadenza() a ogni lettura della
-// richiesta (su Vercel i timer non girano fra una visita e l'altra) e il timer in server.js.
-richieste.impostaAssegnatore(async (requestId) => {
-  const richiesta = await richieste.getRichiesta(requestId);
-  const migliore = await richieste.offertaPerAssegnazione(requestId);
-  if (!richiesta || !migliore) return null;
-  return creaOrdineDaOfferta(richiesta, migliore.distributor_id, migliore, { automatico: true });
-});
+// L'ordine nasce quando una risposta del banco diventa valida (vedi richieste.assegnaOrdine), subito e
+// poi dal timer in server.js se la prima volta è fallito: l'assegnatore si registra qui. Uno script che
+// usa solo src/richieste.js non lo ha.
+richieste.impostaAssegnatore(creaOrdineDaRisposta);
 
 // ---------- Ordine: lettura, consegna, annullamento ----------
 
@@ -469,14 +404,24 @@ async function dettaglioOrdine(ordine) {
     ? await db.prepare('SELECT * FROM distributors WHERE id = ?').get(ordine.distributor_id)
     : null;
   const richiestaOrdine = ordine.request_id
-    ? await db.prepare('SELECT assegnata_auto FROM requests WHERE id = ?').get(ordine.request_id)
+    ? await db
+        .prepare('SELECT pagamento_stato, pagamento_metodo, pagamento_importo, pagato_il FROM requests WHERE id = ?')
+        .get(ordine.request_id)
     : null;
   return {
     righe,
     cliente,
     distributore,
-    // Un ordine partito da solo deve dirlo: senza, sembrava che qualcun altro l'avesse inviato.
-    assegnataAuto: !!(richiestaOrdine && richiestaOrdine.assegnata_auto),
+    // Il pagamento fatto all'invio della richiesta (null per gli ordini del vecchio flusso).
+    pagamento:
+      richiestaOrdine && richiestaOrdine.pagamento_stato
+        ? {
+            stato: richiestaOrdine.pagamento_stato,
+            metodo: richiestaOrdine.pagamento_metodo,
+            importo: richiestaOrdine.pagamento_importo,
+            pagato_il: richiestaOrdine.pagato_il,
+          }
+        : null,
     annullabile: ordineAnnullabileDalCliente(ordine),
     ivaPct: await pricing.getIvaPct(),
   };
@@ -490,13 +435,26 @@ async function segnaConsegnato(ordine) {
   }
 }
 
+// PROVVISORIO (prova della home): l'installatore chiude l'ordine come consegnato qualunque sia il suo
+// stato, così la scheda "in consegna" sparisce. Non tocca lo stato dell'ordine per il banco. A regime la
+// consegna la segnerà un evento vero (corriere, GPS...): da collegare, poi questa funzione va tolta.
+async function segnaConsegnatoProva(ordine) {
+  if (!ordine.consegnato_il) {
+    await db.prepare('UPDATE orders SET consegnato_il = NOW() WHERE id = ?').run(ordine.id);
+  }
+}
+
 // Elimina ordine (cliente) — globale. Lancia OrdineInLavorazione se già preso in carico.
 async function eliminaOrdine(orderId) {
   const elimina = db.transaction(async () => {
     const attuale = await db.prepare('SELECT * FROM orders WHERE id = ? FOR UPDATE').get(orderId);
     if (!attuale) return null;
     if (!ordineAnnullabileDalCliente(attuale)) throw new OrdineInLavorazione(attuale);
-    if (attuale.request_id) await db.prepare('UPDATE requests SET order_id = NULL, stato = ? WHERE id = ?').run('annullata', attuale.request_id);
+    if (attuale.request_id) {
+      await db.prepare('UPDATE requests SET order_id = NULL, stato = ? WHERE id = ?').run('annullata', attuale.request_id);
+      // L'ordine era già pagato: annullandolo il pagamento torna all'installatore.
+      await pagamenti.rimborsa(attuale.request_id);
+    }
     await db.prepare('DELETE FROM order_items WHERE order_id = ?').run(attuale.id);
     await db.prepare('DELETE FROM orders WHERE id = ?').run(attuale.id);
     return attuale;
@@ -507,10 +465,9 @@ async function eliminaOrdine(orderId) {
 
 // ---------- Stato ordini e storico ----------
 
-// Tutte le richieste del cliente (più un ordine associato, quando c'è) con lo step 1-2-3
-// già calcolato — solo i campi che lo Storico mostra davvero (data, materiale, stato):
-// niente risposte dei distributori né calcolo delle offerte, che lì non servono e sono
-// il grosso del costo (offerte() da sola fa una query per ogni distributore confermato).
+// Tutte le richieste del cliente (più un ordine associato, quando c'è) con lo step 1 (in attesa)
+// o 3 (ordine) già calcolato — solo i campi che lo Storico mostra davvero (data, materiale,
+// stato): niente risposte dei distributori, che lì non servono.
 // aggiornaScadenza si chiama solo sulle richieste ancora aperte, non su tutte e 50: su
 // quelle già chiuse (la maggioranza, in uno storico) costerebbe una query a vuoto.
 async function richiesteClienteConStato(clienteId) {
@@ -533,8 +490,14 @@ async function richiesteClienteConStato(clienteId) {
   const idOrdini = aggiornate.filter((r) => r.stato === 'ordinata' && r.order_id).map((r) => r.order_id);
   const ordiniPerId = new Map();
   if (idOrdini.length) {
+    // Il nome del banco (la ditta, mai la filiale: l'installatore non la vede) viaggia nella stessa lettura.
     const ordini = await db
-      .prepare(`SELECT * FROM orders WHERE id IN (${idOrdini.map(() => '?').join(',')})`)
+      .prepare(
+        `SELECT o.*, d.nome AS distributore_nome
+           FROM orders o
+           LEFT JOIN distributors d ON d.id = o.distributor_id
+          WHERE o.id IN (${idOrdini.map(() => '?').join(',')})`
+      )
       .all(...idOrdini);
     for (const o of ordini) ordiniPerId.set(Number(o.id), o);
   }
@@ -543,7 +506,6 @@ async function richiesteClienteConStato(clienteId) {
     let step = 0;
     let ordine = null;
     if (rAgg.stato === 'in_attesa') step = 1;
-    else if (rAgg.stato === 'con_offerte') step = 2;
     else if (rAgg.stato === 'ordinata') {
       step = 3;
       if (rAgg.order_id) ordine = ordiniPerId.get(Number(rAgg.order_id)) || null;
@@ -552,28 +514,129 @@ async function richiesteClienteConStato(clienteId) {
   });
 }
 
+// Una riga della pagina Storico (views/storico.ejs), da una card di richiesteClienteConStato.
+// `tono` sceglie icona e colori: consegna, attesa, consegnato, nessuna (nessuna risposta), annullata.
+// Le etichette sono sempre quelle di sotto: "Inviato", "In preparazione" e "Partito" sono tutti "In consegna".
+function voceStorico(c) {
+  const r = c.richiesta;
+  const o = c.ordine;
+  let tono;
+  let etichetta;
+  if (o && o.consegnato_il) [tono, etichetta] = ['consegnato', 'Consegnato'];
+  else if (r.stato === 'in_attesa') [tono, etichetta] = ['attesa', 'In attesa'];
+  else if (r.stato === 'ordinata') [tono, etichetta] = ['consegna', 'In consegna'];
+  else if (r.stato === 'nessuna_offerta') [tono, etichetta] = ['nessuna', 'Nessuna risposta'];
+  else [tono, etichetta] = ['annullata', r.stato === 'annullata' ? 'Annullata' : r.stato];
+
+  // Al centro: il banco dell'ordine. Una richiesta chiusa senza ordine non ne ha: lì conta il rimborso. Chi non
+  // aveva pagato (richiesta del vecchio flusso, pagamento_stato NULL) non ha niente da vedersi rimborsare.
+  let banco = '';
+  if (o) banco = o.distributore_nome || '';
+  else if (tono === 'nessuna' || tono === 'annullata') {
+    banco = r.pagamento_stato === 'rimborsato' ? 'Rimborsato' : r.pagamento_stato === 'pagato' ? 'Rimborso in corso' : '';
+  }
+
+  return {
+    href: c.step === 3 && o ? '/ordini/' + o.id : '/richieste/' + r.id,
+    tono,
+    etichetta,
+    data: format.dataBreveRoma(r.creato_il),
+    primo: c.righe[0] ? c.righe[0].quantita + '× ' + c.righe[0].nome : '',
+    altri: Math.max(0, c.righe.length - 1),
+    banco,
+    // A destra: il totale dell'ordine (la vista usa totaleOrdine(ordine)) o, senza ordine, quanto è stato pagato.
+    ordine: o,
+    pagato: Number(r.pagamento_importo) > 0 ? Number(r.pagamento_importo) : null,
+    // Il pulsante "Riordina" c'è solo sugli ordini consegnati.
+    riordinaId: o && o.consegnato_il ? o.id : null,
+  };
+}
+
+// Lo Storico dell'installatore: in cima "In corso" (richieste in attesa e ordini in consegna, con le stesse
+// regole di attivitaCorrente: un ordine mai segnato come consegnato non resta "in corso" per sempre), poi
+// tutto il resto raggruppato per mese di creazione, dal più recente. Le richieste arrivano già dalla più
+// recente (id decrescente).
+async function storicoCliente(clienteId) {
+  const inCorso = [];
+  const perMese = new Map();
+  for (const c of await richiesteClienteConStato(clienteId)) {
+    const voce = voceStorico(c);
+    if (c.step === 1 || eInConsegna(c)) {
+      inCorso.push(voce);
+      continue;
+    }
+    const { chiave, titolo } = format.meseRoma(c.richiesta.creato_il);
+    if (!perMese.has(chiave)) perMese.set(chiave, { titolo, voci: [] });
+    perMese.get(chiave).voci.push(voce);
+  }
+  return { inCorso, mesi: [...perMese.values()] };
+}
+
+// "Riordina": gli articoli di un ordine del cliente che si possono rimettere nel carrello, e quanti no
+// (tolti dal catalogo o non più disponibili). Ritorna null se l'ordine non esiste, 'altrui' se è di un altro.
+async function articoliDaRiordinare(clienteId, ordineId) {
+  const ordine = await db.prepare('SELECT id, cliente_id FROM orders WHERE id = ?').get(ordineId);
+  if (!ordine) return null;
+  if (Number(ordine.cliente_id) !== Number(clienteId)) return 'altrui';
+  const righe = await db
+    .prepare(
+      `SELECT oi.product_id, oi.quantita, p.id AS prodotto_id, p.attivo, p.disponibilita
+         FROM order_items oi
+         LEFT JOIN products p ON p.id = oi.product_id
+        WHERE oi.order_id = ?`
+    )
+    .all(ordine.id);
+  const articoli = [];
+  let saltati = 0;
+  for (const r of righe) {
+    const quantita = leggiQuantita(r.quantita);
+    if (r.prodotto_id && Number(r.attivo) === 1 && r.disponibilita !== 'non_disponibile' && quantita > 0) {
+      articoli.push({ id: Number(r.product_id), quantita });
+    } else {
+      saltati++;
+    }
+  }
+  return { articoli, saltati };
+}
+
 // "Stato ordini": mostra sempre e solo UNA cosa, mai un elenco — quella più rilevante, in
-// ordine di priorità: in attesa > da scegliere > in consegna > scaduta senza conferme. Ogni
+// ordine di priorità: in attesa > in consegna > scaduta senza conferme. Ogni
 // livello ha una finestra oltre la quale non conta più come "attivo" (resta comunque
 // raggiungibile dallo Storico). Se ce ne fosse più di una allo stesso livello (es. account
 // demo condiviso da più persone) si prende sempre la più recente.
+const PROGRESSO_IN_VIAGGIO = 0.5; // metà barra: "In viaggio"
 const TRE_ORE_MS = 3 * 60 * 60 * 1000;
 const VENTIQUATTRO_ORE_MS = 24 * 60 * 60 * 1000;
+
+// Millisecondi passati da un istante scritto in una colonna TIMESTAMP (UTC senza fuso). pg la legge come
+// ora locale del processo: `new Date(colonna)` confrontato con Date.now() sbagliava dell'offset del fuso
+// (2 ore sul PC a Roma, niente sulla VPS in UTC), e le finestre di 3 e 24 ore non erano quelle vere.
+// istanteUtc rimette a posto l'istante.
+function eta(naive) {
+  const istante = format.istanteUtc(naive);
+  return istante ? Date.now() - istante.getTime() : Infinity;
+}
+
+// Ordine ancora in viaggio: non consegnato e nato da meno di 24 ore (oltre, non conta più come "attivo").
+function eInConsegna(c) {
+  if (c.step !== 3 || !c.ordine || c.ordine.consegnato_il) return false;
+  return eta(c.ordine.creato_il) <= VENTIQUATTRO_ORE_MS;
+}
 
 function piuRecente(elenco) {
   return elenco.length ? elenco.reduce((a, b) => (b.richiesta.id > a.richiesta.id ? b : a)) : null;
 }
 
 // Versione "leggera" di richiesteClienteConStato, solo per scegliere l'attività corrente:
-// qui non serve MAI il dettaglio (righe, risposte, offerte) di ogni richiesta — solo stato
+// qui non serve MAI il dettaglio (righe, risposte) di ogni richiesta — solo stato
 // e id. Le ultime 5 bastano abbondantemente (il blocco "un solo invio alla volta" impedisce
-// comunque di avere più di una richiesta in_attesa/con_offerte insieme), ed è l'unico stato
+// comunque di avere più di una richiesta in_attesa insieme), ed è l'unico stato
 // che ha bisogno del controllo di scadenza lazy (aggiornaScadenza scrive sul DB solo se
 // necessario). Passa da ~150 query a poche sole per apertura pagina.
 function leggiRichiesteRecenti(clienteId) {
   return db
     .prepare(
-      `SELECT id, stato, creato_il, scade_il, scelta_scade_il, order_id
+      `SELECT id, stato, creato_il, scade_il, order_id
          FROM requests WHERE cliente_id = ? ORDER BY id DESC LIMIT 5`
     )
     .all(clienteId);
@@ -593,7 +656,7 @@ async function richiesteAttiveClienteLeggere(recenti) {
   const ordiniPerId = new Map();
   if (idOrdini.length) {
     const ordini = await db
-      .prepare(`SELECT id, stato, consegnato_il, creato_il FROM orders WHERE id IN (${idOrdini.map(() => '?').join(',')})`)
+      .prepare(`SELECT id, stato, consegnato_il, creato_il, corriere_arrivo_il, corriere_risposto_il, corriere_nome FROM orders WHERE id IN (${idOrdini.map(() => '?').join(',')})`)
       .all(...idOrdini);
     for (const o of ordini) ordiniPerId.set(Number(o.id), o);
   }
@@ -602,7 +665,6 @@ async function richiesteAttiveClienteLeggere(recenti) {
     let step = 0;
     let ordine = null;
     if (rAgg.stato === 'in_attesa') step = 1;
-    else if (rAgg.stato === 'con_offerte') step = 2;
     else if (rAgg.stato === 'ordinata') {
       step = 3;
       if (rAgg.order_id) ordine = ordiniPerId.get(Number(rAgg.order_id)) || null;
@@ -625,29 +687,63 @@ async function attivitaCorrente(clienteId) {
   const cardsAll = await richiesteAttiveClienteLeggere(recenti);
 
   const inAttesa = cardsAll.filter((c) => c.step === 1);
-  const daScegliere = cardsAll.filter((c) => {
-    if (c.step !== 2) return false;
-    // scelta_scade_il si fissa una sola volta, all'ingresso in "con_offerte": è il
-    // riferimento esatto di quando la richiesta è entrata in questo stato.
-    if (!c.richiesta.scelta_scade_il) return true;
-    return Date.now() - new Date(c.richiesta.scelta_scade_il).getTime() <= TRE_ORE_MS;
-  });
-  const inConsegna = cardsAll.filter((c) => {
-    if (c.step !== 3 || !c.ordine || c.ordine.consegnato_il) return false;
-    return Date.now() - new Date(c.ordine.creato_il).getTime() <= VENTIQUATTRO_ORE_MS;
-  });
+  const inConsegna = cardsAll.filter(eInConsegna);
   const scadute = cardsAll.filter((c) => {
     if (c.step !== 0 || c.richiesta.stato !== 'nessuna_offerta') return false;
-    return Date.now() - new Date(c.richiesta.scade_il).getTime() <= TRE_ORE_MS;
+    return eta(c.richiesta.scade_il) <= TRE_ORE_MS;
   });
 
-  const attivo = piuRecente(inAttesa) || piuRecente(daScegliere) || piuRecente(inConsegna) || piuRecente(scadute);
+  const attivo = piuRecente(inAttesa) || piuRecente(inConsegna) || piuRecente(scadute);
   if (!attivo) return null;
   return attivo.step === 3 ? { tipo: 'ordine', id: attivo.ordine.id } : { tipo: 'richiesta', id: attivo.richiesta.id };
 }
 
+// Stato dell'icona "Stato ordini" nella barra in basso. Stesse priorità di attivitaCorrente
+// (in attesa > in consegna > scaduta), ma in sola lettura: NON segna le notifiche come lette,
+// perché gira su ogni pagina del cliente e ogni 15 secondi mentre una richiesta è in attesa.
+//   { fase: 'nessuna' }
+//   { fase: 'richiesta', secondi, durata }   -> conto alla rovescia della finestra (10 min)
+//   { fase: 'consegna', ordineId, minuti, corriere, progresso } -> minuti all'arrivo (null se non scritto),
+//                                                nome del corriere ('' se manca), avanzamento 0-1 per la home
+//   { fase: 'scaduta' }                       -> nessun banco ha accettato in tempo
+async function statoIconaOrdini(clienteId) {
+  const cards = await richiesteAttiveClienteLeggere(await leggiRichiesteRecenti(clienteId));
+
+  const inAttesa = piuRecente(cards.filter((c) => c.step === 1));
+  if (inAttesa) {
+    const r = inAttesa.richiesta;
+    const inizio = format.toDate(r.creato_il);
+    const fine = format.toDate(r.scade_il);
+    const durata = inizio && fine ? Math.max(1, Math.round((fine - inizio) / 1000)) : 600;
+    return { fase: 'richiesta', secondi: await richieste.secondiRimasti(r), durata };
+  }
+
+  const inConsegna = piuRecente(cards.filter(eInConsegna));
+  if (inConsegna) {
+    // corriere_arrivo_il è TIMESTAMPTZ (un istante vero), a differenza degli altri orari dello schema.
+    const arrivo = format.toDate(inConsegna.ordine.corriere_arrivo_il);
+    const minuti = arrivo ? Math.max(1, Math.ceil((arrivo.getTime() - Date.now()) / 60000)) : null;
+    return {
+      fase: 'consegna',
+      ordineId: inConsegna.ordine.id,
+      minuti,
+      corriere: String(inConsegna.ordine.corriere_nome || '').trim(),
+      // Barra della home: ferma a metà ("In viaggio") finché non ci sarà l'evento che segna la consegna
+      // vera (ancora da collegare): solo allora arriva a 1 ("Consegnato").
+      progresso: PROGRESSO_IN_VIAGGIO,
+    };
+  }
+
+  const scaduta = cards.some((c) => {
+    if (c.step !== 0 || c.richiesta.stato !== 'nessuna_offerta') return false;
+    return eta(c.richiesta.scade_il) <= TRE_ORE_MS;
+  });
+  return { fase: scaduta ? 'scaduta' : 'nessuna' };
+}
+
 module.exports = {
   ErroreFlusso,
+  statoIconaOrdini,
   senzaFiliale,
   OrdineInLavorazione,
   richiestaBloccante,
@@ -658,12 +754,14 @@ module.exports = {
   annullaRichiesta,
   reinviaRichiesta,
   eliminaRichiesta,
-  riepilogoOfferta,
-  ordinaDaOfferta,
+  creaOrdineDaRisposta,
   dettaglioOrdine,
   segnaConsegnato,
+  segnaConsegnatoProva,
   eliminaOrdine,
   ordineAnnullabileDalCliente,
   richiesteClienteConStato,
+  storicoCliente,
+  articoliDaRiordinare,
   attivitaCorrente,
 };

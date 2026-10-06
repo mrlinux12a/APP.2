@@ -59,7 +59,7 @@
   <% } else if (currentUser.ruolo === 'distributore') { %>
     <%- include('partials/nav_distributore', { attivo: '' }) %>
   <% } %>
-  <script src="/app.js" defer></script>
-  <script src="/mappa.js" defer></script>
+  <script src="<%= asset('/app.js') %>" defer></script>
+  <script src="<%= asset('/mappa.js') %>" defer></script>
 </body>
 </html>

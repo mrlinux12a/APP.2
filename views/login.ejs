@@ -4,40 +4,35 @@
   <%- include('partials/app_head', { titolo: 'Ordini Minuteria' }) %>
 </head>
 <body data-loggato="0">
-  <div class="ingresso">
-    <div class="ingresso-testata">
-      <div class="ingresso-marchio">Ordini Minuteria</div>
-      <p>
-        Materiale termoidraulico dai distributori della tua zona: chiedi la disponibilità
-        al banco, confronta tempi e prezzi, ordina.
-      </p>
-    </div>
+  <main class="acc">
+    <header class="acc-testata">
+      <span class="acc-icona" aria-hidden="true"><%- iconaOrdini %></span>
+      <div class="acc-occhiello">Ordini Minuteria</div>
+      <h1 class="acc-titolo">Il pezzo che ti manca, in cantiere.</h1>
+      <p class="acc-sotto">Chiedi la disponibilità al banco e ricevi il materiale dove lavori.</p>
+    </header>
 
-    <div class="card">
-      <div class="schede">
-        <a href="/login" class="attiva">Accedi</a>
-        <a href="/registrati">Registrati</a>
-      </div>
+    <nav class="acc-schede" aria-label="Accesso o registrazione">
+      <a href="/login" class="attiva" aria-current="page">Accedi</a>
+      <a href="/registrati">Registrati</a>
+    </nav>
 
-      <% if (errore) { %><div class="errore"><%= errore %></div><% } %>
+    <% if (errore) { %><div class="errore" role="alert"><%= errore %></div><% } %>
 
-      <form method="POST" action="/login">
-        <label for="username">Utente</label>
-        <input type="text" id="username" name="username" autocomplete="username"
-               autocapitalize="none" required>
+    <form method="POST" action="/login">
+      <%- include('partials/acc_campo', {
+        id: 'username', etichetta: 'Nome utente',
+        attributi: { placeholder: 'es. rossimpianti', autocomplete: 'username', autocapitalize: 'none', autocorrect: 'off', spellcheck: 'false', required: true },
+      }) %>
+      <%- include('partials/acc_campo', {
+        id: 'password', etichetta: 'Password', tipo: 'password',
+        attributi: { autocomplete: 'current-password', required: true },
+      }) %>
+      <button class="acc-btn" type="submit">Accedi</button>
+    </form>
 
-        <label for="password">Password</label>
-        <input type="password" id="password" name="password" autocomplete="current-password" required>
-
-        <button class="btn btn-primary btn-blocco" type="submit">Accedi</button>
-      </form>
-
-      <p class="nota" style="margin-bottom:0;">
-        Non hai ancora un'anagrafica? <a href="/registrati">Registra la tua impresa</a>:
-        i distributori che indichi dovranno confermare che sei loro cliente.
-      </p>
-    </div>
-  </div>
-  <script src="/app.js" defer></script>
+    <p class="acc-fondo">Non hai un account? <a href="/registrati">Registra la tua impresa</a></p>
+  </main>
+  <script src="<%= asset('/app.js') %>" defer></script>
 </body>
 </html>

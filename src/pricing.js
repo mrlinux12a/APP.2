@@ -9,7 +9,10 @@ function round2(n) {
 // si legge una volta al minuto invece che a ogni richiesta.
 const getConfigNum = conCache(60 * 1000, async (chiave, fallback) => {
   const row = await db.prepare('SELECT valore FROM config WHERE chiave = ?').get(chiave);
-  return row ? parseFloat(row.valore) : fallback;
+  // Un valore scritto male nella tabella config (testo, vuoto) darebbe NaN, che si propaga in prezzi e totali:
+  // meglio il valore di ripiego.
+  const numero = row ? parseFloat(String(row.valore).replace(',', '.')) : NaN;
+  return Number.isFinite(numero) ? numero : fallback;
 });
 
 async function getServizioPct() {
@@ -22,11 +25,6 @@ async function getIvaPct() {
 
 async function getFinestraMinuti() {
   return getConfigNum('finestra_conferma_min', 10);
-}
-
-// Minuti che il cliente ha per scegliere fra più distributori che hanno confermato.
-async function getFinestraSceltaMinuti() {
-  return getConfigNum('finestra_scelta_min', 5);
 }
 
 // Ordine minimo, calcolato sui prezzi già maggiorati del servizio e IVA esclusa.
@@ -117,7 +115,6 @@ module.exports = {
   getServizioPct,
   getIvaPct,
   getFinestraMinuti,
-  getFinestraSceltaMinuti,
   getOrdineMinimo,
   getSpedizioneFissa,
   prezzoNetto,

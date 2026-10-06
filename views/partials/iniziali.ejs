@@ -1,0 +1,18 @@
+<%
+  // Cerchio blu con le iniziali: pulsante del profilo nell'appbar, cima del menu e pagina "La mia anagrafica".
+  // Parametri: nome (ragione sociale), persona (referente: serve solo se la ragione sociale non dà lettere),
+  // misura (36, 48 o 56, in px). Le iniziali sono le prime due parole significative, senza congiunzioni né forma
+  // societaria ("Rossi Impianti S.r.l." -> RI); con una parola sola le sue prime due lettere ("Borea" -> BO).
+  // Se non c'è niente da cui ricavarle, l'omino bianco. Il cerchio è decorativo (aria-hidden): chi lo contiene
+  // ha già la sua etichetta.
+  const NON_NOME = ['e', 'di', 'de', 'del', 'della', 'dei', 'il', 'la', '&', 'srl', 'srls', 'spa', 'snc', 'sas',
+    'sapa', 'sdf', 'ss', 'scarl', 'coop', 'soc'];
+  const inizialiDi = (testo) => {
+    const parole = String(testo == null ? '' : testo).trim().split(/\s+/)
+      .map((p) => p.replace(/^(l|d|dell|dall|all|nell|sull|un)['’]/i, '')) // "L'Idraulica" -> "Idraulica"
+      .filter((p) => /^\p{L}/u.test(p) && !NON_NOME.includes(p.toLowerCase().replace(/[.,]/g, '')));
+    if (parole.length > 1) return (parole[0][0] + parole[1][0]).toUpperCase();
+    return [...(parole[0] || '')].filter((c) => /\p{L}/u.test(c)).slice(0, 2).join('').toUpperCase();
+  };
+  const sigla = inizialiDi(nome) || inizialiDi(typeof persona !== 'undefined' ? persona : '');
+%><span class="avatar avatar-<%= misura %>" aria-hidden="true"><% if (sigla) { %><%= sigla %><% } else { %><%- iconaPersona %><% } %></span>

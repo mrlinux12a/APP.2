@@ -6,7 +6,8 @@ import { PulsanteAccount } from '@/componenti/PulsanteAccount';
 import { FONT, useTema } from '@/tema';
 
 // "Stato ordini": la prima schermata mostra l'unica attività in corso (come sul sito);
-// da lì si aprono il riepilogo per ordinare, e dallo Storico le richieste e gli ordini passati.
+// dallo Storico si aprono le richieste e gli ordini passati. Non c'è più il riepilogo per ordinare:
+// l'ordine nasce da solo dopo il pagamento (vedi carrello).
 export default function PilaOrdini() {
   const { c } = useTema();
   return (
@@ -35,7 +36,6 @@ export default function PilaOrdini() {
       />
       <Stack.Screen name="richiesta/[id]" options={{ title: 'Richiesta' }} />
       <Stack.Screen name="ordine/[id]" options={{ title: 'Ordine' }} />
-      <Stack.Screen name="offerta" options={{ title: "Riepilogo dell'ordine" }} />
       <Stack.Screen name="storico" options={{ title: 'Storico' }} />
     </Stack>
   );

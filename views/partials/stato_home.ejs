@@ -1,0 +1,65 @@
+<%#
+  Scheda "Stato ordine" in cima alla home dell'installatore. Compare solo con una richiesta in attesa
+  (anello che si svuota + conto alla rovescia) o un ordine in consegna (minuti, corriere, avanzamento).
+  Legge gli stessi dati dell'icona nella barra in basso (res.locals.statoOrdini). Anello e conto alla
+  rovescia li aggiorna lo script di nav_ordini.ejs (elementi [data-arco] e [data-countdown]); quando la
+  fase cambia lo stesso script rimpiazza la scheda intera con GET /nav/stato-ordini?scheda=1.
+  Il contenitore [data-stato-home] c'è sempre, anche vuoto, perché è lì che la scheda può comparire.
+%>
+<%
+  const so = (typeof statoOrdini !== 'undefined' && statoOrdini) ? statoOrdini : { fase: 'nessuna' };
+  const CIRC_SCHEDA = 150.8; // 2 * PI * 24
+  const durataScheda = so.durata || 600;
+  const offsetScheda = so.fase === 'richiesta' ? (CIRC_SCHEDA * (1 - so.secondi / durataScheda)).toFixed(2) : 0;
+  const minutiFinestra = Math.max(1, Math.round(durataScheda / 60));
+  const nomeCorriere = so.fase === 'consegna' ? (so.corriere || '') : '';
+%>
+<div class="stato-home-slot" data-stato-home>
+<% if (so.fase === 'richiesta') { %>
+  <a class="stato-home stato-richiesta" href="/ordini">
+    <div class="stato-riga">
+      <span class="stato-anello">
+        <svg viewBox="0 0 56 56" aria-hidden="true">
+          <circle class="traccia" cx="28" cy="28" r="24"/>
+          <circle class="avanzamento" data-arco data-circ="<%= CIRC_SCHEDA %>" cx="28" cy="28" r="24" style="stroke-dashoffset: <%= offsetScheda %>"/>
+        </svg>
+        <span class="stato-tempo" data-countdown><%= fmt.mmss(so.secondi) %></span>
+      </span>
+      <span class="stato-testi">
+        <span class="stato-occhiello">Richiesta inviata</span>
+        <span class="stato-titolo">Aspettiamo che un banco accetti</span>
+        <span class="stato-sub">Se nessuno accetta entro <%= minutiFinestra %> min, ti rimborsiamo.</span>
+      </span>
+      <span class="stato-freccia" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span>
+    </div>
+  </a>
+<% } else if (so.fase === 'consegna') { %>
+  <div class="stato-home stato-consegna">
+   <a class="stato-corpo" href="/ordini">
+    <div class="stato-riga">
+      <span class="stato-furgone"><span class="furgone"><%- iconaFurgone %></span></span>
+      <span class="stato-testi">
+        <span class="stato-occhiello">Accettato · In consegna</span>
+        <span class="stato-titolo"><%= so.minuti != null ? 'Arriva tra ' + so.minuti + ' min' : 'In consegna' %></span>
+        <% if (nomeCorriere) { %>
+          <span class="stato-sub">
+            <span class="stato-iniziale" aria-hidden="true"><%= Array.from(nomeCorriere)[0].toUpperCase() %></span>
+            <span>Te lo porta <strong><%= nomeCorriere %></strong></span>
+          </span>
+        <% } %>
+      </span>
+      <span class="stato-freccia" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span>
+    </div>
+    <div class="stato-barra" aria-hidden="true"><span style="width: <%= Math.round((so.progresso != null ? so.progresso : 0.5) * 100) %>%"></span></div>
+   </a>
+    <%# La barra sta a metà ("In viaggio") finché non c'è l'evento che segna la consegna. "Consegnato" qui è solo
+        un'etichetta: non si può toccare dalla home. Il pulsante PROVVISORIO che chiude l'ordine (POST
+        /ordini/:id/consegnato-prova) sta nella pagina dell'ordine, "Stato ordini". %>
+    <div class="stato-tappe" aria-hidden="true">
+      <span>Accettato</span>
+      <span>In viaggio</span>
+      <span>Consegnato</span>
+    </div>
+  </div>
+<% } %>
+</div>

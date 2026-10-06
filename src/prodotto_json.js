@@ -24,6 +24,7 @@ function prodottoJson(p, servizioPct) {
     sconto_base_pct: p.sconto_base_pct,
     listino: pricing.euro(p.prezzo_listino),
     prezzo: pricing.euro(pricing.prezzoClienteConPct(p, servizioPct)),
+    varianti_info: p.varianti ? p.varianti_info : null,
     varianti: p.varianti
       ? p.varianti.map((v) => ({
           id: v.id,
@@ -32,6 +33,7 @@ function prodottoJson(p, servizioPct) {
           disponibilita: v.disponibilita,
           disponibilita_testo: TESTO_DISPONIBILITA[v.disponibilita] || v.disponibilita,
           raee: v.raee > 0 ? pricing.euro(v.raee) : null,
+          sconto_base_pct: v.sconto_base_pct, // senza, cambiando misura su una riga da ricerca live il prezzo di listino non si barra
           listino: pricing.euro(v.prezzo_listino),
           prezzo: pricing.euro(pricing.prezzoClienteConPct(v, servizioPct)),
         }))

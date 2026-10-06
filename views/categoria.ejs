@@ -14,13 +14,15 @@
   <%- include('partials/app_head', { titolo }) %>
 </head>
 <body data-loggato="1">
-  <div class="app">
+  <div class="app app-categoria<%= elenco ? '' : ' app-sotto' %>">
     <%- include('partials/appbar', {
           titolo,
           indietro: sottoSlug || q ? '/categoria/' + macro.slug : '/home'
         }) %>
 
-    <div class="contenuto" style="padding-bottom:0;">
+    <%# Elenco delle sottocategorie: la ricerca resta fissa sotto l'intestazione (sticky funziona solo se il
+        blocco è figlio diretto di .app, che è alto quanto la pagina). %>
+    <div class="contenuto<%= elenco ? '' : ' ricerca-fissa-sotto' %>"<%- elenco ? ' style="padding-bottom:0;"' : '' %>>
       <%- include('partials/barra_ricerca', {
             azione: '/categoria/' + macro.slug,
             q,
@@ -30,25 +32,33 @@
     </div>
 
     <% if (!elenco) { %>
-      <div class="contenuto" style="padding-top:0;">
-        <p class="sottotitolo"><%= macro.descrizione %></p>
-        <% if (!sottocategorie.length) { %>
+      <% if (macro.descrizione) { %>
+        <div class="contenuto" style="padding-top:0;">
+          <p class="sottotitolo"><%= macro.descrizione %></p>
+        </div>
+      <% } %>
+      <% if (!sottocategorie.length) { %>
+        <div class="contenuto" style="padding-top:0;">
           <div class="vuoto"><span class="emoji"><%- iconaVuotoScatola %></span>Nessun prodotto in questa categoria.</div>
-        <% } else { %>
-          <div class="card card-fitta">
-            <% sottocategorie.forEach(function (s) { %>
-              <a class="riga-lista" href="<%= conFiltri({ sotto: s.slug, misura: null, marchio: null }) %>">
-                <span class="icona"><%- iconaFamiglia %></span>
-                <span class="corpo">
-                  <span class="etichetta"><%= s.nome %></span>
-                  <span class="dettaglio"><%= s.n %> articoli</span>
-                </span>
-                <span class="freccia">›</span>
-              </a>
-            <% }); %>
-          </div>
-        <% } %>
-      </div>
+        </div>
+      <% } else { %>
+        <%# Foto in src/catalogo.js (s.foto): c'è solo se il file esiste. Senza foto, o se non si carica
+            (onerror toglie l'<img>), resta il riquadro grigio con l'icona della categoria madre. %>
+        <div class="griglia-sotto">
+          <% sottocategorie.forEach(function (s) { %>
+            <a class="sotto-scheda" href="<%= conFiltri({ sotto: s.slug, misura: null, marchio: null }) %>">
+              <span class="sotto-foto">
+                <span class="sotto-segnaposto"><%- iconaCategoria(macro.slug) %></span>
+                <% if (s.foto) { %>
+                  <img src="<%= s.foto %>" alt="<%= s.nome %>" width="600" height="450" loading="lazy"
+                       onerror="this.remove()">
+                <% } %>
+              </span>
+              <span class="sotto-nome"><span class="sotto-testo"><%= s.nome %></span></span>
+            </a>
+          <% }); %>
+        </div>
+      <% } %>
 
     <% } else { %>
       <div class="contenuto" style="padding-top:0;">
@@ -64,21 +74,22 @@
           </div>
         <% } %>
 
-        <p class="sottotitolo">
-          <% if (elenco.ricerca) { %>
-            <strong><%= elenco.righe.length %></strong> risultati per «<%= q %>»
-          <% } else { %>
-            <strong><%= sotto ? sotto.nome : macro.nome %></strong> — <%= elenco.totale %> articoli
-          <% } %>
-        </p>
+        <% if (elenco.ricerca) { %>
+          <p class="sottotitolo"><strong><%= elenco.righe.length %></strong> risultati per «<%= q %>»</p>
+        <% } %>
 
-        <div id="risultati">
+        <%# data-righe-compatte: app.js disegna qui le righe compatte (ricerca live, scroll infinito) e tiene
+            le quantità del carrello dai dati sotto: carrello com'è ora, pezzi totali, icona del riquadro senza foto. %>
+        <div id="risultati" data-righe-compatte
+             data-carrello="<%= JSON.stringify(carrello || {}) %>"
+             data-pezzi="<%= carrelloPezzi || 0 %>"
+             data-icona-vuota="<%= iconaOrdini %>">
           <% if (!elenco.righe.length) { %>
             <div class="vuoto"><span class="emoji"><%- iconaVuotoRicerca %></span>Nessun articolo con questi filtri.</div>
           <% } else { %>
-            <div class="card card-fitta griglia-prodotti">
+            <div class="card card-fitta elenco-righe">
               <% elenco.righe.forEach(function (p) { %>
-                <%- include('partials/prodotto', { p, carrello }) %>
+                <%- include('partials/prodotto_riga', { p, carrello }) %>
               <% }); %>
             </div>
           <% } %>
@@ -106,25 +117,17 @@
         </p>
       </div>
 
-      <!-- Barra carrello: Aggiungi globale + Vai al carrello -->
-      <div class="barra-carrello" data-barra-carrello <%= carrelloPezzi ? '' : 'hidden' %>>
-        <div class="interno">
-          <div class="barra-carrello-testo">
-            <span data-pendenti-wrap hidden><strong data-pendenti>0</strong> selezionati</span>
-            <span data-sep-pendenti hidden> · </span>
-            <span data-carrello-wrap <%= carrelloPezzi ? '' : 'hidden' %>><strong data-carrello-conta><%= carrelloPezzi %></strong> nel carrello</span>
-            <span data-carrello-vuoto <%= carrelloPezzi ? 'hidden' : '' %>>Nessun pezzo nel carrello</span>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <button class="btn btn-primary" type="button" data-aggiungi-tutti disabled>Aggiungi</button>
-            <a class="btn btn-chiaro" href="/carrello" data-vai-carrello <%= carrelloPezzi ? '' : 'hidden' %>>Vai al carrello</a>
-          </div>
-        </div>
+      <!-- Barra sopra la navbar: pezzi nel carrello e "Vai al carrello"; compare solo con almeno un pezzo -->
+      <div class="barra-vai" data-barra-vai <%= carrelloPezzi ? '' : 'hidden' %>>
+        <a class="barra-vai-link" href="/carrello">
+          <span class="bv-pezzi" data-barra-pezzi><%= carrelloPezzi || 0 %> <%= carrelloPezzi === 1 ? 'pezzo' : 'pezzi' %></span>
+          <span class="bv-pillola">Vai al carrello <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+        </a>
       </div>
     <% } %>
   </div>
 
   <%- include('partials/nav', { attivo: 'catalogo' }) %>
-  <script src="/app.js" defer></script>
+  <script src="<%= asset('/app.js') %>" defer></script>
 </body>
 </html>

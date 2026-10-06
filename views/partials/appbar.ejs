@@ -1,3 +1,12 @@
+<%
+  // Il cliente (installatore) ha il cerchio con le iniziali e il menu del profilo; banco e agente la campanella e
+  // il menu a tendina di sempre.
+  const eCliente = !!currentUser && currentUser.ruolo === 'cliente';
+  const profilo = typeof profiloCliente !== 'undefined' && profiloCliente ? profiloCliente : null;
+  const sottoNome = profilo
+    ? [profilo.referente, profilo.distributore ? 'cliente di ' + profilo.distributore : ''].filter(Boolean).join(' · ')
+    : '';
+%>
 <header class="appbar">
   <% if (typeof indietro !== 'undefined' && indietro) { %>
     <a class="icona-btn" href="<%= indietro %>" aria-label="Indietro">‹</a>
@@ -7,46 +16,78 @@
   <div class="titolo"><%= typeof intestazione !== 'undefined' ? intestazione : titolo %></div>
 
   <div class="azioni-appbar">
-    <% if (!currentUser || currentUser.ruolo !== 'cliente') { %>
+    <% if (eCliente) { %>
+      <button class="profilo-btn" type="button" data-menu-apri aria-label="Menu profilo"
+              aria-haspopup="menu" aria-expanded="false" aria-controls="menu-profilo">
+        <%- include('iniziali', { nome: currentUser.ragione_sociale, persona: profilo && profilo.referente, misura: 36 }) %>
+      </button>
+    <% } else { %>
       <a class="icona-btn" href="/notifiche" aria-label="Notifiche">
         <%- iconaNotifiche %>
         <% if (typeof notificheNonLette !== 'undefined' && notificheNonLette > 0) { %><span class="pallino"><%= notificheNonLette %></span><% } %>
       </a>
-    <% } %>
 
-    <% if (currentUser) { %>
-      <div class="menu-account" data-menu-account>
-        <button class="icona-btn icona-account" type="button" data-menu-apri
-                aria-haspopup="true" aria-expanded="false" aria-label="Menu account">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="8" r="3.4"/><path d="M5 19c1.2-3.6 4-5.4 7-5.4s5.8 1.8 7 5.4"/>
-          </svg>
-        </button>
-        <div class="tendina" data-menu-tendina hidden>
-          <div class="tendina-testata">
-            <div class="nome"><%= currentUser.ragione_sociale %></div>
-            <div class="ruolo">
-              <%= currentUser.ruolo === 'cliente' ? 'Cliente'
-                  : (currentUser.ruolo === 'distributore' ? 'Banco distributore' : 'Agente') %>
+      <% if (currentUser) { %>
+        <div class="menu-account" data-menu-account>
+          <button class="icona-btn icona-account" type="button" data-menu-apri
+                  aria-haspopup="true" aria-expanded="false" aria-label="Menu account">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="8" r="3.4"/><path d="M5 19c1.2-3.6 4-5.4 7-5.4s5.8 1.8 7 5.4"/>
+            </svg>
+          </button>
+          <div class="tendina" data-menu-tendina hidden>
+            <div class="tendina-testata">
+              <div class="nome"><%= currentUser.ragione_sociale %></div>
+              <div class="ruolo"><%= currentUser.ruolo === 'distributore' ? 'Banco distributore' : 'Agente' %></div>
             </div>
-          </div>
-          <% if (currentUser.ruolo === 'cliente') { %>
-            <a href="/profilo">La mia anagrafica</a>
-            <a href="/storico">Storico</a>
-          <% } else if (currentUser.ruolo === 'distributore') { %>
-            <a href="/distributore/clienti">Clienti</a>
-            <a href="/distributore/ordini">Ordini da evadere</a>
-            <a href="/distributore/storico">Storico</a>
-            <a href="/punti-vendita">Punti vendita</a>
-          <% } %>
-          <% if (!currentUser || currentUser.ruolo !== 'cliente') { %>
+            <% if (currentUser.ruolo === 'distributore') { %>
+              <a href="/distributore/clienti">Clienti</a>
+              <a href="/distributore/ordini">Ordini da evadere</a>
+              <a href="/distributore/storico">Storico</a>
+              <a href="/punti-vendita">Punti vendita</a>
+            <% } %>
             <a href="/notifiche">Notifiche</a>
-          <% } %>
-          <form method="POST" action="/logout">
-            <button type="submit" class="voce-esci">Esci</button>
-          </form>
+            <form method="POST" action="/logout">
+              <button type="submit" class="voce-esci">Esci</button>
+            </form>
+          </div>
         </div>
-      </div>
+      <% } %>
     <% } %>
   </div>
 </header>
+
+<% if (eCliente) { %>
+  <%# Velo e pannello stanno fuori dall'<header>: l'appbar ha il suo z-index (20) e dentro non si potrebbe stare
+      sopra la navbar (25), che il velo deve coprire. Il velo parte sotto l'intestazione, che resta in luce. %>
+  <div class="profilo-velo" data-menu-velo hidden></div>
+  <div class="profilo-pannello" id="menu-profilo" role="menu" aria-label="Profilo" data-menu-tendina hidden>
+    <div class="pp-testata" role="presentation">
+      <%- include('iniziali', { nome: currentUser.ragione_sociale, persona: profilo && profilo.referente, misura: 48 }) %>
+      <div class="pp-testi">
+        <div class="pp-ragione"><%= currentUser.ragione_sociale %></div>
+        <% if (sottoNome) { %><div class="pp-sotto"><%= sottoNome %></div><% } %>
+      </div>
+    </div>
+    <div class="pp-linea" role="separator"></div>
+
+    <a class="pp-voce" role="menuitem" href="/profilo">
+      <span class="pp-icona" aria-hidden="true"><%- iconaPersona %></span>
+      <span class="pp-testo">La mia anagrafica</span>
+      <span class="pp-freccia" aria-hidden="true">›</span>
+    </a>
+    <a class="pp-voce" role="menuitem" href="/storico">
+      <span class="pp-icona" aria-hidden="true"><%- iconaOrario %></span>
+      <span class="pp-testo">Storico ordini</span>
+      <span class="pp-freccia" aria-hidden="true">›</span>
+    </a>
+
+    <div class="pp-linea" role="separator"></div>
+    <form class="pp-form" method="POST" action="/logout" role="none">
+      <button type="submit" class="pp-voce pp-esci" role="menuitem">
+        <span class="pp-icona" aria-hidden="true"><%- iconaEsci %></span>
+        <span class="pp-testo">Esci</span>
+      </button>
+    </form>
+  </div>
+<% } %>

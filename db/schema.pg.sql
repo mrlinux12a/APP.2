@@ -559,3 +559,14 @@ ALTER TABLE whatsapp_messaggi DROP CONSTRAINT IF EXISTS whatsapp_messaggi_stato_
 ALTER TABLE whatsapp_messaggi ADD CONSTRAINT whatsapp_messaggi_stato_check
   CHECK (stato IN ('da_inviare', 'inviato', 'da_eliminare', 'eliminato', 'annullato'));
 CREATE INDEX IF NOT EXISTS idx_whatsapp_messaggi_request ON whatsapp_messaggi(request_id);
+
+-- Pagamento alla richiesta: l'installatore paga quando manda la richiesta (per ora simulato, senza
+-- provider), con destinazione e note già scelte. L'ordine nasce da solo quando il corriere prende la
+-- consegna: non c'è più la scelta dell'offerta. pagamento_stato: NULL = richiesta del vecchio flusso,
+-- 'pagato', 'rimborsato' (nessun banco o corriere in tempo, annullo).
+ALTER TABLE requests ADD COLUMN IF NOT EXISTS destinazione TEXT;
+ALTER TABLE requests ADD COLUMN IF NOT EXISTS note TEXT NOT NULL DEFAULT '';
+ALTER TABLE requests ADD COLUMN IF NOT EXISTS pagamento_stato TEXT;
+ALTER TABLE requests ADD COLUMN IF NOT EXISTS pagamento_metodo TEXT;
+ALTER TABLE requests ADD COLUMN IF NOT EXISTS pagamento_importo DOUBLE PRECISION;
+ALTER TABLE requests ADD COLUMN IF NOT EXISTS pagato_il TIMESTAMP;

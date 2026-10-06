@@ -12,20 +12,205 @@
         }) %>
 
     <div class="contenuto">
-      <% if (nuovo) { %>
+      <%
+        // "In consegna" = ordine del cliente non ancora consegnato (la modalità "ritiro" è del vecchio flusso).
+        // Consegnato e ritiro, e le viste di banco e agente, restano com'erano.
+        const inConsegna = currentUser.ruolo === 'cliente' && !ordine.consegnato_il && ordine.modalita !== 'ritiro';
+      %>
+      <% if (nuovo && currentUser.ruolo === 'cliente' && !inConsegna) { %>
         <div class="avviso avviso-ok">
-          <strong>Ordine inviato.</strong> Il distributore ha ricevuto la conferma e prepara il materiale.
-        </div>
-      <% } %>
-      <% if (assegnataAuto && currentUser.ruolo !== 'distributore') { %>
-        <div class="avviso avviso-attenzione">
-          <strong>Ordine partito in automatico.</strong> Il tempo per scegliere il distributore era
-          scaduto, quindi l'ordine è andato a chi copriva tutto il materiale con la consegna più
-          veloce, con consegna e note predefinite.
+          <strong>Ordine confermato.</strong> Il distributore prepara il materiale.
+          <%= ordine.corriere_arrivo_il
+              ? 'Consegna prevista entro le ' + fmt.oraRoma(ordine.corriere_arrivo_il) + '.'
+              : (ordine.consegna_ore ? 'Arriva entro ' + fmt.tempoConsegna(ordine.consegna_ore) + '.' : '') %>
         </div>
       <% } %>
 
-      <% if (currentUser.ruolo === 'cliente') { %>
+      <% if (inConsegna) { %>
+        <%
+          // Anello e barra "In consegna": l'anello parte pieno quando l'ordine nasce (conferma del banco) e si
+          // svuota fino a zero all'ora d'arrivo; la barra si riempie in proporzione al tempo trascorso. Lo muove
+          // lo script "Ordine in consegna" di app.js dai due numeri sul riquadro ([data-durata], [data-rimanente]).
+          // creato_il è un TIMESTAMP UTC senza fuso (istanteUtc lo rimette a posto); corriere_arrivo_il è già un
+          // istante vero. Senza orario d'arrivo (né corriere né ore stimate) l'anello resta pieno e fermo.
+          const creatoIl = fmt.istanteUtc(ordine.creato_il);
+          const arrivoIl = ordine.corriere_arrivo_il
+            ? fmt.toDate(ordine.corriere_arrivo_il)
+            : (creatoIl && ordine.consegna_ore != null ? new Date(creatoIl.getTime() + ordine.consegna_ore * 3600 * 1000) : null);
+          const durataSec = creatoIl && arrivoIl ? Math.max(1, Math.round((arrivoIl - creatoIl) / 1000)) : 0;
+          const rimanenteSec = arrivoIl ? Math.round((arrivoIl - Date.now()) / 1000) : 0;
+          const frazioneRimasta = durataSec ? Math.min(1, Math.max(0, rimanenteSec / durataSec)) : 1;
+          const CIRC_CONSEGNA = 402.12; // 2 * PI * 64
+          const offsetConsegna = (CIRC_CONSEGNA * (1 - frazioneRimasta)).toFixed(2);
+          const percTrascorsa = durataSec ? ((1 - frazioneRimasta) * 100).toFixed(1) : 50;
+          const titoloConsegna = ordine.corriere_arrivo_il
+            ? 'Arriva entro le ' + fmt.oraRoma(ordine.corriere_arrivo_il)
+            : (ordine.consegna_ore ? 'Arriva entro ' + fmt.tempoConsegna(ordine.consegna_ore) : 'Tempi di consegna da confermare');
+          // Chi porta la merce: il corriere se c'è, altrimenti il banco (consegna con il suo mezzo).
+          const portatoDa = (ordine.corriere_nome || '').trim() || (distributore ? distributore.nome : '');
+          const spunta = '<span class="att-spunta" aria-hidden="true"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>';
+          const conCorriere = !!ordine.corriere_arrivo_il;
+          const taglioVia = (ordine.destinazione || '').indexOf(',');
+          const viaDest = taglioVia === -1 ? (ordine.destinazione || '') : ordine.destinazione.slice(0, taglioVia).trim();
+          const restoDest = taglioVia === -1 ? '' : ordine.destinazione.slice(taglioVia + 1).trim();
+          const titoloDettagli = ordine.ddt_numero ? 'Dettagli consegna e documenti' : (pagamento ? 'Dettagli consegna e pagamento' : 'Dettagli consegna');
+        %>
+
+        <%# 1. Stato: anello che si svuota, passaggi %>
+        <div class="card att-card att-timer att-verde" data-viaggio data-durata="<%= durataSec %>" data-rimanente="<%= rimanenteSec %>">
+          <div class="att-anello">
+            <svg viewBox="0 0 148 148" aria-hidden="true">
+              <circle class="traccia" cx="74" cy="74" r="64"/>
+              <circle class="avanzamento" data-viaggio-arco data-circ="<%= CIRC_CONSEGNA %>" cx="74" cy="74" r="64" style="stroke-dashoffset: <%= offsetConsegna %>"/>
+            </svg>
+            <span class="att-furgone" aria-hidden="true"><span><%- iconaFurgone %></span></span>
+          </div>
+          <h2 class="att-titolo<%= portatoDa ? '' : ' att-titolo-solo' %>"><span class="att-punto" aria-hidden="true"></span><%= titoloConsegna %></h2>
+          <% if (portatoDa) { %><p class="att-sotto">Te lo porta <strong><%= portatoDa %></strong></p><% } %>
+          <ol class="att-passi">
+            <li class="att-passo att-fatto">
+              <span class="att-barretta"></span>
+              <span class="att-etichetta"><%- spunta %>Inviata</span>
+            </li>
+            <li class="att-passo att-fatto">
+              <span class="att-barretta"></span>
+              <span class="att-etichetta"><%- spunta %>Confermata</span>
+            </li>
+            <li class="att-passo att-corrente" aria-current="step">
+              <span class="att-barretta"><span class="att-riempimento" data-viaggio-barra style="width: <%= percTrascorsa %>%"></span></span>
+              <span class="att-etichetta">In consegna</span>
+            </li>
+          </ol>
+        </div>
+
+        <%# 2. Banco %>
+        <% if (distributore) { %>
+          <div class="card att-card att-banco">
+            <span class="att-icona" aria-hidden="true"><%- iconaNegozio %></span>
+            <div class="att-banco-testo">
+              <div class="att-occhiello">Materiale da</div>
+              <div class="att-banco-nome"><%= distributore.nome %></div>
+            </div>
+            <span class="att-chip-ok"><%- spunta %>Confermato</span>
+          </div>
+        <% } %>
+
+        <%# 3. Materiale e costi %>
+        <div class="card att-card att-materiale">
+          <div class="att-occhiello">Materiale</div>
+          <ul class="att-righe">
+            <% righe.forEach(function (r) { %>
+              <li class="att-riga">
+                <span class="att-qta"><%= r.quantita %>×</span>
+                <div class="att-desc">
+                  <div class="att-nome"><%= r.nome_snapshot %></div>
+                  <div class="att-cod">Cod. <%= r.codice_snapshot %></div>
+                </div>
+                <span class="att-prezzo-riga">€ <%= euro(r.subtotale_cliente) %></span>
+              </li>
+            <% }); %>
+          </ul>
+          <dl class="att-riepilogo">
+            <div class="att-voce"><dt>Merce (IVA esclusa)</dt><dd>€ <%= euro(ordine.totale_finale) %></dd></div>
+            <% if (ordine.contributo_raee > 0) { %>
+              <div class="att-voce"><dt>Contributo RAEE</dt><dd>€ <%= euro(ordine.contributo_raee) %></dd></div>
+            <% } %>
+            <div class="att-voce"><dt>Consegna in cantiere</dt><dd<%- ordine.costo_consegna > 0 ? '' : ' class="att-inclusa"' %>><%= ordine.costo_consegna > 0 ? '€ ' + euro(ordine.costo_consegna) : 'Inclusa' %></dd></div>
+            <div class="att-voce"><dt>IVA <%= ivaPct %>%</dt><dd>€ <%= euro(ordine.iva) %></dd></div>
+            <div class="att-voce att-totale"><dt>Totale</dt><dd>€ <%= euro(totaleOrdine(ordine)) %></dd></div>
+          </dl>
+        </div>
+
+        <%# 4. Dettagli consegna e pagamento (chiuso di default) %>
+        <details class="card att-card att-dettagli">
+          <summary>
+            <span><%= titoloDettagli %></span>
+            <svg class="att-freccia" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </summary>
+          <ul class="att-voci">
+            <li class="att-dett-riga">
+              <span class="att-icona" aria-hidden="true"><%- iconaConsegna %></span>
+              <div class="att-dett-corpo">
+                <div class="att-occhiello">Consegna</div>
+                <div class="att-dett-valore"><%= conCorriere ? 'Con corriere' : 'Con mezzo del distributore' %></div>
+                <dl class="att-dett-tempi">
+                  <% if (!conCorriere && ordine.partenza_ore) { %>
+                    <dt>Partenza</dt><dd>entro <%= fmt.tempoConsegna(ordine.partenza_ore) %></dd>
+                  <% } %>
+                  <dt>Arrivo</dt>
+                  <dd><%= conCorriere ? 'entro le ' + fmt.oraRoma(ordine.corriere_arrivo_il) : (ordine.consegna_ore ? 'entro ' + fmt.tempoConsegna(ordine.consegna_ore) : 'da concordare') %></dd>
+                </dl>
+              </div>
+            </li>
+            <% if (ordine.destinazione) { %>
+              <li class="att-dett-riga">
+                <span class="att-icona" aria-hidden="true"><%- iconaDestinazione %></span>
+                <div class="att-dett-corpo">
+                  <div class="att-occhiello">Destinazione</div>
+                  <div class="att-dett-valore"><%= viaDest %></div>
+                  <% if (restoDest) { %><div class="att-dett-sotto"><%= restoDest %></div><% } %>
+                </div>
+              </li>
+            <% } %>
+            <% if (pagamento) { %>
+              <li class="att-dett-riga">
+                <span class="att-icona" aria-hidden="true"><%- iconaPagamento %></span>
+                <div class="att-dett-corpo">
+                  <div class="att-occhiello">Pagamento</div>
+                  <div class="att-dett-valore">€ <%= euro(pagamento.importo) %> <%= pagamento.stato === 'rimborsato' ? 'rimborsati' : 'pagati' %></div>
+                  <div class="att-dett-sotto"><%= fmt.dataOraRoma(pagamento.pagato_il) %></div>
+                </div>
+                <% if (pagamento.metodo === 'simulato') { %><span class="att-tag-prova">Prova</span><% } %>
+              </li>
+            <% } %>
+            <% if (ordine.ddt_numero) { %>
+              <li class="att-dett-riga">
+                <span class="att-icona" aria-hidden="true"><%- iconaFiscale %></span>
+                <div class="att-dett-corpo">
+                  <div class="att-occhiello">Documenti</div>
+                  <div class="att-dett-valore">Documento di trasporto (DDT)</div>
+                  <div class="att-dett-sotto">n. <%= ordine.ddt_numero %> del <%= fmt.dataSola(ordine.ddt_data) %></div>
+                </div>
+                <a class="att-apri" href="/ddt/<%= ordine.id %>">Apri</a>
+              </li>
+            <% } %>
+            <% if (ordine.note) { %>
+              <li class="att-dett-riga">
+                <span class="att-icona" aria-hidden="true"><%- iconaNota %></span>
+                <div class="att-dett-corpo">
+                  <div class="att-occhiello">Note</div>
+                  <div class="att-dett-valore att-dett-nota"><%= ordine.note %></div>
+                </div>
+              </li>
+            <% } %>
+          </ul>
+        </details>
+
+        <%# 5. Nota sul prezzo %>
+        <p class="att-nota">Prezzo definitivo, con eventuale sconto aggiuntivo, confermato in fattura come di consueto.</p>
+
+        <%# "Consegnato": si segna da qui, non dalla home. Con l'ordine evaso vale la rotta vera (/consegnato); negli
+            altri stati la rotta PROVVISORIA (/consegnato-prova, vale per qualunque stato), da togliere quando la
+            consegna verrà segnata da un evento vero. Il campo "ritorno" riporta qui, sull'ordine consegnato. %>
+        <% if (ordine.stato === 'evaso') { %>
+          <form method="POST" action="/ordini/<%= ordine.id %>/consegnato">
+            <button class="btn btn-primary btn-blocco" type="submit">Ordine consegnato</button>
+          </form>
+        <% } else { %>
+          <form method="POST" action="/ordini/<%= ordine.id %>/consegnato-prova">
+            <input type="hidden" name="ritorno" value="/ordini/<%= ordine.id %>">
+            <button class="btn btn-primary btn-blocco" type="submit" title="Provvisorio: segna l'ordine come consegnato">Ordine consegnato</button>
+          </form>
+        <% } %>
+
+        <%# 6. Annulla: stessa azione e stessa conferma di prima %>
+        <% if (annullabile) { %>
+          <form method="POST" action="/ordini/<%= ordine.id %>/elimina" onsubmit="return confirm('Annullare questo ordine? Il distributore verrà avvisato.')">
+            <button class="att-annulla" type="submit">Annulla ordine</button>
+          </form>
+        <% } %>
+
+      <% } else if (currentUser.ruolo === 'cliente') { %>
         <%
           const statoLabel = ordine.consegnato_il ? 'Consegnato' : (ordine.stato === 'inviato' ? 'Inviato' : (ordine.stato === 'in_evasione' ? 'In preparazione' : 'In consegna'));
           const tempoTesto = ordine.consegnato_il
@@ -119,6 +304,15 @@
                 </span>
               </div>
             <% } %>
+            <% if (pagamento) { %>
+              <div class="riga-lista">
+                <span class="icona"><%- iconaPagamento %></span>
+                <span class="corpo">
+                  <span class="etichetta">Pagamento: <%= pagamento.stato === 'rimborsato' ? 'rimborsato' : 'pagato' %> € <%= euro(pagamento.importo) %></span>
+                  <span class="dettaglio"><%= pagamento.metodo === 'simulato' ? 'Pagamento di prova, nessun addebito reale · ' : '' %>il <%= fmt.dataOra(pagamento.pagato_il) %></span>
+                </span>
+              </div>
+            <% } %>
             <% if (ordine.ddt_numero) { %>
               <a class="riga-lista" href="/ddt/<%= ordine.id %>">
                 <span class="icona"><%- iconaFiscale %></span>
@@ -209,6 +403,15 @@
               </span>
             </div>
           <% } %>
+          <% if (pagamento) { %>
+            <div class="riga-lista">
+              <span class="icona"><%- iconaPagamento %></span>
+              <span class="corpo">
+                <span class="etichetta">Pagamento: <%= pagamento.stato === 'rimborsato' ? 'rimborsato' : 'pagato' %> € <%= euro(pagamento.importo) %></span>
+                <span class="dettaglio"><%= pagamento.metodo === 'simulato' ? 'Pagamento di prova · ' : '' %>il <%= fmt.dataOra(pagamento.pagato_il) %></span>
+              </span>
+            </div>
+          <% } %>
           <% if (ordine.ddt_numero) { %>
             <a class="riga-lista" href="/ddt/<%= ordine.id %>">
               <span class="icona"><%- iconaFiscale %></span>
@@ -287,7 +490,7 @@
   <% if (currentUser.ruolo === 'cliente') { %>
     <%- include('partials/nav', { attivo: 'ordini' }) %>
   <% } %>
-  <script src="/app.js" defer></script>
-  <script src="/mappa.js" defer></script>
+  <script src="<%= asset('/app.js') %>" defer></script>
+  <script src="<%= asset('/mappa.js') %>" defer></script>
 </body>
 </html>

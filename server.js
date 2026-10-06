@@ -2,8 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const compression = require('compression');
 const session = require('express-session');
-const bcrypt = require('bcryptjs');
 const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
 
 const db = require('./db');
@@ -27,6 +27,9 @@ if (typeof db.mantieniCalde === 'function') db.mantieniCalde();
 })();
 
 const { requireLogin, requireRole } = require('./src/auth');
+const { leggiQuery, corpoSempreOggetto, salvaSessionePrimaDelRedirect, idNumerico, gestoreNonTrovato, gestoreErrori } = require('./src/http');
+const { QUANTITA_MASSIMA, leggiId, leggiQuantita } = require('./src/input');
+const { passwordValida } = require('./src/password');
 const pricing = require('./src/pricing');
 const format = require('./src/format');
 const icone = require('./src/icone');
@@ -36,7 +39,6 @@ const notifiche = require('./src/notifiche');
 const ddt = require('./src/ddt');
 const geo = require('./src/geo');
 const anagrafiche = require('./src/anagrafiche');
-const consegna = require('./src/consegna');
 const flusso = require('./src/flusso_cliente');
 const { ArchivioSqlite } = require('./src/sessioni');
 const { TESTO_DISPONIBILITA, prodottoJson } = require('./src/prodotto_json');
@@ -75,14 +77,46 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 // Dove stanno tutti gli installatori, per ora (vedi src/sede_installatori.js).
 app.locals.sede = require('./src/sede_installatori');
+// asset('/style.css') -> '/style.css?v=1759660000000': l'indirizzo di un file statico con la sua versione (data di
+// modifica). La data si rilegge al massimo ogni 5 secondi: una modifica in locale si vede quasi subito, senza
+// riavviare il server, e in produzione costa una lettura ogni tanto invece di una per pagina.
+const versioniAsset = new Map();
+app.locals.asset = function asset(percorso) {
+  const adesso = Date.now();
+  const voce = versioniAsset.get(percorso);
+  if (voce && adesso - voce.letta < 5000) return voce.url;
+  let url = percorso;
+  try {
+    url = percorso + '?v=' + Math.floor(fs.statSync(path.join(__dirname, 'public', percorso)).mtimeMs);
+  } catch (err) { /* file mancante: l'indirizzo resta senza versione */ }
+  versioniAsset.set(percorso, { url, letta: adesso });
+  return url;
+};
 // Necessario per leggere il vero IP del client (usato dal limite tentativi di login)
 // quando l'app gira dietro un proxy/load balancer (es. Vercel).
 app.set('trust proxy', 1);
+app.disable('x-powered-by');
+// Ogni parametro della query string è sempre un testo, mai un array (?q=a&q=b): vedi src/http.js.
+app.set('query parser', leggiQuery);
+// Gli id nei percorsi (/ordini/:id, /richieste/:id...) sono numeri interi positivi: con qualsiasi altra
+// cosa il percorso non esiste (404) invece di far fallire la query e dare un 500.
+app.param('id', idNumerico);
+
+// Intestazioni di sicurezza leggere. Niente Content-Security-Policy: le pagine usano script e stili inline.
+app.use((req, res, next) => {
+  res.set({
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'SAMEORIGIN',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+  });
+  next();
+});
 // Comprime HTML, JSON, CSS e JS (sotto 1 KB no): la ricerca in JSON passa da ~46 KB a pochi KB,
 // che su rete mobile è la parte più lenta. Le foto sono già compresse (webp) e restano intatte.
 app.use(compression());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+app.use(corpoSempreOggetto);
 
 // API dell'app nativa: autenticazione con token (Authorization: Bearer), niente cookie.
 // Montata prima del controllo di origine, della sessione e del middleware che prepara i
@@ -122,7 +156,23 @@ app.use((req, res, next) => {
 // vede subito.
 app.use('/img', express.static(path.join(__dirname, 'public', 'img'), { maxAge: '7d' }));
 app.use('/vendor', express.static(path.join(__dirname, 'public', 'vendor'), { maxAge: '7d' }));
+// CSS e JS dell'app: nelle pagine arrivano con ?v=<data di modifica del file> (asset(), definita in alto), quindi un URL
+// con la versione non cambia mai contenuto e il browser lo tiene un anno senza richiederlo di nuovo a ogni
+// pagina (sono 2-3 richieste in meno a ogni apertura, su una rete da cantiere). Quando il file cambia cambia
+// anche la versione e il browser lo riscarica da solo. Senza ?v= (collegamenti vecchi) resta la sola verifica
+// ETag di prima.
+const ASSET_VERSIONATI = new Set(['/style.css', '/app.js', '/mappa.js']);
+app.use((req, res, next) => {
+  if (req.query.v && ASSET_VERSIONATI.has(req.path)) res.set('Cache-Control', 'public, max-age=31536000, immutable');
+  next();
+});
 app.use(express.static(path.join(__dirname, 'public')));
+// I browser chiedono /favicon.ico da soli: risposto qui, prima della sessione e delle query del middleware
+// delle viste, invece di far passare un 404 per tutta la pagina (con le sue letture dal DB) a ogni apertura.
+app.get('/favicon.ico', (req, res) => {
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.type('png').sendFile(path.join(__dirname, 'public', 'icons', 'icona-192.png'));
+});
 app.use(
   session({
     store: new ArchivioSqlite(), // su file, così un riavvio non scollega nessuno
@@ -134,9 +184,13 @@ app.use(
       maxAge: 1000 * 60 * 60 * 24 * 30, // 30 giorni
       httpOnly: true,
       sameSite: 'lax',
+      // Marcato "Secure" solo quando la richiesta arriva davvero in HTTPS (con `trust proxy` vale anche dietro
+      // un proxy): oggi il sito gira anche su HTTP semplice, dove un cookie Secure non verrebbe mai rimandato.
+      secure: 'auto',
     },
   })
 );
+app.use(salvaSessionePrimaDelRedirect);
 
 // rende disponibili utente, helper e contatori a tutte le viste
 app.use(async (req, res, next) => {
@@ -151,7 +205,7 @@ app.use(async (req, res, next) => {
   // Nessuna di queste dipende dal risultato di un'altra: prima giravano una dopo l'altra
   // (fino a una decina di query in sequenza, anche per un cliente senza nulla da mostrare),
   // sommando la latenza di ognuna invece di pagare solo quella della più lenta.
-  const [servizioPct, notificheNonLette, ordiniNonLetti, richiesteNonLette, geoStato, contatori] =
+  const [servizioPct, notificheNonLette, ordiniNonLetti, richiesteNonLette, geoStato, contatori, statoOrdini, profiloCliente] =
     await Promise.all([
       pricing.getServizioPct(),
       utente ? notifiche.nonLette(utente.id) : Promise.resolve(0),
@@ -160,6 +214,23 @@ app.use(async (req, res, next) => {
       utente ? geo.statoUtente(utente.id) : Promise.resolve({ consenso: false }),
       utente && utente.ruolo === 'distributore' && utente.distributor_id
         ? contatoriBanco(utente.distributor_id)
+        : Promise.resolve(null),
+      // Icona dinamica "Stato ordini" (partials/nav_ordini.ejs): solo per il cliente e solo per le
+      // pagine, non per le API dell'app. Un errore qui non deve mai rompere la pagina, ma va scritto
+      // nel log: se lo si ingoia in silenzio l'icona resta quella di prima e nessuno capisce perché.
+      utente && utente.ruolo === 'cliente' && !req.path.startsWith('/api/')
+        ? flusso.statoIconaOrdini(utente.id).catch((err) => {
+            console.error('[nav] icona Stato ordini non calcolata:', err.message);
+            return null;
+          })
+        : Promise.resolve(null),
+      // Menu del profilo nell'appbar del cliente (partials/appbar.ejs): referente e distributore di riferimento.
+      // Come sopra, un errore non rompe la pagina: il menu mostra solo la ragione sociale.
+      utente && utente.ruolo === 'cliente' && !req.path.startsWith('/api/')
+        ? anagrafiche.intestazioneCliente(utente.id).catch((err) => {
+            console.error('[appbar] intestazione del profilo non letta:', err.message);
+            return null;
+          })
         : Promise.resolve(null),
     ]);
 
@@ -175,6 +246,8 @@ app.use(async (req, res, next) => {
   // entrambe le categorie, altrimenti una conferma disponibilità (categoria "richieste")
   // non farebbe comparire nulla.
   res.locals.ordiniNonLetti = ordiniNonLetti + richiesteNonLette;
+  res.locals.statoOrdini = statoOrdini;
+  res.locals.profiloCliente = profiloCliente;
   res.locals.geo = geoStato;
   // I contatori del banco servono alla barra di navigazione di tutte le pagine distributore.
   res.locals.contatori = contatori;
@@ -197,7 +270,9 @@ function contaCarrello(req) {
   return Object.values(c).reduce((acc, q) => acc + q, 0);
 }
 
-// Trasforma il carrello di sessione in righe [{prodotto, quantita}] con i dati aggiornati.
+// Trasforma il carrello di sessione in righe [{prodotto, quantita}] con i dati aggiornati. Gli articoli
+// non più in catalogo (tolti o disattivati dopo essere finiti nel carrello) escono anche dal carrello di
+// sessione: altrimenti il pallino del carrello li contava ancora, senza che la pagina li mostrasse.
 async function righeCarrello(req) {
   const carrello = getCarrello(req);
   const ids = Object.keys(carrello).map(Number).filter((id) => carrello[id] > 0);
@@ -207,26 +282,46 @@ async function righeCarrello(req) {
       `SELECT * FROM products WHERE attivo = 1 AND id IN (${placeholders}) ORDER BY macro_slug, categoria, nome`
     )
     .all(...ids);
+  const presenti = new Set(prodotti.map((p) => p.id));
+  for (const id of Object.keys(carrello)) {
+    if (!presenti.has(Number(id))) delete carrello[id];
+  }
   return prodotti.map((prodotto) => ({ prodotto, quantita: carrello[prodotto.id] }));
 }
 
 // Legge i campi quantita_<id> di un form e aggiorna il carrello di sessione.
 // modo 'aggiungi' (cataloghi e ricerca): le quantità si sommano, lo zero non tocca nulla.
 // modo 'imposta' (pagina carrello): le quantità sostituiscono, lo zero rimuove la riga.
+// Le quantità hanno un tetto (QUANTITA_MASSIMA, src/input.js): un numero enorme o scritto male non deve
+// arrivare al DB come quantità di una riga.
 function aggiornaCarrelloDaForm(req, modo = 'aggiungi') {
   const carrello = getCarrello(req);
   for (const [chiave, valore] of Object.entries(req.body || {})) {
     if (!chiave.startsWith('quantita_')) continue;
-    const id = parseInt(chiave.slice('quantita_'.length), 10);
+    const id = leggiId(chiave.slice('quantita_'.length));
     if (!id) continue;
-    const q = Math.max(0, parseInt(valore, 10) || 0);
+    const q = leggiQuantita(valore);
     if (modo === 'imposta') {
       if (q > 0) carrello[id] = q;
       else delete carrello[id];
     } else if (q > 0) {
-      carrello[id] = (carrello[id] || 0) + q;
+      carrello[id] = Math.min(QUANTITA_MASSIMA, (carrello[id] || 0) + q);
     }
   }
+}
+
+// Apre la sessione di un utente appena riconosciuto (login o registrazione). Prima si cambia l'id di
+// sessione (regenerate): un cookie di sessione preesistente non diventa mai quello di un utente collegato
+// (session fixation). Poi si salva PRIMA di rispondere: express-session manda la risposta e salva dopo, e se
+// il browser rilegge subito la pagina (succede) la sessione non c'è ancora e si torna al login.
+function avviaSessione(req, utente) {
+  return new Promise((risolvi, rifiuta) => {
+    req.session.regenerate((err) => {
+      if (err) return rifiuta(err);
+      req.session.user = utente;
+      req.session.save((errSalvataggio) => (errSalvataggio ? rifiuta(errSalvataggio) : risolvi()));
+    });
+  });
 }
 
 // ---------- Home / Login ----------
@@ -245,87 +340,85 @@ app.get('/login', async (req, res) => {
 
 // ---------- Registrazione cliente ----------
 
-// Una voce per ditta: con più filiali (es. Borea) l'installatore sceglie la ditta, non la
-// filiale. L'id è quello della prima filiale; alla registrazione il legame si crea con tutte.
-async function distributoriSelezionabili() {
-  return db
-    .prepare(
-      `SELECT DISTINCT ON (COALESCE(ditta_id, -id)) id, nome, zona
-         FROM distributors WHERE attivo = 1
-        ORDER BY COALESCE(ditta_id, -id), id`
-    )
-    .all()
-    .then((righe) => righe.sort((a, b) => a.nome.localeCompare(b.nome)));
-}
-
+// La pagina ha tre passi (uno script li mostra uno alla volta) ma è un unico modulo. Il distributore non si sceglie:
+// ogni nuovo cliente è collegato a quello predefinito (anagrafiche.distributoriPredefiniti).
 app.get('/registrati', async (req, res) => {
   if (req.session.user) return res.redirect('/');
   res.render('registrati', {
-    titolo: 'Crea la tua anagrafica',
-    distributori: await distributoriSelezionabili(),
+    titolo: 'Registra la tua impresa',
     tipi: anagrafiche.TIPI_SOGGETTO,
     dati: {},
-    scelti: [],
     errori: [],
+    campiErrore: [],
+    passo: 1,
   });
 });
 
-app.post('/registrati', async (req, res, next) => {
-  const scelti = []
-    .concat(req.body.distributori || [])
-    .map((v) => parseInt(v, 10))
-    .filter(Boolean);
-
-  const validi = new Set((await distributoriSelezionabili()).map((d) => d.id));
-  const distributoriScelti = scelti.filter((id) => validi.has(id));
-  const errori = await anagrafiche.validaIscrizione(req.body, distributoriScelti);
-
-  if (errori.length) {
-    return res.status(400).render('registrati', {
-      titolo: 'Crea la tua anagrafica',
-      distributori: await distributoriSelezionabili(),
+app.post('/registrati', async (req, res) => {
+  // Gli errori ripropongono il modulo com'è stato compilato (le password no) e la pagina si riapre sul primo passo
+  // che ha un campo sbagliato.
+  const mostraErrori = (errori) =>
+    res.status(400).render('registrati', {
+      titolo: 'Registra la tua impresa',
       tipi: anagrafiche.TIPI_SOGGETTO,
       dati: req.body,
-      scelti: distributoriScelti,
-      errori,
+      errori: errori.map((e) => e.testo),
+      campiErrore: errori.flatMap((e) => e.campi),
+      passo: anagrafiche.primoPassoConErrori(errori),
     });
-  }
 
-  const cliente = await anagrafiche.iscriviCliente(
-    req.body,
-    await anagrafiche.conTutteLeFiliali(distributoriScelti)
-  );
-  req.session.user = {
+  const errori = await anagrafiche.validaIscrizione(req.body);
+  if (errori.length) return mostraErrori(errori);
+
+  let cliente;
+  try {
+    cliente = await anagrafiche.iscriviCliente(req.body, await anagrafiche.distributoriPredefiniti());
+  } catch (e) {
+    // 23505 = nome utente (unico) preso da qualcun altro fra il controllo di validaIscrizione e l'inserimento.
+    if (e && e.code === '23505') return mostraErrori([{ testo: 'Questo nome utente è già in uso.', campi: ['username'] }]);
+    throw e;
+  }
+  await avviaSessione(req, {
     id: cliente.id,
     ruolo: cliente.ruolo,
     username: cliente.username,
     ragione_sociale: cliente.ragione_sociale,
     zona: cliente.zona,
     distributor_id: null,
-  };
-  // Come per il login: prima si salva la sessione, poi si va al profilo.
-  req.session.save((err) => (err ? next(err) : res.redirect('/profilo?benvenuto=1')));
+  });
+  res.redirect('/benvenuto');
+});
+
+// Schermata dopo la registrazione: l'anagrafica è pronta e c'è il distributore di riferimento. Senza stato: se la
+// si riapre, mostra la stessa cosa. Se il distributore non ha ancora approvato, lo dice.
+app.get('/benvenuto', requireRole('cliente'), async (req, res) => {
+  const legami = await anagrafiche.legamiDelCliente(req.session.user.id);
+  res.render('benvenuto', {
+    titolo: 'Benvenuto',
+    distributore: anagrafiche.distributoreDiRiferimento(legami),
+  });
 });
 
 // ---------- Profilo del cliente ----------
 
 app.get('/profilo', requireRole('cliente'), async (req, res) => {
   const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
+  const legami = await anagrafiche.legamiDelCliente(cliente.id);
   res.render('profilo', {
     titolo: 'La mia anagrafica',
     cliente,
-    legami: await anagrafiche.legamiDelCliente(cliente.id),
+    legami,
+    distributore: anagrafiche.distributoreDiRiferimento(legami),
     tipi: anagrafiche.TIPI_SOGGETTO,
-    benvenuto: req.query.benvenuto === '1',
     indirizzoCliente: ddt.indirizzoCompleto(cliente),
   });
 });
 
-app.post('/login', async (req, res, next) => {
+app.post('/login', async (req, res) => {
   // Uno spazio digitato per sbaglio (specie a fine nome, su telefono con autocorrezione)
   // non deve far fallire l'accesso: il nome utente si confronta sempre già "ripulito".
-  const username = String(req.body.username || '').trim();
-  const { password } = req.body;
+  // Un nome utente reale è corto: il taglio evita chiavi enormi nel contatore dei tentativi.
+  const username = String(req.body.username || '').trim().slice(0, 100);
   const chiave = chiaveLogin(req, username);
 
   if (loginBloccato(chiave)) {
@@ -333,22 +426,20 @@ app.post('/login', async (req, res, next) => {
   }
 
   const user = await db.prepare('SELECT * FROM users WHERE username = ? AND attivo = 1').get(username);
-  if (!user || !bcrypt.compareSync(password || '', user.password_hash)) {
+  if (!(await passwordValida(req.body.password, user))) {
     registraTentativoFallito(chiave);
-    return res.render('login', { errore: 'Credenziali non valide.' });
+    return res.status(401).render('login', { errore: 'Credenziali non valide.' });
   }
   azzeraTentativi(chiave);
-  req.session.user = {
+  await avviaSessione(req, {
     id: user.id,
     ruolo: user.ruolo,
     username: user.username,
     ragione_sociale: user.ragione_sociale,
     zona: user.zona,
     distributor_id: user.distributor_id,
-  };
-  // La sessione si salva PRIMA del redirect: express-session manda la risposta e salva dopo, e se il
-  // browser rilegge subito la pagina (succede) la sessione non c'è ancora e si torna al login.
-  req.session.save((err) => (err ? next(err) : res.redirect('/')));
+  });
+  res.redirect('/');
 });
 
 app.post('/logout', async (req, res) => {
@@ -551,22 +642,23 @@ app.get('/api/carrello', requireRole('cliente'), async (req, res) => {
 });
 
 app.post('/api/carrello/aggiungi', requireRole('cliente'), async (req, res) => {
-  const id = parseInt(req.body.id || req.body.product_id, 10);
-  const qty = Math.max(0, parseInt(req.body.qty || req.body.quantita, 10) || 0);
+  const id = leggiId(req.body.id || req.body.product_id);
+  const qty = leggiQuantita(req.body.qty || req.body.quantita);
   if (!id || !qty) return res.status(400).json({ ok: false, errore: 'Quantità non valida.' });
   const prodotto = await db.prepare('SELECT id FROM products WHERE id = ? AND attivo = 1').get(id);
   if (!prodotto) return res.status(404).json({ ok: false, errore: 'Prodotto non trovato.' });
   const carrello = getCarrello(req);
-  carrello[id] = (carrello[id] || 0) + qty;
+  carrello[id] = Math.min(QUANTITA_MASSIMA, (carrello[id] || 0) + qty);
   const pezzi = contaCarrello(req);
   res.json({ ok: true, carrello, pezzi, prodottoQty: carrello[id] });
 });
 
 app.post('/api/carrello/aggiungi-batch', requireRole('cliente'), async (req, res) => {
-  const items = Array.isArray(req.body.items) ? req.body.items : [];
+  // Un elemento che non è un oggetto ({id, qty}) si scarta: il destructuring di null/numeri lanciava un errore.
+  const items = Array.isArray(req.body.items) ? req.body.items.filter((v) => v && typeof v === 'object') : [];
   if (!items.length) return res.status(400).json({ ok: false, errore: 'Nessun articolo.' });
   const richiesti = items
-    .map(({ id, qty }) => ({ pid: parseInt(id, 10), q: Math.max(0, parseInt(qty, 10) || 0) }))
+    .map(({ id, qty }) => ({ pid: leggiId(id), q: leggiQuantita(qty) }))
     .filter(({ pid, q }) => pid && q);
   // Un articolo non valido o non più attivo si salta: prima un "return" dentro il ciclo
   // chiudeva la route senza rispondere, il pulsante restava su "…" e il carrello non si salvava.
@@ -580,20 +672,25 @@ app.post('/api/carrello/aggiungi-batch', requireRole('cliente'), async (req, res
   const aggiornati = {};
   for (const { pid, q } of richiesti) {
     if (!attivi.has(pid)) continue;
-    carrello[pid] = (carrello[pid] || 0) + q;
+    carrello[pid] = Math.min(QUANTITA_MASSIMA, (carrello[pid] || 0) + q);
     aggiornati[pid] = carrello[pid];
   }
   res.json({ ok: true, carrello, pezzi: contaCarrello(req), aggiornati });
 });
 
 app.post('/api/carrello/imposta', requireRole('cliente'), async (req, res) => {
-  const id = parseInt(req.body.id, 10);
-  const qty = Math.max(0, parseInt(req.body.qty, 10) || 0);
-  if (!id) return res.status(400).json({ ok: false });
+  const id = leggiId(req.body.id);
+  const qty = leggiQuantita(req.body.qty);
+  if (!id) return res.status(400).json({ ok: false, errore: 'Prodotto non valido.' });
   const carrello = getCarrello(req);
   if (qty > 0) carrello[id] = qty;
   else delete carrello[id];
+  // righeCarrello legge i prodotti attivi: se quello appena impostato non c'è (id inventato, articolo
+  // tolto dal catalogo) esce anche dal carrello, così il conteggio dei pezzi resta quello vero.
   const righe = await righeCarrello(req);
+  if (qty > 0 && !righe.some((r) => r.prodotto.id === id)) {
+    return res.status(404).json({ ok: false, errore: 'Prodotto non trovato.' });
+  }
   const totali = await pricing.calcolaOrdine(righe);
   res.json({ ok: true, carrello, pezzi: contaCarrello(req), totali, righe: righe.length });
 });
@@ -605,24 +702,22 @@ app.post('/carrello', requireRole('cliente'), async (req, res) => {
   return res.redirect(req.body.ritorno || '/carrello');
 });
 
-// Riepilogo prima di procedere: articoli, quantità, prezzi, totale e conferma finale.
+// Riepilogo prima di procedere: articoli, quantità, prezzi, destinazione, note, totale da pagare.
+// Da qui si paga e parte la richiesta: dopo l'installatore non sceglie più niente.
 app.get('/carrello', requireRole('cliente'), async (req, res) => {
   const righe = await righeCarrello(req);
-  const totali = await pricing.calcolaOrdine(righe);
-  const minimo = await pricing.getOrdineMinimo();
-  const spedizione = await pricing.getSpedizioneFissa();
+  const riepilogo = await flusso.riepilogoCarrello(righe);
+
+  // Gli articoli che "Riordina" ha saltato (POST /storico/:id/riordina): l'avviso si mostra una volta sola.
+  const saltati = Number(req.session.avvisoCarrello) || 0;
+  delete req.session.avvisoCarrello;
 
   res.render('carrello', {
     titolo: 'Riepilogo',
+    avviso: saltati === 1 ? '1 articolo non è più disponibile' : saltati > 1 ? saltati + ' articoli non sono più disponibili' : '',
     righe,
-    totali,
-    minimo,
-    spedizione,
-    // La soglia si misura sulla sola merce: la spedizione si somma dopo.
-    mancaAlMinimo: pricing.round2(Math.max(0, minimo - totali.totale_finale)),
-    raggiunto: totali.totale_finale >= minimo,
-    ivaPct: await pricing.getIvaPct(),
-    minutiRisposta: await pricing.getFinestraMinuti(),
+    ...riepilogo,
+    cliente: await db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id),
   });
 });
 
@@ -633,8 +728,8 @@ app.post('/carrello/svuota', requireRole('cliente'), async (req, res) => {
 
 // ---------- Cliente: richiesta di disponibilità ----------
 
-// "Conferma e chiedi disponibilità": manda la richiesta ai distributori e apre l'attesa.
-// Dal carrello arrivano le quantità visibili in pagina (modo 'imposta'): anche quelle
+// "Paga e invia la richiesta": paga (per ora simulato), manda la richiesta ai distributori e apre
+// l'attesa. Dal carrello arrivano le quantità visibili in pagina (modo 'imposta'): anche quelle
 // scritte a mano e mai salvate, che prima andavano perse e la richiesta partiva con le vecchie.
 // La logica del flusso (qui e nelle route sotto) sta in src/flusso_cliente.js, condivisa
 // con l'API dell'app.
@@ -642,7 +737,10 @@ app.post('/richieste', requireRole('cliente'), async (req, res) => {
   aggiornaCarrelloDaForm(req, req.body && req.body.modo === 'imposta' ? 'imposta' : 'aggiungi');
   let requestId;
   try {
-    requestId = await flusso.nuovaRichiesta(req.session.user.id, await righeCarrello(req));
+    requestId = await flusso.nuovaRichiesta(req.session.user.id, await righeCarrello(req), {
+      destinazione: req.body && req.body.destinazione,
+      note: req.body && req.body.note,
+    });
   } catch (e) {
     if (!(e instanceof flusso.ErroreFlusso)) throw e;
     const link =
@@ -665,8 +763,8 @@ app.get('/richieste/:id', requireRole('cliente'), async (req, res) => {
   if (richiesta.stato === 'ordinata' && richiesta.order_id) {
     return res.redirect('/ordini/' + richiesta.order_id);
   }
-  // Il cliente sta già guardando questa richiesta (schermata di attesa/offerte, che si
-  // auto-aggiorna): il cambio di stato non deve anche accendere il pallino in basso.
+  // Il cliente sta già guardando questa richiesta (schermata di attesa, che si auto-aggiorna):
+  // il cambio di stato non deve anche accendere il pallino in basso.
   // dettaglioRichiesta segna lette le notifiche, ma res.locals.ordiniNonLetti è già stato
   // calcolato dal middleware prima di questa route: va azzerato qui, altrimenti questa
   // stessa risposta renderizzerebbe ancora il conteggio vecchio.
@@ -674,7 +772,7 @@ app.get('/richieste/:id', requireRole('cliente'), async (req, res) => {
   res.locals.ordiniNonLetti = 0;
   const vista = { titolo: 'Richiesta #' + richiesta.id, ...dati };
   if (richiesta.stato === 'in_attesa') return res.render('richiesta_attesa', vista);
-  return res.render('richiesta_offerte', { ...vista, consegna });
+  return res.render('richiesta_chiusa', vista);
 });
 
 // Stato della richiesta per la schermata di attesa (polling + notifica push del browser).
@@ -688,8 +786,9 @@ app.get('/api/richieste/:id', requireRole('cliente'), async (req, res) => {
   const risposte = richieste.raggruppaRisposteDitta(await richieste.risposteRichiesta(richiesta.id));
   res.json({
     stato: richiesta.stato,
+    // Con l'ordine già nato la pagina di attesa porta dritto all'ordine.
+    order_id: richiesta.stato === 'ordinata' ? richiesta.order_id : null,
     secondi: await richieste.secondiRimasti(richiesta),
-    conferme: risposte.filter((r) => r.esito === 'confermato').length,
     risposte: risposte.map((r) => ({ nome: r.distributore_nome, esito: r.esito })),
   });
 });
@@ -752,88 +851,23 @@ app.post('/distributore/richieste/:id/elimina', requireRole('distributore'), asy
   res.redirect('/distributore');
 });
 
-// Riepilogo ordine con il distributore scelto.
-app.get('/richieste/:id/offerta/:distributorId', requireRole('cliente'), async (req, res) => {
-  const richiesta = await richieste.aggiornaScadenza(req.params.id);
-  if (!richiesta || richiesta.cliente_id !== req.session.user.id) {
-    return res.status(404).render('errore', { titolo: 'Non trovata', messaggio: 'Richiesta non trovata.' });
-  }
-  // Solo da una richiesta con offerte aperte: da una annullata o scaduta si arrivava comunque
-  // al riepilogo e si poteva chiudere un ordine (la pagina offerte mostrava ancora le card).
-  if (richiesta.stato !== 'con_offerte') return res.redirect('/richieste/' + richiesta.id);
-
-  const modalita = req.query.modalita === 'ritiro' ? 'ritiro' : 'consegna_mezzo_grossista';
-  const riepilogo = await flusso.riepilogoOfferta(richiesta, req.params.distributorId, modalita);
-  if (!riepilogo) {
-    return res.status(404).render('errore', {
-      titolo: 'Offerta non valida',
-      messaggio: 'Questo distributore non ha confermato la disponibilità.',
-      link: '/richieste/' + richiesta.id,
-      linkTesto: 'Torna alle offerte',
-    });
-  }
-
-  res.render('riepilogo', {
-    titolo: "Riepilogo dell'ordine",
-    richiesta,
-    modalita,
-    cliente: await db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id),
-    consegna,
-    ...riepilogo,
-  });
-});
-
 // ---------- Cliente: ordine ----------
 
-app.post('/ordini', requireRole('cliente'), async (req, res) => {
-  const richiesta = await richieste.getRichiesta(req.body.request_id);
-  if (!richiesta || richiesta.cliente_id !== req.session.user.id) {
-    return res.status(404).render('errore', { titolo: 'Non trovata', messaggio: 'Richiesta non trovata.' });
-  }
+// Non c'è più "riepilogo con il distributore scelto" né "Invia l'ordine": l'installatore paga con la
+// richiesta e l'ordine nasce da solo quando il corriere prende la consegna (src/richieste.js).
 
-  const esito = await flusso.ordinaDaOfferta(richiesta, parseInt(req.body.distributor_id, 10), {
-    modalita: req.body.modalita,
-    note: req.body.note,
-    destinazione: req.body.destinazione,
-  });
-  if (esito.esito === 'creato') return res.redirect('/ordini/' + esito.orderId + '?nuovo=1');
-  if (esito.esito === 'gia_ordinata') return rispostaGiaOrdinata(res, esito.richiesta);
-  if (esito.esito === 'offerta_non_valida') {
-    return res.status(400).render('errore', {
-      titolo: 'Offerta non valida',
-      messaggio: 'Questo distributore non ha confermato la disponibilità.',
-      link: '/richieste/' + richiesta.id,
-      linkTesto: 'Torna alle offerte',
-    });
-  }
-  return res.status(400).render('errore', {
-    titolo: 'Richiesta non più aperta',
-    messaggio:
-      esito.richiesta.stato === 'annullata'
-        ? 'Hai annullato questa richiesta: non si può più ordinare da qui.'
-        : 'Le offerte di questa richiesta sono scadute: puoi reinviarla per avere conferme aggiornate.',
-    link: '/richieste/' + richiesta.id,
-    linkTesto: 'Apri la richiesta',
+// "Stato ordini": porta dritto all'unica attività in corso (vedi flusso.attivitaCorrente).
+// Solo il link "Stato ordini" della barra in basso, già aggiornato: lo richiede lo script di
+// partials/nav_ordini.ejs mentre una richiesta è in attesa o un ordine è in consegna. Dalla home
+// (?scheda=1) segue anche la scheda di stato in cima (partials/stato_home.ejs).
+app.get('/nav/stato-ordini', requireRole('cliente'), (req, res) => {
+  res.render('partials/nav_ordini', {
+    attivo: String(req.query.attivo || ''),
+    parziale: true,
+    conScheda: req.query.scheda === '1',
   });
 });
 
-// "Invia l'ordine" su una richiesta già chiusa. Se l'ha chiusa l'ordine automatico il
-// cliente va avvisato: prima veniva portato sull'ordine in silenzio, e consegna/ritiro,
-// destinazione e note appena scritte andavano perse senza che lo sapesse.
-function rispostaGiaOrdinata(res, richiesta) {
-  if (!richiesta.order_id) return res.redirect('/richieste/' + richiesta.id);
-  if (!richiesta.assegnata_auto) return res.redirect('/ordini/' + richiesta.order_id);
-  return res.status(409).render('errore', {
-    titolo: 'Ordine già assegnato',
-    messaggio:
-      "Il tempo per scegliere era scaduto e l'ordine è partito in automatico, con consegna e note predefinite: " +
-      'le scelte di questa pagina non sono state applicate. Se serve cambiarle contatta il distributore.',
-    link: '/ordini/' + richiesta.order_id,
-    linkTesto: "Apri l'ordine",
-  });
-}
-
-// "Stato ordini": porta dritto all'unica attività in corso (vedi flusso.attivitaCorrente).
 app.get('/ordini', requireRole('cliente'), async (req, res) => {
   const attivo = await flusso.attivitaCorrente(req.session.user.id);
   if (attivo) return res.redirect((attivo.tipo === 'ordine' ? '/ordini/' : '/richieste/') + attivo.id);
@@ -843,8 +877,26 @@ app.get('/ordini', requireRole('cliente'), async (req, res) => {
 // Storico unificato (tutto: in corso, scaduto, annullato, consegnato) — raggiungibile dal
 // menu account, non più dal tab "Stato ordini".
 app.get('/storico', requireRole('cliente'), async (req, res) => {
-  const cardsAll = await flusso.richiesteClienteConStato(req.session.user.id);
-  res.render('storico', { titolo: 'Storico', cards: cardsAll });
+  res.render('storico', { titolo: 'Storico ordini', ...(await flusso.storicoCliente(req.session.user.id)) });
+});
+
+// "Riordina" (solo sulle schede "Consegnato"): rimette nel carrello gli stessi articoli dell'ordine, sommati a
+// quelli già presenti, e porta al carrello. Gli articoli tolti dal catalogo o non più disponibili si saltano:
+// il carrello lo dice con un avviso (letto una volta sola da GET /carrello).
+app.post('/storico/:id/riordina', requireRole('cliente'), async (req, res) => {
+  const daRiordinare = await flusso.articoliDaRiordinare(req.session.user.id, req.params.id);
+  if (!daRiordinare) {
+    return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Ordine non trovato.' });
+  }
+  if (daRiordinare === 'altrui') {
+    return res.status(403).render('errore', { titolo: 'Accesso negato', messaggio: 'Accesso non consentito.' });
+  }
+  const carrello = getCarrello(req);
+  for (const { id, quantita } of daRiordinare.articoli) {
+    carrello[id] = Math.min(QUANTITA_MASSIMA, (carrello[id] || 0) + quantita);
+  }
+  if (daRiordinare.saltati) req.session.avvisoCarrello = daRiordinare.saltati;
+  res.redirect('/carrello');
 });
 
 app.get('/ordini/:id', requireLogin, async (req, res) => {
@@ -884,6 +936,21 @@ app.post('/ordini/:id/consegnato', requireRole('cliente'), async (req, res) => {
   }
   await flusso.segnaConsegnato(ordine);
   res.redirect('/ordini/' + ordine.id);
+});
+
+// PROVVISORIO: "Consegnato" cliccabile sulla scheda della home, per non mostrare più l'ordine in consegna.
+// Vale per qualunque stato dell'ordine (vedi flusso.segnaConsegnatoProva); da togliere quando la consegna
+// verrà segnata da un evento vero.
+app.post('/ordini/:id/consegnato-prova', requireRole('cliente'), async (req, res) => {
+  const ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+  if (!ordine || ordine.cliente_id !== req.session.user.id) {
+    return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Ordine non trovato.' });
+  }
+  await flusso.segnaConsegnatoProva(ordine);
+  // Dalla pagina dell'ordine si torna all'ordine (ora consegnato); dalle altre parti, alla home. Si accettano
+  // solo percorsi /ordini/<numero>: niente redirect aperti.
+  const ritorno = /^\/ordini\/\d+$/.test((req.body && req.body.ritorno) || '') ? req.body.ritorno : '/home';
+  res.redirect(ritorno);
 });
 
 // Elimina ordine (cliente) — globale
@@ -1036,8 +1103,11 @@ app.get('/distributore', requireRole('distributore'), async (req, res) => {
 
   // Anteprima sintetica dei pezzi ("2x Valvola...") invece del solo totale: le prime 2
   // righe più un conteggio delle altre, mostrata direttamente nella card urgente.
+  // Le righe di tutte le card si leggono insieme (una query, non una per card: col DB su un altro server
+  // ogni query in sequenza costa ~50 ms) e anche l'elenco degli ordini sotto fa lo stesso.
+  const righePerRichiesta = await richieste.righeRichieste(daRispondere.map((r) => r.id));
   for (const r of daRispondere) {
-    const righe = await richieste.righeRichiesta(r.id);
+    const righe = righePerRichiesta.get(Number(r.id)) || [];
     r.anteprima = righe.slice(0, 2).map((ri) => ({ quantita: ri.quantita, nome: ri.nome }));
     r.altreRighe = Math.max(0, righe.length - r.anteprima.length);
   }
@@ -1055,10 +1125,15 @@ app.get('/distributore', requireRole('distributore'), async (req, res) => {
     )
     .all(req.session.user.distributor_id);
 
+  const righePerOrdine = new Map(daPreparare.map((o) => [Number(o.id), []]));
+  if (daPreparare.length) {
+    const tutteLeRighe = await db
+      .prepare('SELECT order_id, nome_snapshot, quantita FROM order_items WHERE order_id = ANY(?::int[]) ORDER BY order_id, id')
+      .all(daPreparare.map((o) => o.id));
+    for (const ri of tutteLeRighe) righePerOrdine.get(Number(ri.order_id)).push(ri);
+  }
   for (const o of daPreparare) {
-    const righe = await db
-      .prepare('SELECT nome_snapshot, quantita FROM order_items WHERE order_id = ?')
-      .all(o.id);
+    const righe = righePerOrdine.get(Number(o.id));
     o.anteprima = righe.slice(0, 2).map((ri) => ({ quantita: ri.quantita, nome: ri.nome_snapshot }));
     o.altreRighe = Math.max(0, righe.length - o.anteprima.length);
   }
@@ -1202,16 +1277,28 @@ app.get('/distributore/clienti/:id', requireRole('distributore'), async (req, re
     });
   }
 
+  // Marchi e categorie si leggono una volta sola; le famiglie di tutti i marchi partono insieme (una per
+  // marchio, in parallelo) invece che una dopo l'altra.
+  const [regole, marchi, macro] = await Promise.all([
+    anagrafiche.regoleSconto(distributorId, cliente.id),
+    catalogo.marchi(),
+    catalogo.macroCategorie(),
+  ]);
+  const famigliePerMarchio = await Promise.all(marchi.map((m) => catalogo.famiglieDelMarchio(m.slug)));
+  const famiglie = marchi.flatMap((m, i) =>
+    famigliePerMarchio[i].map((f) => ({ ...f, marchio: m.nome, marchio_slug: m.slug }))
+  );
+
   res.render('distributore_cliente', {
     titolo: cliente.ragione_sociale,
     cliente,
     rapporto,
     tipi: anagrafiche.TIPI_SOGGETTO,
     indirizzoCliente: ddt.indirizzoCompleto(cliente),
-    regole: await anagrafiche.regoleSconto(distributorId, cliente.id),
-    marchi: await catalogo.marchi(),
-     macro: await catalogo.macroCategorie(),
-    famiglie: (await (async () => { const ms = await catalogo.marchi(); const out=[]; for (const m of ms) { const fs = await catalogo.famiglieDelMarchio(m.slug); for (const f of fs) out.push({ ...f, marchio: m.nome, marchio_slug: m.slug }); } return out; })()),
+    regole,
+    marchi,
+    macro,
+    famiglie,
     salvato: req.query.salvato === '1',
   });
 });
@@ -1354,7 +1441,7 @@ app.post('/distributore/ordini/:id/ddt', requireRole('distributore'), async (req
   const ordine = await ordineDelBanco(req);
   if (!ordine) return res.redirect('/distributore/ordini');
 
-  const numero = await ddt.emetti(ordine, {
+  const { numero, nuovo } = await ddt.emetti(ordine, {
     colli: req.body.colli,
     aspetto: req.body.aspetto,
     trasporto: req.body.trasporto,
@@ -1362,14 +1449,18 @@ app.post('/distributore/ordini/:id/ddt', requireRole('distributore'), async (req
     note: req.body.note,
   });
 
-  await notifiche.notifica(ordine.cliente_id, {
-    titolo: 'Merce in partenza',
-    testo: `Ordine #${ordine.id}: emessa la bolla n. ${numero}. Puoi vedere il DDT in app.`,
-    link: '/ddt/' + ordine.id,
-    categoria: 'ordini',
-    sottostato: 'spedito',
-    order_id: ordine.id,
-  });
+  // Un secondo invio (doppio tocco, pagina riaperta) trova la bolla già emessa: non si rinumera e il cliente
+  // non riceve una seconda notifica.
+  if (nuovo) {
+    await notifiche.notifica(ordine.cliente_id, {
+      titolo: 'Merce in partenza',
+      testo: `Ordine #${ordine.id}: emessa la bolla n. ${numero}. Puoi vedere il DDT in app.`,
+      link: '/ddt/' + ordine.id,
+      categoria: 'ordini',
+      sottostato: 'spedito',
+      order_id: ordine.id,
+    });
+  }
 
   res.redirect('/ddt/' + ordine.id);
 });
@@ -1429,16 +1520,11 @@ app.get('/agente/ordini', requireRole('agente'), async (req, res) => {
 // Senza un handler dedicato, un errore lanciato da una rotta async finiva nel gestore di
 // default di Express: fuori da NODE_ENV=production può restituire lo stack trace al
 // client, e comunque non è coerente con le pagine di errore già esistenti nell'app.
-// Va registrato dopo tutte le rotte (Express lo riconosce come error-handler dai 4
-// parametri), quindi resta qui in fondo.
-app.use((err, req, res, next) => {
-  console.error('Errore non gestito nella richiesta', req.method, req.originalUrl, ':', err);
-  if (res.headersSent) return next(err);
-  res.status(500).render('errore', {
-    titolo: 'Errore imprevisto',
-    messaggio: 'Si è verificato un problema imprevisto. Riprova tra poco.',
-  });
-});
+// Vanno registrati dopo tutte le rotte (Express riconosce l'error-handler dai 4 parametri), quindi
+// restano qui in fondo. Per /api/... rispondono in JSON, per il resto con la pagina `errore`; gli errori
+// del client (JSON malformato, corpo troppo grande) tengono il loro 4xx. Vedi src/http.js.
+app.use(gestoreNonTrovato);
+app.use(gestoreErrori);
 
 // Reti di sicurezza a livello di processo: prima non c'erano, quindi un errore sfuggito
 // (es. una Promise rifiutata senza .catch) poteva passare inosservato nei log, o — nel
@@ -1458,21 +1544,38 @@ process.on('uncaughtException', (err) => {
 
 // Le richieste scadono anche se nessuno sta guardando una pagina: così la notifica
 // "nessuna conferma" arriva comunque allo scadere dei 10 minuti.
-(async () => {
-  try { await richieste.aggiornaScadenzeAperte(); } catch {}
-})();
-setInterval(async () => {
+// Un solo giro alla volta: se il DB è lento e uno dura più di 30 s, il successivo aspetta invece di
+// sovrapporsi (le scritture sono atomiche, ma due giri insieme raddoppiano inutilmente il carico).
+let controlloScadenzeInCorso = false;
+async function controllaScadenze() {
+  if (controlloScadenzeInCorso) return;
+  controlloScadenzeInCorso = true;
   try {
-    // Chiude le finestre scadute e crea gli ordini automatici (vedi impostaAssegnatore).
+    // Chiude le finestre scadute (rimborso) e riprova gli ordini rimasti a metà (vedi assegnaOrdine).
     await richieste.aggiornaScadenzeAperte();
   } catch (err) {
     console.error('Errore nel controllo scadenze:', err.message);
+  } finally {
+    controlloScadenzeInCorso = false;
   }
-}, 30 * 1000).unref();
+}
+controllaScadenze();
+setInterval(controllaScadenze, 30 * 1000).unref();
 
 // Gruppo WhatsApp dei corrieri: si collega solo con WHATSAPP_ATTIVO=1 (vedi src/whatsapp.js).
 whatsapp.avvia();
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server minuteria in ascolto su http://localhost:${PORT}`);
 });
+
+// pm2 (e Ctrl+C in locale) chiedono la chiusura con un segnale: si smette di accettare richieste nuove e
+// si lascia finire quelle in corso, invece di troncarle a metà (un ordine o un pagamento a metà strada).
+// Dopo 10 secondi si esce comunque.
+function chiudiConGrazia(segnale) {
+  console.log(`${segnale}: chiudo il server...`);
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 10 * 1000).unref();
+}
+process.on('SIGTERM', () => chiudiConGrazia('SIGTERM'));
+process.on('SIGINT', () => chiudiConGrazia('SIGINT'));

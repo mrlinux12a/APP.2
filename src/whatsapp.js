@@ -6,16 +6,17 @@ const ddt = require('./ddt');
 
 // Gruppo WhatsApp dei corrieri.
 //
-// Quando un banco accetta una richiesta, PRIMA che l'offerta arrivi all'installatore, nel gruppo
-// parte un messaggio con le due tappe: prelievo merci (la filiale che ha accettato) e consegna
-// (l'installatore). L'installatore non vede l'offerta finché qualcuno nel gruppo non risponde al
-// messaggio con la parola chiave e i minuti totali ("preso 30"): solo allora la risposta del banco
-// diventa un'offerta, con quel tempo come tempo di consegna. Se la finestra della richiesta scade
-// senza che nessuno risponda, il messaggio viene eliminato dal gruppo e per l'installatore è come
-// se nessun banco avesse accettato.
+// L'installatore paga quando manda la richiesta. Quando un banco la accetta, nel gruppo parte un
+// messaggio con le due tappe: prelievo merci (la filiale che ha accettato) e consegna (l'installatore).
+// L'installatore non sa niente finché qualcuno nel gruppo non risponde al messaggio con la parola
+// chiave e i minuti totali ("preso 30"): solo allora l'ordine nasce da solo e all'installatore arriva
+// la conferma con quel tempo di consegna. Dopo il "preso" il bot non scrive più nel gruppo (a parte
+// la risposta al "preso" stesso). Se la finestra della richiesta scade senza che nessuno risponda, il
+// messaggio viene eliminato dal gruppo e per l'installatore è come se nessun banco avesse accettato
+// (e il pagamento gli torna).
 //
-// La logica di stato (offerta nascosta, "preso", scadenza) sta in richieste.js: qui solo il
-// gruppo, cioè messaggi in uscita, risposte in ingresso e la connessione.
+// La logica di stato ("preso", scadenza, ordine) sta in richieste.js: qui solo il gruppo, cioè
+// messaggi in uscita, risposte in ingresso e la connessione.
 //
 // Libreria non ufficiale (Baileys): si collega come dispositivo del numero scelto e scrive nel
 // gruppo. Il modulo è spento finché non c'è WHATSAPP_ATTIVO=1, che va messo in un solo posto
@@ -216,20 +217,8 @@ async function accodaEsito(requestId, responseId, testo) {
   svuotaCoda().catch((err) => console.error('WhatsApp, invio:', err.message));
 }
 
-// L'installatore ha confermato (o l'ordine è partito da solo): chi ha preso la consegna deve saperlo.
-// Se il cliente ritira al banco la consegna non serve più.
-async function avvisaOrdine(orderId, risposta) {
-  if (!risposta || risposta.corriere_stato !== 'preso') return;
-  const ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
-  if (!ordine) return;
-  const testo =
-    ordine.modalita === 'ritiro'
-      ? `ℹ️ Richiesta #${ordine.request_id}: il cliente ritira al banco, la consegna non serve più.`
-      : `✅ Richiesta #${ordine.request_id}: il cliente ha confermato (ordine #${ordine.id}). Ritira la merce e consegna entro le ${format.oraRoma(ordine.corriere_arrivo_il)}.`;
-  await accodaEsito(ordine.request_id, risposta.id, testo);
-}
-
-// L'installatore annulla un ordine che aveva già un corriere.
+// L'installatore annulla un ordine che aveva già un corriere (per ora l'annullo resta possibile, per i
+// test): è l'unico messaggio che il bot scrive dopo il "preso".
 async function avvisaAnnulloOrdine(ordine) {
   if (!ordine || ordine.corriere_minuti === null || ordine.corriere_minuti === undefined) return;
   await accodaEsito(
@@ -386,9 +375,12 @@ async function gestisciMessaggio(msg) {
   const esito = await require('./richieste').corriereHaPreso(riga.response_id, letta.minuti, nome);
   if (esito.esito === 'preso') {
     await db.prepare('UPDATE whatsapp_messaggi SET preso_il = NOW() WHERE id = ?').run(riga.id);
+    // L'ordine è già confermato (il cliente ha pagato all'invio): dopo questa risposta il bot non
+    // scrive più niente nel gruppo.
+    const entro = format.oraRoma(new Date(Date.now() + letta.minuti * 60 * 1000));
     await rispondi(
       msg,
-      `✅ Preso! Richiesta #${riga.request_id}: ${consegna.inParole(letta.minuti)} in totale. Aspetto la conferma del cliente e ti scrivo qui appena arriva.`
+      `✅ Preso! Richiesta #${riga.request_id}: ${consegna.inParole(letta.minuti)} in totale, consegna entro le ${entro}.`
     );
   } else if (esito.esito === 'gia_preso') {
     const da = esito.nome ? ` da ${esito.nome}` : '';
@@ -547,7 +539,6 @@ module.exports = {
   elencaGruppi,
   accodaRitiroConsegna,
   ritiraRichiesta,
-  avvisaOrdine,
   avvisaAnnulloOrdine,
   leggiRisposta,
   leggiMinuti,

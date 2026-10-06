@@ -25,8 +25,8 @@ function NessunOrdine() {
   );
 }
 
-// Come /ordini sul sito: mostra sempre e solo UNA cosa, la più rilevante (in attesa > da
-// scegliere > in consegna > scaduta da poco). Niente in corso: invito al catalogo.
+// Come /ordini sul sito: mostra sempre e solo UNA cosa, la più rilevante (in attesa >
+// in consegna > scaduta da poco). Niente in corso: invito al catalogo.
 export default function StatoOrdini() {
   const q = useStatoOrdini();
   // Annullata o eliminata una richiesta o un ordine si resta qui, su "Nessun ordine in corso",

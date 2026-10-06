@@ -5,21 +5,24 @@
 // Per ora l'app è solo per gli installatori (ruolo 'cliente'): il banco e l'agente
 // continuano a usare il sito.
 const express = require('express');
-const bcrypt = require('bcryptjs');
 
 const db = require('../db');
 const catalogo = require('./catalogo');
 const pricing = require('./pricing');
 const richieste = require('./richieste');
 const flusso = require('./flusso_cliente');
-const consegna = require('./consegna');
 const format = require('./format');
 const notifiche = require('./notifiche');
 const tokenApp = require('./token_app');
 const { prodottoJson } = require('./prodotto_json');
 const { chiaveLogin, loginBloccato, registraTentativoFallito, azzeraTentativi } = require('./limite_login');
+const { passwordValida } = require('./password');
+const { idNumerico } = require('./http');
 
 const router = express.Router();
+
+// Un id che non è un numero intero positivo non esiste: 404 in JSON invece di una query che fallisce (500).
+router.param('id', idNumerico);
 
 // Nessun cookie in gioco: l'unica credenziale è l'intestazione Authorization, che un sito
 // terzo non può far inviare al posto dell'utente. Aprire l'origine non espone quindi nulla
@@ -86,15 +89,14 @@ function macroJson(m) {
 // ---------- Accesso ----------
 
 router.post('/login', async (req, res) => {
-  const username = String((req.body && req.body.username) || '').trim();
-  const password = String((req.body && req.body.password) || '');
+  const username = String((req.body && req.body.username) || '').trim().slice(0, 100);
   const chiave = chiaveLogin(req, username);
 
   if (loginBloccato(chiave)) {
     return res.status(429).json({ errore: 'Troppi tentativi non riusciti. Riprova tra qualche minuto.' });
   }
   const user = await db.prepare('SELECT * FROM users WHERE username = ? AND attivo = 1').get(username);
-  if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+  if (!(await passwordValida(req.body && req.body.password, user))) {
     registraTentativoFallito(chiave);
     return res.status(401).json({ errore: 'Credenziali non valide.' });
   }
@@ -102,7 +104,7 @@ router.post('/login', async (req, res) => {
   if (user.ruolo !== 'cliente') {
     return res.status(403).json({ errore: "Per ora l'app è riservata agli installatori: accedi dal sito." });
   }
-  const token = await tokenApp.creaToken(user.id, req.body.dispositivo);
+  const token = await tokenApp.creaToken(user.id, req.body && req.body.dispositivo);
   res.json({ token, utente: utenteJson(user) });
 });
 
@@ -176,7 +178,13 @@ router.post('/carrello/riepilogo', richiedeCliente, async (req, res) => {
     merce: pricing.euro(r.totali.totale_finale),
     raee: r.totali.contributo_raee > 0 ? pricing.euro(r.totali.contributo_raee) : null,
     spedizione: pricing.euro(r.spedizione),
-    totale: pricing.euro(r.totali.totale_finale + r.totali.contributo_raee + r.spedizione),
+    // Totale da pagare: l'installatore paga all'invio della richiesta (pagamento simulato).
+    imponibile: pricing.euro(r.totali.imponibile),
+    iva: pricing.euro(r.totali.iva),
+    iva_pct: r.ivaPct,
+    totale_ivato: pricing.euro(r.totali.totale_ivato),
+    // Destinazione di partenza: l'indirizzo di consegna abituale (il cliente può cambiarlo).
+    indirizzo_consegna: req.utente.indirizzo_consegna || '',
     minimo: pricing.euro(r.minimo),
     manca_al_minimo: pricing.euro(r.mancaAlMinimo),
     raggiunto: r.raggiunto,
@@ -188,9 +196,14 @@ router.post('/carrello/riepilogo', richiedeCliente, async (req, res) => {
   });
 });
 
+// Paga (simulato) e invia la richiesta, con destinazione e note scritte nel carrello.
 router.post('/richieste', richiedeCliente, async (req, res) => {
   try {
-    const id = await flusso.nuovaRichiesta(req.utente.id, await flusso.righeDaQuantita(req.body && req.body.righe));
+    const body = req.body || {};
+    const id = await flusso.nuovaRichiesta(req.utente.id, await flusso.righeDaQuantita(body.righe), {
+      destinazione: body.destinazione,
+      note: body.note,
+    });
     res.json({ id });
   } catch (e) {
     if (!(e instanceof flusso.ErroreFlusso)) throw e;
@@ -208,14 +221,16 @@ function righeJson(righe) {
   return righe.map((r) => ({ quantita: r.quantita, nome: r.nome, codice: r.codice }));
 }
 
-function totaliJson(t) {
+// Il pagamento di una richiesta (simulato, vedi src/pagamenti.js): null se la richiesta è nata col
+// vecchio flusso e non ha pagamento.
+function pagamentoJson(r) {
+  if (!r || !r.pagamento_stato) return null;
   return {
-    merce: pricing.euro(t.totale_finale),
-    raee: t.contributo_raee > 0 ? pricing.euro(t.contributo_raee) : null,
-    consegna: t.costo_consegna > 0 ? pricing.euro(t.costo_consegna) : null,
-    imponibile: pricing.euro(t.imponibile),
-    iva: pricing.euro(t.iva),
-    totale_ivato: pricing.euro(t.totale_ivato),
+    stato: r.pagamento_stato,
+    stato_testo: r.pagamento_stato === 'rimborsato' ? 'Rimborsato' : 'Pagato',
+    importo: pricing.euro(r.pagamento_importo),
+    simulato: r.pagamento_metodo === 'simulato',
+    pagato_il: r.pagato_il ? format.dataOra(r.pagato_il) : null,
   };
 }
 
@@ -228,8 +243,8 @@ async function richiestaDelCliente(req, res) {
   return richiesta;
 }
 
-// Una richiesta com'è ora: attesa con conto alla rovescia, offerte da scegliere, scaduta,
-// annullata o (con order_id) già diventata ordine. L'app la rilegge ogni pochi secondi.
+// Una richiesta com'è ora: attesa con conto alla rovescia, chiusa senza ordine (nessuno ha confermato:
+// pagamento rimborsato), annullata o (con order_id) già diventata ordine. L'app la rilegge ogni pochi secondi.
 router.get('/richieste/:id', richiedeCliente, async (req, res) => {
   const richiesta = await richiestaDelCliente(req, res);
   if (!richiesta) return;
@@ -248,29 +263,8 @@ router.get('/richieste/:id', richiedeCliente, async (req, res) => {
       esito: r.esito,
       esito_testo: ESITO_RISPOSTA[r.esito] || 'Nessuna risposta',
     })),
-    offerte:
-      richiesta.stato === 'con_offerte'
-        ? d.offerte.map((o, i) => ({
-            distributore_id: o.distributore.id,
-            distributore: o.distributore.nome,
-            filiale: o.distributore.filiale,
-            imponibile: pricing.euro(o.totali.imponibile),
-            merce: pricing.euro(o.totali.totale_finale),
-            consegna: o.totali.costo_consegna > 0 ? pricing.euro(o.totali.costo_consegna) : null,
-            copertura: o.copertura,
-            mancanti: o.mancanti.map((m) => ({ nome: m.nome, mancano: m.mancano })),
-            // Con il corriere i minuti sono i suoi (totali): niente partenza dichiarata dal banco.
-            partenza_testo: o.corriere_minuti ? '' : format.tempoConsegna(o.partenza_ore),
-            arrivo_testo: consegna.inParole(o.consegna_minuti_stimati),
-            note: o.note || null,
-            piu_veloce: o.distributore.id === d.idPiuVeloce && d.offerte.length > 1,
-            piu_conveniente: i === 0 && d.offerte.length > 1 && o.copertura === 'totale',
-          }))
-        : [],
-    // Offerte arrivate ma scadute senza scelta (testo diverso da "nessuno ha confermato").
-    offerte_scadute: richiesta.stato === 'nessuna_offerta' && d.offerte.length > 0,
-    secondi_scelta: d.secondiScelta,
-    nome_assegnazione: d.nomeAssegnazione,
+    // Pagamento fatto all'invio (null per le richieste del vecchio flusso).
+    pagamento: pagamentoJson(richiesta),
   });
 });
 
@@ -301,78 +295,10 @@ router.delete('/richieste/:id', richiedeCliente, async (req, res) => {
   res.json({ ok: true });
 });
 
-// ---------- Offerta scelta e ordine ----------
+// ---------- Ordine ----------
 
-router.get('/richieste/:id/offerte/:distributorId', richiedeCliente, async (req, res) => {
-  const richiesta = await richiestaDelCliente(req, res);
-  if (!richiesta) return;
-  // Solo da una richiesta con offerte aperte (come sul sito).
-  if (richiesta.stato !== 'con_offerte') {
-    return res.status(409).json({ errore: 'Le offerte di questa richiesta non sono più aperte.', stato: richiesta.stato });
-  }
-  const modalita = req.query.modalita === 'ritiro' ? 'ritiro' : 'consegna_mezzo_grossista';
-  const r = await flusso.riepilogoOfferta(richiesta, req.params.distributorId, modalita);
-  if (!r) return res.status(404).json({ errore: 'Questo distributore non ha confermato la disponibilità.' });
-  const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.utente.id);
-  const { offerta, risposta } = r;
-  res.json({
-    modalita,
-    cliente: { ragione_sociale: cliente.ragione_sociale, telefono: cliente.telefono || null },
-    indirizzo_consegna: cliente.indirizzo_consegna || '',
-    distributore: { id: offerta.distributore.id, nome: offerta.distributore.nome, filiale: offerta.distributore.filiale, zona: offerta.distributore.zona },
-    // Con il corriere: tempo totale scritto da lui, al posto dei tempi dichiarati dal banco.
-    corriere: !!risposta.corriere_minuti,
-    partenza_testo: risposta.corriere_minuti ? '' : format.tempoConsegna(risposta.partenza_ore),
-    consegna_testo: risposta.corriere_minuti
-      ? consegna.inParole(risposta.corriere_minuti)
-      : format.tempoConsegna(risposta.consegna_ore),
-    mancanti: offerta.mancanti.map((m) => ({ nome: m.nome, mancano: m.mancano })),
-    righe: offerta.totali.righe.map((x) => ({
-      quantita: x.quantita,
-      nome: x.nome_snapshot,
-      codice: x.codice_snapshot,
-      prezzo: pricing.euro(x.prezzo_unitario_cliente),
-      subtotale: pricing.euro(x.subtotale_cliente),
-    })),
-    totali: totaliJson(offerta.totali),
-    iva_pct: r.ivaPct,
-    secondi_scelta: r.secondiScelta,
-    nome_assegnazione: r.nomeAssegnazione,
-  });
-});
-
-router.post('/ordini', richiedeCliente, async (req, res) => {
-  const body = req.body || {};
-  const richiesta = await richieste.getRichiesta(body.request_id);
-  if (!richiesta || richiesta.cliente_id !== req.utente.id) {
-    return res.status(404).json({ errore: 'Richiesta non trovata.' });
-  }
-  const esito = await flusso.ordinaDaOfferta(richiesta, parseInt(body.distributor_id, 10), {
-    modalita: body.modalita,
-    note: body.note,
-    destinazione: body.destinazione,
-  });
-  if (esito.esito === 'creato') return res.json({ order_id: esito.orderId });
-  if (esito.esito === 'gia_ordinata') {
-    // Se l'ha chiusa l'ordine automatico il cliente va avvisato: consegna, destinazione e
-    // note appena scritte non sono state applicate.
-    return res.status(409).json({
-      errore: esito.richiesta.assegnata_auto
-        ? "Il tempo per scegliere era scaduto e l'ordine è partito in automatico, con consegna e note predefinite: le scelte di questa pagina non sono state applicate. Se serve cambiarle contatta il distributore."
-        : 'Questa richiesta è già diventata un ordine.',
-      order_id: esito.richiesta.order_id || null,
-    });
-  }
-  if (esito.esito === 'offerta_non_valida') {
-    return res.status(400).json({ errore: 'Questo distributore non ha confermato la disponibilità.' });
-  }
-  return res.status(400).json({
-    errore:
-      esito.richiesta.stato === 'annullata'
-        ? 'Hai annullato questa richiesta: non si può più ordinare da qui.'
-        : 'Le offerte di questa richiesta sono scadute: puoi reinviarla per avere conferme aggiornate.',
-  });
-});
+// Non ci sono più la scelta dell'offerta né "Invia l'ordine": l'installatore paga con la richiesta
+// (POST /richieste) e l'ordine nasce da solo quando il corriere prende la consegna.
 
 function statoOrdineTesto(ordine) {
   if (ordine.consegnato_il) return 'Consegnato';
@@ -438,7 +364,16 @@ router.get('/ordini/:id', richiedeCliente, async (req, res) => {
       totale: pricing.euro(ordine.totale_ivato > 0 ? ordine.totale_ivato : ordine.totale_finale),
     },
     iva_pct: d.ivaPct,
-    assegnata_auto: d.assegnataAuto,
+    // Pagamento fatto all'invio della richiesta (null per gli ordini del vecchio flusso).
+    pagamento: d.pagamento
+      ? {
+          stato: d.pagamento.stato,
+          stato_testo: d.pagamento.stato === 'rimborsato' ? 'Rimborsato' : 'Pagato',
+          importo: pricing.euro(d.pagamento.importo),
+          simulato: d.pagamento.metodo === 'simulato',
+          pagato_il: d.pagamento.pagato_il ? format.dataOra(d.pagamento.pagato_il) : null,
+        }
+      : null,
     annullabile: d.annullabile,
     da_confermare_consegna: ordine.stato === 'evaso' && !ordine.consegnato_il,
   });
@@ -482,21 +417,19 @@ router.get('/storico', richiedeCliente, async (req, res) => {
         ? 'Consegnato'
         : r.stato === 'in_attesa'
           ? 'In attesa'
-          : r.stato === 'con_offerte'
-            ? 'Da scegliere'
-            : r.stato === 'ordinata'
-              ? c.ordine
-                ? c.ordine.stato === 'inviato'
-                  ? 'Inviato'
-                  : c.ordine.stato === 'in_evasione'
-                    ? 'In preparazione'
-                    : 'Partito'
-                : 'Ordinata'
-              : r.stato === 'nessuna_offerta'
-                ? 'Scaduta senza ordine'
-                : r.stato === 'annullata'
-                  ? 'Annullata'
-                  : r.stato;
+          : r.stato === 'ordinata'
+            ? c.ordine
+              ? c.ordine.stato === 'inviato'
+                ? 'Inviato'
+                : c.ordine.stato === 'in_evasione'
+                  ? 'In preparazione'
+                  : 'Partito'
+              : 'Ordinata'
+            : r.stato === 'nessuna_offerta'
+              ? 'Scaduta senza ordine'
+              : r.stato === 'annullata'
+                ? 'Annullata'
+                : r.stato;
       return {
         richiesta_id: r.id,
         order_id: c.step === 3 && c.ordine ? c.ordine.id : null,
@@ -504,7 +437,7 @@ router.get('/storico', richiedeCliente, async (req, res) => {
         materiale: c.righe.map((x) => x.quantita + '× ' + x.nome).join(', '),
         etichetta,
         // Colore del badge: verde a buon fine, arancio da fare, rosso chiusa senza ordine.
-        tono: consegnato || r.stato === 'ordinata' ? 'ok' : r.stato === 'in_attesa' || r.stato === 'con_offerte' ? 'attesa' : 'ko',
+        tono: consegnato || r.stato === 'ordinata' ? 'ok' : r.stato === 'in_attesa' ? 'attesa' : 'ko',
       };
     }),
   });

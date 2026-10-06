@@ -15,7 +15,6 @@ import {
   type Prodotto,
   type Richiesta,
   type RiepilogoCarrello,
-  type RiepilogoOfferta,
   type Sottocategoria,
   type VoceStorico,
 } from './api';
@@ -180,7 +179,7 @@ export function useRicerca(testo: string, ambito: { macro?: string | null; sotto
   return { ...query, attiva: testo.trim().length >= 2, q };
 }
 
-// ---------- Flusso richiesta -> offerte -> ordine ----------
+// ---------- Flusso richiesta pagata -> ordine ----------
 
 // Totali del carrello ricalcolati dal server (prezzi veri, spedizione, ordine minimo).
 // Si aspetta una breve pausa nei tocchi: cinque "+" di fila fanno una richiesta, non cinque.
@@ -199,11 +198,11 @@ export function useRiepilogoCarrello(voci: { id: number; quantita: number }[]) {
   return { ...query, inAttesa: chiaveDifferita !== chiave };
 }
 
-const APERTA = new Set(['in_attesa', 'con_offerte']);
+const APERTA = new Set(['in_attesa']);
 
 // Rilettura periodica solo mentre la schermata è in primo piano: con l'app su un'altra
 // scheda (o sotto un'altra schermata) il giro rallenta, invece di continuare ogni pochi secondi
-// per nulla. Non si ferma del tutto, così un'offerta arrivata nel frattempo non resta invisibile.
+// per nulla. Non si ferma del tutto, così un ordine nato nel frattempo non resta invisibile.
 // Tornando in primo piano si rilegge subito, senza aspettare il prossimo giro.
 function useRileggiAlRitorno(rileggi: () => unknown, inPrimoPiano: boolean) {
   const eraInPrimoPiano = useRef(inPrimoPiano);
@@ -213,7 +212,7 @@ function useRileggiAlRitorno(rileggi: () => unknown, inPrimoPiano: boolean) {
   }, [inPrimoPiano, rileggi]);
 }
 
-// Mentre i banchi rispondono (o si sceglie) la richiesta si rilegge da sola ogni 4 secondi.
+// Mentre banchi e corrieri rispondono la richiesta si rilegge da sola ogni 4 secondi.
 export function useRichiesta(id: number) {
   const inPrimoPiano = useIsFocused();
   const query = useQuery({
@@ -223,18 +222,6 @@ export function useRichiesta(id: number) {
   });
   useRileggiAlRitorno(query.refetch, inPrimoPiano);
   return query;
-}
-
-export function useRiepilogoOfferta(richiestaId: number, distributoreId: number, modalita: string) {
-  return useQuery({
-    queryKey: ['offerta', richiestaId, distributoreId, modalita],
-    queryFn: () =>
-      chiamaApi<RiepilogoOfferta>(
-        conParametri(`/richieste/${richiestaId}/offerte/${distributoreId}`, { modalita: modalita === 'ritiro' ? 'ritiro' : null })
-      ),
-    placeholderData: keepPreviousData,
-    retry: false,
-  });
 }
 
 // L'ordine cambia stato quando il banco lo prende in carico o lo spedisce: si rilegge ogni 20s

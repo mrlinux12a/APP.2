@@ -115,6 +115,18 @@ const iconaOrdini = svg(
   '<path d="M3 8.5V16l9 4.5 9-4.5V8.5"/><path d="M12 13v7.5"/>'
 );
 
+// "Stato ordini" quando l'ordine è in consegna (vedi partials/nav_ordini.ejs).
+const iconaFurgone = svg(
+  '<path d="M2.5 6.5h11v9.5h-11z"/><path d="M13.5 9.5h4l3.5 3.5v3h-7.5"/>' +
+  '<circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>'
+);
+
+// Inquadratura (quattro angoli + cerchio): "cerca con una foto o il codice a barre" nella home.
+const iconaInquadra = svg(
+  '<path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/>' +
+  '<circle cx="12" cy="12" r="3.2"/>'
+);
+
 // Icone di navigazione del venditore: stesso trattamento (stroke, 1em, currentColor) delle
 // tre sopra, così ereditano dal CSS gli stessi colori del menu installatore (--icona-nav a
 // riposo, colore attivo del tema) invece di restare fisse come le emoji 🏠/👥 di prima.
@@ -155,6 +167,14 @@ const iconaDestinazione = svg('<path d="M6 3v18"/><path d="M6 4.2h11l-2.4 3.3L17
 const iconaTelefono = svg(
   '<path d="M6.2 3.2h3l1.4 3.8-2 1.5a12 12 0 0 0 5.9 5.9l1.5-2 3.8 1.4v3a2 2 0 0 1-2 2C10.9 18.8 5.2 13.1 4.2 5.2a2 2 0 0 1 2-2Z"/>'
 );
+
+const iconaEmail = svg('<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3.5 7.2 12 13l8.5-5.8"/>');
+
+// Cerchio con la "i": nota informativa (es. in fondo a "La mia anagrafica").
+const iconaInfo = svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5"/><path d="M12 8h.01"/>');
+
+// Freccia che esce da una porta: "Esci" nel menu del profilo.
+const iconaEsci = svg('<path d="M10 4H6.5A1.5 1.5 0 0 0 5 5.5v13A1.5 1.5 0 0 0 6.5 20H10"/><path d="M15 8l4 4-4 4"/><path d="M19 12H9.5"/>');
 
 const iconaOrario = svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3.2 2"/>');
 
@@ -235,6 +255,26 @@ const iconaAvviso = svg(
 // Chiudi/rimuovi: X semplice per i pulsanti di dismissione (es. togliere una card dalla home).
 const iconaChiudi = svg('<path d="M6 6l12 12M18 6 6 18"/>');
 
+// Cestino (rimuovi un articolo dal carrello) e scudo con spunta (rimborso garantito, barra di pagamento).
+const iconaCestino = svg(
+  '<path d="M4 7h16"/><path d="M9.5 7V4.5h5V7"/>' +
+  '<path d="M6.5 7l.8 12a1.5 1.5 0 0 0 1.5 1.4h6.4a1.5 1.5 0 0 0 1.5-1.4l.8-12"/><path d="M10 11v6M14 11v6"/>'
+);
+const iconaScudo = svg('<path d="M12 3l7.5 3v5.5c0 4.6-3.1 8.2-7.5 9.5-4.4-1.3-7.5-4.9-7.5-9.5V6L12 3Z"/><path d="M9 12l2.2 2.2L15.2 10"/>');
+
+// Pagina Storico: spunta (consegnato), punto esclamativo (nessuna risposta) e freccia circolare ("Riordina").
+const iconaSpunta = svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>');
+const iconaEsclamativo = svg('<path d="M12 6.5v7.2"/><path d="M12 17.6h.01"/>');
+const iconaRiprova = svg('<path d="M20 12a8 8 0 1 1-2.7-6"/><path d="M20 4.5V9h-4.5"/>');
+
+// Accesso e registrazione: occhio (mostra la password), occhio barrato (nascondila), freccia indietro.
+const iconaOcchio = svg('<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.8"/>');
+const iconaOcchioBarrato = svg(
+  '<path d="M9.9 5.8A9.6 9.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.9 3.7M6.3 7.4A16 16 0 0 0 2.5 12S6 18.5 12 18.5a9.4 9.4 0 0 0 4.1-.9"/>' +
+  '<path d="M9.9 9.9a2.8 2.8 0 0 0 4.2 3.7"/><path d="M3.5 3.5l17 17"/>'
+);
+const iconaIndietro = svg('<path d="M14.5 5.5 8 12l6.5 6.5"/>');
+
 module.exports = {
   ICONE_CATEGORIA: ICONE, // letto da scripts/genera_icone_app.js per l'app nativa
   iconaCategoria,
@@ -242,6 +282,8 @@ module.exports = {
   iconaCatalogo,
   iconaCarrello,
   iconaOrdini,
+  iconaFurgone,
+  iconaInquadra,
   iconaHome,
   iconaClienti,
   iconaNotifiche,
@@ -250,6 +292,9 @@ module.exports = {
   iconaFiscale,
   iconaDestinazione,
   iconaTelefono,
+  iconaEmail,
+  iconaInfo,
+  iconaEsci,
   iconaOrario,
   iconaPersona,
   iconaNegozio,
@@ -270,4 +315,12 @@ module.exports = {
   iconaVuotoNotifiche,
   iconaAvviso,
   iconaChiudi,
+  iconaCestino,
+  iconaScudo,
+  iconaSpunta,
+  iconaEsclamativo,
+  iconaRiprova,
+  iconaOcchio,
+  iconaOcchioBarrato,
+  iconaIndietro,
 };

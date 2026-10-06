@@ -38,16 +38,19 @@ class ArchivioSqlite extends session.Store {
   get(sid, callback) {
     const isPg = !!process.env.DATABASE_URL;
     const sql = isPg ? 'SELECT sess FROM session WHERE sid = ? AND expire > NOW()' : "SELECT sess FROM session WHERE sid = ? AND expire > datetime('now')";
+    // then(esito, errore) e non then(...).catch(...): se la callback lancia, un .catch la richiamerebbe
+    // una seconda volta con l'errore.
     db.prepare(sql).get(sid)
       .then(row => {
         if (!row) return callback(null, null);
         const sess = row.sess;
         if (typeof sess === 'string') {
-          try { return callback(null, JSON.parse(sess)); } catch (e) { return callback(e); }
+          let letta;
+          try { letta = JSON.parse(sess); } catch (e) { return callback(e); }
+          return callback(null, letta);
         }
         return callback(null, sess);
-      })
-      .catch(err => callback(err));
+      }, err => callback(err));
   }
 
   set(sid, sess, callback) {
@@ -59,8 +62,7 @@ class ArchivioSqlite extends session.Store {
       ? `INSERT INTO session (sid, sess, expire) VALUES (?, ?, ?) ON CONFLICT(sid) DO UPDATE SET sess = EXCLUDED.sess, expire = EXCLUDED.expire`
       : `INSERT INTO session (sid, sess, expire) VALUES (?, ?, ?) ON CONFLICT(sid) DO UPDATE SET sess = excluded.sess, expire = excluded.expire`;
     db.prepare(sql).run(sid, sessJson, expireParam)
-      .then(() => callback(null))
-      .catch(err => callback(err));
+      .then(() => callback(null), err => callback(err));
   }
 
   // Con rolling: true express-session chiama touch a ogni richiesta e ASPETTA che finisca prima di
@@ -82,16 +84,16 @@ class ArchivioSqlite extends session.Store {
           for (const [k, v] of this.ultimoTouch) if (adesso - v >= INTERVALLO_TOUCH_MS) this.ultimoTouch.delete(k);
         }
         callback(null);
-      })
-      .catch(err => callback(err));
+      }, err => callback(err));
   }
 
   destroy(sid, callback) {
+    // express-session può chiamarla senza callback (req.session.destroy()): senza questa riga, il
+    // `callback(null)` sotto lanciava un TypeError dentro la promessa.
+    const fine = typeof callback === 'function' ? callback : () => {};
     this.ultimoTouch.delete(sid);
     db.prepare('DELETE FROM session WHERE sid = ?').run(sid)
-      .then(() => callback(null))
-      .catch(err => callback(err || null));
-    if (!callback) return;
+      .then(() => fine(null), err => fine(err || null));
   }
 
   pulisci() {

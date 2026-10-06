@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="1">
+  <main class="acc ben">
+    <div class="ben-alto">
+      <div class="ben-alone" aria-hidden="true"><span class="ben-cerchio"><%- iconaSpunta %></span></div>
+      <h1 class="ben-titolo">Benvenuto in Ordini Minuteria</h1>
+      <p class="ben-sotto">L’anagrafica di <strong><%= currentUser.ragione_sociale %></strong> è pronta.</p>
+
+      <% if (distributore) { %>
+        <section class="ben-scheda">
+          <span class="ben-icona" aria-hidden="true"><%- iconaNegozio %></span>
+          <div>
+            <div class="ben-etichetta">Il tuo distributore</div>
+            <div class="ben-nome"><%= distributore.distributore %></div>
+          </div>
+        </section>
+        <% if (distributore.stato !== 'approvato') { %>
+          <p class="ben-nota"><%= distributore.distributore %> confermerà a breve che sei suo cliente.</p>
+        <% } %>
+      <% } %>
+    </div>
+
+    <div class="ben-azioni">
+      <a class="acc-btn" href="/home">Vai al catalogo</a>
+      <a class="ben-link" href="/profilo">Vedi la mia anagrafica</a>
+    </div>
+  </main>
+  <script src="<%= asset('/app.js') %>" defer></script>
+</body>
+</html>

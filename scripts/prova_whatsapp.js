@@ -2,13 +2,13 @@
 //
 // Si collega a WhatsApp con la sessione in whatsapp_auth/ (al primo giro mostra il QR o il codice) e
 // ripete quello che succede con un ordine vero:
-//   1. crea una richiesta finta e fa "accettare" il banco: nel gruppo arriva il messaggio con le due
-//      tappe (prelievo e consegna);
+//   1. crea una richiesta finta (già "pagata", pagamento simulato) e fa "accettare" il banco: nel gruppo
+//      arriva il messaggio con le due tappe (prelievo e consegna);
 //   2. aspetta che qualcuno risponda al messaggio con "preso <minuti>" entro la finestra (--finestra);
-//   3. se risponde: l'offerta diventa visibile all'installatore con quel tempo (con --ordina l'installatore
-//      conferma e nel gruppo arriva l'avviso "confermato");
-//   4. se nessuno risponde: la finestra scade, la richiesta torna "nessuna offerta" e il messaggio viene
-//      ELIMINATO dal gruppo.
+//   3. se risponde: l'ordine nasce da solo e all'installatore arriva la conferma con quel tempo; il bot
+//      risponde al "preso" e nel gruppo non scrive altro;
+//   4. se nessuno risponde: la finestra scade, la richiesta si chiude senza ordine (pagamento rimborsato)
+//      e il messaggio viene ELIMINATO dal gruppo.
 // Alla fine stampa il risultato e cancella tutto quello che ha creato.
 //
 // La richiesta è intestata a un cliente di prova disattivato e al banco AFIS (id 1, disattivato): nessun
@@ -19,11 +19,10 @@
 // WHATSAPP_ATTIVO=1: due istanze leggerebbero lo stesso gruppo e risponderebbero due volte.
 //
 // Uso:  node scripts/prova_whatsapp.js [--gruppo="Nome del gruppo" | id@g.us] [--numero=39333...]
-//                                       [--finestra=3] [--ordina]
+//                                       [--finestra=3]
 //   --gruppo   il gruppo di prova (altrimenti WHATSAPP_GRUPPO dal .env; se manca, elenca i gruppi ed esce)
 //   --numero   il numero del bot, con prefisso e senza +: al posto del QR stampa un codice da 8 caratteri
 //   --finestra minuti di tempo per rispondere, come la finestra della richiesta (default 3)
-//   --ordina   dopo il "preso" l'installatore conferma l'ordine (default: si ferma all'offerta)
 require('dotenv').config();
 const db = require('../db');
 
@@ -37,11 +36,10 @@ process.env.WHATSAPP_ATTIVO = '1';
 if (arg('gruppo')) process.env.WHATSAPP_GRUPPO = arg('gruppo');
 if (arg('numero')) process.env.WHATSAPP_NUMERO = arg('numero');
 const finestraMinuti = parseFloat(arg('finestra')) > 0 ? parseFloat(arg('finestra')) : 3;
-const ORDINA = process.argv.includes('--ordina');
 
 const whatsapp = require('../src/whatsapp');
 const richieste = require('../src/richieste');
-const flusso = require('../src/flusso_cliente');
+require('../src/flusso_cliente'); // registra l'assegnatore: senza, "preso" non crea l'ordine
 const sede = require('../src/sede_installatori');
 
 const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -132,10 +130,12 @@ async function stato() {
   const prodotto = await db.prepare('SELECT id FROM products WHERE attivo = 1 ORDER BY id LIMIT 1').get();
   const rich = await db
     .prepare(
-      `INSERT INTO requests (cliente_id, zona, stato, scade_il)
-       VALUES (?, 'Genova', 'in_attesa', NOW() + (? * INTERVAL '1 minute'))`
+      `INSERT INTO requests (cliente_id, zona, stato, scade_il, destinazione, note,
+                             pagamento_stato, pagamento_metodo, pagamento_importo, pagato_il)
+       VALUES (?, 'Genova', 'in_attesa', NOW() + (? * INTERVAL '1 minute'), ?, 'PROVA',
+               'pagato', 'simulato', 100, NOW())`
     )
-    .run(clienteId, finestraMinuti);
+    .run(clienteId, finestraMinuti, sede.indirizzoConsegna);
   requestId = Number(rich.lastInsertRowid);
   await db.prepare('INSERT INTO request_items (request_id, product_id, quantita) VALUES (?, ?, 2)').run(requestId, prodotto.id);
   await db
@@ -166,32 +166,28 @@ async function stato() {
   for (;;) {
     const { richiesta, risposta } = await stato();
     if (risposta.corriere_stato === 'preso') {
-      const offerte = await richieste.offerte(requestId);
-      const notifica = await db.prepare(`SELECT titolo, testo FROM notifications WHERE user_id = ? AND link = ?`).get(clienteId, '/richieste/' + requestId);
+      orderId = richiesta.order_id ? Number(richiesta.order_id) : null;
+      const notifica = orderId
+        ? await db.prepare(`SELECT titolo, testo FROM notifications WHERE user_id = ? AND order_id = ?`).get(clienteId, orderId)
+        : null;
       console.log('\nRISPOSTA LETTA');
       console.log('  minuti totali:   ', risposta.corriere_minuti);
       console.log('  da:              ', risposta.corriere_nome || '(nome non disponibile)');
-      console.log('  stato richiesta: ', richiesta.stato, '(atteso con_offerte)');
-      console.log('  offerte visibili:', offerte.length, offerte[0] ? `, tempo di consegna ${offerte[0].consegna_minuti_stimati} min` : '');
-      console.log('  notifica cliente:', notifica ? notifica.titolo + ' — ' + notifica.testo : 'NON CREATA');
-      if (ORDINA) {
-        const esito = await flusso.ordinaDaOfferta(richiesta, BANCO_DI_PROVA, { modalita: 'consegna_mezzo_grossista', destinazione: sede.indirizzoConsegna });
-        if (esito.esito === 'creato') {
-          orderId = esito.orderId;
-          const o = await db.prepare('SELECT corriere_minuti, corriere_arrivo_il FROM orders WHERE id = ?').get(orderId);
-          console.log(`  ordine #${orderId} creato: corriere ${o.corriere_minuti} min, arrivo ${new Date(o.corriere_arrivo_il).toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' })}`);
-          await whatsapp.svuotaCoda();
-          console.log('  nel gruppo deve essere arrivato l\'avviso "il cliente ha confermato".');
-        } else {
-          console.error('  ordine non creato:', JSON.stringify(esito));
-        }
+      console.log('  stato richiesta: ', richiesta.stato, '(atteso ordinata)');
+      if (orderId) {
+        const o = await db.prepare('SELECT corriere_minuti, corriere_arrivo_il FROM orders WHERE id = ?').get(orderId);
+        console.log(`  ordine #${orderId} creato da solo: corriere ${o.corriere_minuti} min, arrivo ${new Date(o.corriere_arrivo_il).toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' })}`);
+      } else {
+        console.error('  ORDINE NON CREATO (il timer lo riproverebbe).');
       }
-      await pausa(4000); // lascia partire conferma e avvisi nel gruppo
-      return fine(0);
+      console.log('  notifica cliente:', notifica ? notifica.titolo + ' — ' + notifica.testo : 'NON CREATA');
+      await pausa(4000); // lascia partire la risposta del bot nel gruppo (e nient'altro)
+      return fine(orderId ? 0 : 1);
     }
     if (risposta.corriere_stato === 'scaduto' || richiesta.stato === 'nessuna_offerta') {
       console.log('\nFINESTRA SCADUTA senza risposta.');
       console.log('  stato richiesta per l\'installatore:', richiesta.stato, '(atteso nessuna_offerta)');
+      console.log('  pagamento:', richiesta.pagamento_stato, '(atteso rimborsato)');
       await whatsapp.svuotaCoda();
       await pausa(1500);
       const dopo = await db.prepare('SELECT stato, errore FROM whatsapp_messaggi WHERE request_id = ?').get(requestId);

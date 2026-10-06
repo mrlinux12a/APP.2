@@ -5,9 +5,6 @@
       <span class="ico"><%- iconaCarrello %></span>Carrello
       <% if (typeof carrelloPezzi !== 'undefined' && carrelloPezzi > 0) { %><span class="pallino" data-nav-badge><%= carrelloPezzi %></span><% } else { %><span class="pallino" data-nav-badge hidden>0</span><% } %>
     </a>
-    <a href="/ordini" class="<%= attivo === 'ordini' ? 'attivo' : '' %>">
-      <span class="ico"><%- iconaOrdini %></span>Stato ordini
-      <% if (typeof ordiniNonLetti !== 'undefined' && ordiniNonLetti > 0) { %><span class="pallino pallino-azzurro">+<%= ordiniNonLetti %></span><% } %>
-    </a>
+    <%- include('nav_ordini', { attivo }) %>
   </div>
 </nav>

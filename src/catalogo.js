@@ -1,15 +1,57 @@
+const fs = require('fs');
+const path = require('path');
 const db = require('../db');
 const { conCache } = require('./memo');
 
 const PER_PAGINA = 40;
 
-function etichettaVariante(variante_valori) {
+function valoriVariante(variante_valori) {
   try {
     const arr = typeof variante_valori === 'string' ? JSON.parse(variante_valori) : variante_valori;
-    return Array.isArray(arr) && arr.length ? arr.join(' ') : null;
+    return Array.isArray(arr) && arr.length ? arr : null;
   } catch (e) {
     return null;
   }
+}
+
+// "H108xl60xp44cm" -> { lettere: ['H','L','P'], numeri: ['108','60','44'], unita: 'cm' }. Da due a tre coppie
+// lettera+numero separate da "x", unità facoltativa in fondo; l'ordine delle lettere cambia da un prodotto
+// all'altro (c'è anche "L1000xh400xp180"). Qualunque altra forma (Ø, Dn, gradi, più valori) non è una misura.
+const RE_DIMENSIONI = /^\s*((?:[hlp]\s*\d+(?:[.,]\d+)?\s*[x×]\s*){1,2}[hlp]\s*\d+(?:[.,]\d+)?)\s*(cm|mm|m)?\s*$/i;
+
+function leggiDimensioni(testo) {
+  const m = RE_DIMENSIONI.exec(String(testo));
+  if (!m) return null;
+  const coppie = m[1].split(/\s*[x×]\s*/i).map((c) => /^([hlp])\s*(\d.*)$/i.exec(c));
+  const lettere = coppie.map((c) => c[1].toUpperCase());
+  if (new Set(lettere).size !== lettere.length) return null; // "H10xh20" non descrive tre misure diverse
+  return { lettere, numeri: coppie.map((c) => c[2]), unita: m[2] ? m[2].toLowerCase() : '' };
+}
+
+function dimensioniVariante(variante_valori) {
+  const arr = valoriVariante(variante_valori);
+  return arr && arr.length === 1 ? leggiDimensioni(arr[0]) : null;
+}
+
+// Etichetta di una variante, per il sito (chip, pannello) e per l'app: "H108xl60xp44cm" -> "108 × 60 × 44 cm".
+// Con formatta = false, o se i valori non sono dimensioni, resta quella scritta nel catalogo.
+function etichettaVariante(variante_valori, formatta = true) {
+  const dim = formatta ? dimensioniVariante(variante_valori) : null;
+  if (dim) return dim.numeri.join(' × ') + (dim.unita ? ' ' + dim.unita : '');
+  const arr = valoriVariante(variante_valori);
+  return arr ? arr.join(' ') : null;
+}
+
+// Intestazioni del selettore di un prodotto con varianti. Le etichette si riscrivono come misure solo se
+// TUTTE le varianti sono dimensioni con le lettere nello stesso ordine: un gruppo misto resta com'è, con
+// l'occhiello "Variante" (un "H × L × P" sopra una misura che non lo è direbbe il falso).
+function infoVarianti(membri) {
+  const dim = membri.map((m) => dimensioniVariante(m.variante_valori));
+  const ordine = dim[0] ? dim[0].lettere.join(' × ') : '';
+  const sonoMisure = !!ordine && dim.every((d) => d && d.lettere.join(' × ') === ordine);
+  return sonoMisure
+    ? { voce: 'Misura', ordine, occhiello: 'Misura · ' + ordine, titolo: 'Scegli la misura' }
+    : { voce: 'Variante', ordine: '', occhiello: 'Variante', titolo: 'Scegli la variante' };
 }
 
 // Prodotti con lo stesso gruppo_id (stesso nome principale, misure diverse) vengono
@@ -96,6 +138,7 @@ async function raggruppaVarianti(righe) {
     giaMostrati.add(r.gruppo_id);
     const membriOrdinati = gruppo.membri.slice().sort((a, b) => a.prezzo_listino - b.prezzo_listino);
     const rappresentante = membriOrdinati.find((m) => m.prodotto_id === r.id) || membriOrdinati[0];
+    const info = infoVarianti(membriOrdinati);
     risultato.push({
       ...r,
       id: rappresentante.prodotto_id,
@@ -104,9 +147,10 @@ async function raggruppaVarianti(righe) {
       prezzo_listino: rappresentante.prezzo_listino,
       sconto_base_pct: rappresentante.sconto_base_pct,
       disponibilita: rappresentante.disponibilita,
+      varianti_info: info,
       varianti: membriOrdinati.map((m) => ({
         id: m.prodotto_id,
-        etichetta: etichettaVariante(m.variante_valori) || m.nome,
+        etichetta: etichettaVariante(m.variante_valori, !!info.ordine) || m.nome,
         codice: m.codice,
         prezzo_listino: m.prezzo_listino,
         sconto_base_pct: m.sconto_base_pct,
@@ -229,6 +273,10 @@ function correggiParolaChiave(termine) {
 const SOGLIA_MINIMA_FUZZY = 4;
 const SOGLIA_FUZZY = 0.45;
 
+// Una ricerca vera è di poche parole: oltre questi limiti il resto del testo si ignora.
+const LUNGHEZZA_MASSIMA_RICERCA = 200;
+const TERMINI_MASSIMI_RICERCA = 12;
+
 // Pattern Postgres (operatore ~*) per un diametro in mm ancorato a un confine non
 // numerico: "20" non deve mai intercettare "Ø200" o "120". Uno o più valori insieme,
 // es. frammentiDiametroMm([20,22,25]) -> 'ø\s?(20|22|25)(?!\d)'.
@@ -277,10 +325,18 @@ async function eseguiRicerca(
   } = {},
   veloce = true
 ) {
-  const termini = sostituisciFrazioniAParole(String(query || '').toLowerCase())
+  // Il testo cercato ha un tetto di lunghezza e di parole: ogni parola aggiunge condizioni e parametri alla
+  // query, e un testo di migliaia di parole superava il limite di parametri di Postgres (errore 500).
+  const termini = sostituisciFrazioniAParole(String(query || '').slice(0, LUNGHEZZA_MASSIMA_RICERCA).toLowerCase())
     .split(/\s+/)
     .map((t) => t.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .slice(0, TERMINI_MASSIMI_RICERCA);
+
+  // I filtri espliciti arrivano dalla query string: se non sono testo (vecchi link, richieste a mano) si
+  // ignorano invece di far fallire la ricerca con un TypeError.
+  materiale = typeof materiale === 'string' ? materiale : null;
+  diametro = typeof diametro === 'string' ? diametro : null;
 
   const where = ['p.attivo = 1'];
   const params = [];
@@ -446,19 +502,8 @@ const macroCategorie = conCache(60 * 1000, async function macroCategorie() {
     .all();
 });
 
-// Le categorie che in cantiere si cercano più spesso: vanno in cima alla home.
-async function categorieInEvidenza() {
-  const cats = await macroCategorie();
-  return cats.filter((m) => m.in_evidenza === 1);
-}
-
-async function altreCategorie() {
-  const cats = await macroCategorie();
-  return cats.filter((m) => m.in_evidenza !== 1 && m.n_prodotti > 0);
-}
-
-// Le due liste della home con una sola lettura: chiamare le due funzioni sopra ripete la
-// stessa query di conteggio (la più lenta della home).
+// Le due liste della home con una sola lettura: le categorie che in cantiere si cercano più spesso (in
+// cima) e le altre con almeno un prodotto. Il conteggio dei prodotti è la query più lenta della home.
 async function categorieHome() {
   const cats = await macroCategorie();
   return {
@@ -468,6 +513,22 @@ async function categorieHome() {
 }
 
 // ---------- Sottocategorie e misure ----------
+
+// Foto delle sottocategorie: la tabella non ha una colonna immagine, vale la convenzione
+// public/img/sottocategorie/<slug>.webp. "varie" esiste in ogni categoria, quindi lì il file è
+// <macro>-varie.webp. Si propone solo se il file c'è: un'immagine mancante non è un errore innocuo, perché
+// /img cade nel resto dell'app (sessione e query delle viste) prima di arrivare al 404.
+const CARTELLA_FOTO_SOTTO = path.join(__dirname, '..', 'public', 'img', 'sottocategorie');
+
+async function fotoSottocategoria(macroSlug, slug) {
+  const file = (slug === 'varie' ? macroSlug + '-varie' : slug) + '.webp';
+  try {
+    await fs.promises.access(path.join(CARTELLA_FOTO_SOTTO, file));
+    return '/img/sottocategorie/' + file;
+  } catch (e) {
+    return null;
+  }
+}
 
 const sottocategorieDi = conCache(60 * 1000, async function sottocategorieDi(macroSlug) {
   const rows = await db
@@ -480,7 +541,9 @@ const sottocategorieDi = conCache(60 * 1000, async function sottocategorieDi(mac
         ORDER BY s.ordine, s.nome`
     )
     .all(macroSlug);
-  return rows.filter((s) => s.n > 0);
+  const conArticoli = rows.filter((s) => s.n > 0);
+  const foto = await Promise.all(conArticoli.map((s) => fotoSottocategoria(macroSlug, s.slug)));
+  return conArticoli.map((s, i) => ({ ...s, foto: foto[i] }));
 });
 
 async function sottocategoria(macroSlug, slug) {
@@ -572,7 +635,9 @@ async function paginato({ where, params, pagina = 1, perPagina = PER_PAGINA }) {
 
   // Totale e pagina partono insieme: prima erano in fila, una andata e ritorno al DB in più
   // a ogni apertura di un elenco.
-  const richiesta = Math.max(1, parseInt(pagina, 10) || 1);
+  // Tetto alla pagina richiesta: un numero enorme (?p=99999999999999999999) dava un OFFSET fuori scala
+  // per Postgres e un 500 invece dell'ultima pagina.
+  const richiesta = Math.min(1000000, Math.max(1, parseInt(pagina, 10) || 1));
   const [totale, prima] = await Promise.all([contaRighe(where, params), leggiPagina(richiesta)]);
 
   const pagine = Math.max(1, Math.ceil(totale / perPagina));
@@ -691,10 +756,11 @@ async function prodottiDelMarchio(slug, famiglia, pagina) {
 
 module.exports = {
   PER_PAGINA,
+  etichettaVariante,
+  infoVarianti,
+  raggruppaVarianti,
   cercaProdotti,
   macroCategorie,
-  categorieInEvidenza,
-  altreCategorie,
   categorieHome,
   macroCategoria,
   sottocategorieDi,

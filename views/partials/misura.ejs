@@ -1,0 +1,14 @@
+<%
+  // Scelta della misura (o variante) di un prodotto con varianti: occhiello, poi due chip affiancati oppure,
+  // da tre varianti in su, un pulsante che apre il pannello dal basso (uno solo per pagina, lo riempie
+  // public/app.js dai data-varianti della riga). Deve restare uguale a misuraHtml in public/app.js: lo usano
+  // sia la riga compatta della categoria sia la card classica, e la ricerca live le ridisegna da lì.
+  const info = p.varianti_info || { voce: 'Misura', ordine: '', occhiello: 'Misura', titolo: 'Scegli la misura' };
+  const scelta = p.varianti.find(function (v) { return v.id === p.id; }) || p.varianti[0];
+%><div class="misura" data-misura><div class="misura-occhiello"><%= info.occhiello %><% if (p.varianti.length >= 3) { %> · <%= p.varianti.length %> disponibili<% } %></div><%
+  if (p.varianti.length >= 3) {
+%><button type="button" class="misura-apri" data-misura-apri aria-haspopup="dialog" data-pannello-titolo="<%= info.titolo %>" data-pannello-sotto="<%= p.nome %><%= info.ordine ? ' · ' + info.ordine : '' %>"><span class="misura-sr"><%= info.voce %> di <%= p.nome %>: </span><span class="misura-testo" data-misura-testo><%= scelta.etichetta %></span><svg class="misura-freccia" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button><%
+  } else {
+%><div class="misura-chip" role="radiogroup" aria-label="<%= info.voce %> di <%= p.nome %>"><% p.varianti.forEach(function (v) { %><button type="button" class="misura-opz<%= v.id === scelta.id ? ' attivo' : '' %>" role="radio" aria-checked="<%= v.id === scelta.id ? 'true' : 'false' %>" tabindex="<%= v.id === scelta.id ? 0 : -1 %>" data-variante-id="<%= v.id %>"><%= v.etichetta %></button><% }); %></div><%
+  }
+%></div>

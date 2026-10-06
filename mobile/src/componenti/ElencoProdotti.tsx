@@ -55,7 +55,7 @@ export function ElencoProdotti({
             <ActivityIndicator color={c.accento} style={{ marginVertical: 20 }} />
           ) : prodotti.length ? (
             <Text style={[stili.nota, { color: c.grigio }]}>
-              Prezzi IVA esclusa. La disponibilità la conferma il banco prima di chiudere l'ordine.
+              Prezzi IVA esclusa. Paghi quando mandi la richiesta: se nessun banco conferma, il pagamento ti viene rimborsato.
             </Text>
           ) : null
         }

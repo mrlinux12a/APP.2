@@ -95,13 +95,13 @@
             </div>
           <% }); %>
         </div>
-        <a class="nota" href="/distributore/ordini" style="display:block;">Vedi tutti gli ordini →</a>
+        <a class="nota" href="/distributore/ordini">Vedi tutti gli ordini →</a>
       <% } %>
 
     </div>
   </div>
 
   <%- include('partials/nav_distributore', { attivo: 'home', contatori }) %>
-  <script src="/app.js" defer></script>
+  <script src="<%= asset('/app.js') %>" defer></script>
 </body>
 </html>

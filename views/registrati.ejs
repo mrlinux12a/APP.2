@@ -1,140 +1,136 @@
+<%
+  // Un solo modulo con tutti i campi, diviso in tre fieldset. Senza JavaScript si vedono uno sotto l'altro e il modulo
+  // funziona come sempre; con lo script (public/app.js, "Registrazione a passi") se ne mostra uno alla volta.
+  // `passo` è il passo da aprire (il primo con un errore del server), `campiErrore` i campi sbagliati.
+  const v = (campo) => (typeof dati[campo] === 'string' ? dati[campo] : '');
+  const sbagliato = (campo) => campiErrore.indexOf(campo) !== -1;
+  const tipoScelto = dati.tipo_soggetto === undefined ? Object.keys(tipi)[0] : dati.tipo_soggetto;
+%>
 <!DOCTYPE html>
 <html lang="it">
 <head>
   <%- include('partials/app_head', { titolo }) %>
 </head>
 <body data-loggato="0">
-  <div class="ingresso ingresso-largo">
-    <div class="ingresso-testata">
-      <div class="ingresso-marchio">Ordini Minuteria</div>
-      <p>Crea l'anagrafica della tua impresa. I dati servono anche per la fatturazione.</p>
-    </div>
+  <div class="acc reg" data-registrazione data-passo-iniziale="<%= passo %>">
+    <header class="reg-testata">
+      <a class="reg-indietro" href="/login" data-reg-indietro aria-label="Indietro"><%- iconaIndietro %></a>
+      <div class="reg-titolo-pagina">Registra la tua impresa</div>
+    </header>
 
-    <div class="card">
-      <div class="schede">
-        <a href="/login">Accedi</a>
-        <a href="/registrati" class="attiva">Registrati</a>
+    <div class="reg-avanzamento" aria-hidden="true"><span></span><span></span><span></span></div>
+
+    <% if (errori.length) { %>
+      <div class="errore" role="alert">
+        <strong>Controlla questi punti:</strong>
+        <ul class="errore-elenco">
+          <% errori.forEach(function (e) { %><li><%= e %></li><% }); %>
+        </ul>
       </div>
+    <% } %>
 
-      <% if (errori.length) { %>
-        <div class="errore">
-          <strong>Controlla questi punti:</strong>
-          <ul style="margin:6px 0 0; padding-left:18px;">
-            <% errori.forEach(function (e) { %><li><%= e %></li><% }); %>
-          </ul>
-        </div>
-      <% } %>
+    <form method="POST" action="/registrati" data-reg-form>
+      <fieldset class="reg-passo" data-reg-passo aria-labelledby="reg-t1">
+        <div class="reg-passo-testa"><h2 id="reg-t1">La tua impresa</h2><span>Passo 1 di 3</span></div>
 
-      <form method="POST" action="/registrati">
-        <div class="sezione-titolo" style="margin-top:0;">Chi sei</div>
-        <label>Forma giuridica</label>
-        <div class="scelta-modalita" style="margin-bottom:12px;">
-          <% Object.keys(tipi).forEach(function (k) { %>
-            <label class="scelta-radio <%= dati.tipo_soggetto === k ? 'attiva' : '' %>">
-              <input type="radio" name="tipo_soggetto" value="<%= k %>"
-                     <%= dati.tipo_soggetto === k ? 'checked' : '' %> required>
-              <%= tipi[k] %>
-            </label>
-          <% }); %>
-        </div>
-
-        <label for="ragione_sociale">Ragione sociale / denominazione *</label>
-        <input type="text" id="ragione_sociale" name="ragione_sociale" required
-               value="<%= dati.ragione_sociale || '' %>">
-
-        <label for="referente">Referente (nome e cognome)</label>
-        <input type="text" id="referente" name="referente" value="<%= dati.referente || '' %>">
-
-        <div class="sezione-titolo">Dati per la fatturazione</div>
-
-        <label for="partita_iva">Partita IVA *</label>
-        <input type="text" id="partita_iva" name="partita_iva" inputmode="numeric"
-               placeholder="11 cifre" value="<%= dati.partita_iva || '' %>" required>
-
-        <label for="codice_fiscale">Codice fiscale</label>
-        <input type="text" id="codice_fiscale" name="codice_fiscale" autocapitalize="characters"
-               value="<%= dati.codice_fiscale || '' %>">
-
-        <label for="indirizzo">Indirizzo della sede legale *</label>
-        <input type="text" id="indirizzo" name="indirizzo" placeholder="Via e numero civico"
-               value="<%= dati.indirizzo || '' %>" required>
-
-        <div class="riga-campi">
-          <div>
-            <label for="cap">CAP *</label>
-            <input type="text" id="cap" name="cap" inputmode="numeric" maxlength="5"
-                   value="<%= dati.cap || '' %>" required>
-          </div>
-          <div style="flex:2;">
-            <label for="citta">Città *</label>
-            <input type="text" id="citta" name="citta" value="<%= dati.citta || '' %>" required>
-          </div>
-          <div>
-            <label for="provincia">Prov. *</label>
-            <input type="text" id="provincia" name="provincia" maxlength="2"
-                   autocapitalize="characters" value="<%= dati.provincia || '' %>" required>
+        <div class="acc-campo<%= sbagliato('tipo_soggetto') ? ' sbagliato' : '' %>" role="radiogroup" aria-labelledby="reg-tipo-et">
+          <span class="acc-etichetta" id="reg-tipo-et">Forma giuridica</span>
+          <div class="reg-tipi">
+            <% Object.keys(tipi).forEach(function (k) { %>
+              <label class="reg-tipo">
+                <input type="radio" name="tipo_soggetto" value="<%= k %>" <%= tipoScelto === k ? 'checked' : '' %> required>
+                <span><%= tipi[k] %></span>
+              </label>
+            <% }); %>
           </div>
         </div>
 
-        <label for="sdi_pec">Codice SDI o PEC per la fattura elettronica</label>
-        <input type="text" id="sdi_pec" name="sdi_pec" value="<%= dati.sdi_pec || '' %>">
+        <%- include('partials/acc_campo', {
+          id: 'ragione_sociale', etichetta: 'Ragione sociale', valore: v('ragione_sociale'), sbagliato: sbagliato('ragione_sociale'),
+          attributi: { placeholder: 'es. Rossi Impianti S.r.l.', maxlength: 200, autocomplete: 'organization', required: true },
+        }) %>
+        <%- include('partials/acc_campo', {
+          id: 'referente', etichetta: 'Referente', valore: v('referente'), sbagliato: sbagliato('referente'), hint: 'Facoltativo',
+          attributi: { placeholder: 'Nome e cognome', maxlength: 200, autocomplete: 'name' },
+        }) %>
+        <%- include('partials/acc_campo', {
+          id: 'email', etichetta: 'Email', tipo: 'email', valore: v('email'), sbagliato: sbagliato('email'),
+          attributi: { placeholder: 'nome@impresa.it', maxlength: 200, autocomplete: 'email', autocapitalize: 'none', required: true },
+        }) %>
+        <%- include('partials/acc_campo', {
+          id: 'telefono', etichetta: 'Telefono', tipo: 'tel', valore: v('telefono'), sbagliato: sbagliato('telefono'),
+          attributi: { placeholder: 'es. 333 1234567', maxlength: 200, autocomplete: 'tel', required: true },
+        }) %>
+      </fieldset>
 
-        <p class="nota">Per ora tutte le consegne vanno in <%= sede.indirizzoConsegna %>.</p>
+      <fieldset class="reg-passo" data-reg-passo aria-labelledby="reg-t2">
+        <div class="reg-passo-testa"><h2 id="reg-t2">Dati di fatturazione</h2><span>Passo 2 di 3</span></div>
 
-        <div class="sezione-titolo">Contatti</div>
-
-        <label for="email">Email *</label>
-        <input type="email" id="email" name="email" autocapitalize="none"
-               value="<%= dati.email || '' %>" required>
-
-        <label for="telefono">Telefono *</label>
-        <input type="tel" id="telefono" name="telefono" value="<%= dati.telefono || '' %>" required>
-
-        <div class="sezione-titolo">I tuoi distributori di riferimento</div>
-        <p class="nota" style="margin-top:0;">
-          Scegli i banchi con cui lavori: riceveranno la richiesta di confermare che sei loro
-          cliente. Finché non ti approvano non potrai inviare loro ordini.
-        </p>
-        <div class="card card-fitta" style="margin-bottom:12px;">
-          <% distributori.forEach(function (d) { %>
-            <label class="riga-lista riga-scelta">
-              <input type="checkbox" name="distributori" value="<%= d.id %>"
-                     <%= scelti.indexOf(d.id) !== -1 ? 'checked' : '' %>>
-              <span class="corpo">
-                <span class="etichetta"><%= d.nome %></span>
-                <span class="dettaglio">zona <%= d.zona %></span>
-              </span>
-            </label>
-          <% }); %>
+        <%- include('partials/acc_campo', {
+          id: 'partita_iva', etichetta: 'Partita IVA', valore: v('partita_iva'), sbagliato: sbagliato('partita_iva'),
+          attributi: { placeholder: '11 cifre', inputmode: 'numeric', maxlength: 20, autocomplete: 'off', required: true },
+        }) %>
+        <%- include('partials/acc_campo', {
+          id: 'codice_fiscale', etichetta: 'Codice fiscale', valore: v('codice_fiscale'), sbagliato: sbagliato('codice_fiscale'),
+          hint: 'Facoltativo, se diverso dalla Partita IVA',
+          attributi: { maxlength: 20, autocomplete: 'off', autocapitalize: 'characters' },
+        }) %>
+        <%- include('partials/acc_campo', {
+          id: 'indirizzo', etichetta: 'Sede legale', valore: v('indirizzo'), sbagliato: sbagliato('indirizzo'),
+          attributi: { placeholder: 'Via e numero civico', maxlength: 200, autocomplete: 'street-address', required: true },
+        }) %>
+        <div class="reg-riga-citta">
+          <%- include('partials/acc_campo', {
+            id: 'cap', etichetta: 'CAP', valore: v('cap'), sbagliato: sbagliato('cap'),
+            attributi: { inputmode: 'numeric', maxlength: 5, autocomplete: 'postal-code', required: true },
+          }) %>
+          <%- include('partials/acc_campo', {
+            id: 'citta', etichetta: 'Città', valore: v('citta'), sbagliato: sbagliato('citta'),
+            attributi: { maxlength: 200, autocomplete: 'address-level2', required: true },
+          }) %>
+          <%- include('partials/acc_campo', {
+            id: 'provincia', etichetta: 'Prov.', valore: v('provincia'), sbagliato: sbagliato('provincia'),
+            attributi: { maxlength: 2, autocomplete: 'address-level1', autocapitalize: 'characters', required: true },
+          }) %>
         </div>
+        <%- include('partials/acc_campo', {
+          id: 'sdi_pec', etichetta: 'Codice SDI o PEC', valore: v('sdi_pec'), sbagliato: sbagliato('sdi_pec'),
+          hint: 'Facoltativo: serve per la fattura elettronica',
+          attributi: { maxlength: 200, autocomplete: 'off' },
+        }) %>
+      </fieldset>
 
-        <div class="sezione-titolo">Credenziali di accesso</div>
+      <fieldset class="reg-passo" data-reg-passo aria-labelledby="reg-t3">
+        <div class="reg-passo-testa"><h2 id="reg-t3">Accesso</h2><span>Passo 3 di 3</span></div>
 
-        <label for="username">Nome utente *</label>
-        <input type="text" id="username" name="username" autocapitalize="none"
-               autocomplete="username" spellcheck="false" data-utente
-               pattern="[A-Za-z0-9._\-]{3,30}"
-               placeholder="tutto attaccato, es. rossimpianti"
-               value="<%= dati.username || '' %>" required>
-        <p class="nota" style="margin:-6px 0 12px;">
-          Scrivilo <strong>tutto attaccato</strong>, senza spazi: solo lettere, numeri,
-          punto o trattino. Gli spazi vengono tolti da soli.
-        </p>
+        <%- include('partials/acc_campo', {
+          id: 'username', etichetta: 'Nome utente', valore: v('username'), sbagliato: sbagliato('username'),
+          hint: 'Tutto attaccato: lettere, numeri, punto o trattino.',
+          attributi: {
+            placeholder: 'es. rossimpianti', autocomplete: 'username', autocapitalize: 'none', autocorrect: 'off',
+            spellcheck: 'false', 'data-utente': true, pattern: '[A-Za-z0-9._\\-]{3,30}', required: true,
+          },
+        }) %>
+        <%- include('partials/acc_campo', {
+          id: 'password', etichetta: 'Password', tipo: 'password', sbagliato: sbagliato('password'), hint: 'Almeno 8 caratteri.',
+          attributi: { autocomplete: 'new-password', minlength: 8, maxlength: 72, required: true },
+        }) %>
+        <%- include('partials/acc_campo', {
+          id: 'password2', etichetta: 'Ripeti la password', tipo: 'password', sbagliato: sbagliato('password2'),
+          attributi: { autocomplete: 'new-password', maxlength: 72, required: true },
+        }) %>
 
-        <label for="password">Password * (almeno 8 caratteri)</label>
-        <input type="password" id="password" name="password" autocomplete="new-password" required>
+        <p class="reg-nota-fiscale">I dati fiscali servono per intestare bolle e fatture.</p>
+      </fieldset>
 
-        <label for="password2">Ripeti la password *</label>
-        <input type="password" id="password2" name="password2" autocomplete="new-password" required>
-
-        <button class="btn btn-primary btn-blocco" type="submit">Crea l'anagrafica</button>
-        <p class="nota" style="margin-bottom:0;">
-          I campi con * sono obbligatori. I dati fiscali vengono usati per intestare bolle e
-          fatture, e vengono mostrati ai distributori che indichi qui sopra.
-        </p>
-      </form>
-    </div>
+      <div class="reg-barra">
+        <div class="reg-barra-in">
+          <button type="submit" class="acc-btn" data-reg-avanti>Crea l'anagrafica</button>
+          <p class="reg-accedi">Hai già un account? <a href="/login">Accedi</a></p>
+        </div>
+      </div>
+    </form>
   </div>
-  <script src="/app.js" defer></script>
+  <script src="<%= asset('/app.js') %>" defer></script>
 </body>
 </html>

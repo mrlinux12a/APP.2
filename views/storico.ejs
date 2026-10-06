@@ -4,47 +4,30 @@
   <%- include('partials/app_head', { titolo }) %>
 </head>
 <body data-loggato="1">
-  <div class="app">
-    <%- include('partials/appbar', { titolo, intestazione: 'Storico', indietro: '/home' }) %>
+  <div class="app app-storico">
+    <%- include('partials/appbar', { titolo, intestazione: 'Storico ordini', indietro: '/home' }) %>
 
     <div class="contenuto">
-      <% if (!cards.length) { %>
+      <% if (!inCorso.length && !mesi.length) { %>
         <div class="vuoto">
           <span class="emoji"><%- iconaVuotoScatola %></span>
-          Nessuna richiesta né ordine ancora.
+          Nessun ordine ancora.
         </div>
+        <a class="btn btn-primary btn-blocco" href="/home">Vai al catalogo</a>
       <% } else { %>
-        <div class="card card-fitta">
-          <% cards.forEach(function (c) { %>
-            <% const r = c.richiesta;
-               const href = c.step === 3 && c.ordine ? '/ordini/' + c.ordine.id : '/richieste/' + r.id;
-               const consegnato = c.ordine && c.ordine.consegnato_il;
-               const etichetta = consegnato ? 'Consegnato'
-                 : r.stato === 'in_attesa' ? 'In attesa'
-                 : r.stato === 'con_offerte' ? 'Da scegliere'
-                 : r.stato === 'ordinata' ? (c.ordine ? (c.ordine.stato === 'inviato' ? 'Inviato' : c.ordine.stato === 'in_evasione' ? 'In preparazione' : 'Partito') : 'Ordinata')
-                 : r.stato === 'nessuna_offerta' ? 'Scaduta senza ordine'
-                 : r.stato === 'annullata' ? 'Annullata'
-                 : r.stato;
-               const classeBadge = consegnato ? 'stato-consegnato' : (c.ordine ? 'stato-' + c.ordine.stato : 'stato-' + r.stato);
-            %>
-            <a class="riga-lista" href="<%= href %>">
-              <span class="icona"><%- iconaOrdini %></span>
-              <span class="corpo">
-                <span class="etichetta"><%= fmt.dataOra(r.creato_il) %></span>
-                <span class="dettaglio">
-                  <% c.righe.forEach(function (row, i) { %><%= i ? ', ' : '' %><%= row.quantita %>× <%= row.nome %><% }); %>
-                </span>
-              </span>
-              <span class="stato-badge <%= classeBadge %>"><%= etichetta %></span>
-            </a>
-          <% }); %>
-        </div>
+        <% if (inCorso.length) { %>
+          <h2 class="st-titolo">In corso</h2>
+          <% inCorso.forEach(function (v) { %><%- include('partials/storico_scheda', { v }) %><% }); %>
+        <% } %>
+        <% mesi.forEach(function (mese) { %>
+          <h2 class="st-titolo"><%= mese.titolo %></h2>
+          <% mese.voci.forEach(function (v) { %><%- include('partials/storico_scheda', { v }) %><% }); %>
+        <% }); %>
       <% } %>
     </div>
   </div>
 
   <%- include('partials/nav', { attivo: '' }) %>
-  <script src="/app.js" defer></script>
+  <script src="<%= asset('/app.js') %>" defer></script>
 </body>
 </html>

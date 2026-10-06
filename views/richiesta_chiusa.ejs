@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="1">
+  <div class="app">
+    <%- include('partials/appbar', { titolo, intestazione: 'Richiesta', indietro: '/home' }) %>
+
+    <%# Una richiesta senza ordine: annullata dall'installatore o chiusa perché nessun banco (o nessun
+        corriere) ha confermato in tempo. Se è andata a buon fine si apre direttamente l'ordine.
+        Scaduta (nessuna_offerta) ha il layout nuovo, in rosso, come "Verifica disponibilità" e "Ordine in
+        consegna" (classi att-*); annullata resta com'era. %>
+    <div class="contenuto">
+      <% if (richiesta.stato === 'nessuna_offerta') { %>
+        <%
+          // Durata vera della finestra (come l'anello della pagina di attesa), non il valore di configurazione di oggi.
+          const inizioFinestra = fmt.toDate(richiesta.creato_il);
+          const fineFinestra = fmt.toDate(richiesta.scade_il);
+          const minutiFinestra = inizioFinestra && fineFinestra ? Math.max(1, Math.round((fineFinestra - inizioFinestra) / 60000)) : Math.round(minutiRisposta);
+          const testoFinestra = minutiFinestra === 1 ? '1 minuto' : minutiFinestra + ' minuti';
+          const spunta = '<span class="att-spunta" aria-hidden="true"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>';
+        %>
+
+        <%# 1. Stato: anello vuoto, rimborso, passaggi %>
+        <div class="card att-card att-timer att-rosso">
+          <div class="att-anello">
+            <svg viewBox="0 0 148 148" aria-hidden="true">
+              <circle class="traccia" cx="74" cy="74" r="64"/>
+            </svg>
+            <span class="att-tempo att-tempo-spento">00:00</span>
+            <span class="att-allarme" aria-hidden="true">!</span>
+          </div>
+          <h2 class="att-titolo">Nessun banco ha confermato</h2>
+          <p class="att-sotto">Il tempo di <%= testoFinestra %> è scaduto.</p>
+          <% if (richiesta.pagamento_stato === 'rimborsato') { %>
+            <div class="att-rimborso-riga"><span class="att-rimborso"><%- spunta %>€ <%= euro(richiesta.pagamento_importo) %> rimborsati</span></div>
+          <% } else if (richiesta.pagamento_stato === 'pagato') { %>
+            <div class="att-rimborso-riga"><span class="att-rimborso att-rimborso-attesa">Rimborso in corso · € <%= euro(richiesta.pagamento_importo) %></span></div>
+          <% } %>
+          <ol class="att-passi">
+            <li class="att-passo att-fatto">
+              <span class="att-barretta"></span>
+              <span class="att-etichetta"><%- spunta %>Inviata</span>
+            </li>
+            <li class="att-passo att-corrente" aria-current="step">
+              <span class="att-barretta"></span>
+              <span class="att-etichetta"><span class="att-croce" aria-hidden="true"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"><path d="M7 7l10 10M17 7L7 17"/></svg></span>Nessuna risposta</span>
+            </li>
+            <li class="att-passo">
+              <span class="att-barretta"></span>
+              <span class="att-etichetta">In consegna</span>
+            </li>
+          </ol>
+        </div>
+
+        <%# 2. Banchi interpellati (uno per ditta, con il suo stato) %>
+        <% risposte.forEach(function (r) { %>
+          <div class="card att-card att-banco">
+            <span class="att-icona" aria-hidden="true"><%- iconaNegozio %></span>
+            <div class="att-banco-testo">
+              <div class="att-occhiello">Banco interpellato</div>
+              <div class="att-banco-nome"><%= r.distributore_nome %></div>
+            </div>
+            <% if (r.esito === 'confermato') { %>
+              <span class="att-chip-ok"><%- spunta %>Disponibile</span>
+            <% } else { %>
+              <span class="att-chip-no"><%= r.esito === 'non_disponibile' ? 'Non disponibile' : 'Nessuna risposta' %></span>
+            <% } %>
+          </div>
+        <% }); %>
+
+        <%# 3. Materiale richiesto %>
+        <div class="card att-card att-materiale">
+          <div class="att-occhiello">Materiale richiesto</div>
+          <ul class="att-righe">
+            <% righe.forEach(function (r) { %>
+              <li class="att-riga">
+                <span class="att-qta"><%= r.quantita %>×</span>
+                <div class="att-desc">
+                  <div class="att-nome"><%= r.nome %></div>
+                  <div class="att-cod">Cod. <%= r.codice %></div>
+                </div>
+              </li>
+            <% }); %>
+          </ul>
+          <div class="att-piede">Richiesta del <%= fmt.dataOraRoma(richiesta.creato_il, ', ') %> · prezzi IVA esclusa</div>
+        </div>
+
+        <%# 4. Rinvia: stessa azione di prima. Il testo non dice più "paghi di nuovo": l'importo lo ha già visto nella scheda. %>
+        <form method="POST" action="/richieste/<%= richiesta.id %>/reinvia">
+          <button class="att-rinvia" type="submit">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4.5V9h-4.5"/></svg>
+            Rinvia richiesta
+          </button>
+        </form>
+
+        <%# 5. Elimina: stessa azione e stessa conferma di prima %>
+        <form method="POST" action="/richieste/<%= richiesta.id %>/elimina" onsubmit="return confirm('Eliminare definitivamente questa richiesta?')">
+          <button class="att-elimina" type="submit">Elimina richiesta</button>
+        </form>
+
+      <% } else { %>
+      <% if (richiesta.stato === 'annullata') { %>
+        <div class="avviso avviso-attenzione">
+          Hai annullato questa richiesta.
+          <% if (richiesta.pagamento_stato === 'rimborsato') { %>Il pagamento di € <%= euro(richiesta.pagamento_importo) %> è stato rimborsato.<% } %>
+        </div>
+      <% } else { %>
+        <div class="avviso avviso-attenzione">
+          Nessun distributore ha confermato la consegna entro i <%= Math.round(minutiRisposta) %> minuti.
+          La mancata risposta non vale come disponibilità: il materiale potrebbe esserci
+          ma non essere reperibile al banco.
+          <% if (richiesta.pagamento_stato === 'rimborsato') { %>
+            <strong>Il pagamento di € <%= euro(richiesta.pagamento_importo) %> è stato rimborsato.</strong>
+          <% } %>
+        </div>
+      <% } %>
+
+      <% if (risposte.length) { %>
+        <div class="sezione-titolo">Distributori interpellati</div>
+        <div class="card card-fitta">
+          <% risposte.forEach(function (r) { %>
+            <div class="pill-distributore">
+              <div>
+                <div class="nome"><%= r.distributore_nome %></div>
+                <div class="filiale"><%= r.filiale %></div>
+              </div>
+              <span class="stato-badge stato-<%= r.esito %>">
+                <%= r.esito === 'non_disponibile' ? 'Non disponibile' : (r.esito === 'in_attesa' ? 'In attesa' : (r.esito === 'confermato' ? 'Disponibile' : 'Nessuna risposta')) %>
+              </span>
+            </div>
+          <% }); %>
+        </div>
+      <% } %>
+
+      <div class="sezione-titolo">Materiale richiesto</div>
+      <div class="card">
+        <% righe.forEach(function (r) { %>
+          <div class="riga-articolo">
+            <div class="qta"><%= r.quantita %>×</div>
+            <div class="desc">
+              <%= r.nome %>
+              <div class="meta">Cod. <%= r.codice %></div>
+            </div>
+          </div>
+        <% }); %>
+      </div>
+
+      <p class="nota">Prezzi IVA esclusa, già comprensivi del servizio. Richiesta del <%= fmt.dataOra(richiesta.creato_il) %>.</p>
+
+      <a class="btn btn-primary btn-blocco" href="/home">Torna alla home</a>
+      <form method="POST" action="/richieste/<%= richiesta.id %>/elimina" onsubmit="return confirm('Eliminare definitivamente questa richiesta?')">
+        <button class="btn btn-rosso btn-blocco" type="submit" style="margin-top:8px;">Elimina richiesta</button>
+      </form>
+      <% } %>
+    </div>
+  </div>
+
+  <%- include('partials/nav', { attivo: 'ordini' }) %>
+  <script src="<%= asset('/app.js') %>" defer></script>
+</body>
+</html>

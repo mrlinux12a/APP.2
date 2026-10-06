@@ -1,7 +1,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#f3f1ec">
+<%# PWA: manifest e icone (public/manifest.webmanifest, public/icons). Senza <link rel="icon"> il browser chiede /favicon.ico a ogni pagina. %>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icona-192.png" type="image/png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Minuteria">
 <title><%= typeof titolo !== 'undefined' ? titolo : 'Ordini Minuteria' %></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Source+Sans+3:wght@400;600&display=swap">
-<link rel="stylesheet" href="/style.css">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<%# I font si caricano senza bloccare il disegno della pagina: con una rete debole da cantiere un foglio di stile
+    esterno "bloccante" teneva la pagina bianca finché Google non rispondeva. Nel frattempo valgono i font di sistema. %>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Source+Sans+3:wght@400;600&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Source+Sans+3:wght@400;600&display=swap"></noscript>
+<link rel="stylesheet" href="<%= asset('/style.css') %>">

@@ -1,0 +1,28 @@
+<%
+  // Una scheda dello Storico (richiesta o ordine). `v` viene da flusso.storicoCliente. La scheda è un contenitore:
+  // il link porta al dettaglio, "Riordina" è un form a parte (un form dentro un <a> non è valido e non deve aprire
+  // il dettaglio).
+  const iconaStato = { consegna: iconaFurgone, attesa: iconaOrdini, consegnato: iconaSpunta, nessuna: iconaEsclamativo, annullata: iconaChiudi }[v.tono];
+  const importo = v.ordine ? totaleOrdine(v.ordine) : v.pagato;
+%>
+<div class="st-scheda">
+  <a class="st-link" href="<%= v.href %>">
+    <span class="st-alto">
+      <span class="st-icona st-<%= v.tono %>"><%- iconaStato %></span>
+      <span class="st-testi">
+        <span class="st-data"><%= v.data %></span>
+        <span class="st-articoli"><%= v.primo %><% if (v.altri) { %> <span class="st-altri">+ <%= v.altri %> <%= v.altri === 1 ? 'altro' : 'altri' %></span><% } %></span>
+      </span>
+    </span>
+    <span class="st-basso">
+      <span class="st-stato st-<%= v.tono %>"><%= v.etichetta %></span>
+      <span class="st-banco"><%= v.banco %></span>
+      <% if (importo) { %><span class="st-importo">€ <%= euro(importo) %></span><% } %>
+    </span>
+  </a>
+  <% if (v.riordinaId) { %>
+    <form class="st-riordina" method="POST" action="/storico/<%= v.riordinaId %>/riordina">
+      <button type="submit" class="st-btn-riordina"><%- iconaRiprova %><span>Riordina</span></button>
+    </form>
+  <% } %>
+</div>

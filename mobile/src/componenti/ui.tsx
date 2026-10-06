@@ -1,4 +1,4 @@
-// Mattoncini delle schermate richiesta / offerte / ordine, con lo stesso aspetto delle
+// Mattoncini delle schermate richiesta / ordine, con lo stesso aspetto delle
 // classi del sito (.avviso, .card, .riga-articolo, .riepilogo-riga, .btn, .stato-badge).
 import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';

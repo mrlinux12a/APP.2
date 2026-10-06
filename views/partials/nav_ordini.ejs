@@ -1,0 +1,110 @@
+<%#
+  Link "Stato ordini" della barra in basso, con l'icona che cambia in base alla fase:
+  nessuna -> scatola; richiesta (10 min) -> anello che si svuota + conto alla rovescia;
+  consegna -> furgone + minuti all'arrivo; scaduta -> scatola grigia con "!".
+  Viene renderizzato anche da solo (GET /nav/stato-ordini) per aggiornarlo senza ricaricare; con
+  conScheda (?scheda=1, solo dalla home) segue anche la scheda di stato_home.ejs.
+  Lo script in fondo aggiorna con un solo timer sia questa icona sia la scheda della home.
+%>
+<%
+  const attivoNav = typeof attivo !== 'undefined' ? attivo : '';
+  const so = (typeof statoOrdini !== 'undefined' && statoOrdini) ? statoOrdini : { fase: 'nessuna' };
+  const nonLetti = typeof ordiniNonLetti !== 'undefined' ? ordiniNonLetti : 0;
+  const CIRC = 65.97; // 2 * PI * 10.5
+  const offsetAnello = so.fase === 'richiesta' ? (CIRC * (1 - so.secondi / (so.durata || 600))).toFixed(2) : 0;
+%>
+<a href="/ordini" class="nav-ordini fase-<%= so.fase %> <%= attivoNav === 'ordini' ? 'attivo' : '' %>" data-fase="<%= so.fase %>" data-attivo="<%= attivoNav %>"<% if (so.fase === 'richiesta') { %> data-secondi="<%= so.secondi %>" data-durata="<%= so.durata %>"<% } %>>
+  <% if (so.fase === 'richiesta') { %>
+    <span class="ico ico-stato">
+      <svg class="anello" viewBox="0 0 24 24" aria-hidden="true">
+        <circle class="traccia" cx="12" cy="12" r="10.5"/>
+        <circle class="avanzamento" data-arco data-circ="<%= CIRC %>" cx="12" cy="12" r="10.5" style="stroke-dashoffset: <%= offsetAnello %>"/>
+      </svg>
+      <span class="ico-interna"><%- iconaOrdini %></span>
+      <span class="puntino"></span>
+    </span>
+    <span class="etichetta">In attesa · <span data-countdown><%= fmt.mmss(so.secondi) %></span></span>
+  <% } else if (so.fase === 'consegna') { %>
+    <span class="ico ico-stato">
+      <span class="furgone"><%- iconaFurgone %></span>
+      <% if (so.minuti != null) { %><span class="badge-eta"><%= so.minuti %>′</span><% } %>
+    </span>
+    <span class="etichetta"><%= so.minuti != null ? 'Arriva tra ' + so.minuti + ' min' : 'In consegna' %></span>
+  <% } else if (so.fase === 'scaduta') { %>
+    <span class="ico ico-stato">
+      <span class="scatola-spenta"><%- iconaOrdini %></span>
+      <span class="badge-alert">!</span>
+    </span>
+    <span class="etichetta">Nessuna risposta</span>
+  <% } else { %>
+    <span class="ico"><%- iconaOrdini %></span>Stato ordini
+    <% if (nonLetti > 0) { %><span class="pallino pallino-azzurro">+<%= nonLetti %></span><% } %>
+  <% } %>
+</a>
+<% if (typeof conScheda !== 'undefined' && conScheda) { %><%- include('stato_home') %><% } %>
+<% if (typeof parziale === 'undefined') { %>
+<script>
+  // Conto alla rovescia degli anelli (icona in basso e scheda della home) e aggiornamento senza
+  // ricaricare la pagina: ogni 15 s mentre la richiesta è in attesa, ogni minuto mentre l'ordine è in
+  // consegna. Un solo timer per tutto: gli elementi da muovere sono [data-countdown] e [data-arco]
+  // (con data-circ = lunghezza della circonferenza), ovunque si trovino nella pagina.
+  (function () {
+    var timer = null, attesa = null;
+    function link() { return document.querySelector('.navbar a.nav-ordini'); }
+    function scheda() { return document.querySelector('[data-stato-home]'); }
+    function due(n) { return (n < 10 ? '0' : '') + n; }
+    function avvia() {
+      clearInterval(timer); clearTimeout(attesa);
+      var a = link(); if (!a) return;
+      var fase = a.getAttribute('data-fase');
+      if (fase === 'richiesta') {
+        var fine = Date.now() + Number(a.getAttribute('data-secondi')) * 1000;
+        var durata = Number(a.getAttribute('data-durata')) || 600;
+        var tick = function () {
+          var s = Math.max(0, Math.round((fine - Date.now()) / 1000));
+          var testo = due(Math.floor(s / 60)) + ':' + due(s % 60);
+          document.querySelectorAll('[data-countdown]').forEach(function (el) { el.textContent = testo; });
+          document.querySelectorAll('[data-arco]').forEach(function (el) {
+            var circ = Number(el.getAttribute('data-circ')) || 65.97;
+            el.style.strokeDashoffset = (circ * (1 - s / durata)).toFixed(2);
+          });
+        };
+        tick(); timer = setInterval(tick, 1000);
+        attesa = setTimeout(aggiorna, 15000);
+      } else if (fase === 'consegna') {
+        attesa = setTimeout(aggiorna, 60000);
+      }
+    }
+    var inLettura = false;
+    function aggiorna() {
+      var a = link(); if (!a) return;
+      clearTimeout(attesa);
+      if (document.hidden) { attesa = setTimeout(aggiorna, 15000); return; }
+      if (inLettura) return;
+      inLettura = true;
+      var url = '/nav/stato-ordini?attivo=' + encodeURIComponent(a.getAttribute('data-attivo') || '') + (scheda() ? '&scheda=1' : '');
+      fetch(url, { credentials: 'same-origin', cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.text() : null; })
+        .then(function (html) {
+          if (html && html.indexOf('nav-ordini') !== -1) {
+            var t = document.createElement('div');
+            t.innerHTML = html;
+            var nuovoLink = t.querySelector('a.nav-ordini'), vecchioLink = link();
+            if (nuovoLink && vecchioLink) vecchioLink.replaceWith(nuovoLink);
+            var nuovaScheda = t.querySelector('[data-stato-home]'), vecchiaScheda = scheda();
+            if (nuovaScheda && vecchiaScheda) vecchiaScheda.replaceWith(nuovaScheda);
+          }
+          inLettura = false;
+          avvia();
+        })
+        .catch(function () { inLettura = false; attesa = setTimeout(aggiorna, 30000); });
+    }
+    // Tornando sulla pagina (tasto indietro che la rimostra com'era, o scheda che torna in primo piano) lo stato può
+    // essere cambiato: per esempio con un ordine in consegna si restava a "In consegna" anche con una nuova richiesta
+    // in attesa, fino al giro successivo del timer (un minuto). Si rilegge subito.
+    window.addEventListener('pageshow', function (e) { if (e.persisted) aggiorna(); });
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) aggiorna(); });
+    avvia();
+  })();
+</script>
+<% } %>

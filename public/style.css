@@ -20,7 +20,12 @@
   --account: #0f9d93;
   --icona-nav: #000000;
   --raggio: 14px;
-  --barra-bassa: 62px;
+  /* Barra in basso: pillola tonda che galleggia a --nav-stacco dal fondo. --nav-alt è la sua altezza (si legge
+     dal browser: se cambia, aggiornarla), --barra-bassa lo spazio che occupa: le barre fisse che stanno sopra
+     (carrello, "Vai al carrello", pagamento) e il riempimento in fondo alle pagine partono da lì. */
+  --nav-alt: 62px;
+  --nav-stacco: 10px;
+  --barra-bassa: calc(var(--nav-alt) + var(--nav-stacco));
 }
 
 * { box-sizing: border-box; }
@@ -36,7 +41,18 @@ body {
   background: var(--sfondo);
   color: var(--testo);
   -webkit-text-size-adjust: 100%;
+  /* Rete di sicurezza: nessuna pagina deve poter scorrere di lato. Le cause note (testi lunghi senza spazi,
+     l'appbar a tutta larghezza da tablet in su, che con 100vw conta anche la barra di scorrimento) sono
+     sistemate dove nascono; questo ritaglia il poco che dovesse sfuggire. `clip` (non `hidden`) non crea un
+     contenitore di scorrimento e lascia funzionare gli elementi sticky. */
+  overflow-x: clip;
 }
+
+img { max-width: 100%; }
+
+/* Il doppio tocco ravvicinato (tipico su + e −) non deve ingrandire la pagina su iPhone, e il tocco è subito
+   un clic, senza attesa. */
+a, button, input, select, textarea, summary, label { touch-action: manipulation; }
 
 /* I pulsanti non ereditano il font da soli: senza questa regola restano in Arial. */
 button { font-family: inherit; }
@@ -71,6 +87,9 @@ a { color: var(--blu); }
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   min-height: 52px;
+  /* viewport-fit=cover (app_head.ejs): senza questi spazi, con lo schermo girato o l'app installata, i
+     pulsanti ai lati della barra finivano sotto la tacca. Fuori da quei casi valgono 0. */
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
 }
 .appbar > :first-child { justify-self: start; }
 
@@ -154,7 +173,7 @@ a { color: var(--blu); }
 }
 .riga-lista:last-child { border-bottom: none; }
 .riga-lista .icona { font-size: 1.25rem; width: 26px; text-align: center; color: var(--testo); }
-.riga-lista .corpo { flex: 1; min-width: 0; }
+.riga-lista .corpo { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .riga-lista .etichetta { font-weight: 600; }
 .riga-lista .dettaglio { color: var(--grigio); font-size: 0.85rem; margin-top: 2px; }
 .riga-lista .freccia { color: #b9c0c9; font-size: 1.1rem; }
@@ -168,7 +187,7 @@ a { color: var(--blu); }
   background: var(--surface);
   border: 1px solid var(--bordo);
   border-radius: 999px;
-  padding: 8px 14px;
+  padding: 0 14px; /* l'altezza la dà il campo (44px): la barra resta alta quasi quanto prima */
   margin-bottom: 14px;
 }
 .barra-ricerca input[type="search"] {
@@ -177,6 +196,7 @@ a { color: var(--blu); }
   outline: none;
   font-size: 1rem;
   width: 100%;
+  min-height: 44px; /* area di tocco: prima 30px di altezza */
   background: transparent;
   margin: 0;
   padding: 4px 0;
@@ -246,7 +266,7 @@ a { color: var(--blu); }
   border-bottom: 1px solid var(--bordo);
 }
 .prodotto:last-child { border-bottom: none; }
-.prodotto .info { flex: 1; min-width: 0; }
+.prodotto .info { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 
 /* Colonna a destra della card: la foto sta in alto, lo stepper viene spinto in basso
    (justify-content: space-between) così la foto ha lo spazio in alto senza convivere con
@@ -287,14 +307,15 @@ a { color: var(--blu); }
 .foto-overlay-img {
   max-width: 90vw;
   max-height: 90vh;
+  max-height: 90dvh; /* dvh: la barra degli indirizzi dei browser mobile non la taglia */
   object-fit: contain;
   border-radius: 8px;
   background: var(--surface);
 }
 .foto-overlay-chiudi {
   position: absolute;
-  top: 16px;
-  right: 16px;
+  top: max(16px, env(safe-area-inset-top, 0px));
+  right: max(16px, env(safe-area-inset-right, 0px));
   width: 44px;
   height: 44px;
   border-radius: 50%;
@@ -348,8 +369,9 @@ a { color: var(--blu); }
 }
 .stepper button:disabled { color: #c2c8d0; cursor: default; box-shadow: none; }
 .stepper input[type="number"] {
-  width: 38px;
-  min-width: 38px;
+  width: 44px;
+  min-width: 44px;
+  height: 44px; /* il campo si può toccare per scrivere la quantità: area di 44px come i pulsanti ai lati */
   flex: none;
   text-align: center;
   border: none;
@@ -417,13 +439,15 @@ a { color: var(--blu); }
 /* barra fissa in fondo con il pulsante Procedi */
 .barra-azione {
   position: fixed;
-  bottom: 0;
+  /* Sopra la pillola della navbar (z-index 25), non sopra di lei: prima stava a bottom: 0 e la nascondeva. */
+  bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + 8px);
   left: 0;
   right: 0;
-  z-index: 30;
+  z-index: 24;
   background: var(--surface);
   border-top: 1px solid var(--bordo);
-  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.08);
+  padding: 10px 14px;
 }
 .barra-azione .interno { max-width: 520px; margin: 0 auto; display: flex; gap: 10px; align-items: center; }
 .barra-azione .conteggio { font-size: 0.85rem; color: var(--grigio); }
@@ -527,7 +551,7 @@ a { color: var(--blu); }
   font-weight: 700;
   color: var(--blu);
 }
-.riga-articolo .desc { flex: 1; }
+.riga-articolo .desc { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .riga-articolo .desc .meta { font-size: 0.8rem; color: var(--grigio); margin-top: 2px; }
 .riga-articolo .imp { text-align: right; white-space: nowrap; font-weight: 600; }
 
@@ -539,6 +563,9 @@ a { color: var(--blu); }
 }
 
 .nota-mini { color: var(--grigio); font-size: 0.75rem; line-height: 1.4; margin: 10px 2px 4px; }
+
+/* Una .nota che è un link ("Vedi tutti gli ordini →"): area di tocco da 44px invece dei 19px del testo. */
+a.nota { display: flex; align-items: center; min-height: 44px; margin-top: 0; margin-bottom: 0; }
 
 .ordine-hero { border-radius: var(--raggio); padding: 14px 16px; margin-bottom: 10px; }
 .ordine-hero.verde { background: var(--verde-chiaro); }
@@ -592,28 +619,37 @@ a { color: var(--blu); }
 
 /* ---------- Barra di navigazione bassa ---------- */
 
+/* Pillola tonda sollevata dal fondo. Il contenitore .navbar copre tutta la larghezza ma non intercetta i
+   tocchi: solo la pillola (.interno), così ai lati si vede e si tocca il contenuto sotto. */
 .navbar {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
   z-index: 25;
-  background: var(--surface);
-  border-top: 1px solid var(--bordo);
-  padding-bottom: env(safe-area-inset-bottom);
+  padding: 0 12px calc(var(--nav-stacco) + env(safe-area-inset-bottom));
+  pointer-events: none;
 }
 .navbar .interno {
-  max-width: 520px;
+  pointer-events: auto;
+  max-width: 496px;
   margin: 0 auto;
   display: flex;
+  padding: 3px 6px;
+  background: var(--surface);
+  border: 1px solid var(--bordo);
+  border-radius: 31px;
+  box-shadow: 0 8px 24px rgba(35, 32, 25, 0.14), 0 1px 3px rgba(35, 32, 25, 0.08);
 }
+.navbar a:active { background: var(--sfondo); }
 .navbar a {
   flex: 1;
-  padding: 8px 4px;
+  padding: 6px 4px;
+  border-radius: 26px;
   text-align: center;
   text-decoration: none;
   color: var(--grigio);
-  font-size: 0.7rem;
+  font-size: 13px;
   position: relative;
 }
 .navbar a .ico { display: block; font-size: 1.25rem; line-height: 1.2; color: var(--icona-nav); }
@@ -641,7 +677,8 @@ body.con-azione .navbar { display: block; }
 
 /* ---------- Form ---------- */
 
-input[type="text"], input[type="password"], input[type="search"], input[type="number"], textarea, select {
+input[type="text"], input[type="password"], input[type="search"], input[type="number"],
+input[type="email"], input[type="tel"], input[type="url"], textarea, select {
   width: 100%;
   padding: 12px;
   border: 1px solid var(--bordo);
@@ -654,21 +691,6 @@ input[type="text"], input[type="password"], input[type="search"], input[type="nu
 }
 
 label { font-weight: 600; display: block; margin-bottom: 4px; }
-
-.scelta-modalita { display: flex; gap: 8px; margin-bottom: 4px; }
-.scelta-modalita a {
-  flex: 1;
-  text-align: center;
-  padding: 10px;
-  border-radius: 10px;
-  border: 1px solid var(--bordo);
-  background: var(--surface);
-  text-decoration: none;
-  color: var(--grigio);
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-.scelta-modalita a.attiva { border-color: var(--blu); background: var(--blu-chiaro); color: var(--blu); }
 
 /* ---------- Login ---------- */
 
@@ -788,6 +810,7 @@ th { color: var(--grigio); font-weight: 600; }
    la colonna flex della card), il pulsante dentro è solo lo stile del cerchio. */
 .urgente-rimuovi-wrap { position: absolute; top: 10px; right: 10px; margin: 0; }
 .urgente-rimuovi {
+  position: relative;
   width: 28px;
   height: 28px;
   border-radius: 50%;
@@ -801,6 +824,8 @@ th { color: var(--grigio); font-weight: 600; }
   padding: 0;
 }
 .urgente-rimuovi svg { width: 15px; height: 15px; }
+/* Il cerchio resta da 28px ma l'area di tocco è di 44px (8px in più per lato). */
+.urgente-rimuovi::after { content: ""; position: absolute; inset: -8px; }
 .urgente-rimuovi:hover { color: var(--rosso); }
 .urgente-testa { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .urgente-id { font-weight: 700; font-size: 0.92rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1108,50 +1133,6 @@ th { color: var(--grigio); font-weight: 600; }
 /* Legenda con un colore per insegna sulla mappa dei punti vendita */
 .legenda-insegne span::before { background: var(--colore-insegna, var(--blu)); }
 
-/* ---------- Ingresso: accedi / registrati ---------- */
-
-.ingresso { max-width: 460px; margin: 28px auto; padding: 0 16px 40px; }
-.ingresso-largo { max-width: 560px; }
-.ingresso-testata { text-align: center; margin-bottom: 18px; }
-.ingresso-marchio { font-size: 1.5rem; font-weight: 800; color: var(--blu); }
-.ingresso-testata p { color: var(--grigio); font-size: 0.9rem; line-height: 1.45; margin: 8px 0 0; }
-
-.schede { display: flex; gap: 6px; margin-bottom: 16px; }
-.schede a {
-  flex: 1;
-  text-align: center;
-  padding: 10px;
-  border-radius: 10px;
-  text-decoration: none;
-  font-weight: 700;
-  color: var(--grigio);
-  background: var(--sfondo);
-}
-.schede a.attiva { background: var(--blu-chiaro); color: var(--blu); }
-
-.scelta-radio {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px;
-  border: 1px solid var(--bordo);
-  border-radius: 10px;
-  background: var(--surface);
-  font-weight: 600;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-.scelta-radio input { width: auto; margin: 0; }
-.scelta-radio.attiva { border-color: var(--blu); background: var(--blu-chiaro); color: var(--blu); }
-
-.riga-campi { display: flex; gap: 8px; }
-.riga-campi > div { flex: 1; }
-
-.riga-scelta { cursor: pointer; font-weight: normal; margin: 0; }
-.riga-scelta input { width: auto; margin: 0; flex: none; }
-
 /* ---------- Sconti per ambito ---------- */
 
 .riga-sconto-ambito input[type="number"] {
@@ -1206,13 +1187,14 @@ th { color: var(--grigio); font-weight: 600; }
 .scaglione input[type="number"] {
   width: 100%;
   min-width: 0;
+  min-height: 44px;
   margin: 0;
-  padding: 8px 2px 8px 6px;
+  padding: 0 2px 0 4px;
   border: none;
   border-radius: 0;
   text-align: right;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 16px; /* sotto i 16px Safari su iPhone ingrandisce la pagina al tocco del campo */
   -moz-appearance: textfield;
 }
 .scaglione .segno { color: var(--grigio); font-size: 0.8rem; font-weight: 600; }
@@ -1364,8 +1346,7 @@ th { color: var(--grigio); font-weight: 600; }
   /* Sfumatura sul bordo destro: segnala che si può scorrere per vedere altri chip, cosa
      che prima capiva dalla barra di scorrimento grigia ora nascosta. Sfuma la trasparenza
      dell'elemento stesso (non un colore fisso), quindi funziona identica sia dentro una
-     card (--surface) sia sullo sfondo pagina (--sfondo), qui e nei chip di variante sul
-     prodotto (.varianti-riga usa la stessa classe). */
+     card (--surface) sia sullo sfondo pagina (--sfondo). */
   -webkit-mask-image: linear-gradient(to right, black calc(100% - 18px), transparent 100%);
   mask-image: linear-gradient(to right, black calc(100% - 18px), transparent 100%);
 }
@@ -1390,17 +1371,176 @@ th { color: var(--grigio); font-weight: 600; }
 }
 .chip.attivo { background: var(--blu); border-color: var(--blu); color: var(--su-blu); box-shadow: none; }
 
-.varianti-riga { margin: 4px 0 6px; }
-/* Prima 5px/10px (~28px di altezza): troppo piccolo per un tocco preciso da cantiere. */
-.chip-variante { padding: 11px 14px; font-size: 0.8rem; }
-.selettore-variante {
-  width: auto;
-  max-width: 100%;
-  margin: 4px 0 6px;
-  padding: 6px 28px 6px 10px;
-  font-size: 0.86rem;
-  border-radius: 8px;
+/* ---------- Scelta della misura (partials/misura.ejs, misuraHtml in app.js) ----------
+   Occhiello "Misura · H × L × P", poi due chip affiancati (2 varianti) o un pulsante che apre il pannello dal
+   basso (3 o più). Tutti i pulsanti sono da 40px con l'area di tocco estesa a 44px da un ::after. */
+.misura { margin: 8px 0 0; }
+.misura-occhiello {
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--grigio);
 }
+.misura-chip { display: flex; flex-wrap: wrap; gap: 6px; }
+.misura-opz, .misura-apri {
+  position: relative;
+  min-height: 40px;
+  max-width: 100%;
+  border-radius: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.misura-opz::after, .misura-apri::after { content: ""; position: absolute; inset: -2px 0; }
+.misura-opz:focus-visible, .misura-apri:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+.misura-opz {
+  padding: 0 12px;
+  border: 1.5px solid #d6d1c6;
+  background: #fff;
+  color: var(--testo);
+  font-size: 14px;
+}
+.misura-opz.attivo { border-color: var(--blu); background: var(--blu-chiaro); color: #1a4468; }
+.misura-apri {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 0 14px;
+  border: 1.5px solid var(--blu);
+  background: var(--blu-chiaro);
+  color: #1a4468;
+  font-size: 15px;
+  text-align: left;
+}
+.misura-testo { min-width: 0; overflow-wrap: anywhere; }
+.misura-freccia { flex: none; }
+/* Testo solo per gli screen reader ("Misura di NOME: ") davanti alla misura scelta. */
+.misura-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Pannello dal basso: uno solo per pagina, creato da app.js al primo tocco (hidden quando chiuso). */
+.misura-velo {
+  position: fixed;
+  inset: 0;
+  z-index: 50; /* sopra navbar (25), barre fisse (24-29) e menu del profilo (30-31) */
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(28, 25, 23, 0.4);
+  animation: misura-dissolvi 200ms ease-out;
+}
+.misura-velo[hidden] { display: none; }
+html.misura-aperta { overflow: hidden; }
+.misura-pannello {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 520px;
+  max-height: 70vh;
+  max-height: 70dvh;
+  padding: 10px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  border-radius: 22px 22px 0 0;
+  background: #fff;
+  box-shadow: 0 -8px 30px rgba(28, 25, 23, 0.18);
+  animation: misura-sale 200ms ease-out;
+}
+@keyframes misura-sale { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes misura-dissolvi { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .misura-velo, .misura-pannello { animation: none; }
+}
+.misura-maniglia { flex: none; width: 40px; height: 5px; margin: 0 auto 16px; border-radius: 3px; background: #d6d1c6; }
+.misura-titolo {
+  flex: none;
+  margin: 0;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 1.25;
+}
+.misura-sotto {
+  flex: none;
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--grigio);
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+/* L'elenco scorre dentro il pannello se le misure sono tante; il margine negativo lascia posto ai contorni del fuoco. */
+.misura-elenco {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px -4px 0;
+  padding: 3px 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.misura-riga {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 16px;
+  border: 1.5px solid #d6d1c6;
+  border-radius: 14px;
+  background: #fff;
+  color: var(--testo);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.misura-riga.attivo { border-color: var(--blu); background: var(--blu-chiaro); }
+.misura-riga:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+.misura-radio {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 2px solid #b9b4a8;
+  border-radius: 50%;
+  background: #fff;
+}
+.misura-riga.attivo .misura-radio { border-color: var(--blu); background: var(--blu); box-shadow: inset 0 0 0 3px #fff; }
+.misura-riga-testo { flex: 1; min-width: 0; font-size: 16px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.misura-riga-prezzo { flex: none; font-size: 15px; font-weight: 700; color: var(--grigio); font-variant-numeric: tabular-nums; }
+.misura-riga.attivo .misura-riga-prezzo { color: var(--testo); }
+.misura-conferma {
+  flex: none;
+  height: 52px;
+  margin-top: 16px;
+  border: none;
+  border-radius: 26px;
+  background: var(--blu);
+  color: var(--su-blu);
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.misura-conferma:active { background: var(--blu-scuro); }
+.misura-conferma:focus-visible { outline: 2px solid var(--blu); outline-offset: 3px; }
 
 .svuota-link {
   background: none;
@@ -1453,7 +1593,7 @@ th { color: var(--grigio); font-weight: 600; }
 /* barra che porta al carrello (categoria / ricerca / marchio) */
 .barra-carrello {
   position: fixed;
-  bottom: 62px;
+  bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + 8px);
   left: 0;
   right: 0;
   z-index: 29;
@@ -1474,40 +1614,25 @@ th { color: var(--grigio); font-weight: 600; }
 .barra-carrello-testo { font-size: 0.9rem; color: var(--testo); }
 .barra-carrello-testo strong { color: var(--blu); }
 
-/* pagina carrello: layout responsive */
+/* pagina carrello: layout responsive (stili della pagina in fondo al file, sezione "Carrello") */
 .carrello-layout { display: grid; gap: 12px; }
-.prodotto-carrello { align-items: center; }
-.prodotto-azioni-carrello { gap: 4px; }
-.prodotto-azioni-carrello .stepper { background: var(--surface); }
-.link-rimuovi {
-  background: none;
-  border: none;
-  color: var(--rosso);
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 2px 0;
-  font-family: inherit;
-}
+/* Gli elementi di una griglia hanno min-width: auto: senza questo un contenuto largo allarga la colonna oltre lo schermo. */
+.carrello-layout > * { min-width: 0; }
 
 @media (min-width: 720px) {
-  .app { max-width: 1400px; padding-bottom: calc(62px + 62px + 16px); }
+  /* .app occupa tutta la larghezza e lo spazio limitato a 1400px lo tiene il contenuto: così l'appbar è a tutta
+     larghezza senza trucchi. Prima .app era larga 1400px max e l'appbar ne usciva con width: 100vw + margine
+     negativo: 100vw conta anche la barra di scorrimento (15px su desktop), quindi la barra partiva 15px fuori
+     dallo schermo e il pulsante "indietro" veniva tagliato. */
+  .app { max-width: none; padding-bottom: calc(var(--barra-bassa) + 62px + 16px); }
+  .app > .contenuto { max-width: 1400px; margin-left: auto; margin-right: auto; }
   .barra-carrello .interno { max-width: 1400px; }
-  .navbar .interno { max-width: 1400px; justify-content: center; gap: 28px; }
+  .navbar .interno { max-width: 520px; }
   .carrello-layout { grid-template-columns: 1.6fr 0.9fr; align-items: start; }
   .carrello-riepilogo { position: sticky; top: 64px; }
   .prodotto { padding: 16px 18px; gap: 16px; }
-  .barra-carrello { bottom: 62px; }
+  .barra-carrello { bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + 8px); }
   body { background: var(--sfondo); }
-
-  /* L'header (.appbar) esce dalla colonna centrale di .app e occupa tutta la larghezza
-     della finestra: tecnica standard "full-bleed" (100vw + margine negativo), l'alternativa
-     sarebbe spostare l'appbar fuori da .app in ogni singola vista (~20 file .ejs). */
-  .appbar {
-    width: 100vw;
-    left: 50%;
-    margin-left: -50vw;
-  }
 
   /* Da tablet in su la card entra in una sola riga: foto, poi nome/dettagli, poi lo
      stepper -/+ in fondo alla riga (spazio permettendo) — invece della colonna foto sopra
@@ -1567,3 +1692,1507 @@ th { color: var(--grigio); font-weight: 600; }
 .stepper-3 .linea.piena { background:var(--blu); }
 .pannelli .pannello { background:var(--sfondo); border:1px solid var(--bordo); border-radius:10px; padding:12px; }
 .pannello-titolo { font-weight:700; font-size:0.95rem; }
+
+/* ---------- Icona dinamica "Stato ordini" (partials/nav_ordini.ejs) ---------- */
+.navbar a .ico-stato { position: relative; width: 24px; height: 24px; margin: 0 auto; line-height: 0; }
+.navbar a .ico-stato svg { display: block; }
+.navbar a .ico-stato .anello { width: 24px; height: 24px; fill: none; }
+.navbar a .ico-stato .anello .traccia { stroke: var(--arancio-chiaro); stroke-width: 2.2; }
+.navbar a .ico-stato .anello .avanzamento {
+  stroke: var(--arancio); stroke-width: 2.2; stroke-linecap: round;
+  stroke-dasharray: 65.97; transform: rotate(-90deg); transform-origin: 12px 12px;
+  transition: stroke-dashoffset 1s linear;
+}
+.navbar a .ico-stato .ico-interna {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: var(--icona-nav);
+}
+.navbar a .ico-stato .puntino {
+  position: absolute; top: -2px; right: -4px; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--arancio); border: 2px solid var(--surface);
+  animation: nav-ordini-pulsa 1.6s ease-in-out infinite;
+}
+.navbar a .ico-stato .furgone {
+  display: flex; align-items: center; justify-content: center; height: 24px;
+  font-size: 1.35rem; color: var(--icona-nav);
+  animation: nav-ordini-oscilla 1.1s ease-in-out infinite;
+}
+.navbar a .ico-stato .scatola-spenta {
+  display: flex; align-items: center; justify-content: center; height: 24px;
+  font-size: 1.25rem; color: var(--grigio);
+}
+.navbar a .ico-stato .badge-eta,
+.navbar a .ico-stato .badge-alert {
+  position: absolute; top: -5px; left: 50%; margin-left: 6px;
+  min-width: 16px; height: 16px; box-sizing: border-box; padding: 0 4px; border-radius: 8px;
+  border: 1.5px solid var(--surface); color: #fff;
+  font-size: 0.6rem; font-weight: 700; line-height: 13px; text-align: center;
+}
+.navbar a .ico-stato .badge-eta { background: var(--verde); }
+.navbar a .ico-stato .badge-alert { background: var(--rosso); margin-left: 4px; }
+.navbar a.nav-ordini .etichetta { font-weight: 700; white-space: nowrap; }
+.navbar a.fase-richiesta .etichetta { color: var(--arancio); font-variant-numeric: tabular-nums; }
+.navbar a.fase-consegna .etichetta { color: var(--verde); }
+.navbar a.fase-scaduta .etichetta { color: var(--rosso); }
+@keyframes nav-ordini-pulsa { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.7); } }
+@keyframes nav-ordini-oscilla { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.5px); } }
+@media (prefers-reduced-motion: reduce) {
+  .navbar a .ico-stato .puntino,
+  .navbar a .ico-stato .furgone { animation: none; }
+  .navbar a .ico-stato .anello .avanzamento { transition: none; }
+}
+
+/* ---------- Home installatore (views/home.ejs): ricerca fissa, categorie compatte, scheda di stato ---------- */
+
+:root { --altezza-appbar: calc(52px + env(safe-area-inset-top, 0px)); }
+
+/* "Cosa ti serve?" e la barra di ricerca restano sotto l'appbar quando si scorre. Il blocco esce di 14px
+   dai lati di .contenuto così lo sfondo e il bordo coprono tutta la larghezza. */
+.home-cliente .ricerca-fissa {
+  position: sticky;
+  top: var(--altezza-appbar);
+  z-index: 15;
+  margin: 0 -14px;
+  padding: 6px 14px 12px;
+  background: var(--sfondo);
+  border-bottom: 1px solid var(--bordo);
+  box-shadow: 0 6px 10px -8px rgba(35, 32, 25, 0.35);
+}
+.home-cliente .domanda { margin: 4px 2px 10px; }
+
+.barra-ricerca.barra-home {
+  border: 1.5px solid var(--blu);
+  padding: 6px 6px 6px 14px;
+  margin: 0;
+}
+/* 16px: sotto, Safari su iPhone ingrandisce la pagina al tocco del campo. */
+.barra-ricerca.barra-home input[type="search"] { font-size: 16px; min-width: 0; padding: 6px 0; }
+.barra-ricerca.barra-home .btn-cerca { height: 44px; padding: 0 20px; font-size: 16px; font-weight: 700; flex: none; }
+/* Cerca con foto / codice a barre: il pulsante c'è, la funzione no (disabilitato, senza handler). */
+.barra-ricerca.barra-home .btn-inquadra {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--blu-chiaro);
+  color: var(--blu-scuro);
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.barra-ricerca.barra-home .btn-inquadra:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* Il margine è lo spazio che prima occupava la scritta "Categorie" (4 + 20,8 + 8 px): tolta la scritta, resta il vuoto. */
+.griglia-categorie { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 33px; }
+/* Tessera in colonna (icona sopra, nome sotto): col nome in orizzontale accanto all'icona, a questa grandezza
+   restavano ~85px di testo e "Condizionamento" non ci stava. Le tessere di una riga si allungano alla più alta. */
+.cat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 12px;
+  min-height: 128px; /* icona + due righe di nome: anche le tessere con un nome solo non restano più basse */
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--bordo);
+  border-radius: 14px;
+  color: inherit;
+  text-decoration: none;
+}
+.cat-ico {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--blu-chiaro);
+  color: #1a4468;
+  font-size: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cat-ico svg { stroke-width: 1.8; }
+.cat .nome {
+  min-width: 0;
+  width: 100%;
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3; /* tre righe bastano al nome più lungo: nessuno finisce in ellissi */
+  overflow: hidden;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+/* Parola da 15+ lettere ("Condizionamento", 139px a 15px): corpo ridotto invece di spezzarla. Il testo ha 143px a
+   375px di schermo, 137px a 360px, 117px a 320px. */
+.cat-lunga .nome { font-size: 14px; }
+@media (max-width: 360px) {
+  .cat .nome { font-size: 14px; }
+  .cat-lunga .nome { font-size: 13px; }
+}
+@media (max-width: 330px) {
+  .cat-lunga .nome { font-size: 12px; }
+}
+@media (min-width: 720px) {
+  .griglia-categorie { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  .cat .nome { font-size: 16px; }
+  .cat-lunga .nome { font-size: 16px; }
+}
+
+/* Scheda "stato ordine" sopra la ricerca (views/partials/stato_home.ejs). */
+.stato-home {
+  display: block;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid;
+  border-radius: 16px;
+  color: var(--testo);
+  text-decoration: none;
+}
+.stato-richiesta { background: var(--arancio-chiaro); border-color: #f1c9b3; }
+.stato-consegna { background: var(--verde-chiaro); border-color: #bfe0c6; }
+.stato-riga { display: flex; align-items: center; gap: 12px; }
+.stato-testi { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.stato-occhiello { font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.stato-richiesta .stato-occhiello, .stato-richiesta .stato-sub { color: var(--arancio); }
+.stato-consegna .stato-occhiello, .stato-consegna .stato-sub { color: var(--verde); }
+.stato-titolo {
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.25;
+}
+.stato-consegna .stato-titolo { font-size: 18px; }
+.stato-sub { display: flex; align-items: center; gap: 6px; font-size: 13px; line-height: 1.3; }
+.stato-sub strong { font-weight: 700; }
+.stato-freccia { flex: none; display: flex; color: var(--testo); }
+
+.stato-anello { position: relative; flex: none; width: 56px; height: 56px; }
+.stato-anello svg { display: block; width: 56px; height: 56px; }
+.stato-anello .traccia { fill: none; stroke: #fff; stroke-width: 4; }
+.stato-anello .avanzamento {
+  fill: none; stroke: var(--arancio); stroke-width: 4; stroke-linecap: round;
+  stroke-dasharray: 150.8; transform: rotate(-90deg); transform-origin: 28px 28px;
+  transition: stroke-dashoffset 1s linear;
+}
+.stato-tempo {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+
+.stato-furgone {
+  flex: none; width: 56px; height: 56px; border-radius: 50%; background: #fff;
+  display: flex; align-items: center; justify-content: center; color: var(--testo);
+}
+.stato-furgone .furgone { display: flex; font-size: 30px; animation: nav-ordini-oscilla 1.1s ease-in-out infinite; }
+.stato-iniziale {
+  flex: none; width: 20px; height: 20px; border-radius: 50%; background: var(--verde); color: #fff;
+  display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;
+}
+.stato-barra { margin-top: 12px; height: 6px; border-radius: 3px; background: #fff; overflow: hidden; }
+.stato-barra span { display: block; height: 100%; border-radius: 3px; background: var(--verde); transition: width 0.6s ease; }
+.stato-corpo { display: block; color: inherit; text-decoration: none; }
+.stato-tappe { display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: center; margin-top: 6px; font-size: 12px; color: var(--grigio); }
+.stato-tappe > span:nth-child(2) { text-align: center; }
+.stato-tappe > span:nth-child(3) { text-align: right; }
+
+@media (prefers-reduced-motion: reduce) {
+  .stato-furgone .furgone { animation: none; }
+  .stato-anello .avanzamento, .stato-barra span { transition: none; }
+}
+
+/* ---------- Carrello (views/carrello.ejs) ---------- */
+
+/* Altezza della barra di pagamento fissa: serve a lasciare in fondo alla pagina lo spazio che copre. */
+:root { --altezza-barra-paga: 96px; }
+.app-carrello { padding-bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + var(--altezza-barra-paga) + 8px + 16px); }
+
+.carrello-testata { display: flex; justify-content: flex-end; margin-bottom: 4px; }
+.link-aggiungi {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 2px;
+  color: var(--blu); font-size: 15px; font-weight: 600; text-decoration: none;
+}
+
+/* Scheda articolo */
+.carrello-articolo { padding: 14px; margin-bottom: 12px; }
+.art-nome {
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 700; font-size: 16px; line-height: 1.3; overflow-wrap: anywhere;
+}
+.art-prezzo { margin-top: 4px; color: var(--grigio); font-size: 14px; }
+/* A 320px di larghezza cestino + stepper + totale non stanno in una riga (la colonna della griglia si allargava
+   e la pagina scorreva di lato): il totale va a capo, sempre allineato a destra. */
+.art-azioni { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.btn-cestino {
+  flex: none; width: 44px; height: 44px; padding: 0; border-radius: 50%;
+  border: 1px solid var(--bordo); background: var(--surface); color: var(--rosso);
+  font-size: 22px; display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.art-azioni .stepper { background: var(--sfondo); }
+.art-totale {
+  margin-left: auto; white-space: nowrap;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 700; font-size: 17px;
+}
+
+/* Scheda "Consegna in cantiere" */
+.consegna-card { padding: 12px 14px; }
+.consegna-riga { display: flex; align-items: center; gap: 12px; }
+.consegna-ico {
+  flex: none; width: 40px; height: 40px; border-radius: 10px; background: var(--blu-chiaro); color: var(--blu);
+  font-size: 22px; display: flex; align-items: center; justify-content: center;
+}
+.consegna-testo { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.consegna-occhiello { font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--grigio); }
+.consegna-via { font-weight: 700; font-size: 16px; line-height: 1.3; overflow-wrap: anywhere; }
+.consegna-citta { color: var(--grigio); font-size: 14px; }
+.consegna-via:empty, .consegna-citta:empty { display: none; }
+.btn-cambia {
+  flex: none; min-height: 44px; padding: 0 4px; background: none; border: none;
+  color: var(--blu); font-size: 15px; font-weight: 600; cursor: pointer;
+}
+.consegna-campo { margin-top: 10px; }
+.consegna-campo input { margin-bottom: 0; font-size: 16px; }
+
+/* Nota facoltativa: riquadro tratteggiato che si apre sulla textarea */
+.nota-dett { margin-bottom: 12px; border: 1.5px dashed rgba(107, 106, 95, 0.45); border-radius: 12px; }
+.nota-dett summary {
+  display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 10px 14px; cursor: pointer; list-style: none;
+}
+.nota-dett summary::-webkit-details-marker { display: none; }
+.nota-piu { flex: none; width: 16px; color: var(--blu); font-size: 18px; font-weight: 600; line-height: 1; text-align: center; }
+.nota-testi { display: flex; flex-direction: column; min-width: 0; }
+.nota-titolo { font-weight: 700; font-size: 15px; }
+.nota-sotto { color: var(--grigio); font-size: 13px; }
+.nota-dett textarea { display: block; width: calc(100% - 28px); margin: 0 14px 14px; font-size: 16px; }
+
+/* Riepilogo costi */
+.riepilogo-card { padding: 8px 14px; margin-bottom: 0; }
+.carrello-riepilogo .riepilogo-riga.forte { font-size: 17px; font-weight: 700; }
+
+/* "Svuota carrello": in fondo, centrato, link sottolineato in rosso scuro */
+.svuota-fondo {
+  display: block; margin: 8px auto 0; min-height: 44px; padding: 0 16px; background: none; border: none;
+  color: #973030; font-family: inherit; font-size: 15px; text-decoration: underline; cursor: pointer;
+}
+
+/* Barra di pagamento fissa, subito sopra la navbar */
+.barra-paga {
+  position: fixed; left: 0; right: 0; bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + 8px); z-index: 24;
+  background: var(--surface); border-top: 1px solid var(--bordo); box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.08);
+  padding: 10px 14px 8px;
+}
+.barra-paga-interno { max-width: 520px; margin: 0 auto; }
+.barra-paga-riga { display: flex; align-items: center; gap: 14px; }
+.bp-totale { flex: none; display: flex; flex-direction: column; }
+.bp-label { font-size: 12px; color: var(--grigio); }
+.bp-importo {
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 700; font-size: 20px; line-height: 1.15; white-space: nowrap;
+}
+.btn-paga {
+  flex: 1; min-width: 0; height: 52px; padding: 0 12px; border: none; border-radius: 26px;
+  background: var(--blu); color: var(--su-blu); font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer;
+}
+.btn-paga:active:not(:disabled) { background: var(--blu-scuro); }
+.btn-paga:disabled { background: #c9d0d8; cursor: not-allowed; }
+.barra-paga-nota {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  margin: 8px 0 0; color: var(--grigio); font-size: 12.5px; line-height: 1.3;
+}
+.barra-paga-nota .scudo { flex: none; display: flex; color: var(--verde); font-size: 16px; }
+@media (min-width: 720px) {
+  .barra-paga-interno { max-width: 560px; }
+}
+
+/* ---------- Categoria: righe prodotto compatte (views/partials/prodotto_riga.ejs, public/app.js) ---------- */
+
+/* Altezza del pulsante blu "N pezzi · Vai al carrello" sopra la navbar: fondo pagina = navbar + pulsante + aria. */
+:root { --altezza-barra-vai: 52px; }
+.app-categoria { padding-bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + var(--altezza-barra-vai) + 10px + 16px); }
+
+/* Un'unica scheda bianca; su telefono a tutta larghezza (esce di 14px dai lati di .contenuto). */
+.elenco-righe {
+  margin: 12px -14px 0;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+}
+
+.riga-prod {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid #ece9e2;
+}
+.riga-prod:last-child { border-bottom: none; }
+
+.riga-prod .riga-foto {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: #f1efea;
+}
+.riga-foto-vuota {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #a3a094;
+  font-size: 28px;
+}
+
+.riga-info { flex: 1; min-width: 0; }
+.riga-nome {
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 600;
+  font-size: 14.5px;
+  line-height: 1.25;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+.riga-stato { margin-top: 4px; }
+.riga-prezzo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 5px;
+  margin-top: 4px;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.3;
+  color: var(--testo);
+}
+.riga-prezzo .iva {
+  font-family: "Source Sans 3", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--grigio);
+}
+.riga-prezzo .barrato {
+  font-family: "Source Sans 3", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 500;
+  font-size: 13px;
+  color: #a7a498;
+  text-decoration: line-through;
+}
+.riga-prezzo .raee {
+  flex-basis: 100%;
+  font-family: "Source Sans 3", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--grigio);
+}
+
+/* Riga con misure (data-varianti): a sinistra la foto, a destra in colonna il nome, il blocco "Misura" (chip o
+   pulsante, v. .misura) e in fondo, sulla stessa riga, prezzo + IVA a sinistra e stepper a destra: la misura ha
+   tutta la larghezza. L'HTML è quello delle righe senza varianti (deve restare uguale a rigaCompattaHtml): .riga-info
+   esce dalla griglia (display: contents) e i suoi figli si dispongono direttamente, ognuno nella sua riga. */
+.riga-prod[data-varianti] {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  gap: 0 12px; /* il gap di 12px della riga flex vale anche fra le righe della griglia: qui no, le distanze sono i margini */
+  align-items: start;
+}
+.riga-prod[data-varianti] .riga-info { display: contents; }
+.riga-prod[data-varianti] .riga-foto { grid-column: 1; grid-row: 1 / span 4; }
+.riga-prod[data-varianti] .riga-nome { grid-column: 2 / -1; grid-row: 1; }
+.riga-prod[data-varianti] .misura { grid-column: 2 / -1; grid-row: 2; }
+.riga-prod[data-varianti] .riga-stato { grid-column: 2 / -1; grid-row: 3; }
+.riga-prod[data-varianti] .riga-prezzo { grid-column: 2; grid-row: 4; align-self: center; margin-top: 8px; }
+.riga-prod[data-varianti] .riga-azioni { grid-column: 3; grid-row: 4; align-self: center; margin-top: 8px; }
+
+.riga-azioni { flex: none; }
+.riga-azioni:empty { display: none; }
+
+/* − N +: la quantità è quella già nel carrello. A 0 bordo neutro e numero grigio; sopra 0 bordo e numero blu.
+   Il bordo è sempre da 1,5px: cambia solo colore, lo stepper non si sposta. */
+.riga-stepper {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 2px;
+  border: 1.5px solid var(--bordo);
+  border-radius: 22px;
+  background: #f7f6f2;
+}
+.riga-stepper.attivo { border-color: var(--blu); }
+.riga-stepper.errore { animation: riga-errore 0.7s ease; }
+@keyframes riga-errore {
+  from { border-color: var(--rosso); background: var(--rosso-chiaro); }
+}
+.riga-passo {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--blu);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  touch-action: manipulation; /* due tocchi ravvicinati non zoomano la pagina */
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+/* Il cerchio resta da 40px, ma l'area di tocco arriva a 44px come lo stepper. */
+.riga-passo::after { content: ""; position: absolute; inset: -2px; }
+.riga-passo:active:not(:disabled) { transform: scale(0.94); }
+.riga-passo:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
+.riga-qta {
+  min-width: 32px;
+  padding: 0 2px;
+  text-align: center;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--grigio);
+}
+.riga-stepper.attivo .riga-qta { font-weight: 700; color: var(--blu); }
+
+/* Pulsante blu sopra la navbar: "N pezzi" a sinistra, pillola bianca "Vai al carrello" a destra. Il contenitore
+   non intercetta i tocchi: solo il pulsante. */
+.barra-vai {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + 10px); /* sopra la pillola della navbar */
+  z-index: 24;
+  padding: 0 12px;
+  pointer-events: none;
+}
+.barra-vai-link {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 496px;
+  height: var(--altezza-barra-vai);
+  margin: 0 auto;
+  padding: 0 6px 0 22px;
+  border-radius: 26px;
+  background: var(--blu);
+  color: var(--su-blu);
+  text-decoration: none;
+  box-shadow: 0 6px 18px rgba(26, 68, 104, 0.35);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.barra-vai-link:active { background: var(--blu-scuro); }
+.bv-pezzi {
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  white-space: nowrap;
+}
+.bv-pillola {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--blu);
+  font-weight: 700;
+  font-size: 15.5px;
+  white-space: nowrap;
+}
+
+@media (min-width: 720px) {
+  .elenco-righe { margin: 12px auto 0; max-width: 720px; border-radius: var(--raggio); border: 1px solid var(--bordo); }
+  .barra-vai-link { max-width: 560px; }
+}
+
+/* ---------- Verifica disponibilità (views/richiesta_attesa.ejs) ---------- */
+
+.att-card { border-radius: 16px; }
+.att-occhiello {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--grigio);
+}
+
+/* Scheda timer: anello che si svuota in 10 minuti. Lo muove lo stesso timer della navbar
+   (nav_ordini.ejs: [data-countdown] e [data-arco] con data-circ), con la stessa formula. */
+.att-timer { padding: 24px 16px 18px; text-align: center; }
+.att-anello { position: relative; width: 148px; height: 148px; margin: 0 auto 18px; }
+.att-anello > svg { display: block; width: 148px; height: 148px; }
+.att-anello .traccia { fill: none; stroke: var(--arancio-chiaro); stroke-width: 10; }
+.att-anello .avanzamento {
+  fill: none; stroke: var(--arancio); stroke-width: 10; stroke-linecap: round;
+  stroke-dasharray: 402.12; transform: rotate(-90deg); transform-origin: 74px 74px;
+  transition: stroke-dashoffset 1s linear;
+}
+.att-tempo {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 800; font-size: 31px; line-height: 1; color: var(--testo);
+  font-variant-numeric: tabular-nums;
+}
+.att-titolo {
+  display: flex; align-items: center; justify-content: center; gap: 9px; margin: 0 0 18px;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 700; font-size: 19px; line-height: 1.25;
+}
+.att-punto {
+  flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--arancio);
+  animation: nav-ordini-pulsa 1.6s ease-in-out infinite;
+}
+
+/* I tre passaggi: Inviata (fatto) > Conferma banco (corrente) > In consegna */
+.att-passi { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.att-passo { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.att-barretta { display: block; height: 5px; border-radius: 3px; background: var(--bordo); }
+.att-fatto .att-barretta { background: var(--verde); }
+.att-corrente .att-barretta { background: var(--arancio); }
+.att-etichetta {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 12.5px; line-height: 1.2; font-weight: 600; color: var(--grigio);
+}
+.att-fatto .att-etichetta { color: var(--verde); font-weight: 700; }
+.att-corrente .att-etichetta { color: var(--arancio); font-weight: 700; }
+.att-spunta {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 50%; background: var(--verde); color: #fff;
+}
+
+/* Banco interpellato: una scheda per banco. L'etichetta di stato è un .stato-badge (lo script della pagina
+   ne riscrive testo e classe a ogni aggiornamento): il puntino davanti è un ::before, così resta. */
+.att-banco { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 10px 14px; }
+.att-icona {
+  flex: none; display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 10px; background: #f1efea; color: var(--grigio); font-size: 20px;
+}
+.att-banco-testo { flex: 1; min-width: 0; }
+.att-banco-nome { font-weight: 700; font-size: 16px; line-height: 1.25; overflow-wrap: anywhere; }
+#stato-distributori .stato-badge {
+  flex: none; display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; font-size: 13px; line-height: 1.2; white-space: nowrap;
+}
+#stato-distributori .stato-badge::before {
+  content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--punto, currentColor);
+}
+#stato-distributori .stato-in_attesa { background: var(--arancio-chiaro); color: #8a3a14; --punto: var(--arancio); }
+#stato-distributori .stato-in_attesa::before { animation: nav-ordini-pulsa 1.6s ease-in-out infinite; }
+#stato-distributori .stato-confermato { --punto: var(--verde); }
+#stato-distributori .stato-non_disponibile,
+#stato-distributori .stato-scaduto { --punto: var(--rosso); }
+
+/* Materiale richiesto e importo pagato */
+.att-materiale { padding: 14px 16px; }
+.att-righe { list-style: none; margin: 8px 0 0; padding: 0; }
+.att-riga { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0; }
+.att-qta {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  min-width: 36px; height: 28px; padding: 0 6px; border-radius: 8px;
+  background: var(--blu-chiaro); color: #1a4468; font-weight: 700; font-size: 14px;
+}
+.att-desc { flex: 1; min-width: 0; }
+.att-nome { font-size: 15px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.att-cod { margin-top: 3px; font-size: 13px; color: var(--grigio); overflow-wrap: anywhere; }
+.att-pagato {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 8px; padding-top: 14px; border-top: 1px solid var(--bordo);
+}
+.att-pagato span { font-size: 14px; color: var(--grigio); }
+.att-pagato strong {
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 700; font-size: 17px;
+}
+
+/* "Annulla la richiesta": link centrato, rosso scuro, sottolineato */
+.att-annulla {
+  display: block; margin: 4px auto 0; min-height: 44px; padding: 0 16px; background: none; border: none;
+  color: #8a3a3a; font-family: inherit; font-size: 15px; text-decoration: underline; cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .att-punto, #stato-distributori .stato-in_attesa::before { animation: none; }
+  .att-anello .avanzamento { transition: none; }
+}
+
+/* ---------- Ordine in consegna (views/ordine_dettaglio.ejs): stessa struttura della verifica disponibilità, in verde ---------- */
+
+.att-verde .att-anello .traccia { stroke: var(--verde-chiaro); }
+.att-verde .att-anello .avanzamento { stroke: var(--verde); }
+.att-furgone {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 58px; color: var(--testo);
+}
+.att-furgone > span { display: flex; animation: att-oscilla 1.1s ease-in-out infinite; }
+.att-furgone svg { stroke-width: 1.4; }
+@keyframes att-oscilla { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+
+.att-verde .att-titolo { margin-bottom: 6px; font-size: 22px; font-weight: 800; }
+.att-verde .att-titolo.att-titolo-solo { margin-bottom: 18px; }
+.att-verde .att-punto { background: var(--verde); }
+.att-sotto { margin: 0 0 18px; font-size: 14px; color: var(--grigio); }
+.att-sotto strong { color: var(--testo); }
+
+/* "In consegna": la barretta si riempie col tempo trascorso (all'inverso dell'anello) */
+.att-verde .att-corrente .att-barretta { overflow: hidden; background: var(--verde-chiaro); }
+.att-riempimento { display: block; height: 100%; border-radius: 3px; background: var(--verde); transition: width 1s linear; }
+.att-verde .att-corrente .att-etichetta { color: #1f5f2e; }
+
+/* Etichetta "Confermato" della scheda del banco */
+.att-chip-ok {
+  flex: none; display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px 5px 6px; border-radius: 999px; background: var(--verde-chiaro); color: #1f5f2e;
+  font-weight: 600; font-size: 13px; line-height: 1.2; white-space: nowrap;
+}
+
+/* Materiale: prezzo di riga a destra e riepilogo dei costi */
+.att-prezzo-riga { flex: none; font-weight: 700; font-size: 15px; line-height: 1.3; white-space: nowrap; }
+.att-riepilogo { margin: 10px 0 0; padding-top: 10px; border-top: 1px solid var(--bordo); }
+.att-voce { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 5px 0; font-size: 14.5px; }
+.att-voce dt { margin: 0; color: var(--grigio); }
+.att-voce dd { margin: 0; }
+.att-voce dd.att-inclusa { color: var(--verde); font-weight: 700; }
+.att-totale { margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--bordo); }
+.att-totale dt { color: var(--testo); font-weight: 700; font-size: 15px; }
+.att-totale dd {
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 700; font-size: 17px;
+}
+
+/* Dettagli consegna e pagamento: <details> chiuso, una riga per voce */
+.att-dettagli { padding: 0; }
+.att-dettagli summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  min-height: 56px; padding: 10px 16px; font-weight: 700; font-size: 15px; cursor: pointer; list-style: none;
+}
+.att-dettagli summary::-webkit-details-marker { display: none; }
+.att-freccia { flex: none; color: var(--blu); transition: transform 0.2s ease; }
+.att-dettagli[open] .att-freccia { transform: rotate(180deg); }
+.att-voci { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--bordo); }
+.att-dett-riga { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; }
+.att-dett-riga + .att-dett-riga { border-top: 1px solid var(--bordo); }
+.att-dett-riga .att-icona { margin-top: 2px; }
+.att-dett-corpo { flex: 1; min-width: 0; }
+.att-dett-valore { margin-top: 2px; font-weight: 700; font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; }
+.att-dett-nota { font-weight: 600; white-space: pre-line; }
+.att-dett-sotto { margin-top: 2px; font-size: 13.5px; color: var(--grigio); }
+.att-dett-tempi { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; margin: 6px 0 0; font-size: 14px; }
+.att-dett-tempi dt { margin: 0; color: var(--grigio); }
+.att-dett-tempi dd { margin: 0; font-weight: 700; color: var(--testo); }
+.att-tag-prova {
+  flex: none; align-self: center; padding: 4px 10px; border-radius: 999px;
+  background: #fbebc7; color: #8a5a00; font-size: 12.5px; font-weight: 700;
+}
+.att-apri {
+  flex: none; align-self: center; display: inline-flex; align-items: center; justify-content: center;
+  min-width: 44px; min-height: 44px; padding: 0 4px; color: var(--blu); font-weight: 700; font-size: 15px; text-decoration: none;
+}
+
+.att-nota { margin: 4px 4px 12px; font-size: 12.5px; line-height: 1.4; color: var(--grigio); }
+
+@media (prefers-reduced-motion: reduce) {
+  .att-furgone > span { animation: none; }
+  .att-riempimento, .att-freccia { transition: none; }
+}
+
+/* ---------- Richiesta scaduta (views/richiesta_chiusa.ejs): stessa struttura delle altre pagine att-*, in rosso ---------- */
+
+.att-rosso .att-anello .traccia { stroke: var(--rosso-chiaro); }
+.att-tempo-spento { color: #b8b4aa; }
+/* Pallino d'allarme sul bordo dell'anello, a 45° in alto a destra (centro 119,29 su 148) */
+.att-allarme {
+  position: absolute; left: 102px; top: 12px; box-sizing: border-box; width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center; border-radius: 50%;
+  background: var(--rosso); border: 3px solid var(--surface); color: #fff;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 700; font-size: 17px; line-height: 1;
+}
+.att-rosso .att-titolo { margin-bottom: 6px; }
+.att-rosso .att-sotto { margin-bottom: 14px; }
+
+/* Rimborso: pillola verde (o neutra se il rimborso non è ancora avvenuto) */
+.att-rimborso-riga { margin: 0 0 18px; }
+.att-rimborso {
+  display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px 8px 10px; border-radius: 999px;
+  background: var(--verde-chiaro); color: #1f5f2e; font-weight: 700; font-size: 15px; line-height: 1.2;
+}
+.att-rimborso-attesa { padding-left: 16px; background: var(--sfondo); color: var(--grigio); border: 1px solid var(--bordo); }
+
+/* Passaggio corrente "Nessuna risposta": barretta rossa, etichetta rosso scuro con la croce */
+.att-rosso .att-corrente .att-barretta { background: var(--rosso); }
+.att-rosso .att-corrente .att-etichetta { color: #991b1b; font-weight: 700; }
+.att-croce {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 50%; background: var(--rosso); color: #fff;
+}
+
+/* Stato del banco: "Nessuna risposta" / "Non disponibile" */
+.att-chip-no {
+  flex: none; padding: 6px 12px; border-radius: 999px; background: var(--rosso-chiaro); color: #991b1b;
+  font-weight: 700; font-size: 13px; line-height: 1.2; white-space: nowrap;
+}
+
+/* Riga in fondo alla scheda del materiale */
+.att-piede { margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--bordo); font-size: 13px; color: var(--grigio); }
+
+/* "Rinvia richiesta": pulsante blu a tutta larghezza; "Elimina richiesta": link rosso scuro sottolineato */
+.att-rinvia {
+  display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; height: 54px;
+  margin-top: 4px; border: none; border-radius: 27px; background: var(--blu); color: var(--su-blu);
+  font-family: inherit; font-size: 17px; font-weight: 700; cursor: pointer;
+}
+.att-rinvia:active:not(:disabled) { background: var(--blu-scuro); }
+.att-rinvia:disabled { background: #c9d0d8; cursor: default; }
+.att-elimina {
+  display: block; margin: 8px auto 0; min-height: 44px; padding: 0 16px; background: none; border: none;
+  color: #8a3a3a; font-family: inherit; font-size: 15px; font-weight: 600; text-decoration: underline; cursor: pointer;
+}
+
+/* ---------- Area di tocco minima 44 x 44 px (audit del 05/10/2026) ---------- */
+
+/* Controlli che prima erano fra i 34 e i 42 px di altezza: il cantiere è fatto di guanti e dita sporche. Il
+   centraggio del testo è esplicito perché alcuni sono link o inline-block. */
+.btn-logout,
+.link-discreto,
+.paginazione .btn,
+.chip {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.link-discreto { display: flex; width: 100%; }
+.menu-account .tendina a,
+.menu-account .tendina .voce-esci { min-height: 44px; }
+
+/* ---------- Categoria: elenco delle sottocategorie con foto (views/categoria.ejs, ramo senza elenco prodotti) ---------- */
+
+/* Ricerca fissa sotto l'appbar (--altezza-appbar sta nella sezione "Home installatore"). Ha lo sfondo della pagina,
+   così le schede che scorrono sotto non si vedono attraverso. */
+.ricerca-fissa-sotto {
+  position: sticky;
+  top: var(--altezza-appbar);
+  z-index: 15;
+  padding: 12px;
+  background: var(--sfondo);
+}
+.ricerca-fissa-sotto .barra-ricerca { margin: 0; }
+
+/* Il vuoto in fondo lo dà la griglia (sotto): senza la barra "Vai al carrello" quello di .app-categoria è troppo. */
+.app-categoria.app-sotto { padding-bottom: 0; }
+
+.griglia-sotto {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 12px;
+  /* Navbar sospesa (--barra-bassa) + margine: l'ultima riga di schede non resta coperta. In tutto circa 96px. */
+  padding-bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + 24px);
+}
+
+.sotto-scheda {
+  display: block;
+  background: var(--surface);
+  border: 1px solid var(--bordo);
+  border-radius: 14px;
+  overflow: hidden;
+  color: var(--testo);
+  text-decoration: none;
+}
+.sotto-scheda:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+
+/* Riquadro 4:3: sotto, sempre, il fondo grigio con l'icona della categoria madre; la foto (se c'è) ci sta sopra e
+   lo copre. Se la foto non si carica l'<img> viene tolta (onerror) e resta il segnaposto: mai un riquadro vuoto. */
+.sotto-foto {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 4 / 3;
+  background: #e7e3da;
+  color: #8a887e;
+  font-size: 32px; /* le icone di src/icone.js sono 1em */
+}
+.sotto-foto img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.sotto-nome {
+  display: block;
+  padding: 10px 12px 12px;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 600;
+  font-size: 13.5px;
+  line-height: 1.25;
+}
+/* Il troncamento sta sul <span> interno: con il padding sul blocco che tronca la terza riga si vedrebbe a metà. */
+.sotto-testo {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  min-height: 2.5em; /* due righe, così le schede di una riga restano allineate alle altre */
+}
+
+/* Da tablet in su tante colonne quante ne stanno (come le categorie in home), nei 1400px del resto delle pagine. */
+@media (min-width: 720px) {
+  .griglia-sotto {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    max-width: 1400px;
+    margin: 0 auto;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+
+/* ---------- La mia anagrafica (views/profilo.ejs): schede in sola lettura ---------- */
+
+/* Il vuoto in fondo è la navbar sospesa + un margine (circa 96px): i ~150px di .app servono alle barre fisse
+   di carrello e pagamento, che qui non ci sono. */
+.app-anagrafica { padding-bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + 24px); }
+
+.an-scheda {
+  background: var(--surface);
+  border: 1px solid var(--bordo);
+  border-radius: 16px;
+  padding: 16px 14px;
+  margin-bottom: 12px;
+}
+.an-titolo {
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0 0 14px;
+}
+
+/* Scheda col nome: cerchio con le iniziali (.avatar, qui sotto), ragione sociale e "referente · tipo". */
+.an-nome { display: flex; align-items: center; gap: 14px; }
+.an-nome-testi { min-width: 0; }
+.an-ragione {
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.an-sotto { color: var(--grigio); font-size: 14px; margin-top: 2px; overflow-wrap: anywhere; }
+
+/* Una voce: riquadro icona, etichetta in maiuscolo sopra, valore sotto. Le voci si dividono con una linea sottile;
+   la prima e l'ultima di una scheda non hanno aria in più. */
+.an-riga {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #ece9e2;
+}
+.an-titolo + .an-riga { padding-top: 0; }
+.an-riga:last-child { border-bottom: none; padding-bottom: 0; }
+.an-icona {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #f1efea;
+  color: var(--testo);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px; /* le icone di src/icone.js sono 1em */
+}
+.an-icona-blu { width: 44px; height: 44px; border-radius: 12px; background: var(--blu-chiaro); color: var(--blu); font-size: 24px; }
+.an-testi { flex: 1; min-width: 0; }
+.an-etichetta {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--grigio);
+}
+.an-valore { font-size: 15px; font-weight: 700; line-height: 1.35; margin-top: 2px; overflow-wrap: anywhere; }
+.an-cifre { font-variant-numeric: tabular-nums; }
+.an-dettaglio { color: var(--grigio); font-size: 14px; line-height: 1.35; margin-top: 2px; overflow-wrap: anywhere; }
+.an-dettaglio strong { color: var(--testo); }
+.an-distributore {
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+/* Partita IVA, codice fiscale e SDI/PEC: due colonne, senza icona. */
+.an-riga.an-fiscali { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; align-items: start; }
+.an-fiscali .an-largo { grid-column: 1 / -1; }
+
+.an-nota {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 4px 4px 0;
+  color: var(--grigio);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.an-nota-icona { flex: none; font-size: 18px; line-height: 1; margin-top: 1px; color: var(--blu); }
+
+@media (min-width: 720px) {
+  /* Pagina di sola lettura: sui 1400px del resto del sito le schede si allungherebbero senza motivo. */
+  .app > .contenuto.anag { max-width: 640px; }
+}
+
+/* ---------- Profilo: cerchio con le iniziali, pulsante e menu (views/partials/appbar.ejs, iniziali.ejs) ---------- */
+
+/* Il cerchio è uno solo, in tre misure: pulsante dell'appbar (36), cima del menu (48), pagina anagrafica (56). */
+.avatar {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--blu);
+  color: #fff;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 700;
+  line-height: 1;
+}
+.avatar-36 { width: 36px; height: 36px; font-size: 13px; }
+.avatar-48 { width: 48px; height: 48px; font-size: 17px; }
+.avatar-56 { width: 56px; height: 56px; font-size: 20px; }
+.avatar svg { width: 55%; height: 55%; } /* l'omino, quando non ci sono iniziali */
+
+/* Il pulsante è alto 44px (area di tocco); il cerchio da 36 ha un anello di 3px che ci sta dentro. */
+.profilo-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+.profilo-btn .avatar { box-shadow: 0 0 0 3px var(--blu-chiaro); }
+.profilo-btn:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; }
+
+/* Velo e pannello sono fuori dall'appbar (z-index 20) per stare sopra la navbar (25) e le barre fisse (24-29). Il
+   velo parte sotto l'intestazione, che resta in luce. L'apertura è una dissolvenza veloce; chiuso è `hidden`. */
+.profilo-velo {
+  position: fixed;
+  top: var(--altezza-appbar);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  background: rgba(28, 25, 23, 0.28);
+  animation: profilo-dissolvi 150ms ease-out;
+}
+.profilo-pannello {
+  position: fixed;
+  top: calc(var(--altezza-appbar) + 6px);
+  right: 10px;
+  z-index: 31;
+  width: 300px;
+  max-width: calc(100vw - 20px);
+  max-height: calc(100vh - var(--altezza-appbar) - 16px);
+  max-height: calc(100dvh - var(--altezza-appbar) - 16px);
+  overflow-y: auto;
+  padding-bottom: 6px;
+  background: var(--surface);
+  border-radius: 18px;
+  box-shadow: 0 16px 36px rgba(28, 25, 23, 0.22);
+  animation: profilo-dissolvi 150ms ease-out;
+}
+@keyframes profilo-dissolvi { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .profilo-velo, .profilo-pannello { animation: none; }
+}
+/* Fra 521 e 719px .app è una colonna di 520px al centro: il pannello segue il suo bordo, non quello dello schermo. */
+@media (min-width: 521px) and (max-width: 719px) {
+  .profilo-pannello { right: calc((100vw - 520px) / 2 + 10px); }
+}
+
+.pp-testata { display: flex; align-items: center; gap: 12px; padding: 16px 14px 14px; }
+.pp-testi { min-width: 0; }
+.pp-ragione {
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.pp-sotto { color: var(--grigio); font-size: 13.5px; line-height: 1.35; margin-top: 2px; overflow-wrap: anywhere; }
+.pp-linea { height: 1px; margin: 0 14px; background: #ece9e2; }
+
+.pp-voce {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  margin: 0;
+  padding: 0 14px;
+  border: none;
+  background: none;
+  color: var(--testo);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.pp-voce:hover, .pp-voce:focus-visible { background: var(--sfondo); }
+.pp-voce:focus-visible { outline: 2px solid var(--blu); outline-offset: -2px; }
+.pp-icona {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #f1efea;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px; /* le icone di src/icone.js sono 1em */
+}
+.pp-testo { flex: 1; min-width: 0; }
+.pp-freccia { flex: none; color: #a8a69b; font-size: 20px; line-height: 1; }
+.pp-form { margin: 0; }
+.pp-esci, .pp-esci .pp-testo { color: #a33232; }
+.pp-esci .pp-icona { background: var(--rosso-chiaro); color: #a33232; }
+
+/* ---------- Storico ordini (views/storico.ejs, partials/storico_scheda.ejs) ---------- */
+
+/* Come .app-anagrafica: in fondo solo la navbar sospesa + un margine (circa 96px). */
+.app-storico { padding-bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + 24px); }
+
+.st-titolo {
+  margin: 8px 2px 10px;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #5c5b52;
+}
+
+.st-scheda {
+  background: var(--surface);
+  border: 1px solid var(--bordo);
+  border-radius: 16px;
+  margin-bottom: 10px;
+}
+.st-link {
+  display: block;
+  padding: 12px 14px;
+  border-radius: 16px;
+  color: inherit;
+  text-decoration: none;
+}
+.st-link:focus-visible { outline: 2px solid var(--blu); outline-offset: -2px; }
+
+.st-alto { display: flex; align-items: center; gap: 12px; }
+.st-icona {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px; /* le icone di src/icone.js sono 1em */
+}
+.st-testi { flex: 1; min-width: 0; }
+.st-data { display: block; color: var(--grigio); font-size: 13px; line-height: 1.3; }
+.st-articoli {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  margin-top: 2px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.st-altri { color: var(--grigio); font-weight: 600; }
+
+.st-basso {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #ece9e2;
+}
+.st-stato {
+  flex: none;
+  padding: 3px 9px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.st-banco {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--grigio);
+  font-size: 13px;
+}
+.st-importo {
+  flex: none;
+  margin-left: auto;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Colori per stato: riquadro dell'icona (.st-icona) ed etichetta (.st-stato) */
+.st-icona.st-consegna, .st-icona.st-consegnato { background: var(--verde-chiaro); color: var(--verde); }
+.st-icona.st-attesa { background: var(--arancio-chiaro); color: var(--arancio); }
+.st-icona.st-nessuna { background: var(--rosso-chiaro); color: var(--rosso); }
+.st-icona.st-annullata { background: #ece9e2; color: var(--grigio); }
+.st-stato.st-consegna, .st-stato.st-consegnato { background: var(--verde-chiaro); color: #1f5f2e; }
+.st-stato.st-attesa { background: var(--arancio-chiaro); color: #8a3c16; }
+.st-stato.st-nessuna { background: var(--rosso-chiaro); color: #991b1b; }
+.st-stato.st-annullata { background: #ece9e2; color: #3f3e38; }
+
+.st-riordina { margin: 0; padding: 0 14px 12px; }
+.st-btn-riordina {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1.5px solid var(--blu);
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--blu);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.st-btn-riordina svg { font-size: 18px; }
+/* Area di tocco di almeno 44px: il pulsante è 40px, il resto lo dà questa estensione invisibile. */
+.st-btn-riordina::after { content: ""; position: absolute; inset: -2px; }
+.st-btn-riordina:hover { background: var(--blu-chiaro); }
+.st-btn-riordina:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+
+/* ---------- Accesso, registrazione e benvenuto (views/login.ejs, registrati.ejs, benvenuto.ejs) ---------- */
+
+/* Pagine a tutta altezza: il pulsante o il link finale stanno in fondo allo schermo (margin-top: auto). */
+.acc {
+  display: flex;
+  flex-direction: column;
+  max-width: 460px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: 28px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Testata dell'accesso */
+.acc-icona {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 14px;
+  border-radius: 16px;
+  background: var(--blu);
+  color: var(--su-blu);
+  font-size: 26px; /* le icone di src/icone.js sono 1em */
+  box-shadow: 0 6px 16px rgba(36, 90, 143, 0.28);
+}
+.acc-occhiello {
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--blu);
+}
+.acc-titolo {
+  margin: 6px 0 10px;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+.acc-sotto { margin: 0 0 24px; color: var(--grigio); font-size: 15px; line-height: 1.45; }
+
+/* Accedi / Registrati: controllo a pillola. Il link è alto 42px; ::after porta l'area di tocco a 48px. */
+.acc-schede {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 22px;
+  padding: 4px;
+  border-radius: 14px;
+  background: #e6e2d9;
+}
+.acc-schede a {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 42px;
+  border-radius: 11px;
+  color: var(--grigio);
+  font-weight: 700;
+  text-decoration: none;
+}
+.acc-schede a::after { content: ""; position: absolute; inset: -3px 0; }
+.acc-schede a.attiva { background: #fff; color: var(--testo); box-shadow: 0 1px 3px rgba(35, 32, 25, 0.16); }
+.acc-schede a:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; }
+
+/* Campi: stessi in tutti i moduli (font a 16px: sotto, Safari su iPhone ingrandisce la pagina al tocco) */
+.acc-campo { margin-bottom: 18px; }
+.acc-campo > label, .acc-etichetta { display: block; margin: 0 0 6px; font-size: 14px; font-weight: 700; }
+.acc-campo input[type="text"], .acc-campo input[type="email"], .acc-campo input[type="tel"], .acc-campo input[type="password"] {
+  display: block;
+  width: 100%;
+  height: 52px;
+  margin: 0;
+  padding: 0 16px;
+  border: 1.5px solid #d6d1c6;
+  border-radius: 14px;
+  background: #fff;
+  color: var(--testo);
+  font-family: inherit;
+  font-size: 16px;
+}
+.acc-campo input::placeholder { color: #8a897e; opacity: 1; }
+.acc-campo input:focus { outline: none; border-color: var(--blu); box-shadow: 0 0 0 3px var(--blu-chiaro); }
+.acc-campo.sbagliato input[type="text"], .acc-campo.sbagliato input[type="email"],
+.acc-campo.sbagliato input[type="tel"], .acc-campo.sbagliato input[type="password"] { border-color: var(--rosso); }
+.acc-hint { margin: 6px 0 0; color: var(--grigio); font-size: 13px; line-height: 1.35; }
+
+/* Password con l'occhio: il pulsante è 44px, dentro il campo a destra */
+.acc-pwd { position: relative; }
+.acc-campo .acc-pwd input { padding-right: 52px; }
+.acc-occhio {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: #5c5b52;
+  font-size: 22px;
+  cursor: pointer;
+}
+.acc-occhio:focus-visible { outline: 2px solid var(--blu); outline-offset: -2px; }
+.acc-occhio-off, .acc-occhio[aria-pressed="true"] .acc-occhio-on { display: none; }
+.acc-occhio[aria-pressed="true"] .acc-occhio-off { display: inline; }
+
+/* Pulsante principale (anche come link, nel benvenuto) */
+.acc-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 54px;
+  margin: 0;
+  border: 0;
+  border-radius: 27px;
+  background: var(--blu);
+  color: var(--su-blu);
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+.acc-btn:hover { background: var(--blu-scuro); }
+.acc-btn:focus-visible { outline: 2px solid var(--blu); outline-offset: 3px; }
+
+/* In fondo allo schermo: la riga con il link all'altro modulo */
+.acc-fondo { margin: auto 0 0; padding-top: 28px; text-align: center; color: var(--grigio); font-size: 15px; }
+.acc-fondo a, .reg-accedi a { display: inline-block; padding: 12px 2px; margin: -12px 0; font-weight: 700; text-decoration: none; }
+.acc .errore { margin-bottom: 18px; }
+.errore-elenco { margin: 6px 0 0; padding-left: 18px; }
+
+/* Registrazione a tre passi. Senza script i tre fieldset si vedono tutti, uno sotto l'altro, e la barra di avanzamento
+   non c'è; con lo script (data-passi) se ne vede uno alla volta. La fascia con "Avanti" è fissa in fondo. */
+.reg { padding-bottom: 150px; }
+.reg-testata { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; margin-bottom: 14px; }
+.reg-indietro {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--blu);
+  font-size: 24px;
+  box-shadow: 0 1px 4px rgba(35, 32, 25, 0.16);
+  text-decoration: none;
+}
+.reg-indietro:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+.reg-titolo-pagina {
+  grid-column: 2;
+  text-align: center;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+}
+.reg-avanzamento { display: none; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 20px; }
+.reg[data-passi] .reg-avanzamento { display: grid; }
+.reg-avanzamento span { height: 5px; border-radius: 3px; background: #d6d1c6; }
+.reg-avanzamento span.fatto { background: var(--blu); }
+
+.reg-passo { min-width: 0; margin: 0 0 28px; padding: 0; border: 0; }
+.reg-passo-testa { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.reg-passo-testa h2 {
+  margin: 0;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 24px;
+  font-weight: 800;
+}
+.reg-passo-testa span { flex: none; color: var(--grigio); font-size: 13px; }
+
+.reg-tipi { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.reg-tipo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+  height: 52px;
+  margin: 0;
+  padding: 0 8px;
+  border: 1.5px solid #d6d1c6;
+  border-radius: 14px;
+  background: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.reg-tipo input { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--blu); }
+.reg-tipo:has(input:checked) { border-color: var(--blu); background: var(--blu-chiaro); color: var(--blu-scuro); }
+.reg-tipo:has(input:focus-visible) { outline: 2px solid var(--blu); outline-offset: 2px; }
+.acc-campo.sbagliato .reg-tipo { border-color: var(--rosso); }
+
+/* CAP, Città e Prov. sulla stessa riga */
+.reg-riga-citta { display: grid; grid-template-columns: 96px minmax(0, 1fr) 72px; gap: 10px; }
+.reg-nota-fiscale { margin: 4px 0 0; color: var(--grigio); font-size: 13px; line-height: 1.4; }
+
+.reg-barra {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  padding: 12px 20px calc(10px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid rgba(35, 32, 25, 0.08);
+  background: var(--sfondo);
+}
+.reg-barra-in { max-width: 420px; margin: 0 auto; }
+.reg-accedi { margin: 12px 0 0; text-align: center; color: var(--grigio); font-size: 14px; }
+/* Schermi bassi (tastiera aperta in orizzontale): la fascia non deve mangiare il modulo */
+@media (max-height: 520px) {
+  .reg { padding-bottom: 24px; }
+  .reg-barra { position: static; padding: 4px 0 0; border: 0; }
+}
+
+/* Benvenuto dopo la registrazione */
+.ben { padding-top: 72px; }
+.ben-alto { text-align: center; }
+.ben-alone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  margin: 0 auto 24px;
+  border-radius: 50%;
+  background: var(--verde-chiaro);
+}
+.ben-cerchio {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--verde);
+  color: #fff;
+  font-size: 34px;
+}
+.ben-cerchio svg { stroke-width: 2.6; }
+.ben-titolo { margin: 0 0 10px; font-size: 26px; font-weight: 800; line-height: 1.15; text-wrap: balance; }
+.ben-sotto { margin: 0; color: var(--grigio); font-size: 16px; line-height: 1.45; }
+.ben-sotto strong { color: var(--testo); }
+.ben-scheda {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 28px;
+  padding: 14px;
+  border: 1px solid var(--bordo);
+  border-radius: 16px;
+  background: var(--surface);
+  text-align: left;
+}
+.ben-icona {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--blu-chiaro);
+  color: var(--blu);
+  font-size: 24px;
+}
+.ben-scheda > div { min-width: 0; }
+.ben-etichetta { color: #5c5b52; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.ben-nome { margin-top: 2px; font-size: 17px; font-weight: 700; overflow-wrap: anywhere; }
+.ben-nota { margin: 12px 4px 0; color: var(--grigio); font-size: 14px; line-height: 1.4; text-align: left; }
+.ben-azioni { margin-top: auto; padding-top: 32px; text-align: center; }
+.ben-link { display: inline-block; margin-top: 4px; padding: 14px 8px; font-size: 15px; font-weight: 700; text-decoration: none; }

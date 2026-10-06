@@ -1,0 +1,16 @@
+{
+  "name": "Ordini Minuteria",
+  "short_name": "Minuteria",
+  "description": "Materiale termoidraulico dai banchi della tua zona: chiedi la disponibilità, paghi, ricevi in cantiere.",
+  "lang": "it",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f3f1ec",
+  "theme_color": "#f3f1ec",
+  "icons": [
+    { "src": "/icons/icona-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icona-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icona-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

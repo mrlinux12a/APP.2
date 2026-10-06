@@ -60,6 +60,14 @@ export function VistaOrdine({
     o.distributore ? { etichetta: o.distributore.nome, dettaglio: o.distributore.filiale } : null,
     { etichetta: o.modalita_testo, dettaglio: o.tempi_testo },
     o.destinazione ? { etichetta: 'Destinazione merce', dettaglio: o.destinazione } : null,
+    o.pagamento
+      ? {
+          etichetta: `Pagamento: ${o.pagamento.stato_testo.toLowerCase()} € ${o.pagamento.importo}`,
+          dettaglio: `${o.pagamento.simulato ? 'Pagamento di prova, nessun addebito reale' : ''}${
+            o.pagamento.simulato && o.pagamento.pagato_il ? ' · ' : ''
+          }${o.pagamento.pagato_il ? 'il ' + o.pagamento.pagato_il : ''}`,
+        }
+      : null,
     o.ddt ? { etichetta: 'Bolla / DDT n. ' + o.ddt.numero, dettaglio: 'Del ' + o.ddt.data } : null,
     o.note ? { etichetta: 'Note', dettaglio: o.note } : null,
   ].filter(Boolean) as { etichetta: string; dettaglio: string }[];
@@ -68,13 +76,7 @@ export function VistaOrdine({
     <ScrollView style={{ backgroundColor: c.sfondo }} contentContainerStyle={stili.pagina}>
       {nuovo ? (
         <Avviso tipo="ok">
-          <Forte>Ordine inviato.</Forte> Il distributore ha ricevuto la conferma e prepara il materiale.
-        </Avviso>
-      ) : null}
-      {o.assegnata_auto ? (
-        <Avviso tipo="attenzione">
-          <Forte>Ordine partito in automatico.</Forte> Il tempo per scegliere il distributore era scaduto, quindi l'ordine
-          è andato a chi copriva tutto il materiale con la consegna più veloce, con consegna e note predefinite.
+          <Forte>Ordine confermato.</Forte> Il distributore prepara il materiale. {o.tempo_testo}.
         </Avviso>
       ) : null}
 

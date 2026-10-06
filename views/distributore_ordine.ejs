@@ -117,7 +117,7 @@
         <form method="POST" action="/distributore/ordini/<%= ordine.id %>/ddt">
           <div class="card">
             <label for="colli">Numero colli</label>
-            <input type="number" id="colli" name="colli" min="1" step="1" value="1" inputmode="numeric">
+            <input type="number" id="colli" name="colli" min="1" max="999" step="1" value="1" inputmode="numeric">
 
             <label for="aspetto">Aspetto esteriore dei beni</label>
             <select id="aspetto" name="aspetto">
@@ -143,7 +143,7 @@
             </select>
 
             <label for="ddtnote">Annotazioni in bolla (opzionale)</label>
-            <textarea id="ddtnote" name="note" rows="2" placeholder="Es. consegna al cantiere, citofonare al capocantiere"></textarea>
+            <textarea id="ddtnote" name="note" rows="2" maxlength="500" placeholder="Es. consegna al cantiere, citofonare al capocantiere"></textarea>
           </div>
           <button class="btn btn-verde btn-blocco" type="submit">
             Emetti bolla e segna la merce partita
@@ -165,7 +165,7 @@
   </div>
 
   <%- include('partials/nav_distributore', { attivo: 'ordini' }) %>
-  <script src="/app.js" defer></script>
-  <script src="/mappa.js" defer></script>
+  <script src="<%= asset('/app.js') %>" defer></script>
+  <script src="<%= asset('/mappa.js') %>" defer></script>
 </body>
 </html>
