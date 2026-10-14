@@ -1,0 +1,18 @@
+<%
+  // Articoli di una scheda della home del banco: "2×" + nome + codice. Parametri: articoli (le righe da mostrare,
+  // { quantita, nome, codice }) e altre (quante righe in più non entrano: "+2 altri articoli").
+%>
+<ul class="articoli">
+  <% articoli.forEach(function (a) { %>
+    <li class="articolo">
+      <span class="articolo-qta"><%= a.quantita %>×</span>
+      <span class="articolo-testo">
+        <span class="articolo-nome"><%= a.nome %></span>
+        <% if (a.codice) { %><span class="articolo-cod">Cod. <%= a.codice %></span><% } %>
+      </span>
+    </li>
+  <% }); %>
+  <% if (altre > 0) { %>
+    <li class="articolo-altre">+<%= altre %> altr<%= altre === 1 ? 'o articolo' : 'i articoli' %></li>
+  <% } %>
+</ul>

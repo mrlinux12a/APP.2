@@ -1,0 +1,52 @@
+<%
+  // Pagina di pagamento: riepilogo e form di Stripe (Payment Element) dentro il sito. La carta la raccoglie Stripe e non
+  // passa dal nostro server; la carta viene solo bloccata, si incassa quando nasce l'ordine. Lo script
+  // public/pagamento.js monta il form e conferma; al ritorno (/pagamento/esito) la richiesta nasce.
+  const importo = euro(importoCent / 100);
+  const riepilogo = tipo === 'reinvio' ? 'Richiesta #' + requestId : pezzi + (pezzi === 1 ? ' pezzo' : ' pezzi');
+%>
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="1">
+  <div class="app app-pagamento">
+    <%- include('partials/appbar', { titolo, intestazione: 'Pagamento', indietro: '/carrello' }) %>
+
+    <div class="contenuto pag">
+      <section class="pag-scheda" data-pagamento
+               data-chiave="<%= chiavePubblica %>" data-segreto="<%= clientSecret %>" data-ritorno="<%= ritorno %>">
+        <div class="pag-testa">
+          <div class="pag-totale">
+            <span class="pag-label">Totale IVA inclusa</span>
+            <span class="pag-importo">€ <%= importo %></span>
+          </div>
+          <span class="pag-riepilogo"><%= riepilogo %></span>
+        </div>
+
+        <% if (riprova) { %>
+          <div class="errore" role="alert">Il pagamento non è andato a buon fine. Riprova o usa un'altra carta.</div>
+        <% } %>
+
+        <div id="elemento-pagamento" class="pag-elemento" aria-live="polite"></div>
+        <div class="errore pag-errore" data-pag-messaggio role="alert" hidden></div>
+
+        <button class="btn-paga pag-paga" type="button" data-pag-paga disabled>Paga € <%= importo %></button>
+        <p class="barra-paga-nota">
+          <span class="scudo"><%- iconaScudo %></span>
+          <span>I banchi rispondono entro <%= Math.round(minutiRisposta) %> min · se nessuno accetta, la carta non viene addebitata</span>
+        </p>
+      </section>
+
+      <a class="pag-torna" href="/carrello">Torna al riepilogo</a>
+    </div>
+  </div>
+
+  <%# Stripe.js va caricato da js.stripe.com (mai da una copia nostra): è così che Stripe tiene i dati della carta fuori
+      dal nostro server. Lo script del sito parte dopo (defer). %>
+  <script src="https://js.stripe.com/v3/"></script>
+  <script src="<%= asset('/pagamento.js') %>" defer></script>
+  <script src="<%= asset('/app.js') %>" defer></script>
+</body>
+</html>

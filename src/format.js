@@ -81,6 +81,13 @@ function dataOraRoma(naive, separatore = ' alle ') {
   return `${giorno}${separatore}${oraRoma(d)}`;
 }
 
+// "04/10/2026", in ora italiana, da una colonna TIMESTAMP senza fuso: solo il giorno, senza ora. "—" se manca.
+function dataSolaRoma(naive) {
+  const d = istanteUtc(naive);
+  if (!d) return '—';
+  return d.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
 const MESI_BREVI = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
 const MESI_ESTESI = [
   'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
@@ -120,4 +127,4 @@ function meseRoma(naive) {
   return { chiave: `${d.anno}-${String(d.mese).padStart(2, '0')}`, titolo: `${MESI_ESTESI[d.mese - 1]} ${d.anno}` };
 }
 
-module.exports = { toDate, istanteUtc, dataOra, dataSola, oraSola, oraRoma, dataOraRoma, dataBreveRoma, meseRoma, tempoConsegna, mmss };
+module.exports = { toDate, istanteUtc, dataOra, dataSola, oraSola, oraRoma, dataOraRoma, dataSolaRoma, dataBreveRoma, meseRoma, tempoConsegna, mmss };

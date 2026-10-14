@@ -84,11 +84,11 @@ async function riepilogoCarrello(righe) {
   };
 }
 
-// Paga e invia la richiesta ai distributori. Ritorna l'id creato. `destinazione` e `note` sono quelle
-// del carrello (la destinazione, se vuota, è l'indirizzo di consegna abituale del cliente): da qui
-// l'ordine nasce da solo, senza altre scelte. Il pagamento è simulato (vedi pagamenti.js) e vale il
-// totale IVA inclusa che il carrello ha mostrato.
-async function nuovaRichiesta(clienteId, righe, { destinazione = '', note = '' } = {}) {
+// I controlli prima di pagare e inviare: carrello non vuoto, ordine minimo, nessun'altra richiesta aperta.
+// Ritorna { cliente, totali } (totali.totale_ivato è quello che l'installatore paga) o lancia ErroreFlusso. Li
+// fa il flusso del sito prima di mandare il cliente a Stripe, e di nuovo `nuovaRichiesta` quando il pagamento è
+// autorizzato: nel frattempo il cliente può aver aperto un'altra richiesta (dall'app, da un'altra scheda).
+async function validaRichiesta(clienteId, righe) {
   // L'ordine minimo si misura sulla merce già maggiorata, spedizione esclusa.
   const totali = await pricing.calcolaOrdine(righe, { costoConsegna: await pricing.getSpedizioneFissa() });
   const minimo = await pricing.getOrdineMinimo();
@@ -115,11 +115,28 @@ async function nuovaRichiesta(clienteId, righe, { destinazione = '', note = '' }
     );
   }
 
+  return { cliente, totali };
+}
+
+// Paga e invia la richiesta ai distributori. Ritorna l'id creato. `destinazione` e `note` sono quelle
+// del carrello (la destinazione, se vuota, è l'indirizzo di consegna abituale del cliente): da qui
+// l'ordine nasce da solo, senza altre scelte. Il pagamento vale il totale IVA inclusa che il carrello ha
+// mostrato: simulato (vedi pagamenti.js) per l'app e senza Stripe; col sito e Stripe lo chiama
+// src/stripe_pagamenti.js a carta già autorizzata (`metodoPagamento: 'stripe'`, `importoPagato` = quanto
+// autorizzato, che resta quello scritto sulla richiesta anche se i prezzi si sono mossi nel frattempo).
+async function nuovaRichiesta(
+  clienteId,
+  righe,
+  { destinazione = '', note = '', metodoPagamento = pagamenti.METODO_SIMULATO, importoPagato = null } = {}
+) {
+  const { cliente, totali } = await validaRichiesta(clienteId, righe);
+
   try {
     const { requestId } = await richieste.creaRichiesta(cliente, righe, {
       destinazione: String(destinazione || '').trim().slice(0, 300) || cliente.indirizzo_consegna || ddt.indirizzoCompleto(cliente),
       note: String(note || '').trim().slice(0, 500),
-      importo: totali.totale_ivato,
+      importo: importoPagato === null ? totali.totale_ivato : importoPagato,
+      metodoPagamento,
     });
     return requestId;
   } catch (e) {
@@ -129,9 +146,19 @@ async function nuovaRichiesta(clienteId, righe, { destinazione = '', note = '' }
     // qui sopra (è una lettura-poi-scrittura, non atomica) prima che la seconda arrivi
     // all'INSERT — a quel punto è il DB stesso a fermarla. Si porta comunque il cliente
     // sulla richiesta che è realmente stata creata, invece di un errore 500.
+    // Non con Stripe: lì ogni pagamento autorizzato deve avere una richiesta tutta sua, altrimenti due carte
+    // finirebbero sulla stessa richiesta e verrebbero incassate entrambe. Il secondo pagamento si rilascia.
     if (e && e.code === '23505') {
       const bloccante2 = await richiestaBloccante(cliente.id);
-      if (bloccante2) return bloccante2.id;
+      if (bloccante2 && metodoPagamento !== pagamenti.METODO_STRIPE) return bloccante2.id;
+      if (bloccante2) {
+        throw new ErroreFlusso(
+          'in_corso',
+          'Richiesta già in corso',
+          "Hai già una richiesta in attesa di risposta: aspetta che si chiuda prima di inviarne un'altra.",
+          { requestId: bloccante2.id }
+        );
+      }
     }
     throw e;
   }
@@ -327,6 +354,10 @@ async function creaOrdineDaRisposta(richiesta, risposta) {
     const orderId = Number(info.lastInsertRowid);
     for (const riga of totali.righe) await insertItem.run(orderId, riga.product_id, riga.codice_snapshot, riga.nome_snapshot, riga.quantita, riga.prezzo_listino_snapshot, riga.sconto_pct_snapshot, riga.prezzo_netto_unitario, riga.subtotale, riga.prezzo_unitario_cliente, riga.subtotale_cliente, riga.raee_unitario, riga.raee_riga);
     await db.prepare(`UPDATE requests SET order_id = ? WHERE id = ?`).run(orderId, richiesta.id);
+    // Con Stripe la carta, finora solo bloccata, si incassa (per il totale dell'ordine, se più basso di quanto
+    // autorizzato). Qui si segna soltanto sul DB, nella stessa transazione dell'ordine: la chiamata a Stripe la
+    // fa src/stripe_pagamenti.js subito dopo e, se non riesce, dal timer.
+    await pagamenti.segnaDaIncassare(richiesta.id, totali.totale_ivato);
     // Con il corriere il tempo di consegna è quello scritto nel gruppo ("preso 30"): conta da adesso,
     // cioè da quando l'ordine è confermato.
     if (risposta.corriere_stato === 'preso') {
@@ -749,6 +780,7 @@ module.exports = {
   richiestaBloccante,
   righeDaQuantita,
   riepilogoCarrello,
+  validaRichiesta,
   nuovaRichiesta,
   dettaglioRichiesta,
   annullaRichiesta,

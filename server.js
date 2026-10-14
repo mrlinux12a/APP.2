@@ -39,7 +39,9 @@ const notifiche = require('./src/notifiche');
 const ddt = require('./src/ddt');
 const geo = require('./src/geo');
 const anagrafiche = require('./src/anagrafiche');
+const { conCache } = require('./src/memo');
 const flusso = require('./src/flusso_cliente');
+const stripePagamenti = require('./src/stripe_pagamenti');
 const { ArchivioSqlite } = require('./src/sessioni');
 const { TESTO_DISPONIBILITA, prodottoJson } = require('./src/prodotto_json');
 const { chiaveLogin, loginBloccato, registraTentativoFallito, azzeraTentativi } = require('./src/limite_login');
@@ -114,6 +116,28 @@ app.use((req, res, next) => {
 // Comprime HTML, JSON, CSS e JS (sotto 1 KB no): la ricerca in JSON passa da ~46 KB a pochi KB,
 // che su rete mobile è la parte più lenta. Le foto sono già compresse (webp) e restano intatte.
 app.use(compression());
+
+// Webhook di Stripe (checkout.session.completed / expired). Prima dei parser del corpo: la firma si verifica sul testo
+// grezzo, e un JSON già interpretato non la farebbe più tornare. Niente sessione né controllo d'origine: la chiamata
+// viene da Stripe, non da un browser, e vale solo se la firma (STRIPE_WEBHOOK_SECRET) è giusta. 2xx = ricevuto; un
+// errore nostro (500) fa riprovare Stripe da solo per giorni.
+app.post('/webhooks/stripe', express.raw({ type: 'application/json', limit: '1mb' }), async (req, res) => {
+  if (!stripePagamenti.attivo() || !process.env.STRIPE_WEBHOOK_SECRET) return res.status(503).send('Stripe non configurato');
+  let evento;
+  try {
+    evento = stripePagamenti.leggiEvento(req.body, req.get('stripe-signature'));
+  } catch (e) {
+    return res.status(400).send('Firma non valida');
+  }
+  try {
+    await stripePagamenti.gestisciEvento(evento);
+    res.json({ ricevuto: true });
+  } catch (e) {
+    console.error('[stripe] webhook', evento.type, e.message);
+    res.status(500).send('Errore');
+  }
+});
+
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(corpoSempreOggetto);
@@ -161,7 +185,7 @@ app.use('/vendor', express.static(path.join(__dirname, 'public', 'vendor'), { ma
 // pagina (sono 2-3 richieste in meno a ogni apertura, su una rete da cantiere). Quando il file cambia cambia
 // anche la versione e il browser lo riscarica da solo. Senza ?v= (collegamenti vecchi) resta la sola verifica
 // ETag di prima.
-const ASSET_VERSIONATI = new Set(['/style.css', '/app.js', '/mappa.js']);
+const ASSET_VERSIONATI = new Set(['/style.css', '/app.js', '/mappa.js', '/pagamento.js']);
 app.use((req, res, next) => {
   if (req.query.v && ASSET_VERSIONATI.has(req.path)) res.set('Cache-Control', 'public, max-age=31536000, immutable');
   next();
@@ -192,6 +216,12 @@ app.use(
 );
 app.use(salvaSessionePrimaDelRedirect);
 
+// Ditta e filiale scritte nell'intestazione del banco (views/partials/banco_testa.ejs), che ha ogni pagina del
+// distributore: cambiano di rado, quindi si leggono una volta al minuto invece che a ogni pagina.
+const intestazioneBanco = conCache(60000, (distributorId) =>
+  db.prepare('SELECT nome, filiale FROM distributors WHERE id = ?').get(distributorId)
+);
+
 // rende disponibili utente, helper e contatori a tutte le viste
 app.use(async (req, res, next) => {
   res.locals.currentUser = req.session.user || null;
@@ -205,7 +235,7 @@ app.use(async (req, res, next) => {
   // Nessuna di queste dipende dal risultato di un'altra: prima giravano una dopo l'altra
   // (fino a una decina di query in sequenza, anche per un cliente senza nulla da mostrare),
   // sommando la latenza di ognuna invece di pagare solo quella della più lenta.
-  const [servizioPct, notificheNonLette, ordiniNonLetti, richiesteNonLette, geoStato, contatori, statoOrdini, profiloCliente] =
+  const [servizioPct, notificheNonLette, ordiniNonLetti, richiesteNonLette, geoStato, contatori, statoOrdini, profiloCliente, bancoTesta] =
     await Promise.all([
       pricing.getServizioPct(),
       utente ? notifiche.nonLette(utente.id) : Promise.resolve(0),
@@ -232,6 +262,14 @@ app.use(async (req, res, next) => {
             return null;
           })
         : Promise.resolve(null),
+      // Intestazione del banco, uguale su tutte le sue pagine. Come sopra: un errore non rompe la pagina (la
+      // barra mostra allora il nome dell'utente al posto di ditta e filiale).
+      utente && utente.ruolo === 'distributore' && utente.distributor_id && !req.path.startsWith('/api/')
+        ? intestazioneBanco(utente.distributor_id).catch((err) => {
+            console.error('[banco] intestazione non letta:', err.message);
+            return null;
+          })
+        : Promise.resolve(null),
     ]);
 
   // pricing.prezzoCliente legge il DB (async): i template EJS non possono fare "await"
@@ -248,6 +286,8 @@ app.use(async (req, res, next) => {
   res.locals.ordiniNonLetti = ordiniNonLetti + richiesteNonLette;
   res.locals.statoOrdini = statoOrdini;
   res.locals.profiloCliente = profiloCliente;
+  res.locals.bancoTesta = bancoTesta;
+  res.locals.percorso = req.path; // la voce attiva dell'intestazione del banco si sceglie da qui
   res.locals.geo = geoStato;
   // I contatori del banco servono alla barra di navigazione di tutte le pagine distributore.
   res.locals.contatori = contatori;
@@ -573,7 +613,9 @@ app.get('/categoria/:slug', requireRole('cliente'), async (req, res) => {
 
 // ---------- Punti vendita sulla mappa ----------
 
-app.get('/punti-vendita', requireLogin, async (req, res) => {
+// Il banco non ha più questa pagina (tolta dal suo menu il 14/10/2026): per lui è come se non esistesse (404).
+app.get('/punti-vendita', requireLogin, async (req, res, next) => {
+  if (req.session.user.ruolo === 'distributore') return next();
   const punti = await db
     .prepare(
       `SELECT s.*, d.nome AS distributore, d.zona
@@ -728,8 +770,27 @@ app.post('/carrello/svuota', requireRole('cliente'), async (req, res) => {
 
 // ---------- Cliente: richiesta di disponibilità ----------
 
-// "Paga e invia la richiesta": paga (per ora simulato), manda la richiesta ai distributori e apre
-// l'attesa. Dal carrello arrivano le quantità visibili in pagina (modo 'imposta'): anche quelle
+// Indirizzo del sito, per il ritorno da Stripe (3-D Secure e simili): APP_URL nel .env (in produzione, con il dominio
+// vero); senza, quello della richiesta (va bene in locale).
+function urlBase(req) {
+  const fisso = String(process.env.APP_URL || '').trim().replace(/\/+$/, '');
+  return fisso || req.protocol + '://' + req.get('host');
+}
+
+// Dove mandare chi ha un errore del flusso (richiesta già aperta, minimo, carrello vuoto, pagamento non disponibile).
+function paginaErroreFlusso(res, e) {
+  const link =
+    e.codice === 'in_corso' && e.requestId
+      ? { link: '/richieste/' + e.requestId, linkTesto: 'Apri la richiesta in corso' }
+      : e.codice === 'vuota'
+        ? { link: '/home', linkTesto: 'Torna alla home' }
+        : { link: '/carrello', linkTesto: 'Torna al riepilogo' };
+  return res.status(400).render('errore', { titolo: e.titolo, messaggio: e.message, ...link });
+}
+
+// "Paga e invia la richiesta": manda la richiesta ai distributori e apre l'attesa. Il pagamento è simulato, oppure
+// (con STRIPE_SECRET_KEY nel .env) Stripe: allora da qui si va alla pagina di pagamento del sito (/pagamento/<id>) e
+// la richiesta parte a carta autorizzata. Dal carrello arrivano le quantità visibili in pagina (modo 'imposta'): anche quelle
 // scritte a mano e mai salvate, che prima andavano perse e la richiesta partiva con le vecchie.
 // La logica del flusso (qui e nelle route sotto) sta in src/flusso_cliente.js, condivisa
 // con l'API dell'app.
@@ -737,22 +798,72 @@ app.post('/richieste', requireRole('cliente'), async (req, res) => {
   aggiornaCarrelloDaForm(req, req.body && req.body.modo === 'imposta' ? 'imposta' : 'aggiungi');
   let requestId;
   try {
-    requestId = await flusso.nuovaRichiesta(req.session.user.id, await righeCarrello(req), {
-      destinazione: req.body && req.body.destinazione,
-      note: req.body && req.body.note,
-    });
+    const dati = { destinazione: req.body && req.body.destinazione, note: req.body && req.body.note };
+    if (stripePagamenti.attivo()) {
+      // Con Stripe la richiesta non parte da qui: parte quando la carta è autorizzata (vedi /pagamento/esito, il
+      // webhook e il timer). Il carrello si svuota solo allora.
+      const pagamentoId = await stripePagamenti.avviaPagamento(req.session.user.id, await righeCarrello(req), dati);
+      return res.redirect(303, '/pagamento/' + pagamentoId);
+    }
+    requestId = await flusso.nuovaRichiesta(req.session.user.id, await righeCarrello(req), dati);
   } catch (e) {
     if (!(e instanceof flusso.ErroreFlusso)) throw e;
-    const link =
-      e.codice === 'in_corso'
-        ? { link: '/richieste/' + e.requestId, linkTesto: 'Apri la richiesta in corso' }
-        : e.codice === 'vuota'
-          ? { link: '/home', linkTesto: 'Torna alla home' }
-          : { link: '/carrello', linkTesto: 'Torna al riepilogo' };
-    return res.status(400).render('errore', { titolo: e.titolo, messaggio: e.message, ...link });
+    return paginaErroreFlusso(res, e);
   }
   req.session.carrello = {};
   res.redirect('/richieste/' + requestId);
+});
+
+// Cosa fare dopo un tentativo di pagamento (ritorno da Stripe o pagina già pagata): la richiesta è nata -> alla sua
+// schermata di attesa; la sta creando qualcun altro -> pagina che si ricarica da sola; carta non autorizzata -> di nuovo
+// il form; respinto -> errore con il motivo; altro -> carrello.
+function esitoPagamento(req, res, esito) {
+  if (esito.esito === 'ok') {
+    if (esito.tipo !== 'reinvio') req.session.carrello = {};
+    return res.redirect('/richieste/' + esito.requestId);
+  }
+  if (esito.esito === 'in_corso') return res.render('pagamento_esito', { titolo: 'Pagamento in corso' });
+  if (esito.esito === 'da_pagare') return res.redirect('/pagamento/' + esito.id + '?riprova=1');
+  if (esito.esito === 'rifiutato') {
+    return res.status(400).render('errore', { titolo: esito.titolo, messaggio: esito.messaggio, link: '/carrello', linkTesto: 'Torna al riepilogo' });
+  }
+  if (esito.esito === 'non_configurato') {
+    return res.status(503).render('errore', {
+      titolo: 'Pagamento non disponibile',
+      messaggio:
+        'Il pagamento online non è ancora configurato. Non è stato addebitato nulla.' +
+        // Chi sviluppa in locale deve sapere cosa guardare: ai clienti veri non si dice niente delle chiavi.
+        (['localhost', '127.0.0.1', '::1'].includes(req.hostname)
+          ? ' In locale: controlla le chiavi Stripe nel .env (la pubblicabile deve iniziare con pk_test_) e gli avvisi [stripe] nel log del server.'
+          : ''),
+      link: '/carrello',
+      linkTesto: 'Torna al riepilogo',
+    });
+  }
+  return res.redirect('/carrello'); // annullato o sconosciuto: il cliente è tornato indietro senza pagare
+}
+
+// Il cliente torna dal pagamento: da Stripe dopo il 3-D Secure (con ?payment_intent=...) o dal nostro script, subito
+// dopo aver pagato senza reindirizzamenti. Se la carta è autorizzata la richiesta nasce adesso, se non è già nata
+// (la crea chi arriva primo fra questa pagina, il webhook e il timer).
+app.get('/pagamento/esito', requireRole('cliente'), async (req, res) => {
+  if (!stripePagamenti.attivo()) return res.redirect('/carrello');
+  esitoPagamento(req, res, await stripePagamenti.esitoRitorno(req.query.payment_intent, req.session.user.id));
+});
+
+// La pagina di pagamento: riepilogo e form di Stripe (Payment Element, public/pagamento.js). La carta non passa dal
+// nostro server. Solo il cliente della riga; se la carta è già autorizzata, si va avanti.
+app.get('/pagamento/:id', requireRole('cliente'), async (req, res) => {
+  if (!stripePagamenti.attivo()) return res.redirect('/carrello');
+  const pagina = await stripePagamenti.preparaPagina(Number(req.params.id), req.session.user.id);
+  if (pagina.esito !== 'pagina') return esitoPagamento(req, res, pagina);
+  res.render('pagamento', {
+    titolo: 'Pagamento',
+    ...pagina,
+    ritorno: urlBase(req) + '/pagamento/esito',
+    minutiRisposta: await pricing.getFinestraMinuti(),
+    riprova: req.query.riprova === '1',
+  });
 });
 
 app.get('/richieste/:id', requireRole('cliente'), async (req, res) => {
@@ -803,6 +914,16 @@ app.post('/richieste/:id/annulla', requireRole('cliente'), async (req, res) => {
 app.post('/richieste/:id/reinvia', requireRole('cliente'), async (req, res) => {
   const richiesta = await richieste.getRichiesta(req.params.id);
   if (!richiesta || richiesta.cliente_id !== req.session.user.id) return res.redirect('/ordini');
+  // Con Stripe il blocco sulla carta è stato rilasciato alla chiusura: per rinviare si autorizza di nuovo, e la
+  // richiesta si riapre a pagamento fatto.
+  if (stripePagamenti.attivo() && richiesta.stato === 'nessuna_offerta') {
+    try {
+      return res.redirect(303, '/pagamento/' + (await stripePagamenti.avviaPagamentoReinvio(req.session.user.id, richiesta)));
+    } catch (e) {
+      if (!(e instanceof flusso.ErroreFlusso)) throw e;
+      return paginaErroreFlusso(res, e);
+    }
+  }
   res.redirect('/richieste/' + (await flusso.reinviaRichiesta(richiesta)));
 });
 
@@ -1075,89 +1196,135 @@ app.get('/api/distributore/novita', requireRole('distributore'), (req, res) => {
   res.json(res.locals.contatori || {});
 });
 
+// Soglie dei tempi della home del banco. Passano alla pagina come data-soglia-* (views/distributore_richieste.ejs):
+// il server disegna le classi iniziali e lo script di public/app.js le aggiorna ogni secondo con gli stessi numeri.
+const BACHECA = {
+  urgenteSec: 180, // richiesta da confermare: negli ultimi 3 minuti anello e timer diventano rossi
+  nuovaSec: 180, // ...e per i primi 3 minuti ha l'etichetta "Nuova"
+  appenaSec: 20, // arrivata da meno di 20 secondi: la scheda entra con un'animazione
+  arrivoVicinoMin: 15, // ordine da preparare: sotto i 15 minuti al corriere la pillola è rossa
+  righeVisibili: 3, // articoli mostrati su una scheda, gli altri sono "+N altri articoli"
+};
+
+// Articoli di una scheda: conteggi per la riga "2 articoli · 3 pezzi" e le prime righe da mostrare.
+function riassuntoArticoli(righe) {
+  return {
+    nArticoli: righe.length,
+    nPezzi: righe.reduce((somma, r) => somma + Number(r.quantita || 0), 0),
+    anteprima: righe.slice(0, BACHECA.righeVisibili),
+    altre: Math.max(0, righe.length - BACHECA.righeVisibili),
+  };
+}
+
+// Home del banco: bacheca a tre colonne, nell'ordine in cui passa una richiesta.
+//   Da confermare   richieste arrivate al banco, con la finestra di risposta ancora aperta
+//   Attesa corriere richieste confermate dal banco; nel gruppo WhatsApp nessun corriere ha ancora preso la consegna
+//   Da preparare    ordini nati (consegna presa, o banco che ha accettato a modulo spento) non ancora presi in carico
+// Il banco riceve sempre: non c'è più una pausa della ricezione.
 app.get('/distributore', requireRole('distributore'), async (req, res) => {
   // Niente più sweep completo di tutte le richieste aperte del sistema ad ogni apertura
   // pagina (era una scansione system-wide, non solo di questo distributore): ci pensa già
   // il job periodico ogni 30s, e la singola richiesta si autoaggiorna quando la si apre
   // (vedi GET /distributore/richieste/:id).
-  const distributore = await db
-    .prepare('SELECT * FROM distributors WHERE id = ?')
-    .get(req.session.user.distributor_id);
+  const distributorId = req.session.user.distributor_id;
 
-  const elenco = await db
-    .prepare(
-      `SELECT r.*, rr.esito, u.ragione_sociale AS cliente_nome,
-              EXTRACT(EPOCH FROM (r.scade_il - NOW()))::int AS secondi,
-              (SELECT SUM(quantita) FROM request_items ri WHERE ri.request_id = r.id) AS pezzi
-         FROM request_responses rr
-         JOIN requests r ON r.id = rr.request_id
-         JOIN users u ON u.id = r.cliente_id
-        WHERE rr.distributor_id = ?
-        ORDER BY r.id DESC
-        LIMIT 50`
-    )
-    .all(req.session.user.distributor_id);
+  // Letture indipendenti: partono insieme (col DB su un altro server ogni query in sequenza costa ~50 ms).
+  const [aperte, ordiniDaPreparare, minutiRisposta, contatori] = await Promise.all([
+    // Le due colonne "di richiesta" in una query sola. Le colonne TIMESTAMP (risposto_il) sono ora UTC senza
+    // fuso: si confrontano con NOW() in SQL, mai con un Date di JS.
+    db
+      .prepare(
+        `SELECT r.id, u.ragione_sociale AS cliente_nome, rr.esito,
+                EXTRACT(EPOCH FROM (r.scade_il - NOW()))::int AS secondi,
+                EXTRACT(EPOCH FROM (NOW() - rr.risposto_il))::int AS secondi_da_risposta
+           FROM request_responses rr
+           JOIN requests r ON r.id = rr.request_id
+           JOIN users u ON u.id = r.cliente_id
+          WHERE rr.distributor_id = ? AND r.scade_il > NOW()
+            AND (rr.esito = 'in_attesa' OR (rr.esito = 'confermato' AND rr.corriere_stato = 'in_attesa'))
+          ORDER BY r.id DESC`
+      )
+      .all(distributorId),
+    // corriere_arrivo_il è TIMESTAMPTZ (un istante vero): i secondi che mancano si calcolano in SQL.
+    db
+      .prepare(
+        `SELECT o.id, o.corriere_nome, o.corriere_arrivo_il, u.ragione_sociale AS cliente_nome,
+                EXTRACT(EPOCH FROM (o.corriere_arrivo_il - NOW()))::int AS secondi_arrivo
+           FROM orders o
+           JOIN users u ON u.id = o.cliente_id
+          WHERE o.distributor_id = ? AND o.stato = 'inviato'
+          ORDER BY o.corriere_arrivo_il ASC NULLS LAST, o.id ASC
+          LIMIT 100`
+      )
+      .all(distributorId),
+    pricing.getFinestraMinuti(),
+    contatoriBanco(distributorId),
+  ]);
 
-  // Aperte finché la finestra non scade, anche se un altro banco ha già confermato.
-  const daRispondere = elenco.filter((r) => r.esito === 'in_attesa' && r.secondi > 0);
-
-  // Anteprima sintetica dei pezzi ("2x Valvola...") invece del solo totale: le prime 2
-  // righe più un conteggio delle altre, mostrata direttamente nella card urgente.
-  // Le righe di tutte le card si leggono insieme (una query, non una per card: col DB su un altro server
-  // ogni query in sequenza costa ~50 ms) e anche l'elenco degli ordini sotto fa lo stesso.
-  const righePerRichiesta = await richieste.righeRichieste(daRispondere.map((r) => r.id));
-  for (const r of daRispondere) {
-    const righe = righePerRichiesta.get(Number(r.id)) || [];
-    r.anteprima = righe.slice(0, 2).map((ri) => ({ quantita: ri.quantita, nome: ri.nome }));
-    r.altreRighe = Math.max(0, righe.length - r.anteprima.length);
+  // Gli articoli di tutte le schede si leggono insieme (una query per le richieste, una per gli ordini), non
+  // una per scheda.
+  const [righePerRichiesta, righeOrdini] = await Promise.all([
+    richieste.righeRichieste(aperte.map((r) => r.id)),
+    ordiniDaPreparare.length
+      ? db
+          .prepare(
+            `SELECT order_id, codice_snapshot AS codice, nome_snapshot AS nome, quantita
+               FROM order_items WHERE order_id = ANY(?::int[]) ORDER BY order_id, id`
+          )
+          .all(ordiniDaPreparare.map((o) => o.id))
+      : [],
+  ]);
+  const righePerOrdine = new Map();
+  for (const ri of righeOrdini) {
+    const id = Number(ri.order_id);
+    if (!righePerOrdine.has(id)) righePerOrdine.set(id, []);
+    righePerOrdine.get(id).push(ri);
   }
 
-  // Ordini già confermati, in attesa che il banco li prepari: anteprima a card in home,
-  // stesso trattamento di "daRispondere" ma senza countdown.
-  const daPreparare = await db
-    .prepare(
-      `SELECT o.*, u.ragione_sociale AS cliente_nome
-         FROM orders o
-         JOIN users u ON u.id = o.cliente_id
-        WHERE o.distributor_id = ? AND o.stato = 'inviato'
-        ORDER BY o.id DESC
-        LIMIT 20`
-    )
-    .all(req.session.user.distributor_id);
+  const finestraSecondi = Math.max(1, Math.round(minutiRisposta * 60));
 
-  const righePerOrdine = new Map(daPreparare.map((o) => [Number(o.id), []]));
-  if (daPreparare.length) {
-    const tutteLeRighe = await db
-      .prepare('SELECT order_id, nome_snapshot, quantita FROM order_items WHERE order_id = ANY(?::int[]) ORDER BY order_id, id')
-      .all(daPreparare.map((o) => o.id));
-    for (const ri of tutteLeRighe) righePerOrdine.get(Number(ri.order_id)).push(ri);
-  }
-  for (const o of daPreparare) {
-    const righe = righePerOrdine.get(Number(o.id));
-    o.anteprima = righe.slice(0, 2).map((ri) => ({ quantita: ri.quantita, nome: ri.nome_snapshot }));
-    o.altreRighe = Math.max(0, righe.length - o.anteprima.length);
-  }
+  const daConfermare = aperte
+    .filter((r) => r.esito === 'in_attesa')
+    .map((r) => {
+      const secondi = Math.max(0, Number(r.secondi));
+      const trascorsi = Math.max(0, finestraSecondi - secondi);
+      return {
+        ...r,
+        ...riassuntoArticoli(righePerRichiesta.get(Number(r.id)) || []),
+        secondi,
+        frazione: Math.min(1, secondi / finestraSecondi),
+        urgente: secondi <= BACHECA.urgenteSec,
+        nuovaSec: Math.max(0, BACHECA.nuovaSec - trascorsi), // quanto resta all'etichetta "Nuova"
+        appena: trascorsi < BACHECA.appenaSec,
+      };
+    });
+
+  // In attesa da più tempo per prime: è quella a cui ricordare di più il corriere.
+  const attesaCorriere = aperte
+    .filter((r) => r.esito === 'confermato')
+    .map((r) => ({
+      ...r,
+      ...riassuntoArticoli(righePerRichiesta.get(Number(r.id)) || []),
+      trascorsi: Math.max(0, Number(r.secondi_da_risposta) || 0),
+    }))
+    .sort((a, b) => b.trascorsi - a.trascorsi);
+
+  const daPreparare = ordiniDaPreparare.map((o) => ({
+    ...o,
+    ...riassuntoArticoli(righePerOrdine.get(Number(o.id)) || []),
+    // Senza corriere (modulo WhatsApp spento) non c'è un orario d'arrivo da mostrare.
+    arrivo: o.corriere_arrivo_il ? { secondi: Number(o.secondi_arrivo) } : null,
+  }));
 
   res.render('distributore_richieste', {
     titolo: 'Richieste al banco',
-    distributore,
-    contatori: await contatoriBanco(req.session.user.distributor_id),
-    daRispondere,
+    contatori,
+    bacheca: BACHECA,
+    finestraSecondi,
+    daConfermare,
+    attesaCorriere,
     daPreparare,
-    minutiRisposta: await pricing.getFinestraMinuti(),
   });
-});
-
-// Accende/spegne la ricezione di nuove richieste, senza toccare l'attivazione della sede
-// sulla piattaforma (quella resta sempre "attivo"). Risposta JSON: la home la richiama
-// via fetch per un cambio istantaneo, senza ricaricare la pagina.
-app.post('/api/distributore/stato', requireRole('distributore'), async (req, res) => {
-  const attivo = req.body.attivo ? 1 : 0;
-  await db.prepare('UPDATE distributors SET ricezione_attiva = ? WHERE id = ?').run(
-    attivo,
-    req.session.user.distributor_id
-  );
-  res.json({ ok: true, attivo: attivo === 1 });
 });
 
 // Storico richieste del banco: separato dalla home operativa per non intasarla di dati
@@ -1254,12 +1421,16 @@ app.post('/distributore/richieste/:id/rispondi', requireRole('distributore'), as
 // ---------- Distributore: anagrafiche clienti da approvare ----------
 
 app.get('/distributore/clienti', requireRole('distributore'), async (req, res) => {
+  // Una query sola, con l'ultimo ordine di ogni cliente (`ultimo_ordine`). Ordine per ragione sociale fatto qui, senza
+  // badare alle maiuscole: quello del DB dipende dalla collazione.
   const elenco = await anagrafiche.clientiDelDistributore(req.session.user.distributor_id);
+  const perNome = (a, b) => String(a.ragione_sociale).localeCompare(String(b.ragione_sociale), 'it', { sensitivity: 'base' });
+  const conStato = (stato) => elenco.filter((c) => c.stato === stato).sort(perNome);
   res.render('distributore_clienti', {
     titolo: 'Clienti',
-    daApprovare: elenco.filter((c) => c.stato === 'in_attesa'),
-    approvati: elenco.filter((c) => c.stato === 'approvato'),
-    rifiutati: elenco.filter((c) => c.stato === 'rifiutato'),
+    daApprovare: conStato('in_attesa'),
+    approvati: conStato('approvato'),
+    rifiutati: conStato('rifiutato'),
     tipi: anagrafiche.TIPI_SOGGETTO,
   });
 });
@@ -1553,6 +1724,8 @@ async function controllaScadenze() {
   try {
     // Chiude le finestre scadute (rimborso) e riprova gli ordini rimasti a metà (vedi assegnaOrdine).
     await richieste.aggiornaScadenzeAperte();
+    // Incassi, rilasci e rimborsi su Stripe rimasti da fare (vedi src/stripe_pagamenti.js): senza chiave non fa niente.
+    await stripePagamenti.elabora();
   } catch (err) {
     console.error('Errore nel controllo scadenze:', err.message);
   } finally {
@@ -1561,6 +1734,9 @@ async function controllaScadenze() {
 }
 controllaScadenze();
 setInterval(controllaScadenze, 30 * 1000).unref();
+
+// Stripe acceso ma con il .env incompleto: meglio dirlo subito che al primo cliente.
+for (const avviso of stripePagamenti.controllaConfigurazione()) console.warn('[stripe] ' + avviso);
 
 // Gruppo WhatsApp dei corrieri: si collega solo con WHATSAPP_ATTIVO=1 (vedi src/whatsapp.js).
 whatsapp.avvia();

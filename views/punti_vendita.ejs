@@ -56,8 +56,6 @@
 
   <% if (currentUser.ruolo === 'cliente') { %>
     <%- include('partials/nav', { attivo: '' }) %>
-  <% } else if (currentUser.ruolo === 'distributore') { %>
-    <%- include('partials/nav_distributore', { attivo: '' }) %>
   <% } %>
   <script src="<%= asset('/app.js') %>" defer></script>
   <script src="<%= asset('/mappa.js') %>" defer></script>

@@ -1,4 +1,6 @@
-<nav class="navbar">
+<%# Menu in basso del banco: solo sotto i 900px. Da lì in su c'è lo stesso menu nell'intestazione (banco_testa.ejs), quindi qui
+    sotto non si mostra (.nav-solo-stretta). %>
+<nav class="navbar nav-solo-stretta">
   <div class="interno">
     <a href="/distributore" class="<%= attivo === 'home' ? 'attivo' : '' %>">
       <span class="ico"><%- iconaHome %></span>Home

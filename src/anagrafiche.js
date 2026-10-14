@@ -137,8 +137,17 @@ async function distributoriPredefiniti() {
   return conTutteLeFiliali(righe.map((r) => Number(r.id)));
 }
 
+// Per ora chi si registra è subito un cliente approvato del distributore di riferimento (tutte le filiali), senza
+// conferma del banco: il legame nasce `approvato`, l'anagrafica `attivo`, e non parte nessuna notifica di approvazione.
+// Si spegne con APPROVAZIONE_AUTOMATICA=0 nel .env (a banchi che tornano a confermare a mano). Letta a ogni iscrizione,
+// così le prove la cambiano senza riavviare. Senza nessun banco collegato non c'è chi approvi: resta `in_attesa`.
+function approvazioneAutomatica() {
+  return pulisci(process.env.APPROVAZIONE_AUTOMATICA) !== '0';
+}
+
 async function iscriviCliente(dati, distributoriScelti) {
   const utente = normalizzaUtente(dati.username);
+  const automatica = approvazioneAutomatica() && distributoriScelti.length > 0;
   // L'hash (asincrono, ~60 ms di calcolo) si fa prima della transazione: non tiene occupata una
   // connessione del DB né blocca il processo mentre gira.
   const passwordHash = await bcrypt.hash(String(dati.password), 10);
@@ -153,7 +162,7 @@ async function iscriviCliente(dati, distributoriScelti) {
             geo_consenso, geo_lat, geo_lng)
          VALUES (?, ?, ?, ?, ?, ?, ?,
                  ?, ?, ?, ?, ?, ?, ?,
-                 ?, ?, ?, 'in_attesa', NOW(),
+                 ?, ?, ?, ?, NOW(),
                  1, ?, ?)`
       )
       .run(
@@ -174,13 +183,16 @@ async function iscriviCliente(dati, distributoriScelti) {
         sede.indirizzoConsegna,
         pulisci(dati.referente),
         dati.tipo_soggetto,
+        automatica ? 'attivo' : 'in_attesa',
         sede.lat,
         sede.lng
       );
 
     const clienteId = Number(info.lastInsertRowid);
     const insLegame = db.prepare(
-      `INSERT INTO client_distributors (cliente_id, distributor_id, stato) VALUES (?, ?, 'in_attesa')`
+      automatica
+        ? `INSERT INTO client_distributors (cliente_id, distributor_id, stato, deciso_il) VALUES (?, ?, 'approvato', NOW())`
+        : `INSERT INTO client_distributors (cliente_id, distributor_id, stato) VALUES (?, ?, 'in_attesa')`
     );
     for (const id of distributoriScelti) await insLegame.run(clienteId, id);
     return clienteId;
@@ -188,6 +200,8 @@ async function iscriviCliente(dati, distributoriScelti) {
 
   const clienteId = await crea();
   const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(clienteId);
+  // Già approvato: niente da confermare, quindi nessuna notifica al banco né al cliente.
+  if (automatica) return cliente;
   const { notifica, notificaDistributore } = require('./notifiche');
 
   // Ogni banco collegato riceve la richiesta di approvazione.
@@ -281,18 +295,25 @@ const intestazioneCliente = conCache(60 * 1000, async function intestazioneClien
   };
 });
 
+// `ultimo_ordine`: l'ultimo ordine di quel cliente con QUESTA filiale (NULL se non ha mai ordinato), letto con una
+// sola query per tutti i clienti (un MAX per cliente, non una query per riga). È una colonna TIMESTAMP senza fuso:
+// per mostrarla `fmt.dataSolaRoma`.
 async function clientiDelDistributore(distributorId) {
   return db
     .prepare(
       `SELECT cd.*, u.id AS cliente_id, u.ragione_sociale, u.partita_iva, u.citta, u.provincia,
-              u.tipo_soggetto, u.referente, u.iscritto_il
+              u.tipo_soggetto, u.referente, u.iscritto_il, o.ultimo_ordine
          FROM client_distributors cd
          JOIN users u ON u.id = cd.cliente_id
+         LEFT JOIN (SELECT cliente_id, MAX(creato_il) AS ultimo_ordine
+                      FROM orders
+                     WHERE distributor_id = ?
+                     GROUP BY cliente_id) o ON o.cliente_id = u.id
         WHERE cd.distributor_id = ?
         ORDER BY CASE cd.stato WHEN 'in_attesa' THEN 0 WHEN 'approvato' THEN 1 ELSE 2 END,
                  u.ragione_sociale`
     )
-    .all(distributorId);
+    .all(distributorId, distributorId);
 }
 
 async function legame(distributorId, clienteId) {

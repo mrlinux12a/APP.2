@@ -1226,36 +1226,105 @@ const Minuteria = (function () {
   });
 })();
 
-/* Banco distributore: pausa/riattiva la ricezione di nuove richieste, cambio istantaneo
-   senza ricaricare la pagina (la sede resta comunque attiva sulla piattaforma). */
+/* Home del banco (bacheca a 3 colonne, views/distributore_richieste.ejs): fa muovere timer ed etichette a tempo.
+   Ogni valore parte da quanti secondi mancano (o sono passati) quando il server ha disegnato la pagina, trasformati
+   in un istante con l'orologio del browser: un conteggio non perde colpi se la scheda resta in secondo piano (i
+   timer delle schede nascoste vengono rallentati) e l'orologio del PC, magari sfasato, non conta.
+   - richiesta da confermare: anello che si svuota e mm:ss; rosso negli ultimi minuti (data-soglia-urgente); etichetta
+     "Nuova" per i primi minuti; allo scadere la scheda si spegne e la pagina si ricarica (la richiesta non c'è più);
+   - corriere avvisato: "da N min", da quando il banco ha confermato;
+   - ordine da preparare: minuti all'arrivo del corriere, rossi sotto i data-soglia-arrivo minuti.
+   Le soglie le scrive il server (BACHECA in server.js): le stesse che ha usato per le classi iniziali. */
 (function () {
   'use strict';
-  const btn = document.querySelector('[data-toggle-banco]');
-  if (!btn) return;
-  const testo = btn.querySelector('[data-toggle-banco-testo]');
+  const bacheca = document.querySelector('[data-bacheca]');
+  if (!bacheca) return;
 
-  btn.addEventListener('click', function () {
-    const attivoOra = btn.dataset.attivo === '1';
-    const nuovo = !attivoOra;
-    btn.disabled = true;
-    fetch('/api/distributore/stato', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ attivo: nuovo }),
-    })
-      .then(Minuteria.leggiJson)
-      .then(function (d) {
-        if (!d || typeof d.attivo !== 'boolean') throw new Error('risposta non valida');
-        btn.dataset.attivo = d.attivo ? '1' : '0';
-        btn.classList.toggle('attivo', d.attivo);
-        btn.classList.toggle('pausa', !d.attivo);
-        if (testo) testo.textContent = d.attivo ? 'Banco operativo · Ricezione attiva' : 'Non disponibile · In pausa';
-      })
-      .catch(function (err) {
-        if (!(err && err.sessioneScaduta)) window.alert('Non è stato possibile cambiare lo stato del banco.');
-      })
-      .finally(function () { btn.disabled = false; });
+  const sogliaUrgente = parseInt(bacheca.getAttribute('data-soglia-urgente'), 10) || 180;
+  const sogliaArrivo = parseInt(bacheca.getAttribute('data-soglia-arrivo'), 10) || 15;
+  const avvio = Date.now();
+
+  function numero(el, nome) {
+    const n = parseInt(el.getAttribute(nome), 10);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function mmss(sec) {
+    return String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
+  }
+
+  // "8 min", "1 h 05": uguale a durata() nella vista.
+  function durata(min) {
+    return min < 60 ? min + ' min' : Math.floor(min / 60) + ' h ' + String(min % 60).padStart(2, '0');
+  }
+
+  // Scrive solo se il testo cambia: ogni secondo si controllano tutte le schede, ma il DOM si tocca di rado.
+  function scrivi(el, testo) {
+    if (el && el.textContent !== testo) el.textContent = testo;
+  }
+
+  const richieste = Array.prototype.map.call(bacheca.querySelectorAll('[data-richiesta]'), function (el) {
+    const anello = el.querySelector('[data-anello]');
+    const circ = anello ? parseFloat(anello.getAttribute('stroke-dasharray')) : 0;
+    return {
+      el: el,
+      anello: anello,
+      circ: circ,
+      tempo: el.querySelector('[data-tempo]'),
+      nuova: el.querySelector('[data-nuova]'),
+      fine: avvio + numero(el, 'data-secondi') * 1000,
+      finestra: Math.max(1, numero(el, 'data-finestra')),
+      nuovaFine: avvio + numero(el, 'data-nuova-sec') * 1000,
+      chiusa: false,
+    };
   });
+
+  const corrieri = Array.prototype.map.call(bacheca.querySelectorAll('[data-corriere]'), function (el) {
+    return { el: el, da: el.querySelector('[data-da]'), inizio: avvio - numero(el, 'data-trascorsi') * 1000 };
+  });
+
+  const arrivi = Array.prototype.map.call(bacheca.querySelectorAll('[data-arrivo]'), function (el) {
+    return { el: el, min: el.querySelector('[data-arrivo-min]'), fine: avvio + numero(el, 'data-secondi') * 1000 };
+  });
+
+  if (!richieste.length && !corrieri.length && !arrivi.length) return;
+
+  function tick() {
+    const adesso = Date.now();
+
+    richieste.forEach(function (r) {
+      const sec = Math.max(0, Math.ceil((r.fine - adesso) / 1000));
+      scrivi(r.tempo, mmss(sec));
+      if (r.anello) r.anello.style.strokeDashoffset = String((r.circ * (1 - Math.min(1, sec / r.finestra))).toFixed(2));
+      r.el.classList.toggle('urgente', sec <= sogliaUrgente);
+      if (r.nuova && adesso >= r.nuovaFine) {
+        r.nuova.remove();
+        r.nuova = null;
+      }
+      if (sec === 0 && !r.chiusa) {
+        // La richiesta è scaduta: sparirà dalla colonna con la ricarica (la pagina si accorgerebbe da sola entro
+        // pochi secondi, ma così la scheda non resta lì a contare zero).
+        r.chiusa = true;
+        r.el.classList.remove('urgente');
+        r.el.classList.add('scaduta');
+        setTimeout(function () { window.location.reload(); }, 2500);
+      }
+    });
+
+    corrieri.forEach(function (c) {
+      const min = Math.max(0, Math.floor((adesso - c.inizio) / 60000));
+      scrivi(c.da, min < 1 ? 'meno di 1 min' : durata(min));
+    });
+
+    arrivi.forEach(function (a) {
+      const min = Math.ceil((a.fine - adesso) / 60000);
+      scrivi(a.min, min <= 0 ? 'In ritardo' : durata(min));
+      a.el.classList.toggle('vicino', min <= sogliaArrivo);
+    });
+  }
+
+  tick();
+  setInterval(tick, 1000);
 })();
 
 /* Impedisce il doppio invio dei form che cambiano stato (conferma ordine, risposta del
@@ -1541,6 +1610,45 @@ window.addEventListener('pageshow', function (e) {
   }
 
   mostra(corrente, false);
+})();
+
+/* Clienti del banco (/distributore/clienti): il campo "Cerca" filtra subito, nel browser, i clienti da approvare, gli
+   approvati e i non riconosciuti. Ogni cliente ([data-cliente]) porta in data-cerca ragione sociale, partita IVA e
+   codice cliente; senza badare alle maiuscole, ogni parola scritta deve comparire in uno dei tre. Una sezione senza
+   corrispondenze sparisce, il numero accanto al titolo conta quelle rimaste e, se non resta niente, compare "Nessun
+   cliente trovato.". Il campo non è dentro un form e non naviga: l'aggiornamento automatico del banco aspetta che
+   si smetta di scrivere (vedi sopra). */
+(function () {
+  'use strict';
+  const campo = document.querySelector('[data-cerca-clienti]');
+  if (!campo) return;
+  const sezioni = Array.prototype.slice.call(document.querySelectorAll('[data-sezione-clienti]'));
+  const nessuno = document.querySelector('[data-cerca-nessuno]');
+
+  function applica() {
+    const parole = campo.value.toLowerCase().split(/\s+/).filter(Boolean);
+    let visibili = 0;
+    sezioni.forEach(function (sezione) {
+      let nella = 0;
+      sezione.querySelectorAll('[data-cliente]').forEach(function (voce) {
+        const testo = (voce.getAttribute('data-cerca') || '').toLowerCase();
+        const trovato = parole.every(function (p) { return testo.indexOf(p) !== -1; });
+        voce.hidden = !trovato;
+        if (trovato) nella += 1;
+      });
+      visibili += nella;
+      sezione.hidden = parole.length > 0 && nella === 0;
+      sezione.querySelectorAll('[data-conta-sezione]').forEach(function (conta) {
+        conta.textContent = parole.length ? String(nella) : conta.getAttribute('data-totale');
+      });
+    });
+    if (nessuno) nessuno.hidden = !(parole.length > 0 && visibili === 0);
+  }
+
+  campo.addEventListener('input', applica);
+  // Tornando con "indietro" il browser può rimettere il testo nel campo: l'elenco va riallineato.
+  window.addEventListener('pageshow', applica);
+  applica();
 })();
 
 /* Service worker: serve a mostrare le notifiche dove `new Notification` non esiste (Chrome per Android) e a

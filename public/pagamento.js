@@ -1,0 +1,87 @@
+/* Pagina di pagamento (views/pagamento.ejs): monta il form di Stripe (Payment Element) e conferma il pagamento.
+   La carta la raccoglie Stripe dentro il suo iframe: qui non passa. Con la carta solo "bloccata" (capture_method
+   manual) il PaymentIntent arriva a `requires_capture`; poi si va su /pagamento/esito, dove il server verifica con
+   Stripe e fa nascere la richiesta. Con il 3-D Secure Stripe porta fuori e riporta da solo allo stesso indirizzo. */
+(function () {
+  'use strict';
+  const radice = document.querySelector('[data-pagamento]');
+  if (!radice) return;
+  const pulsante = radice.querySelector('[data-pag-paga]');
+  const messaggio = radice.querySelector('[data-pag-messaggio]');
+  const etichetta = pulsante.textContent;
+
+  function mostraErrore(testo) {
+    messaggio.textContent = testo;
+    messaggio.hidden = !testo;
+  }
+
+  // Stripe.js arriva da js.stripe.com: senza rete (o con un blocco) non c'è form, e lo si dice.
+  if (typeof Stripe === 'undefined') {
+    mostraErrore('Non riesco a caricare il modulo di pagamento. Controlla la connessione e ricarica la pagina.');
+    return;
+  }
+
+  const stripe = Stripe(radice.dataset.chiave);
+  const elements = stripe.elements({
+    clientSecret: radice.dataset.segreto,
+    locale: 'it',
+    fonts: [{ cssSrc: 'https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600&display=swap' }],
+    appearance: {
+      theme: 'stripe',
+      variables: {
+        colorPrimary: '#245a8f',
+        colorText: '#232019',
+        colorDanger: '#bd3a3a',
+        colorBackground: '#ffffff',
+        fontFamily: '"Source Sans 3", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
+        fontSizeBase: '16px', // sotto i 16px Safari su iPhone ingrandisce la pagina al tocco dei campi
+        borderRadius: '12px',
+        spacingUnit: '4px',
+      },
+    },
+  });
+
+  // I metodi che compaiono (carta, Apple Pay, Google Pay, Link...) li decide Stripe in base al Dashboard, al paese e al
+  // dispositivo: Apple Pay e Google Pay si vedono solo in HTTPS e con un dispositivo che li ha configurati.
+  const pagamento = elements.create('payment', { layout: { type: 'tabs', defaultCollapsed: false } });
+  pagamento.mount('#elemento-pagamento');
+  pagamento.on('ready', function () { pulsante.disabled = false; });
+  pagamento.on('loaderror', function (e) {
+    mostraErrore((e && e.error && e.error.message) || 'Non riesco a mostrare il modulo di pagamento. Ricarica la pagina.');
+  });
+
+  let inCorso = false;
+  pulsante.addEventListener('click', async function () {
+    if (inCorso) return;
+    inCorso = true;
+    pulsante.disabled = true;
+    pulsante.textContent = 'Sto pagando…';
+    mostraErrore('');
+
+    const esito = await stripe.confirmPayment({
+      elements: elements,
+      confirmParams: { return_url: radice.dataset.ritorno },
+      redirect: 'if_required',
+    });
+
+    if (esito.error) {
+      // Carta rifiutata, dati incompleti, 3-D Secure non superato: si resta qui e si può riprovare.
+      mostraErrore(esito.error.message || 'Il pagamento non è andato a buon fine. Riprova.');
+      pulsante.disabled = false;
+      pulsante.textContent = etichetta;
+      inCorso = false;
+      return;
+    }
+    // Nessun reindirizzamento (carta senza 3-D Secure): si va al ritorno a mano, con lo stesso parametro che
+    // Stripe aggiunge quando reindirizza.
+    window.location.assign(radice.dataset.ritorno + '?payment_intent=' + encodeURIComponent(esito.paymentIntent.id));
+  });
+
+  // Tornando con "indietro" il browser può rimostrare la pagina com'era, col pulsante bloccato.
+  window.addEventListener('pageshow', function (e) {
+    if (!e.persisted) return;
+    inCorso = false;
+    pulsante.disabled = false;
+    pulsante.textContent = etichetta;
+  });
+})();

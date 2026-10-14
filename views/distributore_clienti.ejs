@@ -1,77 +1,136 @@
+<%
+  // Clienti del banco: prima chi aspetta di essere approvato, poi la tabella dei clienti approvati (e, in fondo, chi
+  // è stato rifiutato: da lì si può ripensarci). "Clienti" è una scheda dell'intestazione del banco, non una pagina
+  // interna: niente freccia indietro. Il campo "Cerca" filtra qui, nel browser (blocco "Clienti del banco" di
+  // public/app.js): ogni cliente porta in data-cerca ragione sociale, partita IVA e codice cliente.
+  const cittaDi = (c) => (c.citta ? c.citta + (c.provincia ? ' (' + c.provincia + ')' : '') : '—');
+  const testoCerca = (c) => [c.ragione_sociale, c.partita_iva, c.codice_cliente].filter(Boolean).join(' ');
+%>
 <!DOCTYPE html>
 <html lang="it">
 <head>
   <%- include('partials/app_head', { titolo }) %>
 </head>
-<body data-loggato="1" data-auto-refresh="15000" data-versione="<%= JSON.stringify(contatori) %>">
-  <div class="app">
-    <%- include('partials/appbar', { titolo, intestazione: 'Clienti', indietro: '/distributore' }) %>
+<body class="pagina-clienti" data-loggato="1" data-auto-refresh="15000" data-versione="<%= JSON.stringify(contatori) %>">
 
-    <div class="contenuto">
-      <div class="sezione-titolo">Da approvare</div>
-      <% if (!daApprovare.length) { %>
-        <div class="vuoto"><span class="emoji"><%- iconaVuotoOk %></span>Nessuna anagrafica in attesa.</div>
-      <% } else { %>
-        <div class="card card-fitta">
-          <% daApprovare.forEach(function (c) { %>
-            <a class="riga-lista" href="/distributore/clienti/<%= c.cliente_id %>">
-              <span class="icona"><%- iconaNuovo %></span>
-              <span class="corpo">
-                <span class="etichetta"><%= c.ragione_sociale %></span>
-                <span class="dettaglio">
-                  <%= tipi[c.tipo_soggetto] || '' %> · P. IVA <%= c.partita_iva || '—' %>
-                </span>
-                <span class="dettaglio">
-                  <%= c.citta %> (<%= c.provincia %>) · iscritto <%= fmt.dataOra(c.richiesto_il) %>
-                </span>
-              </span>
-              <span class="stato-badge stato-in_attesa">Verifica</span>
-            </a>
-          <% }); %>
-        </div>
-        <p class="nota">
-          Approva solo le anagrafiche che riconosci come tuoi clienti: da lì in poi possono
-          inviarti richieste e vedere le condizioni che imposti.
-        </p>
-      <% } %>
+  <%# Intestazione unica del banco (con la scheda "Clienti" attiva: la sceglie il percorso della pagina). %>
+  <%- include('partials/banco_testa') %>
 
-      <div class="sezione-titolo">Clienti approvati</div>
-      <% if (!approvati.length) { %>
-        <div class="vuoto"><span class="emoji"><%- iconaClienti %></span>Ancora nessun cliente approvato.</div>
-      <% } else { %>
-        <div class="card card-fitta">
-          <% approvati.forEach(function (c) { %>
-            <a class="riga-lista" href="/distributore/clienti/<%= c.cliente_id %>">
-              <span class="icona"><%- iconaAzienda %></span>
-              <span class="corpo">
-                <span class="etichetta"><%= c.ragione_sociale %></span>
-                <span class="dettaglio">
-                  <%= c.codice_cliente ? 'Cod. ' + c.codice_cliente + ' · ' : '' %><%= c.citta %> (<%= c.provincia %>)
-                </span>
-              </span>
-              <span class="freccia">›</span>
-            </a>
-          <% }); %>
-        </div>
-      <% } %>
-
-      <% if (rifiutati.length) { %>
-        <div class="sezione-titolo">Non riconosciuti</div>
-        <div class="card card-fitta">
-          <% rifiutati.forEach(function (c) { %>
-            <a class="riga-lista" href="/distributore/clienti/<%= c.cliente_id %>">
-              <span class="icona"><%- iconaRifiutato %></span>
-              <span class="corpo">
-                <span class="etichetta"><%= c.ragione_sociale %></span>
-                <span class="dettaglio">P. IVA <%= c.partita_iva || '—' %></span>
-              </span>
-              <span class="stato-badge stato-non_disponibile">Rifiutato</span>
-            </a>
-          <% }); %>
-        </div>
-      <% } %>
+  <main class="cli-pagina">
+    <div class="cli-testata">
+      <h1 class="cli-titolo">Clienti</h1>
+      <div class="cli-cerca">
+        <span class="cli-cerca-ico" aria-hidden="true"><%- iconaLente %></span>
+        <input type="search" data-cerca-clienti placeholder="Cerca per nome, P. IVA o codice"
+               aria-label="Cerca per nome, P. IVA o codice" autocomplete="off" autocapitalize="off"
+               autocorrect="off" spellcheck="false" enterkeyhint="search">
+      </div>
     </div>
-  </div>
+
+    <p class="cli-nessuno" data-cerca-nessuno role="status" hidden>Nessun cliente trovato.</p>
+
+    <%# ---------- Da approvare (solo se ce ne sono) ---------- %>
+    <% if (daApprovare.length) { %>
+      <section class="cli-sezione" data-sezione-clienti aria-labelledby="cli-titolo-approvare">
+        <div class="cli-sezione-testa">
+          <h2 class="cli-sezione-titolo" id="cli-titolo-approvare">Da approvare</h2>
+          <span class="cli-pillola" data-conta-sezione data-totale="<%= daApprovare.length %>"><%= daApprovare.length %></span>
+          <span class="cli-sezione-nota">Approva solo chi riconosci come tuo cliente.</span>
+        </div>
+        <ul class="cli-richieste">
+          <% daApprovare.forEach(function (c) { %>
+            <li data-cliente data-cerca="<%= testoCerca(c) %>">
+              <div class="cli-richiesta">
+                <%- include('partials/iniziali', { nome: c.ragione_sociale, persona: c.referente, misura: 48, tono: 'arancio' }) %>
+                <div class="cli-richiesta-corpo">
+                  <div class="cli-richiesta-nome">
+                    <strong><%= c.ragione_sociale %></strong>
+                    <span class="cli-etichetta cli-etichetta-arancio">Da verificare</span>
+                  </div>
+                  <div class="cli-richiesta-dati">
+                    <% if (tipi[c.tipo_soggetto]) { %><span><%= tipi[c.tipo_soggetto] %></span><% } %>
+                    <% if (c.partita_iva) { %><span>P. IVA <strong><%= c.partita_iva %></strong></span><% } %>
+                    <span><%= cittaDi(c) %></span>
+                    <span class="cli-grigio">Iscritto il <%= fmt.dataOraRoma(c.richiesto_il, ', ') %></span>
+                  </div>
+                </div>
+                <a class="cli-verifica" href="/distributore/clienti/<%= c.cliente_id %>"
+                   aria-label="Verifica <%= c.ragione_sociale %>">Verifica <%- iconaAvanti %></a>
+              </div>
+            </li>
+          <% }); %>
+        </ul>
+      </section>
+    <% } %>
+
+    <%# ---------- Clienti approvati ---------- %>
+    <section class="cli-sezione" data-sezione-clienti aria-labelledby="cli-titolo-approvati">
+      <div class="cli-sezione-testa">
+        <h2 class="cli-sezione-titolo" id="cli-titolo-approvati">Clienti approvati</h2>
+        <span class="cli-conta" data-conta-sezione data-totale="<%= approvati.length %>"><%= approvati.length %></span>
+      </div>
+      <% if (!approvati.length) { %>
+        <p class="cli-vuoto">Ancora nessun cliente approvato.</p>
+      <% } else { %>
+        <div class="cli-tabella">
+          <div class="cli-tab-testa" aria-hidden="true">
+            <span>Cliente</span><span>Codice cliente</span><span>Città</span><span>Ultimo ordine</span><span></span>
+          </div>
+          <ul class="cli-tab-corpo">
+            <% approvati.forEach(function (c) { %>
+              <li data-cliente data-cerca="<%= testoCerca(c) %>">
+                <a class="cli-tab-riga" href="/distributore/clienti/<%= c.cliente_id %>">
+                  <span class="cli-c-cliente">
+                    <%- include('partials/iniziali', { nome: c.ragione_sociale, persona: c.referente, misura: 40 }) %>
+                    <span class="cli-nome"><%= c.ragione_sociale %></span>
+                  </span>
+                  <span class="cli-c-meta">
+                    <span class="cli-c-codice<%= c.codice_cliente ? '' : ' cli-c-manca' %>"><span class="cli-solo-stretta">Cod. </span><%= c.codice_cliente || '—' %></span>
+                    <span class="cli-c-citta"><%= cittaDi(c) %></span>
+                    <span class="cli-c-ordine"><span class="cli-solo-stretta">Ultimo ordine </span><%= fmt.dataSolaRoma(c.ultimo_ordine) %></span>
+                  </span>
+                  <span class="cli-c-freccia" aria-hidden="true"><%- iconaAvanti %></span>
+                </a>
+              </li>
+            <% }); %>
+          </ul>
+        </div>
+      <% } %>
+    </section>
+
+    <%# ---------- Non riconosciuti (rifiutati): la pagina del cliente permette di ripensarci ---------- %>
+    <% if (rifiutati.length) { %>
+      <section class="cli-sezione" data-sezione-clienti aria-labelledby="cli-titolo-rifiutati">
+        <div class="cli-sezione-testa">
+          <h2 class="cli-sezione-titolo" id="cli-titolo-rifiutati">Non riconosciuti</h2>
+          <span class="cli-conta" data-conta-sezione data-totale="<%= rifiutati.length %>"><%= rifiutati.length %></span>
+        </div>
+        <div class="cli-tabella">
+          <div class="cli-tab-testa" aria-hidden="true">
+            <span>Cliente</span><span>Partita IVA</span><span>Città</span><span>Stato</span><span></span>
+          </div>
+          <ul class="cli-tab-corpo">
+            <% rifiutati.forEach(function (c) { %>
+              <li data-cliente data-cerca="<%= testoCerca(c) %>">
+                <a class="cli-tab-riga" href="/distributore/clienti/<%= c.cliente_id %>">
+                  <span class="cli-c-cliente">
+                    <%- include('partials/iniziali', { nome: c.ragione_sociale, persona: c.referente, misura: 40, tono: 'grigio' }) %>
+                    <span class="cli-nome"><%= c.ragione_sociale %></span>
+                  </span>
+                  <span class="cli-c-meta">
+                    <span class="cli-c-codice<%= c.partita_iva ? '' : ' cli-c-manca' %>"><span class="cli-solo-stretta">P. IVA </span><%= c.partita_iva || '—' %></span>
+                    <span class="cli-c-citta"><%= cittaDi(c) %></span>
+                    <span class="cli-c-ordine"><span class="cli-etichetta cli-etichetta-rosso">Rifiutato</span></span>
+                  </span>
+                  <span class="cli-c-freccia" aria-hidden="true"><%- iconaAvanti %></span>
+                </a>
+              </li>
+            <% }); %>
+          </ul>
+        </div>
+      </section>
+    <% } %>
+  </main>
 
   <%- include('partials/nav_distributore', { attivo: 'clienti' }) %>
   <script src="<%= asset('/app.js') %>" defer></script>

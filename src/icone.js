@@ -178,6 +178,14 @@ const iconaEsci = svg('<path d="M10 4H6.5A1.5 1.5 0 0 0 5 5.5v13A1.5 1.5 0 0 0 6
 
 const iconaOrario = svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3.2 2"/>');
 
+// Cronometro (colonna "Da confermare" della home del banco) e fumetto (colonna "Attesa corriere").
+const iconaTimer = svg(
+  '<circle cx="12" cy="13.5" r="7"/><path d="M12 10v3.8l2.4 1.4"/><path d="M9.8 3.5h4.4"/><path d="M12 3.5v3"/>'
+);
+const iconaMessaggio = svg(
+  '<path d="M5 5h14a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 19 16h-7l-4.5 3.5V16H5a1.5 1.5 0 0 1-1.5-1.5v-8A1.5 1.5 0 0 1 5 5Z"/>'
+);
+
 const iconaPersona = svg(
   '<circle cx="12" cy="8" r="3.4"/><path d="M5 19c1.2-3.6 4-5.4 7-5.4s5.8 1.8 7 5.4"/>'
 );
@@ -275,6 +283,10 @@ const iconaOcchioBarrato = svg(
 );
 const iconaIndietro = svg('<path d="M14.5 5.5 8 12l6.5 6.5"/>');
 
+// Pagine clienti del banco: freccetta "avanti" (›) e link che apre un altro sito (↗).
+const iconaAvanti = svg('<path d="M9.5 5.5 16 12l-6.5 6.5"/>');
+const iconaEsterno = svg('<path d="M9 5.5H6.5A1.5 1.5 0 0 0 5 7v10.5A1.5 1.5 0 0 0 6.5 19H17a1.5 1.5 0 0 0 1.5-1.5V15"/><path d="M13 5h6v6"/><path d="M19 5l-8 8"/>');
+
 module.exports = {
   ICONE_CATEGORIA: ICONE, // letto da scripts/genera_icone_app.js per l'app nativa
   iconaCategoria,
@@ -296,6 +308,8 @@ module.exports = {
   iconaInfo,
   iconaEsci,
   iconaOrario,
+  iconaTimer,
+  iconaMessaggio,
   iconaPersona,
   iconaNegozio,
   iconaConsegna,
@@ -323,4 +337,6 @@ module.exports = {
   iconaOcchio,
   iconaOcchioBarrato,
   iconaIndietro,
+  iconaAvanti,
+  iconaEsterno,
 };

@@ -31,6 +31,10 @@ DATABASE_URL=...      # stringa di connessione Postgres (pooler di Supabase)
 SESSION_SECRET=...    # firma i cookie di login: se cambia, tutti devono rifare l'accesso
 PORT=3000             # facoltativa
 DISTRIBUTORE_PREDEFINITO=BOREA SRL   # facoltativa: a chi si collegano i nuovi clienti (vedi "Registrazione e approvazione")
+STRIPE_SECRET_KEY=sk_...             # facoltative, vedi "Pagamenti con Stripe": con la chiave il sito paga con Stripe,
+STRIPE_PUBLISHABLE_KEY=pk_...        #   senza resta simulato (la pubblicabile serve al form di pagamento)
+STRIPE_WEBHOOK_SECRET=whsec_...
+APP_URL=https://tuodominio.it        # indirizzo pubblico del sito, per il ritorno da Stripe
 ```
 
 Il processo gira sotto **pm2** (nome `minuteria`). Per aggiornare dopo un nuovo commit:
@@ -111,10 +115,14 @@ DISTRIBUTORE_PREDEFINITO=BOREA SRL    # nome della ditta (come in distributors.n
 Se non corrisponde a nessun banco attivo la registrazione riesce lo stesso, senza legami, e il
 server scrive un errore nel log (`[registrazione] distributore predefinito ... non trovato`).
 
-A ogni filiale del distributore arriva la notifica *"Nuova anagrafica da approvare"*. Il distributore apre la
-scheda del cliente, vede tutti i dati fiscali e decide: **approva** (indicando il proprio codice
-cliente) o **rifiuta** se non lo riconosce. Approvato il cliente, il banco può impostare gli
-**sconti concordati** (vedi "Sconti al banco").
+**Per ora l'approvazione è automatica** (da metà ottobre 2026): chi si registra entra subito fra i
+**clienti approvati** di tutte le filiali del distributore predefinito (legame `approvato`, anagrafica
+`attivo`), senza conferma del banco e senza notifiche di approvazione. Si torna alla conferma a mano con
+`APPROVAZIONE_AUTOMATICA=0` nel `.env` (e riavvio): allora a ogni filiale arriva la notifica
+*"Nuova anagrafica da approvare"*, e il distributore apre la scheda del cliente, vede tutti i dati fiscali
+e decide: **approva** (indicando il proprio codice cliente) o **rifiuta** se non lo riconosce. I clienti già
+registrati prima del cambio e ancora in attesa restano tali finché il banco non decide (pagina Clienti).
+Il banco può comunque impostare gli **sconti concordati** a ogni cliente approvato (vedi "Sconti al banco").
 
 > **Non ancora applicato**: il codice non blocca né filtra sulla base dell'approvazione — un
 > cliente registrato ma non approvato da nessun banco può comunque inviare richieste, e queste
@@ -123,9 +131,87 @@ cliente) o **rifiuta** se non lo riconosce. Approvato il cliente, il banco può 
 > comportamento inteso ("finché nessuno approva non può ordinare") non è quello reale:
 > verificarlo prima di contarci in produzione.
 
+## Pagamenti con Stripe
+
+Solo sul **sito** (l'app nativa resta sul pagamento simulato). Senza `STRIPE_SECRET_KEY` nel `.env` non cambia
+niente: tutto resta simulato, anche in locale e nelle prove.
+
+**Come funziona.** "Paga e invia richiesta" non crea più la richiesta: porta alla **pagina di pagamento del sito**
+(`/pagamento/<id>`), con riepilogo e il form di Stripe (Payment Element) dentro la pagina: la carta la raccoglie Stripe
+nel suo iframe e non passa dal nostro server. La carta viene solo **autorizzata**: Stripe blocca l'importo ma non lo
+incassa (`capture_method: manual`). Con la carta autorizzata la richiesta nasce e parte verso i banchi, come prima.
+- **Nasce l'ordine** → la carta si **incassa**, per il totale dell'ordine (se il banco ha applicato uno sconto è più
+  basso dell'autorizzato; mai più alto).
+- **La richiesta si chiude senza ordine** (nessun banco, nessun corriere, annullo) → il blocco si **rilascia**: non è
+  passato un euro, niente rimborsi né commissioni perse. Per "Rinvia richiesta" si paga di nuovo, e la stessa richiesta
+  si riapre.
+- **L'ordine viene annullato dopo l'incasso** → **rimborso** Stripe.
+
+**Quali metodi di pagamento compaiono** lo decide Stripe (scelta dinamica): quelli attivi in Dashboard > Impostazioni >
+Metodi di pagamento che supportano il blocco senza incasso, adatti a paese e dispositivo. Nella sandbox di prova oggi:
+carta, Link, Satispay, Klarna, Amazon Pay. Si accendono e spengono dal Dashboard, senza toccare il codice (per un
+cliente B2B probabilmente Klarna e simili non servono). **Apple Pay e Google Pay** compaiono da soli, ma solo in HTTPS e
+su un dispositivo che li ha configurati (Apple Pay vuole anche il dominio registrato nel Dashboard): in locale
+(`http://localhost`) di norma non si vedono.
+
+I soldi arrivano sul **conto Stripe di chi ha le chiavi** (un conto solo: nessuno split verso Borea; il regolamento con
+il banco resta fuori dall'app). La fattura non la fa Stripe.
+
+**Configurazione** (`.env`, poi riavvio). Le chiavi si copiano **intere, prefisso compreso**:
+
+```
+STRIPE_SECRET_KEY=sk_test_...         # Dashboard Stripe > Sviluppatori > Chiavi API. Di prova (sk_test_) o vera (sk_live_)
+STRIPE_PUBLISHABLE_KEY=pk_test_...    # la chiave pubblicabile, dello stesso ambiente (vale anche il nome STRIPE_PUBLIC_KEY)
+STRIPE_WEBHOOK_SECRET=whsec_...       # del webhook (sotto)
+APP_URL=https://tuodominio.it         # senza barra finale; se manca si usa l'indirizzo con cui il cliente apre il sito
+```
+
+Le chiavi **non vanno mai in git** (il `.env` non c'è nel repository). Con una chiave `sk_test_` nessun addebito è
+vero. Se la chiave pubblicabile è senza prefisso (succede copiandola) il sito la completa da solo con quello della chiave
+segreta e lo scrive nel log all'avvio (`[stripe] ...`): meglio correggere il `.env`. Se manca del tutto, o non ha la
+forma di una chiave, al cliente mostra "Il pagamento online non è ancora configurato" invece di un form rotto. Prima di
+tutto va applicato lo schema una volta (tabella `stripe_pagamenti`, vedi `CLAUDE.md`): se il database è già quello di
+produzione è già stato fatto il 14/10/2026.
+
+**Provare in locale** (modo di prova, carta `4242 4242 4242 4242`, data futura, CVC qualsiasi):
+1. Account Stripe (gratuito), sandbox o modalità di prova: chiave segreta e pubblicabile **dello stesso ambiente** nel
+   `.env`.
+2. Facoltativo: la [Stripe CLI](https://docs.stripe.com/stripe-cli) con
+   `stripe listen --forward-to localhost:3000/webhooks/stripe` stampa un `whsec_...` da mettere in
+   `STRIPE_WEBHOOK_SECRET`. Senza webhook funziona lo stesso: la richiesta nasce al ritorno del cliente
+   (`/pagamento/esito`) o, se ha chiuso la scheda subito dopo aver pagato, dal timer entro un minuto circa.
+3. Riavviare il server, mettere materiale nel carrello, "Paga e invia richiesta": si apre la pagina di pagamento, si
+   paga, si arriva alla schermata di attesa. Nel Dashboard il pagamento compare come autorizzato ma **non acquisito**
+   (*uncaptured*) finché non nasce l'ordine. Altre carte: `4000 0027 6000 3184` (3-D Secure), `4000 0000 0000 9995`
+   (rifiutata: si può riprovare con un'altra).
+   Attenzione: il `.env` locale punta al **database di produzione**, quindi la richiesta di prova arriva ai banchi
+   veri come ogni prova in locale (vedi `CLAUDE.md`).
+
+**Messa in produzione.**
+1. **HTTPS con un dominio davanti al sito è obbligatorio**: Stripe.js in modalità reale funziona solo in HTTPS, e il
+   webhook in modalità reale accetta solo indirizzi `https://`. Vedi `SCOPE.md`.
+2. Attivare l'account Stripe (dati dell'azienda e IBAN) e prendere le chiavi `sk_live_...` e `pk_live_...`.
+3. Dashboard > Sviluppatori > Webhook > aggiungere `https://tuodominio.it/webhooks/stripe` con gli eventi
+   `payment_intent.amount_capturable_updated` e `payment_intent.canceled`, e copiare il segreto `whsec_...`.
+4. Nel `.env` della VPS: `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`, `APP_URL`; `npm ci`
+   (c'è la dipendenza `stripe`) e `pm2 restart minuteria`. **Un solo processo** per chiave: due istanze con la stessa
+   chiave lavorano gli stessi incassi (le chiamate a Stripe sono idempotenti, ma meglio non provarci).
+5. Dashboard > Impostazioni > Metodi di pagamento: scegliere i metodi da offrire (la **carta** deve esserci). Per
+   Apple Pay registrare il dominio.
+
+**Cosa guardare se qualcosa non torna.** Ogni tentativo di pagamento è una riga di `stripe_pagamenti` (`stato`,
+`motivo`, `errore`, `tentativi`, `payment_intent_id`): le righe `da_verificare` sono incassi, rilasci o rimborsi che
+non sono riusciti 30 volte e vanno guardati a mano nel Dashboard. Il log del server riporta `[stripe] ...`.
+
+> **Limite attuale**: l'**app nativa non paga con Stripe**. Finché la `POST /api/v1/richieste` resta simulata, chi
+> ordina dall'app non paga niente anche con Stripe acceso sul sito. Va deciso come portarlo nell'app (pagina di
+> pagamento nel browser di sistema o PaymentSheet) prima di darla ai clienti.
+
 ## Punti vendita sulla mappa
 
-`/punti-vendita` (link nel menu account) mostra i banchi su mappa. `store_locations` ha oggi **2
+`/punti-vendita` mostra i banchi su mappa. **Dal 14/10/2026 il banco non l'ha più**: tolta dal suo menu e
+la rotta risponde 404 al ruolo `distributore`; per gli altri ruoli esiste ancora, ma nessun menu la linka.
+`store_locations` ha oggi **2
 righe**: le filiali Borea (Fegino e Staglieno), con coordinate OpenStreetMap; da lì leggono anche
 la stima di consegna e il messaggio ai corrieri. Gli altri punti vendita (AFIS, Cambielli, Fidra,
 disattivati) sono solo in `db/punti_vendita.js`: lo script che li carica,
@@ -149,8 +235,9 @@ disattivati) sono solo in `db/punti_vendita.js`: lo script che li carica,
    destinazione della merce (di partenza l'indirizzo di consegna abituale), note per il distributore
    e, in fondo, il riepilogo (merce, RAEE, spedizione, imponibile, IVA, **totale da pagare**) e
    **Paga e invia la richiesta**, attivo solo con l'ordine minimo raggiunto. Il pagamento è
-   **simulato** (nessun provider né addebito: `src/pagamenti.js`, colonne `pagamento_*` su
-   `requests`) e va rimborsato se la richiesta si chiude senza ordine. Consegna sempre con il
+   **Stripe** sul sito se nel `.env` c'è `STRIPE_SECRET_KEY` (vedi "Pagamenti con Stripe"), altrimenti
+   **simulato** (nessun provider né addebito; è anche quello dell'app nativa): `src/pagamenti.js`, colonne
+   `pagamento_*` su `requests`. Va restituito se la richiesta si chiude senza ordine. Consegna sempre con il
    corriere: il ritiro al banco non esiste più.
 5. **Attesa** — la richiesta parte verso **tutti i distributori attivi** (non filtrata per zona
    né per copertura). Hanno **10 minuti** (`finestra_conferma_min`) per confermare la
@@ -399,7 +486,8 @@ src/token_app.js       token di accesso dell'app (solo hash nel DB)
 src/pricing.js         prezzi, servizio, IVA, finestre temporali configurabili
 src/catalogo.js        ricerca parziale, categorie, varianti
 src/richieste.js       ciclo di vita della richiesta: risposte dei banchi, scadenza, ordine automatico
-src/pagamenti.js       pagamento dell'installatore (simulato): incasso, rimborso
+src/pagamenti.js       pagamento dell'installatore: simulato o Stripe, punti di aggancio del flusso (rimborso, incasso)
+src/stripe_pagamenti.js  Stripe: PaymentIntent, pagina di pagamento, webhook, incassi/rilasci/rimborsi (carta autorizzata e poi incassata)
 src/whatsapp.js        gruppo WhatsApp dei corrieri (Baileys): messaggi, "preso", coda
 src/anagrafiche.js     registrazione cliente, approvazione banco, sconti per ambito
 src/consegna.js        stima del tempo di consegna

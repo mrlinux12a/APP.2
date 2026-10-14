@@ -118,11 +118,12 @@ async function secondiRimasti(richiesta) {
 
 // ---------- Distributori candidati ----------
 
-// Tutti i distributori attivi registrati: ogni richiesta dell'installatore arriva a tutti.
+// Tutti i distributori attivi registrati: ogni richiesta dell'installatore arriva a tutti. Il banco non può più
+// mettere in pausa la ricezione: la colonna distributors.ricezione_attiva esiste ancora ma non si legge più.
 async function distributoriCandidati(productIds, zona, clienteId = null) {
   if (!productIds.length) return [];
   return db
-    .prepare(`SELECT * FROM distributors WHERE attivo = 1 AND ricezione_attiva = 1 ORDER BY nome`)
+    .prepare(`SELECT * FROM distributors WHERE attivo = 1 ORDER BY nome`)
     .all();
 }
 
@@ -132,7 +133,11 @@ async function distributoriCandidati(productIds, zona, clienteId = null) {
 // Da qui parte la finestra di 10 minuti entro cui devono rispondere.
 // `destinazione`, `note` e `importo` (totale IVA inclusa già pagato, vedi pagamenti.js) arrivano dal
 // carrello: da qui l'ordine nasce da solo, senza altre scelte dell'installatore.
-async function creaRichiesta(cliente, righeCarrello, { destinazione = null, note = '', importo = null } = {}) {
+async function creaRichiesta(
+  cliente,
+  righeCarrello,
+  { destinazione = null, note = '', importo = null, metodoPagamento = pagamenti.METODO_SIMULATO } = {}
+) {
   const productIds = righeCarrello.map((r) => r.prodotto.id);
   let candidati = await distributoriCandidati(productIds, cliente.zona, cliente.id);
   const minuti = await getFinestraMinuti();
@@ -141,7 +146,7 @@ async function creaRichiesta(cliente, righeCarrello, { destinazione = null, note
   // filtro zona, import incompleto), manda comunque a TUTTI i banchi attivi.
   if (!candidati.length) {
     try {
-      candidati = await db.prepare(`SELECT * FROM distributors WHERE attivo = 1 AND ricezione_attiva = 1 ORDER BY nome`).all();
+      candidati = await db.prepare(`SELECT * FROM distributors WHERE attivo = 1 ORDER BY nome`).all();
       console.log(`[richieste] fallback broadcast: ${candidati.length} distributori per cliente ${cliente.id} zona=${cliente.zona}`);
     } catch (e) { console.error('[richieste] fallback fallito', e.message); }
   }
@@ -168,7 +173,9 @@ async function creaRichiesta(cliente, righeCarrello, { destinazione = null, note
     } catch (e) { console.error('[richieste] ensure listino fallito', e.message); }
   }
 
-  const incasso = importo === null ? null : pagamenti.incassoSimulato(importo);
+  // Senza candidati la richiesta nasce già chiusa e il pagamento già "rimborsato": con Stripe il blocco sulla
+  // carta lo rilascia chi ha creato la richiesta (src/stripe_pagamenti.js), vedendo pagamento_stato.
+  const incasso = importo === null ? null : pagamenti.incasso(importo, metodoPagamento);
   const crea = db.transaction(async () => {
     const info = await db
       .prepare(
@@ -233,7 +240,7 @@ async function creaRichiesta(cliente, righeCarrello, { destinazione = null, note
 // con una finestra fresca, invece di crearne una nuova — resta un unico riferimento nel tempo, utile
 // per pagamenti o altro. Riparte verso gli stessi distributori già interpellati la prima volta. Il
 // pagamento, rimborsato alla chiusura, si addebita di nuovo (vedi pagamenti.incassaDiNuovo).
-async function reinviaRichiesta(requestId) {
+async function reinviaRichiesta(requestId, { metodoPagamento = pagamenti.METODO_SIMULATO } = {}) {
   const richiesta = await getRichiesta(requestId);
   if (!richiesta || richiesta.stato !== 'nessuna_offerta') return null;
   const minuti = await getFinestraMinuti();
@@ -244,7 +251,7 @@ async function reinviaRichiesta(requestId) {
           SET stato = 'in_attesa', scade_il = NOW() + (? * INTERVAL '1 minute')
         WHERE id = ?`
     ).run(minuti, requestId);
-    await pagamenti.incassaDiNuovo(requestId);
+    await pagamenti.incassaDiNuovo(requestId, { metodo: metodoPagamento });
 
     await db.prepare(
       `UPDATE request_responses

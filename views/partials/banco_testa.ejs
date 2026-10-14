@@ -1,0 +1,76 @@
+<%
+  // Intestazione del banco, UNA SOLA per tutte le pagine del distributore (home, clienti, ordini, richieste, storico,
+  // notifiche, errori...): barra bianca con ditta e filiale, schede Banco/Clienti, "Tutti gli ordini", campanella e
+  // cerchio con le iniziali che apre la tendina. Chi non è la home la riceve da partials/appbar.ejs, che per il
+  // distributore delega qui: non scrivere un'altra intestazione per il banco.
+  // Dati: bancoTesta (nome e filiale, res.locals, in cache), contatori, notificheNonLette, percorso (req.path).
+  // Parametri facoltativi: intestazione e indietro, solo per le pagine interne: sotto la barra compare una riga con la
+  // freccia e il titolo della pagina. La home non li passa.
+  const perc = typeof percorso !== 'undefined' ? String(percorso) : '';
+  const sezione = perc === '/distributore' || perc.indexOf('/distributore/richieste') === 0 ? 'banco'
+    : perc.indexOf('/distributore/clienti') === 0 ? 'clienti'
+    : perc.indexOf('/distributore/ordini') === 0 ? 'ordini'
+    : '';
+  const testa = typeof bancoTesta !== 'undefined' && bancoTesta ? bancoTesta : {};
+  const nomeDitta = testa.nome || currentUser.ragione_sociale;
+  const nomeFiliale = testa.filiale || '';
+  const conta = typeof contatori !== 'undefined' && contatori ? contatori : {};
+  const nonLette = typeof notificheNonLette !== 'undefined' ? notificheNonLette : 0;
+  const pallinoNotifiche = nonLette > 99 ? '99+' : nonLette;
+  const titoloPagina = typeof intestazione !== 'undefined' && intestazione ? intestazione : '';
+  const tornaA = typeof indietro !== 'undefined' && indietro ? indietro : '';
+%>
+<header class="banco-testa">
+  <div class="banco-identita">
+    <div class="banco-ditta"><%= nomeDitta %></div>
+    <% if (nomeFiliale) { %><div class="banco-filiale"><%= nomeFiliale %></div><% } %>
+  </div>
+
+  <nav class="banco-menu" aria-label="Sezioni del banco">
+    <a class="banco-voce<%= sezione === 'banco' ? ' attiva' : '' %>" href="/distributore"<%- sezione === 'banco' ? ' aria-current="page"' : '' %>>
+      <span class="banco-voce-ico"><%- iconaHome %></span>Banco
+    </a>
+    <a class="banco-voce<%= sezione === 'clienti' ? ' attiva' : '' %>" href="/distributore/clienti"<%- sezione === 'clienti' ? ' aria-current="page"' : '' %>>
+      <span class="banco-voce-ico"><%- iconaClienti %></span>Clienti
+      <% if (conta.daApprovare > 0) { %>
+        <span class="banco-voce-pallino" aria-label="<%= conta.daApprovare %> da approvare"><%= conta.daApprovare %></span>
+      <% } %>
+    </a>
+  </nav>
+
+  <div class="banco-azioni">
+    <a class="banco-tutti<%= sezione === 'ordini' ? ' attiva' : '' %>" href="/distributore/ordini"<%- sezione === 'ordini' ? ' aria-current="page"' : '' %>>Tutti gli ordini</a>
+
+    <a class="banco-campanella" href="/notifiche"
+       aria-label="Notifiche<%= nonLette > 0 ? ' (' + nonLette + ' da leggere)' : '' %>">
+      <%- iconaNotifiche %>
+      <% if (nonLette > 0) { %><span class="banco-campanella-conta"><%= pallinoNotifiche %></span><% } %>
+    </a>
+
+    <div class="menu-account banco-account" data-menu-account>
+      <button class="banco-avatar-btn" type="button" data-menu-apri
+              aria-haspopup="true" aria-expanded="false" aria-label="Menu account">
+        <%- include('iniziali', { nome: nomeFiliale || nomeDitta, persona: currentUser.ragione_sociale, misura: 40 }) %>
+      </button>
+      <div class="tendina" data-menu-tendina hidden>
+        <div class="tendina-testata">
+          <div class="nome"><%= currentUser.ragione_sociale %></div>
+          <div class="ruolo">Banco distributore</div>
+        </div>
+        <a class="voce-solo-stretta" href="/distributore/clienti">Clienti</a>
+        <a class="voce-solo-piccola" href="/distributore/ordini">Tutti gli ordini</a>
+        <a href="/distributore/storico">Storico richieste</a>
+        <form method="POST" action="/logout">
+          <button type="submit" class="voce-esci">Esci</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</header>
+
+<% if (titoloPagina || tornaA) { %>
+  <div class="banco-titolo">
+    <% if (tornaA) { %><a class="banco-indietro" href="<%= tornaA %>" aria-label="Indietro"><%- iconaIndietro %></a><% } %>
+    <% if (titoloPagina) { %><h1 class="banco-titolo-testo"><%= titoloPagina %></h1><% } %>
+  </div>
+<% } %>

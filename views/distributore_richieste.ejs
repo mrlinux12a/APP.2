@@ -1,105 +1,150 @@
+<%
+  // Home del banco: bacheca a tre colonne (Da confermare -> Attesa corriere -> Da preparare). Il disegno dei tempi
+  // (anello che si svuota, "Nuova", "da N min", minuti all'arrivo del corriere) parte da qui con i valori del server e
+  // lo muove il blocco "Home del banco" di public/app.js, con le stesse soglie (data-soglia-* sulla bacheca).
+  const RAGGIO = 25;
+  const CIRCONFERENZA = Math.round(2 * Math.PI * RAGGIO * 100) / 100;
+  const durata = (min) => (min < 60 ? min + ' min' : Math.floor(min / 60) + ' h ' + String(min % 60).padStart(2, '0'));
+%>
 <!DOCTYPE html>
 <html lang="it">
 <head>
   <%- include('partials/app_head', { titolo }) %>
 </head>
-<body data-loggato="1" data-auto-refresh="15000" data-versione="<%= JSON.stringify(contatori) %>">
-  <div class="app app-largo">
-    <%- include('partials/appbar', { titolo, intestazione: distributore.nome, indietro: null }) %>
+<body class="pagina-banco" data-loggato="1" data-auto-refresh="15000" data-versione="<%= JSON.stringify(contatori) %>">
 
-    <div class="contenuto">
-      <div class="banco-stato-riga">
-        <p class="sottotitolo" style="margin:0;"><%= distributore.filiale %> · zona <%= distributore.zona %></p>
-        <button type="button" class="toggle-banco <%= distributore.ricezione_attiva ? 'attivo' : 'pausa' %>"
-                data-toggle-banco data-attivo="<%= distributore.ricezione_attiva %>">
-          <span class="toggle-banco-pallino" aria-hidden="true"></span>
-          <span data-toggle-banco-testo><%= distributore.ricezione_attiva ? 'Banco operativo · Ricezione attiva' : 'Non disponibile · In pausa' %></span>
-        </button>
+  <%# Intestazione unica del banco, la stessa di tutte le pagine del distributore (anche quelle che passano da appbar.ejs). %>
+  <%- include('partials/banco_testa') %>
+
+  <main class="bacheca" data-bacheca
+        data-soglia-urgente="<%= bacheca.urgenteSec %>"
+        data-soglia-arrivo="<%= bacheca.arrivoVicinoMin %>">
+
+    <%# ---------- Da confermare ---------- %>
+    <section class="colonna colonna-conferma" aria-labelledby="col-conferma">
+      <div class="colonna-testa">
+        <span class="colonna-icona" aria-hidden="true"><%- iconaTimer %></span>
+        <h2 class="colonna-titolo" id="col-conferma">Da confermare</h2>
+        <span class="colonna-conta" aria-label="<%= daConfermare.length %> richieste"><%= daConfermare.length %></span>
       </div>
-
-      <div class="riquadri-conta">
-        <a class="conta-box" href="#da-confermare">
-          <span class="numero"><%= contatori.daRispondere %></span>
-          <span class="etichetta">da confermare</span>
-        </a>
-        <a class="conta-box" href="/distributore/ordini">
-          <span class="numero"><%= contatori.daPreparare %></span>
-          <span class="etichetta">da preparare</span>
-        </a>
-      </div>
-
-      <div class="sezione-titolo" id="da-confermare">Da confermare</div>
-      <% if (!daRispondere.length) { %>
-        <div class="vuoto"><span class="emoji"><%- iconaVuotoOk %></span>Nessuna richiesta in attesa.</div>
-      <% } else { %>
-        <div class="urgenti-griglia">
-          <% daRispondere.forEach(function (r) { %>
-            <div class="urgente-card">
-              <div class="urgente-testa">
-                <span class="urgente-id"><%= r.cliente_nome %></span>
-                <span class="urgente-timer" data-countdown-live data-secondi="<%= Math.max(0, r.secondi) %>">
-                  <%= fmt.mmss(Math.max(0, r.secondi)) %>
-                </span>
+      <div class="colonna-lista">
+        <% if (!daConfermare.length) { %>
+          <p class="colonna-vuota">Nessuna richiesta in attesa.</p>
+        <% } %>
+        <% daConfermare.forEach(function (r) { %>
+          <article class="scheda scheda-richiesta<%= r.urgente ? ' urgente' : '' %><%= r.appena ? ' entra' : '' %>"
+                   data-richiesta data-secondi="<%= r.secondi %>" data-finestra="<%= finestraSecondi %>"
+                   data-nuova-sec="<%= r.nuovaSec %>">
+            <div class="scheda-testa">
+              <div class="anello">
+                <svg viewBox="0 0 56 56" aria-hidden="true">
+                  <circle class="anello-traccia" cx="28" cy="28" r="<%= RAGGIO %>"/>
+                  <circle class="anello-barra" data-anello cx="28" cy="28" r="<%= RAGGIO %>"
+                          transform="rotate(-90 28 28)"
+                          stroke-dasharray="<%= CIRCONFERENZA %>"
+                          style="stroke-dashoffset: <%= (CIRCONFERENZA * (1 - r.frazione)).toFixed(2) %>"/>
+                </svg>
+                <span class="anello-tempo" data-tempo><%= fmt.mmss(r.secondi) %></span>
               </div>
-              <div class="urgente-prodotti">
-                <% r.anteprima.forEach(function (a) { %>
-                  <span class="urgente-riga"><%= a.quantita %>× <%= a.nome %></span>
-                <% }); %>
-                <% if (r.altreRighe > 0) { %>
-                  <span class="urgente-riga urgente-altre">+<%= r.altreRighe %> altr<%= r.altreRighe === 1 ? 'o' : 'i' %></span>
-                <% } %>
-              </div>
-              <div class="urgente-azioni">
-                <a class="btn btn-chiaro" href="/distributore/richieste/<%= r.id %>">Ispeziona</a>
-                <form method="POST" action="/distributore/richieste/<%= r.id %>/rispondi">
-                  <input type="hidden" name="azione" value="prezzo_richiesto">
-                  <input type="hidden" name="torna" value="home">
-                  <button class="btn btn-verde" type="submit">Accetta</button>
-                </form>
+              <div class="scheda-testi">
+                <div class="scheda-nome-riga">
+                  <h3 class="scheda-nome"><%= r.cliente_nome %></h3>
+                  <% if (r.nuovaSec > 0) { %><span class="etichetta-nuova" data-nuova>Nuova</span><% } %>
+                </div>
+                <div class="scheda-sotto">
+                  <%= r.nArticoli %> <%= r.nArticoli === 1 ? 'articolo' : 'articoli' %> · <%= r.nPezzi %> <%= r.nPezzi === 1 ? 'pezzo' : 'pezzi' %>
+                </div>
               </div>
             </div>
-          <% }); %>
-        </div>
-        <p class="nota">
-          Hai <%= Math.round(minutiRisposta) %> minuti per rispondere. Se non rispondi la richiesta risulta non confermata.
-        </p>
-      <% } %>
 
-      <div class="sezione-titolo">Ordini da preparare</div>
-      <% if (!daPreparare.length) { %>
-        <div class="vuoto"><span class="emoji"><%- iconaVuotoScatola %></span>Nessun ordine da preparare.</div>
-      <% } else { %>
-        <div class="urgenti-griglia">
-          <% daPreparare.forEach(function (o) { %>
-            <div class="urgente-card neutra">
-              <form class="urgente-rimuovi-wrap" method="POST" action="/distributore/ordini/<%= o.id %>/preparazione">
+            <%- include('partials/banco_articoli', { articoli: r.anteprima, altre: r.altre }) %>
+
+            <div class="scheda-azioni">
+              <a class="btn-banco btn-banco-conferma" href="/distributore/richieste/<%= r.id %>">Verifica e conferma</a>
+              <form method="POST" action="/distributore/richieste/<%= r.id %>/rispondi">
+                <input type="hidden" name="azione" value="rifiuta">
                 <input type="hidden" name="torna" value="home">
-                <button class="urgente-rimuovi" type="submit" aria-label="Togli dalla lista da preparare">
-                  <%- iconaChiudi %>
-                </button>
+                <button class="btn-banco btn-banco-secondario" type="submit">Non disponibile</button>
               </form>
-              <div class="urgente-testa" style="padding-right:26px;">
-                <span class="urgente-id"><%= o.cliente_nome %></span>
-              </div>
-              <div class="urgente-prodotti">
-                <% o.anteprima.forEach(function (a) { %>
-                  <span class="urgente-riga"><%= a.quantita %>× <%= a.nome %></span>
-                <% }); %>
-                <% if (o.altreRighe > 0) { %>
-                  <span class="urgente-riga urgente-altre">+<%= o.altreRighe %> altr<%= o.altreRighe === 1 ? 'o' : 'i' %></span>
-                <% } %>
-              </div>
-              <a class="btn btn-primary btn-blocco urgente-azione" href="/distributore/ordini/<%= o.id %>">
-                Ispeziona
-              </a>
             </div>
-          <% }); %>
-        </div>
-        <a class="nota" href="/distributore/ordini">Vedi tutti gli ordini →</a>
-      <% } %>
+          </article>
+        <% }); %>
+      </div>
+    </section>
 
-    </div>
-  </div>
+    <%# ---------- Attesa corriere ---------- %>
+    <section class="colonna colonna-corriere" aria-labelledby="col-corriere">
+      <div class="colonna-testa">
+        <span class="colonna-icona" aria-hidden="true"><%- iconaMessaggio %></span>
+        <h2 class="colonna-titolo" id="col-corriere">Attesa corriere</h2>
+        <span class="colonna-conta" aria-label="<%= attesaCorriere.length %> richieste"><%= attesaCorriere.length %></span>
+      </div>
+      <div class="colonna-lista">
+        <% if (!attesaCorriere.length) { %>
+          <p class="colonna-vuota">Nessuna consegna in attesa di un corriere.</p>
+        <% } %>
+        <% attesaCorriere.forEach(function (c) { %>
+          <article class="scheda scheda-corriere" data-corriere data-trascorsi="<%= c.trascorsi %>">
+            <div class="scheda-testa">
+              <span class="scheda-icona" aria-hidden="true"><%- iconaMessaggio %></span>
+              <div class="scheda-testi">
+                <h3 class="scheda-nome"><a href="/distributore/richieste/<%= c.id %>"><%= c.cliente_nome %></a></h3>
+                <div class="stato-corriere">
+                  Corriere avvisato · da <span data-da><%= Math.floor(c.trascorsi / 60) < 1 ? 'meno di 1 min' : durata(Math.floor(c.trascorsi / 60)) %></span>
+                </div>
+              </div>
+            </div>
+
+            <%- include('partials/banco_articoli', { articoli: c.anteprima, altre: c.altre }) %>
+
+            <p class="scheda-nota">Confermato da te. Non preparare ancora: aspetta che un corriere prenda la consegna.</p>
+          </article>
+        <% }); %>
+      </div>
+    </section>
+
+    <%# ---------- Da preparare ---------- %>
+    <section class="colonna colonna-preparare" aria-labelledby="col-preparare">
+      <div class="colonna-testa">
+        <span class="colonna-icona" aria-hidden="true"><%- iconaOrdini %></span>
+        <h2 class="colonna-titolo" id="col-preparare">Da preparare</h2>
+        <span class="colonna-conta" aria-label="<%= daPreparare.length %> ordini"><%= daPreparare.length %></span>
+      </div>
+      <div class="colonna-lista">
+        <% if (!daPreparare.length) { %>
+          <p class="colonna-vuota">Nessun ordine da preparare.</p>
+        <% } %>
+        <% daPreparare.forEach(function (o) {
+             const minutiArrivo = o.arrivo ? Math.ceil(o.arrivo.secondi / 60) : 0;
+             const inRitardo = o.arrivo && minutiArrivo <= 0;
+             const vicino = o.arrivo && minutiArrivo <= bacheca.arrivoVicinoMin;
+        %>
+          <article class="scheda scheda-ordine">
+            <div class="scheda-testa scheda-testa-alto">
+              <div class="scheda-testi">
+                <h3 class="scheda-nome"><%= o.cliente_nome %></h3>
+                <div class="scheda-sotto">
+                  Ordine #<%= o.id %><% if (o.arrivo) { %> · ritira <%= o.corriere_nome || 'il corriere' %><% } %>
+                </div>
+              </div>
+              <% if (o.arrivo) { %>
+                <div class="pillola-arrivo<%= vicino ? ' vicino' : '' %>" data-arrivo data-secondi="<%= o.arrivo.secondi %>">
+                  <span class="pillola-min" data-arrivo-min><%= inRitardo ? 'In ritardo' : durata(minutiArrivo) %></span>
+                  <span class="pillola-ora">ore <%= fmt.oraRoma(o.corriere_arrivo_il) %></span>
+                </div>
+              <% } %>
+            </div>
+
+            <%- include('partials/banco_articoli', { articoli: o.anteprima, altre: o.altre }) %>
+
+            <a class="btn-banco btn-banco-prepara" href="/distributore/ordini/<%= o.id %>">
+              <%- iconaOrdini %>Prepara
+            </a>
+          </article>
+        <% }); %>
+      </div>
+    </section>
+  </main>
 
   <%- include('partials/nav_distributore', { attivo: 'home', contatori }) %>
   <script src="<%= asset('/app.js') %>" defer></script>

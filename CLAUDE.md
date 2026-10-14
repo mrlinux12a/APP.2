@@ -44,7 +44,8 @@ sua filiale (una sola) e `nome`/`cognome`. Login, token app, sessioni e notifich
   `/ordini/:id` è condivisa fra ruoli, per questo lì si fa per ruolo e non in `dettaglioOrdine`.
   `legamiDelCliente` (anagrafica del cliente, "Distributori di riferimento") esclude i banchi disattivati: i
   legami con AFIS, Cambielli e Fidra restano in `client_distributors` (lo storico li referenzia) ma non si vedono.
-- Una richiesta parte verso **ogni filiale** attiva con `ricezione_attiva` (una riga di
+- Una richiesta parte verso **ogni filiale** attiva (`attivo = 1`; la pausa della ricezione non esiste più dal
+  09/10/2026: la colonna `distributors.ricezione_attiva` è rimasta nel DB ma nessuno la legge) (una riga di
   `request_responses` ciascuna) e la notifica arriva a tutti i dipendenti. **Vince la prima filiale
   che conferma**: `rispondi()` blocca la richiesta (`FOR UPDATE`), chiude le altre filiali della
   stessa ditta (`scaduto`) e registra chi ha risposto (`risposto_da`). Un rifiuto di una filiale non
@@ -190,14 +191,14 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   scheda senza voci sparisce. Il referente si chiama "referente" (è il campo della registrazione: non è detto
   che sia il titolare). Fondo pagina 96px da `.app-anagrafica`, non dai ~150px di `.app`.
 - **Pulsante e menu del profilo** (`views/partials/appbar.ejs`, richiesta esplicita del 05/10/2026; classi
-  `profilo-*`, `pp-*`, `avatar-*`): solo per il **cliente**; banco e agente hanno ancora campanella e tendina
-  `.menu-account`. Pulsante da 44px col cerchio da 36px con le iniziali (partial unico `partials/iniziali.ejs`,
+  `profilo-*`, `pp-*`, `avatar-*`): solo per il **cliente**; l'agente ha ancora campanella e tendina
+  `.menu-account`, il banco la sua intestazione (`partials/banco_testa.ejs`, vedi "Home del banco"). Pulsante da 44px col cerchio da 36px con le iniziali (partial unico `partials/iniziali.ejs`,
   usato anche in cima al menu, 48px, e in anagrafica, 56px). Velo e pannello stanno **fuori dall'`<header>`**: l'appbar
   ha z-index 20 e dentro non si potrebbe stare sopra la navbar (25), che il velo deve coprire (velo 30, pannello
   31). Voci: La mia anagrafica, Storico ordini (`/storico`), Esci. **Niente "Notifiche"** (tolta su richiesta
   esplicita del 05/10/2026, non rimetterla): `/notifiche` esiste ancora ma il cliente non ha più un link per
   arrivarci (aprirla segna tutte lette, anche quelle del badge di "Stato ordini"); banco e agente hanno ancora
-  campanella e voce nella tendina. Il sottotitolo "referente · cliente di DISTRIBUTORE" viene da `res.locals.profiloCliente`
+  la campanella (il banco nella sua barra, l'agente nell'appbar). Il sottotitolo "referente · cliente di DISTRIBUTORE" viene da `res.locals.profiloCliente`
   (`anagrafiche.intestazioneCliente`, in cache 60 s per cliente: un'approvazione appena fatta compare entro un
   minuto). Script in `app.js` ("Menu del profilo"): Esc e tocco sul velo chiudono e riportano il focus sul
   pulsante, frecce/Home/End scorrono le voci, Tab fuori dal pannello lo chiude.
@@ -216,8 +217,15 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   cliente a `anagrafiche.distributoriPredefiniti()` (env `DISTRIBUTORE_PREDEFINITO`, id o nome della ditta, default
   `BOREA SRL`, tutte le filiali; se non esiste scrive un errore nel log e iscrive senza legami). Poi redirect a
   `/benvenuto` (senza stato: riaprirla mostra la stessa cosa; la riga "confermerà a breve" c'è finché il legame non
-  è `approvato`). **L'approvazione non blocca niente**: un cliente `in_attesa` ordina comunque, e la richiesta va a
-  tutti i banchi attivi (vedi README); il banner di `/profilo` ("non inviare richieste") è quindi inesatto.
+  è `approvato`). **Dal 14/10/2026 l'approvazione è automatica** (richiesta esplicita, "per adesso"):
+  `anagrafiche.iscriviCliente` crea i legami già `approvato` (con `deciso_il`) su tutte le filiali, mette
+  `users.stato_anagrafica = 'attivo'` e **non manda nessuna notifica** (né "Nuova anagrafica da approvare" al banco né
+  "Iscrizione inviata" al cliente); quindi in `/benvenuto` la riga "confermerà a breve" non compare mai. Con
+  `APPROVAZIONE_AUTOMATICA=0` nel `.env` (letta a ogni iscrizione) tutto torna com'era (legame `in_attesa`, notifiche);
+  senza nessun banco collegato resta `in_attesa` comunque. I clienti già `in_attesa` prima del cambio non si toccano:
+  li approva il banco, o uno script una tantum. **L'approvazione non blocca niente**: un cliente `in_attesa` ordina
+  comunque, e la richiesta va a tutti i banchi attivi (vedi README); il banner di `/profilo` ("non inviare richieste")
+  è quindi inesatto.
   `/profilo?benvenuto=1` non esiste più.
 - **Storico ordini** (`views/storico.ejs` + `partials/storico_scheda.ejs`, richiesta esplicita del 05/10/2026; classi
   `st-*`): intestazione "Storico ordini". Sezione **"In corso"** (richieste in attesa + ordini in consegna entro 24 h:
@@ -311,10 +319,11 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   `aggiornaScadenza` ora chiude solo le finestre). L'assegnatore si registra in `src/flusso_cliente.js`:
   uno script che usa solo `src/richieste.js` non lo ha (anche `scripts/prova_whatsapp.js` lo importa).
   Destinazione e note stanno sulla richiesta (`requests.destinazione/note`, scritte dal carrello).
-- **Pagamento SIMULATO** (`src/pagamenti.js`): `requests.pagamento_stato` NULL = vecchio flusso,
+- **Pagamento** (`src/pagamenti.js`): `requests.pagamento_stato` NULL = vecchio flusso,
   `pagato`, `rimborsato`; importo = `totali.totale_ivato` del carrello (spedizione fissa inclusa).
   Rimborso quando la richiesta si chiude senza ordine (finestra scaduta, tutti rifiutano, annullo, ordine
-  annullato); "Rinvia" lo riaddebita. Provider vero = cambiare solo quel file.
+  annullato); "Rinvia" lo riaddebita. `pagamento_metodo` è `simulato` (app nativa, o sito senza
+  `STRIPE_SECRET_KEY`) o `stripe` (sito con la chiave: vedi "Pagamenti Stripe" sotto).
   **Consegna dell'ordine = spedizione fissa pagata** (corretto il 05/10/2026): `richieste.calcolaOfferta`
   (da cui nascono ordine e totale dell'offerta) usa `pricing.getSpedizioneFissa()`, la stessa cifra del
   carrello, e non più `distributors.costo_consegna` (Borea: 0). Prima l'ordine diceva "consegna inclusa" e il
@@ -333,6 +342,63 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   (disponibilità parziale, sconto riga per riga) ma nessuna route li usa più — non è codice morto
   da un refuso, è la UI attuale che li ha rimossi.
 
+## Pagamenti Stripe (14/10/2026)
+
+`src/stripe_pagamenti.js` (PaymentIntent, pagina di pagamento, webhook, incassi) + punti di aggancio DB-only in
+`src/pagamenti.js`; setup e messa in produzione in README ("Pagamenti con Stripe"). Scelte esplicite dell'utente: carta
+**autorizzata e poi incassata** (non addebito + rimborso), **pagamento nella pagina del sito** con il Payment Element di
+Stripe (prima era Checkout ospitato: cambiato lo stesso giorno, su richiesta), **solo sito** (l'app resta simulata),
+**un solo conto Stripe** (niente Connect). Da non rompere:
+- **Senza `STRIPE_SECRET_KEY` tutto è come prima** (`pagamenti.stripeAttivo()`): nessuna query su `stripe_pagamenti`,
+  pagamento simulato. Le prove (`test/*.test.js`) non toccano mai Stripe né il DB vero (Stripe finto con
+  `stripePagamenti.impostaStripe`, DB finto) e **non leggono il `.env`**: `test/server.test.js` svuota le variabili
+  `STRIPE_*`/`APP_URL` prima di caricare `server.js` (dotenv non sovrascrive quelle già definite).
+- **Chiavi** (`.env`): `STRIPE_SECRET_KEY`, chiave pubblicabile (`STRIPE_PUBLISHABLE_KEY` o l'alias
+  `STRIPE_PUBLIC_KEY`, che l'utente aveva già usato), `STRIPE_WEBHOOK_SECRET`, `APP_URL`. La pubblicabile deve avere il
+  prefisso `pk_test_`/`pk_live_`. Copiandola dal Dashboard il prefisso si perde facilmente (l'utente l'aveva incollata
+  come `51UQ…`, 99 caratteri): se è tutta alfanumerica e lunga (`chiaveSenzaPrefisso`) il prefisso si ricava dalla chiave
+  segreta (`sk_test_` → `pk_test_`) e all'avvio si scrive un avviso (`controllaConfigurazione`); se non ha proprio la forma
+  di una chiave, `/pagamento/<id>` risponde 503 "non configurato" (in locale con l'indicazione di cosa guardare).
+- **Nessuna chiamata a Stripe dentro una transazione.** `pagamenti.rimborsa` e `segnaDaIncassare` girano dentro le
+  transazioni del flusso (chiusura finestra, creazione ordine, eliminazioni) e **scrivono solo sul DB** (`stato` di
+  `stripe_pagamenti` → `da_incassare` / `da_rilasciare` / `da_rimborsare`); le esegue `stripePagamenti.elabora()`, 2 s dopo
+  (`richiediElaborazione`) e dal timer di 30 s di `server.js`, con chiavi di idempotenza (`cap-<id>`, `rel-<id>`, `ref-<id>`)
+  e fino a 30 tentativi (poi `da_verificare`). Una nuova rotta che chiude una richiesta passa da `pagamenti.rimborsa`, non
+  tocca `pagamento_stato` da sola.
+- **La richiesta nasce a carta autorizzata**, non al clic: `POST /richieste` con Stripe crea riga + PaymentIntent
+  (`capture_method: manual`, `automatic_payment_methods`) e fa `303` verso `/pagamento/<id>` **senza creare niente e senza
+  svuotare il carrello**. La pagina (`views/pagamento.ejs` + `public/pagamento.js`, `stripe.confirmPayment` con
+  `redirect: 'if_required'`) porta a `GET /pagamento/esito?payment_intent=...`. La richiesta la crea `completaRiga`, che
+  chiamano **tre vie**: il ritorno del cliente, il webhook `POST /webhooks/stripe` (`payment_intent.amount_capturable_updated`,
+  montato **prima** di `express.json()`: la firma si verifica sul corpo grezzo) e il **timer** (`elabora`: ogni pagamento
+  `da_pagare` aperto da più di un minuto con la carta autorizzata). Quindi il webhook è comodo ma non indispensabile. Una
+  UPDATE atomica `da_pagare → in_creazione` assicura che la crei uno solo. Il carrello è fotografato sulla riga (`righe`,
+  `destinazione`, `note`): conta quello, non la sessione. Se la creazione fallisce (richiesta già aperta, guasto) la carta
+  si **rilascia** e il testo per il cliente sta in `motivo` (`errore` è solo il guasto tecnico). Un PaymentIntent mai pagato
+  si annulla dopo 70 min (`verificaPendente`); la pagina non si apre più dopo 60 min; una carta autorizzata oltre i 90 min
+  non fa più nascere la richiesta. `flusso.nuovaRichiesta` con `metodoPagamento: 'stripe'` **non** riporta alla richiesta
+  già aperta sul 23505 (a differenza del simulato): due carte non devono finire sulla stessa richiesta.
+- **Incasso = totale dell'ordine** (`LEAST(autorizzato, totale ordine)`), mai di più; `requests.pagamento_importo` si
+  aggiorna se è più basso. "Rinvia richiesta" con Stripe è un nuovo pagamento (`tipo = 'reinvio'`,
+  `avviaPagamentoReinvio`) e riapre la stessa richiesta (`richieste.reinviaRichiesta(id, { metodoPagamento: 'stripe' })`);
+  il ramo simulato di `flusso.reinviaRichiesta` resta per l'app.
+- **`modo` ('test'/'live', dalla chiave) su ogni riga**: il `.env` locale punta al DB di produzione, e un'istanza con la
+  chiave di prova non deve toccare i pagamenti veri (né il contrario). `elabora` e il webhook ignorano l'altro modo.
+- **SDK 23 / API 2026-09-30**: parametri verificati con `tsc` (c'è in `mobile/node_modules`: file `.ts` temporaneo dentro
+  il progetto, poi cancellarlo) e **contro la vera API in sandbox** (autorizzazione, incasso parziale, rimborso, rilascio,
+  carta rifiutata riprovabile): l'API cambia fra le major, non fidarsi della memoria.
+- **Provare la pagina nel browser** (pannello incorporato): l'iframe di Stripe si disegna con un secondo di ritardo (il
+  primo screenshot è bianco: rifarlo) e a larghezze da telefono lo screenshot lo mostra tagliato a destra pur essendo
+  largo il giusto (artefatto della cattura, non del layout); l'errore in console "unknown error occurred when fetching
+  the script" viene dagli script di Google Pay/Apple Pay, bloccati lì. Non pagare dal browser con un cliente demo: il
+  timer farebbe nascere la richiesta e arriverebbe ai banchi veri. Pulire con `DELETE FROM stripe_pagamenti` per id e
+  `paymentIntents.cancel`.
+- **Buco noto, da chiudere prima dell'app ai clienti**: `POST /api/v1/richieste` (e `/reinvia`) restano simulate, quindi
+  dall'app si ordina senza pagare anche con Stripe acceso sul sito. Il sito in produzione richiede HTTPS (Stripe.js e
+  webhook in modalità reale).
+- Schema: blocco "Pagamenti con Stripe" in fondo a `schema.sql` (applicato al DB condiviso il 14/10/2026; `session_id`
+  del primo giro con Checkout è stata tolta con un `DROP COLUMN` dentro lo stesso blocco).
+
 ## Installatori in Via Puggia 22/3 (provvisorio)
 
 Tutti gli installatori sono in Via Puggia 22/3, Genova (`src/sede_installatori.js`, vedi README,
@@ -340,6 +406,75 @@ Tutti gli installatori sono in Via Puggia 22/3, Genova (`src/sede_installatori.j
 `scripts/imposta_installatori_puggia.js` e da `anagrafiche.iscriviCliente`. La sede legale resta quella
 dichiarata. Niente `navigator.geolocation` né `/api/posizione`. Quando torneranno gli indirizzi veri
 togliere i due punti d'uso.
+
+## Home del banco: bacheca a 3 colonne (09/10/2026)
+
+`GET /distributore` (`server.js`) + `views/distributore_richieste.ejs`, classi `banco-*`, `colonna*`, `scheda*`
+(blocco "Home del banco" di `style.css`; la logica di risposta, corriere e ordini non è cambiata). Da confermare →
+Attesa corriere → Da preparare, senza numeri d'ordine delle fasi. Convenzioni da non rompere:
+- **Niente interruttore "ricezione"**, niente riquadri contatore, niente riga "filiale · zona": richieste esplicite.
+  Il banco riceve sempre (`richieste.distributoriCandidati` non guarda più `ricezione_attiva`); la rotta
+  `POST /api/distributore/stato` non esiste più.
+- **Intestazione e tendina dell'utente sono UNA sola per tutto il banco** (richiesta esplicita del 14/10/2026,
+  non farne un'altra): `partials/banco_testa.ejs` = ditta e filiale (`res.locals.bancoTesta`, in cache 60 s dal
+  middleware di `server.js`), schede Banco/Clienti, "Tutti gli ordini", campanella e cerchio con le iniziali della
+  **filiale** ("Banco Genova Fegino" → BG) che apre la tendina `.menu-account` (Storico richieste, Esci; Clienti e
+  Tutti gli ordini compaiono lì solo dove la barra non li mostra). La home la include; **tutte le altre pagine del
+  distributore passano da `partials/appbar.ejs`, che per `ruolo = distributore` delega qui** (anche `/notifiche` e la
+  pagina `errore`): un `appbar` nuovo in una vista del banco funziona da solo. Sotto la barra le pagine interne hanno
+  una riga con freccia e titolo (`intestazione`/`indietro` di `appbar`), la home no. La scheda attiva si sceglie da
+  `res.locals.percorso` (= `req.path`). **Niente "Punti vendita"** nel menu del banco e `/punti-vendita` gli risponde 404.
+- **Da 900px** il menu in basso non si mostra su nessuna pagina del banco (`nav_distributore`, classe
+  `.nav-solo-stretta`, sempre) e la home è una sola schermata con le colonne che scorrono dentro; sotto i 900px le
+  colonne si impilano e il menu in basso resta.
+- Le colonne: **Da confermare** = `request_responses.esito = 'in_attesa'` con la finestra aperta; **Attesa corriere** =
+  `esito = 'confermato'` e `corriere_stato = 'in_attesa'` (mai con il modulo WhatsApp spento: l'ordine nasce subito);
+  **Da preparare** = `orders.stato = 'inviato'`. "Verifica e conferma" apre il dettaglio della richiesta (lì si accetta);
+  "Non disponibile" è `rispondi` con `rifiuta` e `torna=home`, subito, senza conferma; "Prepara" apre
+  `/distributore/ordini/:id` (che prende l'ordine in carico, quindi la scheda esce dalla colonna).
+- **Tempi**: soglie in `BACHECA` (`server.js`) → `data-soglia-*` sulla bacheca → blocco "Home del banco" di `app.js`: il
+  server disegna le classi iniziali, lo script le aggiorna ogni secondo dagli istanti (secondi mancanti + `Date.now()`,
+  non un contatore che decrementa). Rosso negli ultimi 180 s, "Nuova" per i primi 180 s, pillola dell'ordine rossa sotto
+  15 min. A zero la scheda si spegne e la pagina si ricarica. La pillola dell'ordine conta fino a
+  **`orders.corriere_arrivo_il`**, che per il resto del sito è la consegna al cliente (minuti totali dal ritiro alla
+  consegna): non c'è nel DB un orario di arrivo del corriere al banco. Senza corriere non c'è pillola.
+- Il ritardo/`secondi_da_risposta`/`secondi_arrivo` si calcolano **in SQL** (`NOW()`), mai con un `Date` di JS sulle colonne
+  `TIMESTAMP` (vedi sopra); `corriere_arrivo_il` è `TIMESTAMPTZ`. Tre articoli al massimo per scheda, poi "+N altri
+  articoli". Prova: `test/server.test.js` ("home del banco...") con il DB finto.
+
+## Clienti del banco (14/10/2026)
+
+`views/distributore_clienti.ejs` e `views/distributore_cliente.ejs` (classi `cli-*`, blocco "Clienti del banco" in
+fondo a `style.css`); logica di approvazione, rifiuto e sconti **invariata** (`POST .../decidi` e `.../sconti`, stessi
+campi `codice_cliente`, `note`, `azione`, `sconto<n>_<ambito>_<chiave>`). Richieste esplicite, non rimetterli:
+- **Niente freccia indietro né riga titolo** in cima all'elenco: "Clienti" è una scheda dell'intestazione, quindi le due
+  pagine includono `partials/banco_testa` **senza** `intestazione`/`indietro` (non passare da `appbar.ejs`). Titolo
+  "Clienti" + campo di ricerca `[data-cerca-clienti]` (non `[data-ricerca]`: quello è la ricerca del catalogo).
+- **Ricerca nel browser** (blocco "Clienti del banco" di `app.js`): ogni `[data-cliente]` porta in `data-cerca` ragione
+  sociale, P. IVA e codice; ogni parola scritta deve comparire; le sezioni vuote spariscono e il numero accanto al titolo
+  conta i rimasti; "Nessun cliente trovato." se non resta niente.
+- Sezioni: **Da approvare** (solo se ce ne sono; scheda con bordo arancio e pulsante "Verifica ›"), **Clienti approvati**
+  (tabella a 5 colonne, righe impilate sotto i 900px) e, in fondo, **Non riconosciuti** (i rifiutati: da lì si apre la
+  pagina e si può ripensarci; la richiesta non li citava ma sparirebbero). Ordine per ragione sociale fatto nella rotta
+  (`localeCompare`), non dal DB.
+- **Ultimo ordine** = `MAX(orders.creato_il)` del cliente con **questa filiale** (`orders.distributor_id`), in una
+  sub-query `LEFT JOIN` dentro `anagrafiche.clientiDelDistributore`: mai una query per riga. Si mostra con
+  `fmt.dataSolaRoma`; le date di iscrizione con `fmt.dataOraRoma` (prima `dataOra` stampava l'ora UTC: 2 ore indietro).
+- Il cerchio con le iniziali è `partials/iniziali` con il parametro `tono` (`arancio` = da verificare, `grigio` =
+  rifiutato, nessuno = blu/approvato).
+- Pagina del cliente: colonna sinistra = dati (fatturazione in 3 colonne, "Controlla su VIES ↗" in una nuova scheda,
+  sede legale e consegna abituale, contatti `tel:`/`mailto:`), destra = decisione. Per i **da verificare e i rifiutati**
+  la decisione va sopra i dati sotto i 900px; per gli approvati (codice, note, sconti) no. **Una voce senza dato non si
+  disegna** (PEC, consegna, referente, telefono, email). La consegna abituale è una stringa sola
+  ("Via X 1, 16131 Genova (GE)"): la via è ciò che sta prima della prima virgola. La città si mostra com'è salvata
+  (un cliente ha "Génova" con l'accento nel DB: richiesta esplicita di non correggere i dati).
+- Il riquadro "È un tuo cliente?" è `sticky` con `top: 80px` (64px dell'intestazione, anch'essa sticky, + 16px): con
+  `top: 16px` finirebbe sotto la barra. La conferma sul rifiuto è un `onclick="return confirm(...)"` sul solo pulsante
+  "rifiuta" (il form è uno, con i due pulsanti `name="azione"`).
+- La barra "Salva gli sconti" (`.barra-azione`) da 900px in su sta a `bottom: 0` (il menu in basso non c'è).
+- Prova: `test/server.test.js` ("banco: elenco clienti..." e "banco: pagina del cliente..."). Nel browser, per provare
+  approvazione e rifiuto non usare i clienti veri (un "da approvare" è una persona reale): creare due clienti di prova,
+  provare, **cancellarli per id** (users, client_distributors, notifications, client_discount_rules).
 
 ## Aggiornamento automatico del banco
 

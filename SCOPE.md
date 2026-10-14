@@ -94,10 +94,11 @@ Aggiornato al 04/10/2026 (sito in produzione su una VPS, app nativa per l'instal
 
 **Sito e dati**
 - **Pagamento online vero** — dal 04/10/2026 l'installatore paga quando manda la richiesta e l'ordine
-  nasce da solo (nessuna scelta dell'offerta), ma il pagamento è **simulato** (`src/pagamenti.js`): manca
-  il provider (incasso all'invio, rimborso se la richiesta si chiude senza ordine), e va deciso come
-  trattare la differenza fra importo pagato e totale dell'ordine (spedizione fissa del carrello contro
-  `costo_consegna` del banco, oggi 0 per Borea).
+  nasce da solo (nessuna scelta dell'offerta). Il **sito** ha Stripe (14/10/2026, `src/stripe_pagamenti.js`, vedi
+  README "Pagamenti con Stripe"): carta autorizzata all'invio, incassata alla nascita dell'ordine per il suo
+  totale, rilasciata se la richiesta si chiude senza ordine. Mancano: **l'HTTPS con un dominio** (obbligatorio
+  per il webhook in produzione), **l'app nativa** (resta simulata: chi ordina da lì non paga), il **regolamento
+  con Borea** (un solo conto Stripe, nessuno split) e la **fattura**.
 - **Caricamento del catalogo e dei listini da interfaccia** (CSV o form): oggi si fa con script.
 - **Responsabile di ditta**: le filiali Borea esistono (una ditta, più filiali, più dipendenti), ma
   manca un ruolo che veda gli ordini di tutte le filiali.

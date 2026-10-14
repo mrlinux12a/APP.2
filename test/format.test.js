@@ -1,7 +1,7 @@
 // Date brevi dello Storico (src/format.js): "Oggi · 21:20", "Ieri · 18:05", "12 set · 09:40" e il mese in ora italiana.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { dataBreveRoma, meseRoma } = require('../src/format');
+const { dataBreveRoma, dataSolaRoma, meseRoma } = require('../src/format');
 
 // Le colonne TIMESTAMP sono UTC senza fuso: a Roma d'estate (ottobre) sono +2 ore, d'inverno +1.
 const adesso = new Date('2026-10-05T20:00:00Z');
@@ -32,6 +32,14 @@ test('dataBreveRoma: una Date come la leggerebbe pg vale quanto la stringa UTC, 
 test('dataBreveRoma: valore assente', () => {
   assert.equal(dataBreveRoma(null, adesso), '—');
   assert.equal(dataBreveRoma('niente', adesso), '—');
+});
+
+test('dataSolaRoma: giorno italiano gg/mm/aaaa, "—" se manca', () => {
+  assert.equal(dataSolaRoma('2026-10-10 12:00:00'), '10/10/2026');
+  // 22:30 UTC del 9 ottobre sono già le 00:30 del 10 a Roma
+  assert.equal(dataSolaRoma('2026-10-09 22:30:00'), '10/10/2026');
+  assert.equal(dataSolaRoma(new Date(2026, 9, 10, 12, 0)), '10/10/2026'); // come la leggerebbe pg
+  assert.equal(dataSolaRoma(null), '—');
 });
 
 test('meseRoma: mese e anno in ora italiana, maiuscola iniziale', () => {

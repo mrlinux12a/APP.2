@@ -12,6 +12,9 @@
   --arancio-chiaro: #fbe6da;
   --rosso: #bd3a3a;
   --rosso-chiaro: #fbe4e2;
+  /* Fase "attesa corriere" della home del banco (testo scuro sopra il chiaro: #4b3480). */
+  --viola: #6b4fa0;
+  --viola-chiaro: #eee8f7;
   --grigio: #6b6a5f;
   --sfondo: #f3f1ec;
   --surface: #ffffff;
@@ -734,133 +737,452 @@ th { color: var(--grigio); font-weight: 600; }
   .griglia-macro { grid-template-columns: 1fr; }
 }
 
-/* ---------- Riquadri contatore (banco distributore) ---------- */
+/* ---------- Home del banco: bacheca a 3 colonne (views/distributore_richieste.ejs) ---------- */
 
-.riquadri-conta {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-  margin-bottom: 14px;
-}
-.conta-box {
-  background: var(--surface);
-  border: 1px solid var(--bordo);
-  border-radius: var(--raggio);
-  padding: 12px 8px;
-  text-align: center;
-  text-decoration: none;
-  color: inherit;
-  display: block;
-}
-.conta-box .numero { display: block; font-size: 1.5rem; font-weight: 800; color: var(--blu); }
-.conta-box .etichetta { display: block; font-size: 0.72rem; color: var(--grigio); line-height: 1.25; margin-top: 2px; }
-
-/* ---------- Dashboard banco distributore ---------- */
-
-.banco-stato-riga {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.toggle-banco {
+/* Intestazione (views/partials/banco_testa.ejs): è la stessa su TUTTE le pagine del banco, non solo sulla home.
+   Barra bianca da 64px con ditta e filiale, menu a schede, "Tutti gli ordini", campanella e cerchio con le iniziali.
+   Da 900px in su il menu sospeso in basso (nav_distributore, .nav-solo-stretta) non si mostra, su nessuna pagina del
+   banco: il menu sta qui. Sotto, il menu in basso resta e le schede qui spariscono. */
+.banco-testa {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 8px 16px;
-  border-radius: 999px;
-  border: 1px solid var(--bordo);
+  gap: 24px;
+  min-height: 64px;
+  padding: env(safe-area-inset-top, 0px) max(24px, env(safe-area-inset-right, 0px)) 0 max(24px, env(safe-area-inset-left, 0px));
   background: var(--surface);
-  color: var(--testo);
-  font-size: 0.82rem;
-  font-weight: 700;
-  cursor: pointer;
-  font-family: inherit;
+  border-bottom: 1px solid var(--bordo);
 }
-.toggle-banco-pallino { width: 10px; height: 10px; border-radius: 50%; background: var(--grigio); flex: 0 0 auto; }
-.toggle-banco.attivo { border-color: var(--verde); color: var(--verde); }
-.toggle-banco.attivo .toggle-banco-pallino { background: var(--verde); box-shadow: 0 0 0 3px var(--verde-chiaro); }
-.toggle-banco.pausa { border-color: var(--rosso); color: var(--rosso); }
-.toggle-banco.pausa .toggle-banco-pallino { background: var(--rosso); }
+.banco-identita { min-width: 0; }
+.banco-ditta {
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 800;
+  font-size: 18px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.banco-filiale { color: var(--grigio); font-size: 13px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Griglia delle richieste urgenti: 1 colonna su telefono, più colonne quando c'è spazio. */
-.urgenti-griglia {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-.urgente-card {
-  position: relative;
-  background: var(--surface);
-  border: 1px solid var(--arancio);
-  border-radius: var(--raggio);
-  padding: 14px;
-  display: flex;
-  flex-direction: column;
+.banco-menu { display: flex; gap: 8px; }
+.banco-voce {
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
-  min-width: 0; /* dentro una grid: senza questo il testo non-a-capo forza la card ad allargarsi */
-}
-
-/* Tasto per togliere una card "da preparare" dalla home senza aprirla: in alto a destra,
-   discreto finché non serve. Il form è assoluto (non un elemento di flusso in più dentro
-   la colonna flex della card), il pulsante dentro è solo lo stile del cerchio. */
-.urgente-rimuovi-wrap { position: absolute; top: 10px; right: 10px; margin: 0; }
-.urgente-rimuovi {
-  position: relative;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: none;
-  background: var(--sfondo);
+  height: 44px;
+  padding: 0 18px;
+  border-radius: 22px;
   color: var(--grigio);
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.banco-voce:hover { background: var(--sfondo); }
+.banco-voce.attiva { background: var(--blu-chiaro); color: var(--blu-scuro); }
+.banco-voce-ico { display: inline-flex; font-size: 20px; }
+.banco-voce-pallino {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--rosso);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+
+.banco-azioni { display: flex; align-items: center; gap: 4px; margin-left: auto; flex: none; }
+.banco-tutti {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  color: var(--blu);
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.banco-tutti:hover { text-decoration: underline; }
+.banco-tutti.attiva { padding: 0 18px; border-radius: 22px; background: var(--blu-chiaro); color: var(--blu-scuro); text-decoration: none; }
+
+/* Riga col titolo della pagina, sotto l'intestazione, per le pagine interne del banco (clienti, richiesta, ordine,
+   storico, notifiche...): freccia indietro e titolo. La home non l'ha. Allineata al contenuto (.contenuto: 14px). */
+.banco-titolo { display: flex; align-items: center; gap: 4px; padding: 10px 6px 0 6px; }
+.banco-indietro {
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  padding: 0;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: var(--blu);
+  font-size: 24px;
+  text-decoration: none;
 }
-.urgente-rimuovi svg { width: 15px; height: 15px; }
-/* Il cerchio resta da 28px ma l'area di tocco è di 44px (8px in più per lato). */
-.urgente-rimuovi::after { content: ""; position: absolute; inset: -8px; }
-.urgente-rimuovi:hover { color: var(--rosso); }
-.urgente-testa { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.urgente-id { font-weight: 700; font-size: 0.92rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.urgente-timer {
-  flex: 0 0 auto;
-  background: var(--arancio);
-  color: var(--su-blu);
+.banco-indietro:hover { background: var(--sfondo); }
+.banco-indietro:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; }
+.banco-titolo-testo {
+  min-width: 0;
+  margin: 0;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+@media (min-width: 720px) {
+  .app > .banco-titolo { max-width: 1400px; margin-left: auto; margin-right: auto; padding-left: 14px; padding-right: 14px; }
+}
+.banco-campanella {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: var(--blu);
+  font-size: 24px;
+  text-decoration: none;
+}
+.banco-campanella:hover { background: var(--sfondo); }
+.banco-campanella-conta {
+  position: absolute;
+  top: 2px;
+  right: -4px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--rosso);
+  color: #fff;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+.banco-avatar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+.banco-avatar-btn .avatar { box-shadow: 0 0 0 3px var(--blu-chiaro); }
+.banco-avatar-btn:focus-visible, .banco-campanella:focus-visible, .banco-voce:focus-visible,
+.banco-tutti:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; }
+/* Le voci della tendina già presenti nella barra (o nel menu in basso) si mostrano solo dove la barra non le ha. */
+.menu-account .tendina .voce-solo-stretta, .menu-account .tendina .voce-solo-piccola { display: none; }
+
+/* Corpo: tre colonne uguali che riempiono l'altezza rimasta; ogni colonna scorre per conto suo e ha la
+   propria testata fissa. */
+.bacheca {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+  gap: 16px;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-width: none; /* è un <main>: senza questo varrebbe il `main { max-width: 900px }` delle viste desktop */
+  margin: 0;
+  padding: 16px 24px 20px;
+}
+
+/* Colori di fase (--fase*): striscia in cima, riquadro icona e pillola del numero. */
+.colonna {
+  --fase: var(--arancio);
+  --fase-chiaro: var(--arancio-chiaro);
+  --fase-scuro: var(--arancio);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: #e9e6df;
+  border-top: 4px solid var(--fase);
+  border-radius: 18px;
+  overflow: hidden;
+}
+.colonna-corriere { --fase: var(--viola); --fase-chiaro: var(--viola-chiaro); --fase-scuro: #4b3480; }
+.colonna-preparare { --fase: var(--verde); --fase-chiaro: var(--verde-chiaro); --fase-scuro: var(--verde); }
+
+.colonna-testa { display: flex; align-items: center; gap: 12px; flex: none; padding: 14px 16px 12px; }
+.colonna-icona {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--fase-chiaro);
+  color: var(--fase);
+  font-size: 18px;
+}
+.colonna-titolo {
+  margin: 0;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.colonna-conta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 32px;
+  margin-left: auto;
+  padding: 0 10px;
+  border-radius: 16px;
+  background: var(--fase-chiaro);
+  color: var(--fase-scuro);
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 16px;
   font-weight: 800;
-  font-size: 1.05rem;
-  padding: 6px 12px;
-  border-radius: 999px;
   font-variant-numeric: tabular-nums;
 }
-/* Altezza minima per 3 righe: indipendentemente da quante righe di prodotto mostra
-   davvero (1, 2 o 3), il pulsante in fondo resta sempre alla stessa altezza su tutte
-   le card, non solo su quelle della stessa riga della griglia. */
-.urgente-prodotti { display: flex; flex-direction: column; gap: 2px; min-height: 64px; }
-.urgente-riga { font-size: 0.86rem; color: var(--testo); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.urgente-altre { color: var(--grigio); font-size: 0.8rem; }
-.urgente-azione { min-height: 44px; display: flex; align-items: center; justify-content: center; margin-top: auto; }
-
-/* Due pulsanti affiancati (Ispeziona / Accetta) invece dell'unico pulsante di apertura. */
-.urgente-azioni { display: flex; gap: 8px; margin-top: auto; }
-.urgente-azioni > a, .urgente-azioni form { flex: 1; margin: 0; }
-.urgente-azioni .btn { width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: center; }
-
-/* Stessa card delle richieste urgenti, ma bordo neutro: usata per gli ordini già confermati
-   in attesa di preparazione, che non hanno un countdown da rispettare. */
-.urgente-card.neutra { border-color: var(--bordo); }
-
-@media (min-width: 640px) {
-  .urgenti-griglia { grid-template-columns: repeat(2, 1fr); }
+.colonna-lista {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  gap: 12px;
+  min-height: 0;
+  padding: 4px 12px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
-@media (min-width: 960px) {
-  .urgenti-griglia { grid-template-columns: repeat(3, 1fr); }
+.colonna-vuota { margin: 28px 12px; color: var(--grigio); font-size: 15px; text-align: center; }
+
+/* Scheda: bianca, uguale nelle tre colonne; cambiano solo la testa e le azioni. */
+.scheda {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid rgba(35, 32, 25, 0.07);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(35, 32, 25, 0.06);
+}
+.scheda-testa { display: flex; align-items: center; gap: 14px; }
+.scheda-testa-alto { align-items: flex-start; }
+.scheda-testi { flex: 1 1 auto; min-width: 0; }
+.scheda-nome-riga { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.scheda-nome {
+  margin: 0;
+  min-width: 0;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.scheda-nome a { color: inherit; text-decoration: none; }
+.scheda-nome a:hover { text-decoration: underline; }
+.scheda-sotto { margin-top: 2px; color: var(--grigio); font-size: 13px; line-height: 1.3; }
+
+/* Da confermare: bordo e ombra color fase; negli ultimi minuti tutto passa al rosso e la scheda pulsa piano. */
+.scheda-richiesta { border: 1.5px solid #f1c4ac; box-shadow: 0 2px 10px rgba(171, 77, 36, 0.12); }
+.scheda-richiesta.urgente { border-color: #e29a96; box-shadow: 0 2px 10px rgba(189, 58, 58, 0.14); animation: bacheca-pulsa 1.8s ease-out infinite; }
+.scheda-richiesta.scaduta { opacity: 0.55; pointer-events: none; }
+
+/* Anello da 56px: la barra è il tempo rimasto e si svuota in senso orario; dentro, mm:ss. */
+.anello { position: relative; flex: none; width: 56px; height: 56px; }
+.anello svg { display: block; width: 56px; height: 56px; }
+.anello circle { fill: none; stroke-width: 5; }
+.anello-traccia { stroke: var(--arancio-chiaro); transition: stroke 0.3s; }
+.anello-barra { stroke: var(--arancio); stroke-linecap: round; transition: stroke-dashoffset 1s linear, stroke 0.3s; }
+.anello-tempo {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--arancio);
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 13.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.3s;
+}
+.scheda-richiesta.urgente .anello-traccia { stroke: var(--rosso-chiaro); }
+.scheda-richiesta.urgente .anello-barra { stroke: var(--rosso); }
+.scheda-richiesta.urgente .anello-tempo { color: var(--rosso); }
+.etichetta-nuova {
+  flex: none;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--arancio);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+/* Articoli: "2×" in un riquadro, nome e codice sotto. */
+.articoli { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.articolo { display: flex; align-items: flex-start; gap: 10px; }
+.articolo-qta {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 7px;
+  background: var(--blu-chiaro);
+  color: var(--blu-scuro);
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+}
+.articolo-testo { display: flex; flex-direction: column; min-width: 0; }
+.articolo-nome { font-size: 15px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.articolo-cod { color: var(--grigio); font-size: 12.5px; line-height: 1.35; }
+.articolo-altre { padding-left: 44px; color: var(--grigio); font-size: 13px; }
+
+/* Pulsanti a pillola da 50px. */
+.btn-banco {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 50px;
+  padding: 0 18px;
+  border: 1.5px solid transparent;
+  border-radius: 25px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.btn-banco svg { width: 20px; height: 20px; }
+.btn-banco:focus-visible { outline: 3px solid var(--blu); outline-offset: 2px; }
+.btn-banco-conferma { background: var(--arancio); color: #fff; }
+.btn-banco-conferma:hover { background: #963f1b; }
+.btn-banco-secondario { background: var(--surface); border-color: #d6d1c4; color: var(--testo); }
+.btn-banco-secondario:hover { background: var(--sfondo); }
+.btn-banco-prepara { width: 100%; background: var(--blu); color: #fff; }
+.btn-banco-prepara:hover { background: var(--blu-scuro); }
+.scheda-azioni { display: flex; gap: 10px; }
+.scheda-azioni > a { flex: 1 1 auto; }
+.scheda-azioni > form { flex: 0 0 auto; margin: 0; }
+.scheda-azioni > form .btn-banco { width: 100%; padding: 0 20px; }
+/* Da 900px le colonne sono ~270px: i due pulsanti non ci stanno affiancati e vanno uno sotto l'altro. Si decide dalla
+   larghezza della scheda (non dello schermo): la stessa regola vale anche sul telefono. */
+.scheda { container-type: inline-size; }
+@container (max-width: 340px) {
+  .scheda-azioni { flex-direction: column; }
+  .scheda-azioni > form { flex: 1 1 auto; }
+}
+
+/* Attesa corriere: icona viola, riga di stato e una nota grigia. */
+.scheda-icona {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--viola-chiaro);
+  color: var(--viola);
+  font-size: 20px;
+}
+.stato-corriere { margin-top: 2px; color: #4b3480; font-size: 13px; font-weight: 600; line-height: 1.35; }
+.stato-corriere::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--viola);
+  vertical-align: 0.05em;
+}
+.scheda-nota { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--sfondo); color: var(--grigio); font-size: 14px; line-height: 1.4; }
+
+/* Da preparare: a destra i minuti all'arrivo del corriere e l'ora; verde, rossa negli ultimi minuti. */
+.pillola-arrivo {
+  flex: none;
+  padding: 6px 10px 5px;
+  border-radius: 12px;
+  background: var(--verde-chiaro);
+  color: var(--verde);
+  text-align: center;
+  line-height: 1.15;
+  transition: background-color 0.3s, color 0.3s;
+}
+.pillola-arrivo.vicino { background: var(--rosso-chiaro); color: var(--rosso); }
+.pillola-min {
+  display: block;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 17px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pillola-ora { display: block; margin-top: 1px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+
+@keyframes bacheca-entra {
+  from { opacity: 0; transform: translateY(-8px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes bacheca-pulsa {
+  0%, 100% { box-shadow: 0 2px 10px rgba(189, 58, 58, 0.14), 0 0 0 0 rgba(189, 58, 58, 0.3); }
+  60% { box-shadow: 0 2px 10px rgba(189, 58, 58, 0.14), 0 0 0 7px rgba(189, 58, 58, 0); }
+}
+.scheda.entra { animation: bacheca-entra 0.35s ease-out; }
+.scheda-richiesta.urgente.entra { animation: bacheca-entra 0.35s ease-out, bacheca-pulsa 1.8s ease-out 0.35s infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .scheda.entra, .scheda-richiesta.urgente, .scheda-richiesta.urgente.entra { animation: none; }
+  .anello-barra, .anello-traccia, .anello-tempo, .pillola-arrivo { transition: none; }
+}
+
+/* Da schermo largo la pagina è una sola schermata (le colonne scorrono dentro). Il menu in basso non serve. */
+@media (min-width: 900px) {
+  .pagina-banco { display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
+  .banco-testa { flex: none; }
+  .navbar.nav-solo-stretta { display: none !important; }
+}
+
+/* Sotto i 900px resta il menu in basso: le schede della barra spariscono e le colonne si impilano. */
+@media (max-width: 899.98px) {
+  .banco-testa { gap: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .banco-menu { display: none; }
+  .menu-account .tendina .voce-solo-stretta { display: block; }
+  .bacheca { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; padding: 12px 12px calc(var(--barra-bassa) + 24px); }
+  .colonna-lista { overflow: visible; }
+}
+@media (max-width: 639.98px) {
+  .banco-tutti { display: none; }
+  .menu-account .tendina .voce-solo-piccola { display: block; }
+}
+@media (max-width: 380px) {
+  .scheda-azioni { flex-direction: column; }
+  .scheda-azioni > form { flex: 1 1 auto; }
 }
 
 /* ---------- Geolocalizzazione ---------- */
@@ -2683,6 +3005,7 @@ html.misura-aperta { overflow: hidden; }
   line-height: 1;
 }
 .avatar-36 { width: 36px; height: 36px; font-size: 13px; }
+.avatar-40 { width: 40px; height: 40px; font-size: 14px; }
 .avatar-48 { width: 48px; height: 48px; font-size: 17px; }
 .avatar-56 { width: 56px; height: 56px; font-size: 20px; }
 .avatar svg { width: 55%; height: 55%; } /* l'omino, quando non ci sono iniziali */
@@ -3196,3 +3519,434 @@ html.misura-aperta { overflow: hidden; }
 .ben-nota { margin: 12px 4px 0; color: var(--grigio); font-size: 14px; line-height: 1.4; text-align: left; }
 .ben-azioni { margin-top: auto; padding-top: 32px; text-align: center; }
 .ben-link { display: inline-block; margin-top: 4px; padding: 14px 8px; font-size: 15px; font-weight: 700; text-decoration: none; }
+
+/* ---------- Clienti del banco (views/distributore_clienti.ejs, distributore_cliente.ejs; classi cli-*) ---------- */
+
+/* Pagine interne del banco con l'intestazione unica (partials/banco_testa.ejs) e un contenuto largo al massimo 1120px
+   (1168px con i 24px di margine per lato). Il cerchio con le iniziali (partials/iniziali.ejs, parametro `tono`) può
+   essere arancio (da verificare) o grigio (rifiutato); il blu è quello di sempre. */
+.pagina-clienti {
+  --cli-sora: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  --cli-bordo-arancio: #f1c9b3;
+  --cli-testo-arancio: #8a3a14;
+  --cli-testo-verde: #1f5f2e;
+  --cli-testo-rosso: #a33232;
+  --cli-bordo-rosso: #e8b4b4;
+  --cli-bordo-campo: #d6d1c6;
+}
+.avatar-arancio { background: var(--arancio); }
+.avatar-grigio { background: var(--grigio); }
+
+.cli-pagina {
+  max-width: 1168px;
+  margin: 0 auto;
+  padding: 24px max(24px, env(safe-area-inset-right, 0px)) 56px max(24px, env(safe-area-inset-left, 0px));
+}
+/* La pagina di un cliente approvato ha la barra fissa "Salva gli sconti": serve spazio per non coprire il fondo. */
+.cli-pagina.cli-con-barra { padding-bottom: 112px; }
+
+/* Etichette di stato (DA VERIFICARE, APPROVATO, RIFIUTATO). */
+.cli-etichetta {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.cli-etichetta-arancio { background: var(--arancio-chiaro); color: var(--cli-testo-arancio); }
+.cli-etichetta-verde { background: var(--verde-chiaro); color: var(--cli-testo-verde); }
+.cli-etichetta-rosso { background: var(--rosso-chiaro); color: var(--cli-testo-rosso); }
+.cli-grigio { color: var(--grigio); }
+.cli-cifre { font-variant-numeric: tabular-nums; }
+
+/* ----- Elenco ----- */
+
+.cli-testata { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+.cli-titolo { margin: 0; font-family: var(--cli-sora); font-size: 28px; font-weight: 800; line-height: 1.2; }
+.cli-cerca { position: relative; flex: 0 1 380px; min-width: 0; }
+.cli-cerca-ico {
+  position: absolute;
+  top: 50%;
+  left: 16px;
+  display: inline-flex;
+  transform: translateY(-50%);
+  color: var(--testo);
+  font-size: 20px;
+  pointer-events: none;
+}
+.cli-cerca input[type="search"] {
+  display: block;
+  width: 100%;
+  height: 46px;
+  margin: 0;
+  padding: 0 18px 0 46px;
+  border: 1px solid var(--bordo);
+  border-radius: 23px;
+  background: var(--surface);
+  color: var(--testo);
+  font-size: 16px; /* sotto i 16px Safari su iPhone ingrandisce la pagina al tocco */
+}
+.cli-cerca input[type="search"]::placeholder { color: var(--grigio); opacity: 1; }
+.cli-cerca input[type="search"]:focus { border-color: var(--blu); outline: 2px solid var(--blu); outline-offset: 1px; }
+
+.cli-nessuno { margin: 8px 0 24px; padding: 32px 16px; color: var(--grigio); font-size: 16px; text-align: center; }
+.cli-vuoto {
+  margin: 0;
+  padding: 28px 16px;
+  border: 1px solid var(--bordo);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--grigio);
+  text-align: center;
+}
+
+.cli-sezione { margin-bottom: 32px; }
+.cli-sezione-testa { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 12px; }
+.cli-sezione-titolo { margin: 0; font-family: var(--cli-sora); font-size: 18px; font-weight: 700; line-height: 1.3; }
+.cli-pillola {
+  min-width: 28px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--arancio-chiaro);
+  color: var(--cli-testo-arancio);
+  font-family: var(--cli-sora);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+}
+.cli-conta { color: var(--grigio); font-family: var(--cli-sora); font-size: 14px; font-weight: 600; }
+.cli-sezione-nota { color: var(--grigio); font-size: 14px; }
+
+.cli-richieste, .cli-tab-corpo { margin: 0; padding: 0; list-style: none; }
+.cli-richieste { display: flex; flex-direction: column; gap: 12px; }
+
+/* Cliente da approvare: scheda con bordo arancio, cerchio con le iniziali, dati e pulsante "Verifica". */
+.cli-richiesta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border: 1.5px solid var(--cli-bordo-arancio);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 3px 12px rgba(171, 77, 36, 0.1);
+}
+.cli-richiesta-corpo { flex: 1; min-width: 0; }
+.cli-richiesta-nome { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
+.cli-richiesta-nome strong { font-size: 17px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.cli-richiesta-dati { display: flex; flex-wrap: wrap; gap: 2px 24px; margin-top: 6px; color: #4f4d44; font-size: 15px; }
+.cli-richiesta-dati strong { color: var(--testo); font-weight: 700; font-variant-numeric: tabular-nums; }
+.cli-verifica {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 48px;
+  padding: 0 22px;
+  border-radius: 24px;
+  background: var(--arancio);
+  color: #fff;
+  font-family: var(--cli-sora);
+  font-size: 16px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.cli-verifica svg { width: 18px; height: 18px; vertical-align: 0; }
+.cli-verifica:hover { background: #963f1c; }
+.cli-verifica:focus-visible { outline: 3px solid var(--blu); outline-offset: 2px; }
+
+/* Clienti approvati (e non riconosciuti): una scheda con la tabella. Su schermo largo cinque colonne, sotto i 900px
+   righe impilate: nome sopra, codice · città · ultimo ordine sotto (.cli-c-meta passa da display: contents a flex). */
+.cli-tabella { overflow: hidden; border: 1px solid var(--bordo); border-radius: 16px; background: var(--surface); }
+.cli-tab-testa, .cli-tab-riga {
+  display: grid;
+  grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) 40px;
+  align-items: center;
+  column-gap: 16px;
+  padding-right: 20px;
+  padding-left: 20px;
+}
+.cli-tab-testa {
+  min-height: 44px;
+  border-bottom: 1px solid var(--bordo);
+  color: var(--grigio);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.cli-tab-riga {
+  min-height: 64px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--bordo);
+  color: var(--testo);
+  font-size: 15px;
+  text-decoration: none;
+}
+.cli-tab-corpo li:last-child .cli-tab-riga { border-bottom: none; }
+.cli-tab-riga:hover { background: #faf9f6; }
+.cli-tab-riga:focus-visible { outline: 2px solid var(--blu); outline-offset: -2px; }
+.cli-c-cliente { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.cli-nome { min-width: 0; overflow: hidden; font-size: 16px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.cli-c-meta { display: contents; }
+.cli-c-codice, .cli-c-citta, .cli-c-ordine { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cli-c-codice, .cli-c-ordine { font-variant-numeric: tabular-nums; }
+.cli-c-freccia { display: flex; justify-content: flex-end; color: #8f8d82; font-size: 18px; }
+.cli-solo-stretta { display: none; }
+
+/* ----- Pagina del cliente ----- */
+
+.cli-indietro {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 44px;
+  margin: 0 0 8px -6px;
+  padding-right: 12px;
+  color: var(--blu);
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.cli-indietro svg { font-size: 20px; }
+.cli-indietro:hover { text-decoration: underline; }
+.cli-indietro:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; border-radius: 8px; }
+.cli-avviso { margin-bottom: 16px; }
+
+.cli-intesta { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+.cli-intesta-testi { min-width: 0; }
+.cli-intesta-riga { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; }
+.cli-nome-grande { margin: 0; font-family: var(--cli-sora); font-size: 28px; font-weight: 800; line-height: 1.15; overflow-wrap: anywhere; }
+.cli-intesta-sotto { margin: 4px 0 0; color: var(--grigio); font-size: 15px; }
+
+.cli-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.cli-colonna { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+.cli-scheda { padding: 18px 20px; border: 1px solid var(--bordo); border-radius: 16px; background: var(--surface); }
+.cli-scheda-titolo { margin: 0 0 14px; font-family: var(--cli-sora); font-size: 18px; font-weight: 700; line-height: 1.3; }
+
+.cli-dati { display: grid; gap: 16px 20px; margin: 0; }
+.cli-dati-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.cli-dati-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.cli-dati-1 { grid-template-columns: minmax(0, 1fr); }
+.cli-dato { min-width: 0; }
+.cli-dato dd { margin: 0; }
+.cli-dato-eti {
+  display: block;
+  margin: 0 0 4px;
+  color: var(--grigio);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.cli-dato-val { display: block; font-size: 16px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
+.cli-dato-det { display: block; margin-top: 2px; color: var(--grigio); font-size: 14px; }
+.cli-dato-note { font-weight: 400; white-space: pre-line; }
+
+.cli-vies {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  margin-top: 2px;
+  color: var(--blu);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.cli-vies:hover { text-decoration: underline; }
+.cli-vies svg { font-size: 14px; }
+.cli-linea { margin: 4px 0 16px; border: 0; border-top: 1px solid var(--bordo); }
+
+.cli-contatti { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.cli-contatto {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 56px;
+  padding: 10px 14px;
+  border: 1px solid var(--bordo);
+  border-radius: 14px;
+  color: var(--testo);
+  text-decoration: none;
+}
+.cli-contatto:hover { background: #faf9f6; }
+.cli-contatto:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; }
+.cli-contatto-ico {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--blu-chiaro);
+  color: var(--blu);
+  font-size: 18px;
+}
+.cli-contatto-testi { flex: 1; min-width: 0; }
+.cli-contatto-val { display: block; overflow: hidden; font-size: 16px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+
+/* "È un tuo cliente?": resta in alto mentre si scorre. top = 64px dell'intestazione (anch'essa sticky) + 16px. */
+.cli-decisione {
+  position: sticky;
+  top: 80px;
+  padding: 20px;
+  border: 1.5px solid var(--bordo);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 6px 20px rgba(35, 32, 25, 0.07);
+}
+.cli-decisione h2 { margin: 0 0 6px; font-family: var(--cli-sora); font-size: 20px; font-weight: 800; line-height: 1.25; }
+.cli-decisione > p { margin: 0 0 18px; color: var(--grigio); font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+.cli-campo-eti { display: block; margin: 0 0 6px; font-size: 14px; font-weight: 700; }
+.cli-campo-eti span { color: var(--grigio); font-weight: 400; }
+.cli-decisione .cli-campo {
+  display: block;
+  width: 100%;
+  height: 48px;
+  margin: 0 0 16px;
+  padding: 0 14px;
+  border: 1.5px solid var(--cli-bordo-campo);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--testo);
+  font-family: inherit;
+  font-size: 16px;
+}
+.cli-decisione textarea.cli-campo { height: auto; padding: 12px 14px; line-height: 1.4; resize: vertical; }
+.cli-decisione .cli-campo:focus { border-color: var(--blu); outline: 2px solid var(--blu); outline-offset: 1px; }
+.cli-decisione .cli-campo::placeholder { color: var(--grigio); opacity: 1; }
+
+.cli-approva, .cli-rifiuta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  border-radius: 999px;
+  font-family: var(--cli-sora);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cli-approva svg, .cli-rifiuta svg { font-size: 20px; vertical-align: 0; }
+.cli-approva { height: 52px; border: none; background: var(--verde); color: #fff; }
+.cli-approva:hover { background: #236a33; }
+.cli-rifiuta { height: 46px; margin-top: 12px; border: 1.5px solid var(--cli-bordo-rosso); background: var(--surface); color: var(--cli-testo-rosso); }
+.cli-rifiuta:hover { background: var(--rosso-chiaro); }
+.cli-approva:focus-visible, .cli-rifiuta:focus-visible { outline: 3px solid var(--blu); outline-offset: 2px; }
+.cli-approva:disabled, .cli-rifiuta:disabled { opacity: 0.6; cursor: default; }
+
+/* Cliente approvato: codice, note e sconti nella colonna destra. */
+.cli-nota { margin: 12px 0 0; color: var(--grigio); font-size: 14px; line-height: 1.45; }
+.cli-sotto-titolo { margin: 20px 0 8px; font-family: var(--cli-sora); font-size: 15px; font-weight: 700; }
+.cli-elenco-sconti { overflow: hidden; border: 1px solid var(--bordo); border-radius: 12px; }
+.cli-salva { flex: 1; }
+
+/* Da schermo largo il menu in basso non c'è: la barra del salvataggio sta in fondo e allineata al contenuto. */
+@media (min-width: 900px) {
+  .pagina-clienti .barra-azione { bottom: 0; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+  .pagina-clienti .barra-azione .interno { max-width: 1120px; padding: 0 24px; }
+  .cli-salva { flex: 0 0 auto; min-width: 280px; margin-left: auto; }
+}
+
+/* Sotto i 900px (menu in basso): colonne una sotto l'altra, prima la decisione poi i dati; tabella a righe impilate. */
+@media (max-width: 899.98px) {
+  .cli-pagina { padding-top: 16px; padding-bottom: calc(var(--barra-bassa) + 32px); }
+  .cli-pagina.cli-con-barra { padding-bottom: calc(var(--barra-bassa) + 104px); }
+  .cli-layout { grid-template-columns: minmax(0, 1fr); }
+  .cli-layout-decisione .cli-colonna-destra { order: -1; }
+  .cli-decisione { position: static; }
+
+  .cli-tab-testa { display: none; }
+  .cli-tab-riga {
+    grid-template-columns: minmax(0, 1fr) 24px;
+    grid-template-areas: "cliente freccia" "meta freccia";
+    row-gap: 2px;
+    padding: 12px 16px;
+  }
+  .cli-c-cliente { grid-area: cliente; }
+  .cli-c-meta { display: flex; flex-wrap: wrap; grid-area: meta; padding-left: 52px; color: var(--grigio); font-size: 14px; }
+  .cli-c-meta > * + *::before { content: "·"; margin: 0 6px; }
+  .cli-c-codice, .cli-c-citta, .cli-c-ordine { overflow: visible; text-overflow: clip; }
+  .cli-c-codice.cli-c-manca { display: none; }
+  .cli-c-codice.cli-c-manca + .cli-c-citta::before { content: none; }
+  .cli-c-freccia { grid-area: freccia; }
+  .cli-solo-stretta { display: inline; }
+}
+
+@media (max-width: 639.98px) {
+  .cli-testata { flex-direction: column; align-items: stretch; gap: 12px; }
+  .cli-cerca { flex: 0 0 auto; }
+  .cli-richiesta { flex-wrap: wrap; padding: 16px; }
+  .cli-richiesta-corpo { flex: 1 1 calc(100% - 64px); }
+  .cli-richiesta-dati { gap: 2px 16px; }
+  .cli-verifica { width: 100%; }
+}
+
+@media (max-width: 559.98px) {
+  /* Sul telefono codice · città non lasciano posto all'ultimo ordine: va sulla riga sotto, senza "·" a inizio riga. */
+  .cli-c-ordine { flex-basis: 100%; }
+  .cli-c-meta > .cli-c-ordine::before { content: none; }
+  .cli-dati-3, .cli-dati-2, .cli-contatti { grid-template-columns: minmax(0, 1fr); }
+  .cli-intesta { gap: 12px; }
+  .cli-nome-grande { font-size: 24px; }
+  .cli-pagina { padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-left: max(16px, env(safe-area-inset-left, 0px)); }
+}
+
+/* ---------- Pagamento (views/pagamento.ejs, public/pagamento.js; classi pag-*) ---------- */
+
+/* Pagina senza barra in basso: niente spazio per la navbar. */
+.app-pagamento { padding-bottom: 32px; }
+@media (min-width: 720px) {
+  .app > .contenuto.pag { max-width: 560px; }
+}
+.pag-scheda {
+  padding: 18px 16px 16px;
+  border: 1px solid var(--bordo);
+  border-radius: 16px;
+  background: var(--surface);
+}
+.pag-testa { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.pag-totale { display: flex; flex-direction: column; }
+.pag-label { color: var(--grigio); font-size: 12px; }
+.pag-importo {
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.pag-riepilogo { color: var(--grigio); font-size: 14px; }
+/* Il form di Stripe ha già la sua altezza: lo spazio riservato evita che la pagina salti quando arriva. */
+.pag-elemento { min-height: 120px; margin-bottom: 14px; }
+.pag-errore { margin: 0 0 12px; }
+.pag-paga { width: 100%; }
+.pag-torna {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin-top: 12px;
+  color: var(--blu);
+  font-weight: 600;
+  text-decoration: none;
+}
+.pag-torna:hover { text-decoration: underline; }
+/* Sul telefono il form di Stripe vuole almeno ~330px (sotto, "scadenza / CVC" e i loghi delle carte vengono tagliati):
+   pagina e scheda un po' più strette, il form esce di 8px da ogni lato del padding della scheda. */
+@media (max-width: 480px) {
+  .contenuto.pag { padding-left: 10px; padding-right: 10px; }
+  .pag-elemento { margin-left: -8px; margin-right: -8px; }
+}

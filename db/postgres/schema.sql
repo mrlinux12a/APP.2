@@ -570,3 +570,40 @@ ALTER TABLE requests ADD COLUMN IF NOT EXISTS pagamento_stato TEXT;
 ALTER TABLE requests ADD COLUMN IF NOT EXISTS pagamento_metodo TEXT;
 ALTER TABLE requests ADD COLUMN IF NOT EXISTS pagamento_importo DOUBLE PRECISION;
 ALTER TABLE requests ADD COLUMN IF NOT EXISTS pagato_il TIMESTAMP;
+
+-- Pagamenti con Stripe (src/stripe_pagamenti.js): ogni tentativo di pagamento fatto dal carrello, o da "Rinvia
+-- richiesta", è una riga e un PaymentIntent (il form di pagamento sta nel sito, pagina /pagamento/<id>). La carta viene solo AUTORIZZATA (manual capture) all'invio; si incassa quando nasce
+-- l'ordine e si rilascia il blocco se la richiesta si chiude senza ordine. La tabella sopravvive alla richiesta
+-- (nessuna FK su request_id): un'eliminazione non deve perdere il PaymentIntent da rilasciare.
+-- stato: da_pagare (PaymentIntent creato, carta non ancora autorizzata) | in_creazione (autorizzata, la richiesta sta nascendo) |
+-- autorizzato | da_incassare | incassato | da_rilasciare | rilasciato | da_rimborsare | rimborsato |
+-- scaduto (mai pagata) | fallito (PaymentIntent non creato) | da_verificare (troppi errori: serve una persona).
+-- modo: 'test' o 'live' (dalla chiave): ogni istanza lavora solo le righe del proprio modo. motivo: perché il
+-- pagamento è stato respinto e la carta rilasciata (testo per il cliente; NULL = accettato). errore: l'ultimo guasto
+-- tecnico con Stripe.
+CREATE TABLE IF NOT EXISTS stripe_pagamenti (
+  id SERIAL PRIMARY KEY,
+  cliente_id INTEGER NOT NULL REFERENCES users(id),
+  tipo TEXT NOT NULL DEFAULT 'richiesta' CHECK (tipo IN ('richiesta', 'reinvio')),
+  modo TEXT NOT NULL DEFAULT 'test' CHECK (modo IN ('test', 'live')),
+  stato TEXT NOT NULL DEFAULT 'da_pagare'
+    CHECK (stato IN ('da_pagare', 'in_creazione', 'autorizzato', 'da_incassare', 'incassato', 'da_rilasciare',
+                     'rilasciato', 'da_rimborsare', 'rimborsato', 'scaduto', 'fallito', 'da_verificare')),
+  payment_intent_id TEXT,
+  importo_cent INTEGER NOT NULL,
+  incasso_cent INTEGER,
+  righe TEXT NOT NULL DEFAULT '[]',
+  destinazione TEXT,
+  note TEXT NOT NULL DEFAULT '',
+  request_id INTEGER,
+  tentativi INTEGER NOT NULL DEFAULT 0,
+  motivo TEXT,
+  errore TEXT,
+  creato_il TIMESTAMP NOT NULL DEFAULT NOW(),
+  aggiornato_il TIMESTAMP NOT NULL DEFAULT NOW()
+);
+ALTER TABLE stripe_pagamenti ADD COLUMN IF NOT EXISTS motivo TEXT;
+ALTER TABLE stripe_pagamenti DROP COLUMN IF EXISTS session_id;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_stripe_pagamenti_intento ON stripe_pagamenti(payment_intent_id) WHERE payment_intent_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_stripe_pagamenti_request ON stripe_pagamenti(request_id);
+CREATE INDEX IF NOT EXISTS idx_stripe_pagamenti_stato ON stripe_pagamenti(modo, stato);

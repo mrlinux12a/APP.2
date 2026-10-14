@@ -16,173 +16,267 @@
     const r = regola(ambito, chiave);
     return r ? r.sconto_pct : null;
   }
+
+  // Pagina di un cliente del banco. Tre stati (rapporto.stato): da verificare (a destra il riquadro "È un tuo
+  // cliente?"), approvato (a destra codice, note e sconti) e rifiutato (a destra il pulsante per ripensarci). La
+  // colonna sinistra, con i dati dell'anagrafica, è la stessa per tutti. Una voce senza dato non si disegna.
+  const stato = rapporto.stato;
+  const eApprovato = stato === 'approvato';
+  const eRifiutato = stato === 'rifiutato';
+  const eDaVerificare = !eApprovato && !eRifiutato;
+  const [testoStato, coloreStato] = eApprovato ? ['Approvato', 'verde'] : eRifiutato ? ['Rifiutato', 'rosso'] : ['Da verificare', 'arancio'];
+  const tonoCerchio = eApprovato ? '' : eRifiutato ? 'grigio' : 'arancio';
+
+  const sottotitolo = [
+    tipi[cliente.tipo_soggetto],
+    cliente.referente ? 'referente ' + cliente.referente : '',
+    'iscritto il ' + fmt.dataOraRoma(rapporto.richiesto_il),
+  ].filter(Boolean).join(' · ');
+
+  // Sede legale: via in grassetto e, sotto, CAP, città e provincia. L'indirizzo di consegna è una stringa sola
+  // ("Via Puggia 22/3, 16131 Genova (GE)"): la via è quel che sta prima della prima virgola. La città resta com'è salvata.
+  const sede = {
+    via: String(cliente.indirizzo || '').trim(),
+    zona: [cliente.cap, cliente.citta, cliente.provincia ? '(' + cliente.provincia + ')' : ''].filter(Boolean).join(' '),
+  };
+  const testoConsegna = String(cliente.indirizzo_consegna || '').trim();
+  const virgola = testoConsegna.indexOf(',');
+  const consegna = virgola > 0
+    ? { via: testoConsegna.slice(0, virgola).trim(), zona: testoConsegna.slice(virgola + 1).trim() }
+    : { via: testoConsegna, zona: '' };
+  const haSede = !!(sede.via || sede.zona);
+  const haConsegna = !!(consegna.via || consegna.zona);
+  const fiscali = [
+    ['Partita IVA', cliente.partita_iva],
+    ['Codice fiscale', cliente.codice_fiscale],
+    ['Codice SDI / PEC', cliente.sdi_pec],
+  ].filter(function (x) { return x[1]; });
+  const telefono = String(cliente.telefono || '').trim();
+  const email = String(cliente.email || '').trim();
 %>
 <!DOCTYPE html>
 <html lang="it">
 <head>
   <%- include('partials/app_head', { titolo }) %>
 </head>
-<body data-loggato="1">
-  <div class="app">
-    <%- include('partials/appbar', {
-          titolo, intestazione: cliente.ragione_sociale, indietro: '/distributore/clienti' }) %>
+<body class="pagina-clienti" data-loggato="1">
 
-    <div class="contenuto">
-      <% if (salvato) { %>
-        <div class="avviso avviso-ok">Sconti salvati: valgono dalla prossima richiesta.</div>
-      <% } %>
+  <%# Intestazione unica del banco, con la scheda "Clienti" attiva (la sceglie il percorso /distributore/clienti/...). %>
+  <%- include('partials/banco_testa') %>
 
-      <div class="card card-fitta">
-        <div class="riga-lista">
-          <span class="icona"><%- iconaAzienda %></span>
-          <span class="corpo">
-            <span class="etichetta"><%= cliente.ragione_sociale %></span>
-            <span class="dettaglio">
-              <%= tipi[cliente.tipo_soggetto] || '—' %><% if (cliente.referente) { %> · <%= cliente.referente %><% } %>
-            </span>
-          </span>
-          <span class="stato-badge stato-<%= rapporto.stato === 'approvato' ? 'confermato' : (rapporto.stato === 'rifiutato' ? 'non_disponibile' : 'in_attesa') %>">
-            <%= rapporto.stato === 'approvato' ? 'Approvato' : (rapporto.stato === 'rifiutato' ? 'Rifiutato' : 'Da verificare') %>
-          </span>
+  <main class="cli-pagina<%= eApprovato ? ' cli-con-barra' : '' %>">
+    <a class="cli-indietro" href="/distributore/clienti"><%- iconaIndietro %>Clienti</a>
+
+    <% if (salvato) { %>
+      <div class="avviso avviso-ok cli-avviso" role="status">Sconti salvati: valgono dalla prossima richiesta.</div>
+    <% } %>
+
+    <div class="cli-intesta">
+      <%- include('partials/iniziali', { nome: cliente.ragione_sociale, persona: cliente.referente, misura: 56, tono: tonoCerchio }) %>
+      <div class="cli-intesta-testi">
+        <div class="cli-intesta-riga">
+          <h1 class="cli-nome-grande"><%= cliente.ragione_sociale %></h1>
+          <span class="cli-etichetta cli-etichetta-<%= coloreStato %>"><%= testoStato %></span>
         </div>
-        <div class="riga-lista">
-          <span class="icona"><%- iconaFiscale %></span>
-          <span class="corpo">
-            <span class="etichetta">P. IVA <%= cliente.partita_iva || '—' %></span>
-            <span class="dettaglio">
-              C.F. <%= cliente.codice_fiscale || '—' %><% if (cliente.sdi_pec) { %> · SDI/PEC <%= cliente.sdi_pec %><% } %>
-            </span>
-          </span>
-        </div>
-        <div class="riga-lista">
-          <span class="icona"><%- iconaPosizione %></span>
-          <span class="corpo">
-            <span class="etichetta">Sede legale</span>
-            <span class="dettaglio"><%= indirizzoCliente || '—' %></span>
-          </span>
-        </div>
-        <% if (cliente.indirizzo_consegna) { %>
-          <div class="riga-lista">
-            <span class="icona"><%- iconaDestinazione %></span>
-            <span class="corpo">
-              <span class="etichetta">Consegna abituale</span>
-              <span class="dettaglio"><%= cliente.indirizzo_consegna %></span>
-            </span>
-          </div>
-        <% } %>
-        <a class="riga-lista" href="tel:<%= (cliente.telefono || '').replace(/\s/g, '') %>">
-          <span class="icona"><%- iconaTelefono %></span>
-          <span class="corpo">
-            <span class="etichetta"><%= cliente.telefono || '—' %></span>
-            <span class="dettaglio"><%= cliente.email || '—' %></span>
-          </span>
-          <span class="freccia">›</span>
-        </a>
-        <div class="riga-lista">
-          <span class="icona"><%- iconaOrario %></span>
-          <span class="corpo">
-            <span class="etichetta">Iscritto il <%= fmt.dataOra(rapporto.richiesto_il) %></span>
-            <% if (rapporto.deciso_il) { %>
-              <span class="dettaglio">Deciso il <%= fmt.dataOra(rapporto.deciso_il) %></span>
+        <p class="cli-intesta-sotto"><%= sottotitolo %></p>
+      </div>
+    </div>
+
+    <div class="cli-layout<%= eApprovato ? '' : ' cli-layout-decisione' %>">
+
+      <%# ---------- Sinistra: i dati dell'anagrafica ---------- %>
+      <div class="cli-colonna">
+        <% if (fiscali.length || haSede || haConsegna) { %>
+          <section class="cli-scheda" aria-labelledby="cli-fatturazione">
+            <h2 class="cli-scheda-titolo" id="cli-fatturazione">Dati di fatturazione</h2>
+
+            <% if (fiscali.length) { %>
+              <dl class="cli-dati cli-dati-3">
+                <% fiscali.forEach(function (x) { %>
+                  <div class="cli-dato">
+                    <dt class="cli-dato-eti"><%= x[0] %></dt>
+                    <dd class="cli-dato-val cli-cifre"><%= x[1] %></dd>
+                  </div>
+                <% }); %>
+              </dl>
+              <% if (cliente.partita_iva) { %>
+                <a class="cli-vies" href="https://ec.europa.eu/taxation_customs/vies/#/vat-validation"
+                   target="_blank" rel="noopener">Controlla su VIES <%- iconaEsterno %></a>
+              <% } %>
             <% } %>
-          </span>
-        </div>
+
+            <% if (fiscali.length && (haSede || haConsegna)) { %><hr class="cli-linea"><% } %>
+
+            <% if (haSede || haConsegna) { %>
+              <dl class="cli-dati cli-dati-2">
+                <% if (haSede) { %>
+                  <div class="cli-dato">
+                    <dt class="cli-dato-eti">Sede legale</dt>
+                    <% if (sede.via) { %><dd class="cli-dato-val"><%= sede.via %></dd><% } %>
+                    <% if (sede.zona) { %><dd class="cli-dato-det"><%= sede.zona %></dd><% } %>
+                  </div>
+                <% } %>
+                <% if (haConsegna) { %>
+                  <div class="cli-dato">
+                    <dt class="cli-dato-eti">Consegna abituale</dt>
+                    <% if (consegna.via) { %><dd class="cli-dato-val"><%= consegna.via %></dd><% } %>
+                    <% if (consegna.zona) { %><dd class="cli-dato-det"><%= consegna.zona %></dd><% } %>
+                  </div>
+                <% } %>
+              </dl>
+            <% } %>
+          </section>
+        <% } %>
+
+        <% if (telefono || email) { %>
+          <section class="cli-scheda" aria-labelledby="cli-contatti">
+            <h2 class="cli-scheda-titolo" id="cli-contatti">Contatti</h2>
+            <div class="cli-contatti">
+              <% if (telefono) { %>
+                <a class="cli-contatto" href="tel:<%= telefono.replace(/[^\d+]/g, '') %>">
+                  <span class="cli-contatto-ico" aria-hidden="true"><%- iconaTelefono %></span>
+                  <span class="cli-contatto-testi">
+                    <span class="cli-dato-eti">Telefono</span>
+                    <span class="cli-contatto-val cli-cifre"><%= telefono %></span>
+                  </span>
+                </a>
+              <% } %>
+              <% if (email) { %>
+                <a class="cli-contatto" href="mailto:<%= email %>">
+                  <span class="cli-contatto-ico" aria-hidden="true"><%- iconaEmail %></span>
+                  <span class="cli-contatto-testi">
+                    <span class="cli-dato-eti">Email</span>
+                    <span class="cli-contatto-val"><%= email %></span>
+                  </span>
+                </a>
+              <% } %>
+            </div>
+          </section>
+        <% } %>
       </div>
 
-      <% if (rapporto.stato === 'in_attesa') { %>
-        <div class="sezione-titolo">È un tuo cliente?</div>
-        <form method="POST" action="/distributore/clienti/<%= cliente.id %>/decidi">
-          <div class="card">
-            <label for="codice_cliente">Codice cliente nel tuo gestionale (opzionale)</label>
-            <input type="text" id="codice_cliente" name="codice_cliente" placeholder="Es. 004512">
-            <label for="note">Note interne (opzionale)</label>
-            <textarea id="note" name="note" rows="2"></textarea>
-          </div>
-          <button class="btn btn-verde btn-blocco" type="submit" name="azione" value="approva">
-            Sì, è un mio cliente: approva
-          </button>
-          <button class="btn btn-rosso btn-blocco" type="submit" name="azione" value="rifiuta"
-                  style="margin-top:10px;">
-            Non lo riconosco: rifiuta
-          </button>
-        </form>
+      <%# ---------- Destra: la decisione (o, per chi è già approvato, codice, note e sconti) ---------- %>
+      <div class="cli-colonna cli-colonna-destra">
+        <% if (eDaVerificare) { %>
+          <section class="cli-decisione" aria-labelledby="cli-titolo-decisione">
+            <h2 id="cli-titolo-decisione">È un tuo cliente?</h2>
+            <p>Se lo approvi potrà mandarti richieste e vedrà le condizioni che imposti.</p>
+            <form method="POST" action="/distributore/clienti/<%= cliente.id %>/decidi">
+              <label class="cli-campo-eti" for="codice_cliente">Codice cliente nel tuo gestionale <span>· facoltativo</span></label>
+              <input class="cli-campo" type="text" id="codice_cliente" name="codice_cliente" placeholder="es. 004512"
+                     maxlength="50" autocomplete="off">
+              <label class="cli-campo-eti" for="note">Note interne <span>· le vedi solo tu</span></label>
+              <textarea class="cli-campo" id="note" name="note" rows="3" maxlength="500"></textarea>
+              <button class="cli-approva" type="submit" name="azione" value="approva">
+                <%- iconaSpunta %>Sì, approva
+              </button>
+              <button class="cli-rifiuta" type="submit" name="azione" value="rifiuta"
+                      onclick="return confirm('Rifiutare questa anagrafica? Il cliente non potrà inviarti richieste.')">
+                <%- iconaChiudi %>Non lo riconosco: rifiuta
+              </button>
+            </form>
+          </section>
 
-      <% } else if (rapporto.stato === 'rifiutato') { %>
-        <div class="avviso avviso-attenzione">
-          Hai rifiutato questa anagrafica<% if (rapporto.note) { %>: <%= rapporto.note %><% } %>.
-        </div>
-        <form method="POST" action="/distributore/clienti/<%= cliente.id %>/decidi">
-          <input type="hidden" name="codice_cliente" value="<%= rapporto.codice_cliente %>">
-          <button class="btn btn-chiaro btn-blocco" type="submit" name="azione" value="approva">
-            Ripensaci: approva l'anagrafica
-          </button>
-        </form>
+        <% } else if (eRifiutato) { %>
+          <section class="cli-decisione" aria-labelledby="cli-titolo-decisione">
+            <h2 id="cli-titolo-decisione">Anagrafica non riconosciuta</h2>
+            <p>Hai rifiutato questa anagrafica<% if (rapporto.note) { %>: <%= rapporto.note %><% } %>.</p>
+            <form method="POST" action="/distributore/clienti/<%= cliente.id %>/decidi">
+              <input type="hidden" name="codice_cliente" value="<%= rapporto.codice_cliente %>">
+              <button class="cli-approva" type="submit" name="azione" value="approva">
+                <%- iconaSpunta %>Ripensaci: approva l'anagrafica
+              </button>
+            </form>
+          </section>
 
-      <% } else { %>
-        <div class="avviso avviso-ok">
-          Cliente approvato<% if (rapporto.codice_cliente) { %> — codice <strong><%= rapporto.codice_cliente %></strong><% } %>.
-          Può inviarti richieste di disponibilità.
-        </div>
+        <% } else { %>
+          <section class="cli-scheda" aria-labelledby="cli-titolo-approvato">
+            <h2 class="cli-scheda-titolo" id="cli-titolo-approvato">Cliente approvato</h2>
+            <dl class="cli-dati cli-dati-1">
+              <% if (rapporto.codice_cliente) { %>
+                <div class="cli-dato">
+                  <dt class="cli-dato-eti">Codice cliente</dt>
+                  <dd class="cli-dato-val cli-cifre"><%= rapporto.codice_cliente %></dd>
+                </div>
+              <% } %>
+              <% if (rapporto.note) { %>
+                <div class="cli-dato">
+                  <dt class="cli-dato-eti">Note interne</dt>
+                  <dd class="cli-dato-val cli-dato-note"><%= rapporto.note %></dd>
+                </div>
+              <% } %>
+              <% if (rapporto.deciso_il) { %>
+                <div class="cli-dato">
+                  <dt class="cli-dato-eti">Approvato il</dt>
+                  <dd class="cli-dato-val"><%= fmt.dataOraRoma(rapporto.deciso_il) %></dd>
+                </div>
+              <% } %>
+            </dl>
+            <p class="cli-nota">Può inviarti richieste di disponibilità.</p>
+          </section>
 
-        <div class="sezione-titolo">Sconti concordati</div>
-        <p class="nota" style="margin-top:0;">
-          Sconti <strong>a scalare</strong>: 40+10+5 non fa 55, fa 48,7% — ogni sconto si applica
-          sul residuo del precedente. Vale sempre la regola più precisa: linea di prodotto, poi
-          marchio, poi categoria merceologica. Dove non metti nulla resta lo sconto Base del tuo
-          listino, e puoi comunque ritoccare i prezzi riga per riga quando rispondi.
-        </p>
+          <form method="POST" action="/distributore/clienti/<%= cliente.id %>/sconti">
+            <section class="cli-scheda" aria-labelledby="cli-titolo-sconti">
+              <h2 class="cli-scheda-titolo" id="cli-titolo-sconti">Sconti concordati</h2>
+              <p class="cli-nota">
+                Sconti <strong>a scalare</strong>: 40+10+5 non fa 55, fa 48,7% — ogni sconto si applica
+                sul residuo del precedente. Vale sempre la regola più precisa: linea di prodotto, poi
+                marchio, poi categoria merceologica. Dove non metti nulla resta lo sconto Base del tuo
+                listino, e puoi comunque ritoccare i prezzi riga per riga quando rispondi.
+              </p>
 
-        <form method="POST" action="/distributore/clienti/<%= cliente.id %>/sconti">
-          <div class="sezione-titolo">Per categoria merceologica</div>
-          <div class="card card-fitta">
-            <% macro.forEach(function (m) { %>
-              <%- include('partials/riga_sconti', {
-                    ambito: 'macro', chiave: m.slug, icona: iconaCategoria(m.slug),
-                    titolo: m.nome, dettaglio: m.n_prodotti + ' prodotti',
-                    scaglione: scaglione, effettivo: effettivo
-                  }) %>
-            <% }); %>
-          </div>
+              <h3 class="cli-sotto-titolo">Per categoria merceologica</h3>
+              <div class="cli-elenco-sconti">
+                <% macro.forEach(function (m) { %>
+                  <%- include('partials/riga_sconti', {
+                        ambito: 'macro', chiave: m.slug, icona: iconaCategoria(m.slug),
+                        titolo: m.nome, dettaglio: m.n_prodotti + ' prodotti',
+                        scaglione: scaglione, effettivo: effettivo
+                      }) %>
+                <% }); %>
+              </div>
 
-          <% if (marchi.length) { %>
-            <div class="sezione-titolo">Per marchio</div>
-            <div class="card card-fitta">
-              <% marchi.forEach(function (b) { %>
-                <%- include('partials/riga_sconti', {
-                      ambito: 'marchio', chiave: b.slug, icona: iconaMarchio,
-                      titolo: b.nome, dettaglio: b.n_prodotti + ' articoli',
-                      scaglione: scaglione, effettivo: effettivo
-                    }) %>
-              <% }); %>
+              <% if (marchi.length) { %>
+                <h3 class="cli-sotto-titolo">Per marchio</h3>
+                <div class="cli-elenco-sconti">
+                  <% marchi.forEach(function (b) { %>
+                    <%- include('partials/riga_sconti', {
+                          ambito: 'marchio', chiave: b.slug, icona: iconaMarchio,
+                          titolo: b.nome, dettaglio: b.n_prodotti + ' articoli',
+                          scaglione: scaglione, effettivo: effettivo
+                        }) %>
+                  <% }); %>
+                </div>
+              <% } %>
+
+              <% if (famiglie.length) { %>
+                <h3 class="cli-sotto-titolo">Per linea di prodotto</h3>
+                <div class="cli-elenco-sconti">
+                  <% famiglie.forEach(function (f) { %>
+                    <%- include('partials/riga_sconti', {
+                          ambito: 'famiglia', chiave: f.marchio_slug + ':' + f.codice, icona: iconaFamiglia,
+                          titolo: f.codice + ' · ' + f.marchio,
+                          dettaglio: f.nome + ' — ' + f.n_prodotti + ' articoli',
+                          scaglione: scaglione, effettivo: effettivo
+                        }) %>
+                  <% }); %>
+                </div>
+              <% } %>
+
+              <p class="cli-nota">Svuota i campi di una riga per togliere la regola e tornare a quella più generale.</p>
+            </section>
+
+            <div class="barra-azione">
+              <div class="interno">
+                <a class="btn btn-chiaro" href="/distributore/clienti">Chiudi</a>
+                <button class="btn btn-primary cli-salva" type="submit">Salva gli sconti</button>
+              </div>
             </div>
-          <% } %>
-
-          <% if (famiglie.length) { %>
-            <div class="sezione-titolo">Per linea di prodotto</div>
-            <div class="card card-fitta">
-              <% famiglie.forEach(function (f) { %>
-                <%- include('partials/riga_sconti', {
-                      ambito: 'famiglia', chiave: f.marchio_slug + ':' + f.codice, icona: iconaFamiglia,
-                      titolo: f.codice + ' · ' + f.marchio,
-                      dettaglio: f.nome + ' — ' + f.n_prodotti + ' articoli',
-                      scaglione: scaglione, effettivo: effettivo
-                    }) %>
-              <% }); %>
-            </div>
-          <% } %>
-
-          <p class="nota">Svuota i campi di una riga per togliere la regola e tornare a quella più generale.</p>
-
-          <div class="barra-azione">
-            <div class="interno">
-              <a class="btn btn-chiaro" href="/distributore/clienti">Chiudi</a>
-              <button class="btn btn-primary" type="submit" style="flex:1;">Salva gli sconti</button>
-            </div>
-          </div>
-        </form>
-      <% } %>
+          </form>
+        <% } %>
+      </div>
     </div>
-  </div>
+  </main>
 
   <%- include('partials/nav_distributore', { attivo: 'clienti' }) %>
   <script src="<%= asset('/app.js') %>" defer></script>
