@@ -4,21 +4,59 @@
   <%- include('partials/app_head', { titolo }) %>
 </head>
 <body data-loggato="1">
-  <div class="app">
+  <div class="app app-vuoto">
     <%- include('partials/appbar', { titolo, intestazione: 'Stato ordini', indietro: null }) %>
 
-    <div class="contenuto">
-      <div class="vuoto">
-        <span class="emoji"><%- iconaVuotoScatola %></span>
-        Nessun ordine in corso.
-        <div style="margin-top:6px;font-size:0.9rem;">Crea il tuo ordine dal catalogo.</div>
+    <%# Nessuna attività in corso (altrimenti /ordini rimanda alla richiesta o all'ordine). Figura, titolo, "Come
+        funziona", catalogo e storico: classi vuoto-*, cf-*, riga-storico (blocco "Pagine vuote" di style.css). %>
+    <div class="contenuto vuoto-pagina">
+      <div class="vuoto-fig" aria-hidden="true">
+        <span class="vuoto-fig-tratt"></span>
+        <%- iconaFurgone %>
       </div>
-      <a class="btn btn-primary btn-blocco" href="/home">Vai al catalogo</a>
 
-      <p class="nota" style="margin-top:14px;">
-        Lo storico completo (richieste scadute, annullate, ordini passati e consegnati) è nel
-        menu account, in alto a destra.
-      </p>
+      <div class="vuoto-testa">
+        <h1 class="vuoto-titolo">Nessun ordine in corso</h1>
+        <p class="vuoto-sotto">Quando mandi una richiesta, qui segui ogni passaggio fino al cantiere.</p>
+      </div>
+
+      <section class="cf-scheda" aria-labelledby="cf-occhiello">
+        <h2 class="cf-occhiello" id="cf-occhiello">Come funziona</h2>
+        <ol class="cf-passi" role="list">
+          <li class="cf-passo">
+            <span class="cf-ico cf-blu" aria-hidden="true"><%- iconaInvio %></span>
+            <span class="cf-testi">
+              <strong>Mandi la richiesta</strong>
+              <span>Scegli i pezzi e paghi dal carrello.</span>
+            </span>
+          </li>
+          <li class="cf-passo">
+            <span class="cf-ico cf-arancio" aria-hidden="true"><%- iconaNegozio %></span>
+            <span class="cf-testi">
+              <strong>Il banco conferma</strong>
+              <span>Entro <%= Math.round(minutiRisposta) %> minuti, o ti rimborsiamo.</span>
+            </span>
+          </li>
+          <li class="cf-passo">
+            <span class="cf-ico cf-verde" aria-hidden="true"><%- iconaFurgone %></span>
+            <span class="cf-testi">
+              <strong>Arriva in cantiere</strong>
+              <span>Vedi chi lo porta e quanto manca.</span>
+            </span>
+          </li>
+        </ol>
+      </section>
+
+      <a class="btn-vuoto-pieno" href="/home"><%- iconaCatalogo %><span>Vai al catalogo</span></a>
+
+      <a class="riga-storico" href="/storico">
+        <span class="riga-storico-ico" aria-hidden="true"><%- iconaOrario %></span>
+        <span class="riga-storico-testi">
+          <strong>Storico ordini</strong>
+          <span>Richieste e ordini passati</span>
+        </span>
+        <span class="riga-storico-freccia" aria-hidden="true">›</span>
+      </a>
     </div>
   </div>
 

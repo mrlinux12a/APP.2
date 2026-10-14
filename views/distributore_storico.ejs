@@ -1,35 +1,112 @@
+<%
+  // Storico ordini del banco: tutti gli ordini della filiale, con schede di stato, periodo, ricerca e paginazione. È una
+  // scheda dell'intestazione del banco (e il dettaglio di un ordine la tiene accesa), quindi niente freccia indietro:
+  // l'intestazione si include direttamente, senza passare da appbar.ejs. Dati e filtri: src/storico_banco.js; i filtri
+  // stanno nell'URL, quindi la pagina si può ricaricare (data-auto-refresh) senza perderli.
+  const unOrdine = (n) => n + (n === 1 ? ' ordine' : ' ordini');
+%>
 <!DOCTYPE html>
 <html lang="it">
 <head>
   <%- include('partials/app_head', { titolo }) %>
 </head>
-<body data-loggato="1">
-  <div class="app app-largo">
-    <%- include('partials/appbar', { titolo, intestazione: 'Storico richieste', indietro: '/distributore' }) %>
+<body class="pagina-storico" data-loggato="1" data-auto-refresh="15000" data-versione="<%= JSON.stringify(contatori) %>">
 
-    <div class="contenuto">
-      <% if (!storico.length) { %>
-        <div class="vuoto"><span class="emoji"><%- iconaVuotoScatola %></span>Ancora nessuna richiesta chiusa.</div>
+  <%# Intestazione unica del banco (con "Storico ordini" accesa: la sceglie il percorso della pagina). %>
+  <%- include('partials/banco_testa') %>
+
+  <main class="sto-pagina">
+    <div class="sto-testata">
+      <h1 class="sto-titolo">Storico ordini</h1>
+
+      <form class="sto-cerca" method="get" action="/distributore/storico" role="search">
+        <input type="hidden" name="stato" value="<%= filtri.stato %>">
+        <input type="hidden" name="periodo" value="<%= filtri.periodo %>">
+        <span class="sto-cerca-ico" aria-hidden="true"><%- iconaLente %></span>
+        <%# data-non-ricaricare: finché qui c'è del testo non ancora inviato la pagina non si ricarica da sola (app.js). %>
+        <input type="search" name="q" value="<%= filtri.q %>" data-storico-cerca data-non-ricaricare
+               placeholder="Cliente, n° ordine o DDT" aria-label="Cerca per cliente, numero d'ordine o DDT"
+               maxlength="80" enterkeyhint="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <a class="sto-cerca-x" href="<%= link({ q: '' }) %>" data-storico-svuota aria-label="Svuota la ricerca"<%- filtri.q ? '' : ' hidden' %>><%- iconaChiudi %></a>
+      </form>
+
+      <nav class="sto-periodo" aria-label="Periodo">
+        <% periodi.forEach(function (p) { %>
+          <a href="<%= link({ periodo: p.valore }) %>" class="<%= filtri.periodo === p.valore ? 'attivo' : '' %>"<%- filtri.periodo === p.valore ? ' aria-current="true"' : '' %>><%= p.etichetta %></a>
+        <% }); %>
+      </nav>
+    </div>
+
+    <nav class="sto-schede" aria-label="Stato degli ordini">
+      <% schede.forEach(function (s) { %>
+        <% const n = conteggi[s.filtro]; %>
+        <a class="sto-scheda<%= filtri.stato === s.filtro ? ' attiva' : '' %><%= n === 0 ? ' vuota' : '' %>" href="<%= link({ stato: s.filtro }) %>"<%- filtri.stato === s.filtro ? ' aria-current="true"' : '' %>>
+          <% if (s.chiave) { %><span class="sto-punto sto-st-<%= s.chiave %>" aria-hidden="true"></span><% } %>
+          <span class="sto-scheda-nome"><%= s.etichetta %></span>
+          <span class="sto-scheda-num"><%= n %></span>
+        </a>
+      <% }); %>
+    </nav>
+
+    <% if (!gruppi.length) { %>
+      <% if (vuotoAssoluto) { %>
+        <div class="sto-vuoto">
+          <span class="sto-vuoto-ico" aria-hidden="true"><%- iconaVuotoScatola %></span>
+          <p>Ancora nessun ordine.</p>
+        </div>
       <% } else { %>
-        <div class="card card-fitta">
-          <% storico.forEach(function (r) { %>
-            <a class="riga-lista" href="/distributore/richieste/<%= r.id %>">
-              <span class="icona"><%- r.stato === 'ordinata' && r.esito === 'confermato' ? iconaOrdini : iconaDocumento %></span>
-              <span class="corpo">
-                <span class="etichetta">Richiesta #<%= r.id %> — <%= r.cliente_nome %></span>
-                <span class="dettaglio"><%= r.pezzi %> pz · <%= fmt.dataOra(r.creato_il) %></span>
-              </span>
-              <% const attesaCorriere = r.esito === 'confermato' && r.corriere_stato === 'in_attesa'; %>
-              <% const senzaCorriere = r.esito === 'confermato' && r.corriere_stato === 'scaduto'; %>
-              <span class="stato-badge stato-<%= attesaCorriere ? 'in_attesa' : (senzaCorriere ? 'scaduto' : r.esito) %>">
-                <%= attesaCorriere ? 'In attesa del corriere' : (senzaCorriere ? 'Nessun corriere' : (r.esito === 'confermato' ? 'Confermata' : (r.esito === 'non_disponibile' ? 'Non disponibile' : (r.esito === 'scaduto' ? 'Non risposta' : 'In attesa')))) %>
-              </span>
-            </a>
-          <% }); %>
+        <div class="sto-vuoto" role="status">
+          <p>Nessun ordine con questo filtro.</p>
+          <a class="btn btn-chiaro" href="/distributore/storico?periodo=tutti">Mostra tutti</a>
         </div>
       <% } %>
-    </div>
-  </div>
+    <% } else { %>
+      <div class="sto-tabella">
+        <div class="sto-testa">
+          <span>Ordine</span><span>Ora</span><span>Cliente</span><span>Materiale</span>
+          <span class="sto-c-totale">Totale</span><span>DDT</span><span>Stato</span><span></span>
+        </div>
+
+        <% gruppi.forEach(function (g) { %>
+          <div class="sto-giorno">
+            <strong><%= g.etichetta %></strong>
+            <span><%= unOrdine(g.ordini.length) %></span>
+          </div>
+          <% g.ordini.forEach(function (o) { %>
+            <a class="sto-riga" href="/distributore/ordini/<%= o.id %>">
+              <span class="sto-c-ordine">#<%= o.id %></span>
+              <span class="sto-c-ora"><%= o.ora %></span>
+              <span class="sto-c-cliente">
+                <strong class="sto-cliente-nome"><%= o.cliente_nome %></strong>
+                <% if (o.cliente_citta) { %><small class="sto-cliente-citta"><%= o.cliente_citta %></small><% } %>
+              </span>
+              <span class="sto-c-materiale">
+                <% if (o.materiale.primo) { %>
+                  <span class="sto-mat-nome"><%= o.materiale.primo %></span><% if (o.materiale.altri) { %><span class="sto-mat-altri">+ <%= o.materiale.altri %> <%= o.materiale.altri === 1 ? 'articolo' : 'articoli' %></span><% } %>
+                <% } else { %>
+                  <span class="sto-nessuno">—</span>
+                <% } %>
+              </span>
+              <span class="sto-c-totale">€ <%= euro(totaleOrdine(o)) %></span>
+              <span class="sto-c-ddt<%= o.ddt_numero ? '' : ' sto-senza' %>">
+                <% if (o.ddt_numero) { %><span class="sto-ddt-sigla">DDT </span><%= o.ddt_numero %><% } else { %><span class="sto-nessuno">—</span><% } %>
+              </span>
+              <span class="sto-c-stato">
+                <span class="sto-pillola sto-st-<%= o.statoStorico.chiave %>"><span class="sto-punto" aria-hidden="true"></span><%= o.statoStorico.etichetta %></span>
+              </span>
+              <span class="sto-c-freccia" aria-hidden="true"><%- iconaAvanti %></span>
+            </a>
+          <% }); %>
+        <% }); %>
+      </div>
+
+      <%- include('partials/paginazione', {
+            elenco: { pagina, pagine, totale },
+            base: link({ pagina: 1 }),
+            parametro: 'pagina',
+            unita: 'ordini' }) %>
+    <% } %>
+  </main>
 
   <%- include('partials/nav_distributore', { attivo: '' }) %>
   <script src="<%= asset('/app.js') %>" defer></script>

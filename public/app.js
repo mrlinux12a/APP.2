@@ -46,7 +46,34 @@ const Minuteria = (function () {
       .catch(function () { /* niente notifica: l'avviso resta comunque in "Stato ordini" */ });
   }
 
-  return { QUANTITA_MASSIMA: QUANTITA_MASSIMA, limitaQuantita: limitaQuantita, leggiJson: leggiJson, mostraNotifica: mostraNotifica };
+  // "8 min", "1 h 05": una durata in minuti come la scrive la home del banco (uguale a format.durataMinuti sul server).
+  function durataMinuti(min) {
+    return min < 60 ? min + ' min' : Math.floor(min / 60) + ' h ' + String(min % 60).padStart(2, '0');
+  }
+
+  // "meno di 1 min", "3 min", "1 h 05": quanto tempo è passato da quando il banco ha confermato ("Corriere avvisato · da 3 min",
+  // sulla home e nel dettaglio della richiesta). Uguale a format.daMinuti.
+  function daMinuti(secondi) {
+    const min = Math.max(0, Math.floor(secondi / 60));
+    return min < 1 ? 'meno di 1 min' : durataMinuti(min);
+  }
+
+  // "04:13" che sale, "1 h 05" oltre l'ora (cerchio dell'attesa del corriere). Uguale a format.tempoTrascorso.
+  function tempoTrascorso(secondi) {
+    const s = Math.max(0, Math.floor(secondi));
+    if (s >= 3600) return durataMinuti(Math.floor(s / 60));
+    return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+  }
+
+  return {
+    QUANTITA_MASSIMA: QUANTITA_MASSIMA,
+    limitaQuantita: limitaQuantita,
+    leggiJson: leggiJson,
+    mostraNotifica: mostraNotifica,
+    durataMinuti: durataMinuti,
+    daMinuti: daMinuti,
+    tempoTrascorso: tempoTrascorso,
+  };
 })();
 
 (function () {
@@ -1253,10 +1280,8 @@ const Minuteria = (function () {
     return String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
   }
 
-  // "8 min", "1 h 05": uguale a durata() nella vista.
-  function durata(min) {
-    return min < 60 ? min + ' min' : Math.floor(min / 60) + ' h ' + String(min % 60).padStart(2, '0');
-  }
+  // "8 min", "1 h 05": uguale a durata() nella vista (e a quello del dettaglio della richiesta).
+  const durata = Minuteria.durataMinuti;
 
   // Scrive solo se il testo cambia: ogni secondo si controllano tutte le schede, ma il DOM si tocca di rado.
   function scrivi(el, testo) {
@@ -1312,8 +1337,7 @@ const Minuteria = (function () {
     });
 
     corrieri.forEach(function (c) {
-      const min = Math.max(0, Math.floor((adesso - c.inizio) / 60000));
-      scrivi(c.da, min < 1 ? 'meno di 1 min' : durata(min));
+      scrivi(c.da, Minuteria.daMinuti((adesso - c.inizio) / 1000));
     });
 
     arrivi.forEach(function (a) {
@@ -1321,6 +1345,80 @@ const Minuteria = (function () {
       scrivi(a.min, min <= 0 ? 'In ritardo' : durata(min));
       a.el.classList.toggle('vicino', min <= sogliaArrivo);
     });
+  }
+
+  tick();
+  setInterval(tick, 1000);
+})();
+
+/* Dettaglio di una richiesta al banco (views/distributore_dettaglio.ejs). Due tempi, in due stati diversi:
+   - "Da confermare": il timer con l'anello che si svuota (qui sotto). Come sulla home
+   parte da quanti secondi mancano quando il server ha disegnato la pagina, trasformati in un istante con l'orologio del
+   browser (un conteggio non perde colpi se la scheda resta in secondo piano). Negli ultimi data-soglia-urgente secondi (2
+   minuti) anello e tempo passano dall'arancio al rosso; a zero la pagina si ricarica per mostrare che la richiesta è scaduta.
+   - "Attesa corriere": il tempo da quando il banco ha confermato SALE (cerchio mm:ss, "1 h 05" oltre l'ora, e "da N min" nel passo
+     in corso). Parte dai secondi trascorsi (data-trascorsi, calcolati dal server in SQL come per la home) e li trasforma in un istante
+     col Date.now() del browser; i testi sono quelli di Minuteria (gli stessi di "Corriere avvisato · da N min" sulla home). */
+(function () {
+  'use strict';
+  const attesa = document.querySelector('[data-ric-attesa]');
+  if (attesa) {
+    const inizio = Date.now() - (parseInt(attesa.getAttribute('data-trascorsi'), 10) || 0) * 1000;
+    const cerchio = attesa.querySelector('[data-trascorso]');
+    const da = document.querySelectorAll('[data-da]');
+    const aggiorna = function () {
+      const secondi = Math.max(0, (Date.now() - inizio) / 1000);
+      const tempo = Minuteria.tempoTrascorso(secondi);
+      if (cerchio && cerchio.textContent !== tempo) cerchio.textContent = tempo;
+      const testo = Minuteria.daMinuti(secondi);
+      da.forEach(function (el) { if (el.textContent !== testo) el.textContent = testo; });
+    };
+    aggiorna();
+    setInterval(aggiorna, 1000);
+  }
+
+  // "Da preparare": minuti all'arrivo del corriere (come la pillola della home), rossi sotto la soglia; "In ritardo" a zero.
+  const arrivo = document.querySelector('[data-ric-arrivo]');
+  if (arrivo) {
+    const min = arrivo.querySelector('[data-arrivo-min]');
+    const fineArrivo = Date.now() + (parseInt(arrivo.getAttribute('data-secondi'), 10) || 0) * 1000;
+    const sogliaArrivo = parseInt(arrivo.getAttribute('data-soglia-arrivo'), 10) || 15;
+    const aggiornaArrivo = function () {
+      const minuti = Math.ceil((fineArrivo - Date.now()) / 60000);
+      const testo = minuti <= 0 ? 'In ritardo' : Minuteria.durataMinuti(minuti);
+      if (min && min.textContent !== testo) min.textContent = testo;
+      arrivo.classList.toggle('vicino', minuti <= sogliaArrivo);
+    };
+    aggiornaArrivo();
+    setInterval(aggiornaArrivo, 1000);
+  }
+
+  const timer = document.querySelector('[data-ric-timer]');
+  if (!timer) return;
+  const tempo = timer.querySelector('[data-tempo]');
+  const anello = timer.querySelector('[data-anello]');
+  const circ = anello ? parseFloat(anello.getAttribute('stroke-dasharray')) : 0;
+
+  function numero(nome) {
+    const n = parseInt(timer.getAttribute(nome), 10);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  const fine = Date.now() + numero('data-secondi') * 1000;
+  const finestra = Math.max(1, numero('data-finestra'));
+  const soglia = numero('data-soglia-urgente') || 120;
+  let chiusa = false;
+
+  function tick() {
+    const sec = Math.max(0, Math.ceil((fine - Date.now()) / 1000));
+    const testo = String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
+    if (tempo && tempo.textContent !== testo) tempo.textContent = testo;
+    if (anello) anello.style.strokeDashoffset = String((circ * (1 - Math.min(1, sec / finestra))).toFixed(2));
+    timer.classList.toggle('urgente', sec <= soglia);
+    if (sec === 0 && !chiusa) {
+      chiusa = true;
+      setTimeout(function () { window.location.reload(); }, 2500);
+    }
   }
 
   tick();
@@ -1362,7 +1460,7 @@ window.addEventListener('pageshow', function (e) {
   });
 });
 
-/* Pagine del venditore (home, ordini da evadere, clienti, dettaglio richiesta): richieste e ordini
+/* Pagine del banco (home, storico ordini, clienti, dettaglio richiesta): richieste e ordini
    appena arrivati compaiono senza premere F5. Ogni pochi secondi chiede al server due numeri
    leggeri (/api/distributore/novita) e li confronta con quelli con cui la pagina è stata disegnata
    (data-versione): se sono cambiati si ricarica. Non dipende da una ricarica a tempo, che si salta
@@ -1378,9 +1476,18 @@ window.addEventListener('pageshow', function (e) {
   let daRicaricare = false;
   let erroriDiFila = 0;
 
+  // Un campo marcato data-non-ricaricare (la ricerca dello Storico ordini) con del testo non ancora inviato: la ricarica
+  // lo cancellerebbe, quindi si aspetta anche se il campo non ha più il fuoco. defaultValue è ciò che il server ha
+  // disegnato (la ricerca già inviata): cambiato rispetto a quello = testo non inviato.
+  function conTestoNonInviato() {
+    return Array.prototype.some.call(document.querySelectorAll('input[data-non-ricaricare]'), function (c) {
+      return c.value !== c.defaultValue;
+    });
+  }
+
   function suCampo() {
     const attivo = document.activeElement;
-    return !!attivo && ['INPUT', 'TEXTAREA', 'SELECT'].includes(attivo.tagName);
+    return (!!attivo && ['INPUT', 'TEXTAREA', 'SELECT'].includes(attivo.tagName)) || conTestoNonInviato();
   }
 
   function ricarica() {
@@ -1425,6 +1532,17 @@ window.addEventListener('pageshow', function (e) {
   window.addEventListener('pageshow', function (e) {
     if (e.persisted) window.location.reload();
   });
+})();
+
+/* Storico ordini del banco: la "×" per svuotare la ricerca compare appena nel campo c'è del testo (anche non ancora
+   inviato) e sparisce quando è vuoto. È un link che riporta alla pagina senza ricerca, quindi funziona anche senza questo
+   script (che lo mostra solo quando serve). */
+(function () {
+  'use strict';
+  const campo = document.querySelector('[data-storico-cerca]');
+  const svuota = document.querySelector('[data-storico-svuota]');
+  if (!campo || !svuota) return;
+  campo.addEventListener('input', function () { svuota.hidden = !campo.value; });
 })();
 
 /* Foto prodotto a schermo intero: un tap sulla miniatura la apre ingrandita. Delegato su

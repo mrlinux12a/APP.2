@@ -59,13 +59,22 @@
 
             <%- include('partials/banco_articoli', { articoli: r.anteprima, altre: r.altre }) %>
 
+            <%# "Conferma" conferma subito tutto il materiale, senza aprire il dettaglio (se non riesce, il server riporta al dettaglio
+                con l'errore). "Ispeziona" apre il dettaglio per controllare prima; "Non disponibile" rifiuta subito. %>
             <div class="scheda-azioni">
-              <a class="btn-banco btn-banco-conferma" href="/distributore/richieste/<%= r.id %>">Verifica e conferma</a>
-              <form method="POST" action="/distributore/richieste/<%= r.id %>/rispondi">
-                <input type="hidden" name="azione" value="rifiuta">
+              <form class="scheda-azione-conferma" method="POST" action="/distributore/richieste/<%= r.id %>/rispondi">
+                <input type="hidden" name="azione" value="prezzo_richiesto">
                 <input type="hidden" name="torna" value="home">
-                <button class="btn-banco btn-banco-secondario" type="submit">Non disponibile</button>
+                <button class="btn-banco btn-banco-conferma btn-banco-medio" type="submit">Conferma</button>
               </form>
+              <div class="scheda-azioni-secondarie">
+                <a class="btn-banco btn-banco-secondario btn-banco-piccolo" href="/distributore/richieste/<%= r.id %>"><%- iconaOcchio %>Ispeziona</a>
+                <form method="POST" action="/distributore/richieste/<%= r.id %>/rispondi">
+                  <input type="hidden" name="azione" value="rifiuta">
+                  <input type="hidden" name="torna" value="home">
+                  <button class="btn-banco btn-banco-secondario btn-banco-piccolo" type="submit">Non disponibile</button>
+                </form>
+              </div>
             </div>
           </article>
         <% }); %>
@@ -85,14 +94,15 @@
         <% } %>
         <% attesaCorriere.forEach(function (c) { %>
           <article class="scheda scheda-corriere" data-corriere data-trascorsi="<%= c.trascorsi %>">
-            <div class="scheda-testa">
+            <div class="scheda-testa scheda-testa-corriere">
               <span class="scheda-icona" aria-hidden="true"><%- iconaMessaggio %></span>
               <div class="scheda-testi">
-                <h3 class="scheda-nome"><a href="/distributore/richieste/<%= c.id %>"><%= c.cliente_nome %></a></h3>
+                <h3 class="scheda-nome"><%= c.cliente_nome %></h3>
                 <div class="stato-corriere">
-                  Corriere avvisato · da <span data-da><%= Math.floor(c.trascorsi / 60) < 1 ? 'meno di 1 min' : durata(Math.floor(c.trascorsi / 60)) %></span>
+                  Corriere avvisato · da <span data-da><%= fmt.daMinuti(c.trascorsi) %></span>
                 </div>
               </div>
+              <a class="btn-ispeziona" href="/distributore/richieste/<%= c.id %>" aria-label="Ispeziona la richiesta di <%= c.cliente_nome %>"><%- iconaOcchio %>Ispeziona</a>
             </div>
 
             <%- include('partials/banco_articoli', { articoli: c.anteprima, altre: c.altre }) %>
@@ -137,9 +147,19 @@
 
             <%- include('partials/banco_articoli', { articoli: o.anteprima, altre: o.altre }) %>
 
-            <a class="btn-banco btn-banco-prepara" href="/distributore/ordini/<%= o.id %>">
-              <%- iconaOrdini %>Prepara
-            </a>
+            <%# "Ispeziona" apre il dettaglio della richiesta con il timer del corriere (non tocca l'ordine: resta in colonna).
+                "Preparato" lo toglie da qui: lo porta in preparazione e avvisa il cliente (POST .../preparazione, torna alla home). %>
+            <div class="scheda-azioni">
+              <div class="scheda-azioni-ordine">
+                <% if (o.request_id) { %>
+                  <a class="btn-banco btn-banco-secondario btn-banco-piccolo" href="/distributore/richieste/<%= o.request_id %>"><%- iconaOcchio %>Ispeziona</a>
+                <% } %>
+                <form method="POST" action="/distributore/ordini/<%= o.id %>/preparazione">
+                  <input type="hidden" name="torna" value="home">
+                  <button class="btn-banco btn-banco-prepara btn-banco-piccolo" type="submit"><%- iconaSpunta %>Preparato</button>
+                </form>
+              </div>
+            </div>
           </article>
         <% }); %>
       </div>

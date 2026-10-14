@@ -289,7 +289,7 @@ router.delete('/richieste/:id', richiedeCliente, async (req, res) => {
   } catch (e) {
     if (!(e instanceof flusso.OrdineInLavorazione)) throw e;
     return res.status(409).json({
-      errore: 'Il distributore ha già preso in carico questo ordine: per annullarlo contattalo direttamente.',
+      errore: e.messaggioCliente,
     });
   }
   res.json({ ok: true });
@@ -394,7 +394,7 @@ router.delete('/ordini/:id', richiedeCliente, async (req, res) => {
   } catch (e) {
     if (!(e instanceof flusso.OrdineInLavorazione)) throw e;
     return res.status(409).json({
-      errore: 'Il distributore ha già preso in carico questo ordine: per annullarlo contattalo direttamente.',
+      errore: e.messaggioCliente,
     });
   }
   res.json({ ok: true });

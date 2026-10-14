@@ -119,6 +119,66 @@ function dataBreveRoma(naive, adesso = new Date()) {
   return `${quando} · ${d.ora}:${d.minuti}`;
 }
 
+// "12 set" (con l'anno se non è quello corrente: "12 set 2025"), in ora italiana, da una colonna TIMESTAMP senza
+// fuso. Solo il giorno, senza "Oggi"/"Ieri" né ora. `adesso` si passa solo nelle prove.
+function dataCortaRoma(naive, adesso = new Date()) {
+  const istante = istanteUtc(naive);
+  if (!istante) return '—';
+  const d = partiRoma(istante);
+  return `${d.giorno} ${MESI_BREVI[d.mese - 1]}${d.anno === partiRoma(adesso).anno ? '' : ' ' + d.anno}`;
+}
+
+// "8 min", "1 h 05": una durata in minuti come la scrive la home del banco. Stessa regola in public/app.js (Minuteria.durataMinuti).
+function durataMinuti(min) {
+  return min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`;
+}
+
+// "meno di 1 min", "3 min", "1 h 05": quanto tempo è passato da qualcosa che si è fatto ("Corriere avvisato · da 3 min").
+function daMinuti(secondi) {
+  const min = Math.max(0, Math.floor((Number(secondi) || 0) / 60));
+  return min < 1 ? 'meno di 1 min' : durataMinuti(min);
+}
+
+// "04:13" che sale, "1 h 05" oltre l'ora: il tempo di attesa del corriere, nel cerchio della pagina di dettaglio.
+function tempoTrascorso(secondi) {
+  const s = Math.max(0, Math.floor(Number(secondi) || 0));
+  return s < 3600 ? mmss(s) : durataMinuti(Math.floor(s / 60));
+}
+
+// "22:29", in ora italiana, da una colonna TIMESTAMP senza fuso (solo l'ora, senza giorno). "—" se manca.
+function oraSolaRoma(naive) {
+  const istante = istanteUtc(naive);
+  if (!istante) return '—';
+  const d = partiRoma(istante);
+  return `${d.ora}:${d.minuti}`;
+}
+
+// Il giorno di una colonna TIMESTAMP senza fuso, in ora italiana, per raggruppare gli elenchi:
+// { chiave: '2026-10-14', etichetta: 'Oggi' | 'Ieri' | '12 ottobre' } (con l'anno se non è quello corrente:
+// '12 ottobre 2025'). La chiave è uguale per tutti gli istanti dello stesso giorno italiano. `adesso` solo nelle prove.
+function giornoRoma(naive, adesso = new Date()) {
+  const istante = istanteUtc(naive);
+  if (!istante) return { chiave: '', etichetta: '—' };
+  const d = partiRoma(istante);
+  const oggi = partiRoma(adesso);
+  const giorni = Math.round((Date.UTC(oggi.anno, oggi.mese - 1, oggi.giorno) - Date.UTC(d.anno, d.mese - 1, d.giorno)) / 86400000);
+  const etichetta = giorni === 0 ? 'Oggi'
+    : giorni === 1 ? 'Ieri'
+    : `${d.giorno} ${MESI_ESTESI[d.mese - 1].toLowerCase()}${d.anno === oggi.anno ? '' : ' ' + d.anno}`;
+  return { chiave: `${d.anno}-${String(d.mese).padStart(2, '0')}-${String(d.giorno).padStart(2, '0')}`, etichetta };
+}
+
+// "Martedì 14 ottobre alle 20:10" (con l'anno se non è quello corrente: "Venerdì 14 marzo 2025 alle 11:40"), in ora
+// italiana, da una colonna TIMESTAMP senza fuso: la data di consegna della pagina dell'ordine. `adesso` solo nelle prove.
+function dataEstesaRoma(naive, adesso = new Date()) {
+  const istante = istanteUtc(naive);
+  if (!istante) return '—';
+  const d = partiRoma(istante);
+  const giorno = istante.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', weekday: 'long' });
+  const anno = d.anno === partiRoma(adesso).anno ? '' : ' ' + d.anno;
+  return `${giorno.charAt(0).toUpperCase()}${giorno.slice(1)} ${d.giorno} ${MESI_ESTESI[d.mese - 1].toLowerCase()}${anno} alle ${d.ora}:${d.minuti}`;
+}
+
 // { chiave: '2026-10', titolo: 'Ottobre 2026' }: il mese di una colonna TIMESTAMP senza fuso, in ora italiana.
 function meseRoma(naive) {
   const istante = istanteUtc(naive);
@@ -127,4 +187,4 @@ function meseRoma(naive) {
   return { chiave: `${d.anno}-${String(d.mese).padStart(2, '0')}`, titolo: `${MESI_ESTESI[d.mese - 1]} ${d.anno}` };
 }
 
-module.exports = { toDate, istanteUtc, dataOra, dataSola, oraSola, oraRoma, dataOraRoma, dataSolaRoma, dataBreveRoma, meseRoma, tempoConsegna, mmss };
+module.exports = { toDate, istanteUtc, dataOra, dataSola, oraSola, oraRoma, dataOraRoma, dataSolaRoma, dataBreveRoma, dataCortaRoma, dataEstesaRoma, oraSolaRoma, giornoRoma, durataMinuti, daMinuti, tempoTrascorso, meseRoma, tempoConsegna, mmss };

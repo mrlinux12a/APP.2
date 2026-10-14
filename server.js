@@ -41,6 +41,8 @@ const geo = require('./src/geo');
 const anagrafiche = require('./src/anagrafiche');
 const { conCache } = require('./src/memo');
 const flusso = require('./src/flusso_cliente');
+const storicoBanco = require('./src/storico_banco');
+const richiestaBanco = require('./src/richiesta_banco');
 const stripePagamenti = require('./src/stripe_pagamenti');
 const { ArchivioSqlite } = require('./src/sessioni');
 const { TESTO_DISPONIBILITA, prodottoJson } = require('./src/prodotto_json');
@@ -760,6 +762,8 @@ app.get('/carrello', requireRole('cliente'), async (req, res) => {
     righe,
     ...riepilogo,
     cliente: await db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id),
+    // Solo a carrello vuoto: la scheda "Il tuo ultimo ordine" con "Rimetti nel carrello" (una lettura sola).
+    ultimoOrdine: righe.length ? null : await flusso.ultimoOrdineConsegnato(req.session.user.id),
   });
 });
 
@@ -936,17 +940,18 @@ app.post('/richieste/:id/elimina', requireRole('cliente'), async (req, res) => {
   try {
     await flusso.eliminaRichiesta(richiesta.id);
   } catch (e) {
-    if (e instanceof flusso.OrdineInLavorazione) return rifiutaEliminazioneOrdine(res, e.ordine);
+    if (e instanceof flusso.OrdineInLavorazione) return rifiutaEliminazioneOrdine(res, e);
     throw e;
   }
   res.redirect('/home');
 });
 
-function rifiutaEliminazioneOrdine(res, ordine) {
+// `e` è un flusso.OrdineInLavorazione: ordine già consegnato o già preso in carico dal banco. Niente è stato modificato.
+function rifiutaEliminazioneOrdine(res, e) {
   return res.status(400).render('errore', {
-    titolo: 'Ordine già in lavorazione',
-    messaggio: 'Il distributore ha già preso in carico questo ordine: per annullarlo contattalo direttamente.',
-    link: '/ordini/' + ordine.id,
+    titolo: e.consegnato ? 'Ordine già consegnato' : 'Ordine già in lavorazione',
+    messaggio: e.messaggioCliente,
+    link: '/ordini/' + e.ordine.id,
     linkTesto: "Torna all'ordine",
   });
 }
@@ -992,7 +997,7 @@ app.get('/nav/stato-ordini', requireRole('cliente'), (req, res) => {
 app.get('/ordini', requireRole('cliente'), async (req, res) => {
   const attivo = await flusso.attivitaCorrente(req.session.user.id);
   if (attivo) return res.redirect((attivo.tipo === 'ordine' ? '/ordini/' : '/richieste/') + attivo.id);
-  res.render('ordini_cliente', { titolo: 'Stato ordini' });
+  res.render('ordini_cliente', { titolo: 'Stato ordini', minutiRisposta: await pricing.getFinestraMinuti() });
 });
 
 // Storico unificato (tutto: in corso, scaduto, annullato, consegnato) — raggiungibile dal
@@ -1083,7 +1088,7 @@ app.post('/ordini/:id/elimina', requireRole('cliente'), async (req, res) => {
   try {
     await flusso.eliminaOrdine(ordine.id);
   } catch (e) {
-    if (e instanceof flusso.OrdineInLavorazione) return rifiutaEliminazioneOrdine(res, e.ordine);
+    if (e instanceof flusso.OrdineInLavorazione) return rifiutaEliminazioneOrdine(res, e);
     throw e;
   }
   res.redirect('/ordini');
@@ -1248,7 +1253,7 @@ app.get('/distributore', requireRole('distributore'), async (req, res) => {
     // corriere_arrivo_il è TIMESTAMPTZ (un istante vero): i secondi che mancano si calcolano in SQL.
     db
       .prepare(
-        `SELECT o.id, o.corriere_nome, o.corriere_arrivo_il, u.ragione_sociale AS cliente_nome,
+        `SELECT o.id, o.request_id, o.corriere_nome, o.corriere_arrivo_il, u.ragione_sociale AS cliente_nome,
                 EXTRACT(EPOCH FROM (o.corriere_arrivo_il - NOW()))::int AS secondi_arrivo
            FROM orders o
            JOIN users u ON u.id = o.cliente_id
@@ -1327,73 +1332,136 @@ app.get('/distributore', requireRole('distributore'), async (req, res) => {
   });
 });
 
-// Storico richieste del banco: separato dalla home operativa per non intasarla di dati
-// vecchi. Le stesse righe che prima stavano in fondo a /distributore.
+// Storico ordini del banco: la lista di tutti gli ordini della filiale, con filtri per stato e periodo, ricerca e
+// paginazione. Sta tutto nell'URL (?stato=&periodo=&q=&pagina=), vedi src/storico_banco.js. Prende il posto di "Tutti gli
+// ordini" (/distributore/ordini, che ora rimanda qui) e dello "Storico richieste".
 app.get('/distributore/storico', requireRole('distributore'), async (req, res) => {
-  const distributore = await db
-    .prepare('SELECT * FROM distributors WHERE id = ?')
-    .get(req.session.user.distributor_id);
-
-  const elenco = await db
-    .prepare(
-      `SELECT r.*, rr.esito, rr.corriere_stato, u.ragione_sociale AS cliente_nome,
-              EXTRACT(EPOCH FROM (r.scade_il - NOW()))::int AS secondi,
-              (SELECT SUM(quantita) FROM request_items ri WHERE ri.request_id = r.id) AS pezzi
-         FROM request_responses rr
-         JOIN requests r ON r.id = rr.request_id
-         JOIN users u ON u.id = r.cliente_id
-        WHERE rr.distributor_id = ?
-        ORDER BY r.id DESC
-        LIMIT 100`
-    )
-    .all(req.session.user.distributor_id);
-
+  const distributorId = req.session.user.distributor_id;
+  const filtri = storicoBanco.leggiFiltri(req.query);
+  const [storico, contatori] = await Promise.all([
+    storicoBanco.storicoOrdini(distributorId, filtri),
+    contatoriBanco(distributorId),
+  ]);
   res.render('distributore_storico', {
-    titolo: 'Storico richieste',
-    distributore,
-    contatori: await contatoriBanco(req.session.user.distributor_id),
-    storico: elenco.filter((r) => !(r.esito === 'in_attesa' && r.secondi > 0)),
+    titolo: 'Storico ordini',
+    contatori,
+    filtri,
+    link: (modifiche) => storicoBanco.urlStorico(filtri, modifiche),
+    ...storico,
   });
 });
 
+// Dettaglio di una richiesta al banco: a sinistra il materiale (tabella con listino, prezzo cliente e totale) e i passi dopo la
+// conferma, a destra cosa fare (timer e pulsanti, oppure lo stato dopo la risposta), il cliente e "Elimina dal banco".
+// Lo stato, la tabella e i passi si preparano in src/richiesta_banco.js; la vista (views/distributore_dettaglio.ejs) disegna.
 app.get('/distributore/richieste/:id', requireRole('distributore'), async (req, res) => {
   const richiesta = await richieste.aggiornaScadenza(req.params.id);
   const distributorId = req.session.user.distributor_id;
+  // `secondi_da_risposta`: da quanto il banco ha risposto (lo stesso calcolo della home, per il tempo di attesa del corriere).
   const risposta = richiesta
     ? await db
-        .prepare('SELECT * FROM request_responses WHERE request_id = ? AND distributor_id = ?')
+        .prepare(
+          `SELECT rr.*, EXTRACT(EPOCH FROM (NOW() - rr.risposto_il))::int AS secondi_da_risposta
+             FROM request_responses rr
+            WHERE rr.request_id = ? AND rr.distributor_id = ?`
+        )
         .get(richiesta.id, distributorId)
     : null;
   if (!richiesta || !risposta) {
     return res.status(404).render('errore', { titolo: 'Non trovata', messaggio: 'Richiesta non trovata.' });
   }
 
-  const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(richiesta.cliente_id);
-  const offerta = await richieste.calcolaOfferta(richiesta.id, distributorId);
-  const distributore = await db.prepare('SELECT * FROM distributors WHERE id = ?').get(distributorId);
-  const ordine = richiesta.order_id
-    ? await db.prepare('SELECT * FROM orders WHERE id = ?').get(richiesta.order_id)
-    : null;
+  // Letture indipendenti: partono insieme (col DB su un altro server ogni query in sequenza costa ~50 ms).
+  const [cliente, offerta, distributore, ordine, secondi, servizioPct, minutiRisposta, legameCliente] = await Promise.all([
+    db.prepare('SELECT * FROM users WHERE id = ?').get(richiesta.cliente_id),
+    richieste.calcolaOfferta(richiesta.id, distributorId),
+    db.prepare('SELECT * FROM distributors WHERE id = ?').get(distributorId),
+    // `secondi_arrivo`: quanti ne mancano a corriere_arrivo_il (un istante vero, TIMESTAMPTZ): il timer del corriere, come sulla home.
+    richiesta.order_id
+      ? db
+          .prepare(
+            `SELECT o.*, EXTRACT(EPOCH FROM (o.corriere_arrivo_il - NOW()))::int AS secondi_arrivo
+               FROM orders o WHERE o.id = ?`
+          )
+          .get(richiesta.order_id)
+      : null,
+    richieste.secondiRimasti(richiesta),
+    pricing.getServizioPct(),
+    pricing.getFinestraMinuti(),
+    // La scheda del cliente si apre solo se il cliente ha indicato questo banco (altrimenti la pagina risponde 404).
+    anagrafiche.legame(distributorId, richiesta.cliente_id),
+  ]);
 
-  const secondi = await richieste.secondiRimasti(richiesta);
+  // La risposta si può ancora dare solo se la finestra è aperta e nessuno ha già ordinato.
+  const apribile =
+    risposta.esito === 'in_attesa' &&
+    secondi > 0 &&
+    richiesta.stato !== 'ordinata' &&
+    richiesta.stato !== 'annullata';
+  const ordineMio = !!ordine && ordine.distributor_id === distributorId;
+  // L'ordine è nella colonna "Da preparare" della home finché è 'inviato' (e non segnato consegnato).
+  const ordineDaPreparare = ordineMio && ordine.stato === 'inviato' && !ordine.consegnato_il;
+  const stato = richiestaBanco.statoRichiestaBanco({ richiesta, risposta, apribile, ordineMio, ordineDaPreparare });
+  const conCorriere = whatsapp.attivo();
+  // "confermata alle 21:05" (ora italiana): solo se il banco ha confermato.
+  const oraConferma = risposta.esito === 'confermato' && risposta.risposto_il ? format.oraSolaRoma(risposta.risposto_il) : null;
+
   res.render('distributore_dettaglio', {
     titolo: 'Richiesta #' + richiesta.id,
-    minutiRisposta: await pricing.getFinestraMinuti(),
+    minutiRisposta,
     richiesta,
     risposta,
     cliente,
     distributore,
     offerta,
     ordine,
+    ordineMio,
     secondi,
-    // La risposta si può ancora dare solo se la finestra è aperta e nessuno ha già ordinato.
-    apribile:
-      risposta.esito === 'in_attesa' &&
-      secondi > 0 &&
-      richiesta.stato !== 'ordinata' &&
-      richiesta.stato !== 'annullata',
-    indirizzoCliente: ddt.indirizzoCompleto(cliente),
-    distanza: distanzaClienteBanco(cliente, distributore),
+    apribile,
+    stato,
+    materiale: richiestaBanco.tabellaMateriale(offerta.righe, (riga) => pricing.prezzoClienteConPct(riga, servizioPct), {
+      confermata: risposta.esito === 'confermato',
+    }),
+    // Timer: la finestra intera serve all'anello, la soglia al passaggio al rosso (data-* sulla scheda, public/app.js).
+    finestraSecondi: Math.max(1, Math.round(minutiRisposta * 60)),
+    sogliaUrgenteSec: richiestaBanco.SOGLIA_URGENTE_SEC,
+    ricevuta: richiestaBanco.quandoRicevuta(format.giornoRoma(richiesta.creato_il), format.oraSolaRoma(richiesta.creato_il)),
+    scadenzaOra: format.oraSolaRoma(richiesta.scade_il),
+    // Da confermare: "Cosa succede dopo la conferma" (siamo al primo passo). In attesa del corriere: "Avanzamento", con la
+    // conferma fatta e, se il modulo WhatsApp è acceso, il passo dei corrieri in corso.
+    passi: richiestaBanco.passiDopoConferma({
+      conCorriere,
+      corrente: stato.chiave === 'da_confermare' ? 'conferma' : stato.chiave === 'da_preparare' ? 'prepara' : conCorriere ? 'corrieri' : 'prepara',
+      avanzamento:
+        stato.chiave === 'attesa_corriere' || stato.chiave === 'da_preparare'
+          ? {
+              conCorriere,
+              oraConferma,
+              daPreparare: stato.chiave === 'da_preparare',
+              corriere:
+                stato.chiave === 'da_preparare' && ordine.corriere_arrivo_il
+                  ? { nome: ordine.corriere_nome || '', oraConsegna: format.oraRoma(ordine.corriere_arrivo_il) }
+                  : null,
+            }
+          : null,
+    }),
+    mostraPassi: ['da_confermare', 'attesa_corriere', 'da_preparare'].includes(stato.chiave),
+    // Da preparare con un corriere: il suo timer (minuti all'arrivo, ora, rosso sotto la soglia della home), come la pillola della scheda.
+    arrivo:
+      stato.chiave === 'da_preparare' && ordine.corriere_arrivo_il
+        ? {
+            secondi: Number(ordine.secondi_arrivo) || 0,
+            ora: format.oraRoma(ordine.corriere_arrivo_il),
+            nome: ordine.corriere_nome || '',
+            sogliaMin: BACHECA.arrivoVicinoMin,
+          }
+        : null,
+    oraConferma,
+    // Secondi da quando il banco ha confermato: il cerchio dell'attesa e "da N min" partono da qui (data-trascorsi) e salgono.
+    trascorsi: Math.max(0, Number(risposta.secondi_da_risposta) || 0),
+    conCorriere,
+    schedaClienteAperta: !!legameCliente,
+    destinazione: richiesta.destinazione || cliente.indirizzo_consegna || ddt.indirizzoCompleto(cliente) || '',
     errore: req.query.errore || null,
   });
 });
@@ -1520,22 +1588,11 @@ app.post('/distributore/clienti/:id/sconti', requireRole('distributore'), async 
 
 // ---------- Distributore: ordini ricevuti, preparazione e bolla ----------
 
-app.get('/distributore/ordini', requireRole('distributore'), async (req, res) => {
-  const ordini = await db
-    .prepare(
-      `SELECT o.*, u.ragione_sociale AS cliente_nome, u.citta AS cliente_citta
-         FROM orders o
-         JOIN users u ON u.id = o.cliente_id
-        WHERE o.distributor_id = ?
-        ORDER BY CASE o.stato WHEN 'inviato' THEN 0 WHEN 'in_evasione' THEN 1 ELSE 2 END, o.id DESC`
-    )
-    .all(req.session.user.distributor_id);
-
-  res.render('distributore_ordini', {
-    titolo: 'Ordini da evadere',
-    contatori: await contatoriBanco(req.session.user.distributor_id),
-    ordini,
-  });
+// La lista degli ordini è lo Storico ordini: i vecchi link (e i segnalibri) arrivano lì, con la loro query string.
+// Solo la lista: il dettaglio /distributore/ordini/:id resta com'è.
+app.get('/distributore/ordini', requireRole('distributore'), (req, res) => {
+  const i = req.originalUrl.indexOf('?');
+  res.redirect(301, '/distributore/storico' + (i === -1 ? '' : req.originalUrl.slice(i)));
 });
 
 // Carica un ordine verificando che appartenga al banco loggato.
@@ -1602,7 +1659,7 @@ app.get('/distributore/ordini/:id', requireRole('distributore'), async (req, res
 // lì spostandola in "in preparazione", senza dover aprire il dettaglio.
 app.post('/distributore/ordini/:id/preparazione', requireRole('distributore'), async (req, res) => {
   const ordine = await ordineDelBanco(req);
-  if (!ordine) return res.redirect('/distributore/ordini');
+  if (!ordine) return res.redirect('/distributore/storico');
   await prendiInCarico(ordine);
   res.redirect(req.body.torna === 'home' ? '/distributore' : '/distributore/ordini/' + ordine.id);
 });
@@ -1610,7 +1667,7 @@ app.post('/distributore/ordini/:id/preparazione', requireRole('distributore'), a
 // Emissione della bolla / DDT: assegna il numero progressivo e segna la merce partita.
 app.post('/distributore/ordini/:id/ddt', requireRole('distributore'), async (req, res) => {
   const ordine = await ordineDelBanco(req);
-  if (!ordine) return res.redirect('/distributore/ordini');
+  if (!ordine) return res.redirect('/distributore/storico');
 
   const { numero, nuovo } = await ddt.emetti(ordine, {
     colli: req.body.colli,
@@ -1741,7 +1798,7 @@ for (const avviso of stripePagamenti.controllaConfigurazione()) console.warn('[s
 // Gruppo WhatsApp dei corrieri: si collega solo con WHATSAPP_ATTIVO=1 (vedi src/whatsapp.js).
 whatsapp.avvia();
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT,'127.0.0.1', () => {
   console.log(`Server minuteria in ascolto su http://localhost:${PORT}`);
 });
 

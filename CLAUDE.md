@@ -271,6 +271,17 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   mostrarle in ora italiana `fmt.dataOraRoma` (`fmt.dataOra` stampa l'ora UTC così com'è). Titolo = tempo
   stimato reale ("Arriva entro 6 ore", o "entro le HH:MM" col corriere); "Te lo porta" = `corriere_nome`, se
   vuoto il nome del banco.
+- **Ordine consegnato** (`views/ordine_dettaglio.ejs`, ramo `consegnato` = cliente + `consegnato_il`, richiesta esplicita
+  del 14/10/2026; stesse classi `att-*`, in verde, **senza animazioni**; chiude `.app-consegnato` con 96px in fondo): scheda
+  di stato (cerchio 120px con spunta in cerchio pieno 76px, "Consegnato", `fmt.dataEstesaRoma(consegnato_il)` = "Mercoledì 14
+  ottobre alle 20:10", tre passaggi tutti `att-fatto`), pulsante blu "Riordina gli stessi pezzi" (stesso `POST /storico/:id/riordina`
+  dello storico), **una sola scheda** banco + materiale + costi ("Materiale da", "Ordine #N"), "Dettagli consegna e documenti"
+  (chiuso), nota sul prezzo. Non rimettere: il riquadro verde con l'etichetta "Consegnato" e il nome del banco, il titolo
+  "Prodotti", "Costo di consegna" (ora "Consegna in cantiere") né il link "Annulla ordine". Banco, agente e il ritiro **non**
+  consegnato hanno ancora il markup vecchio. **Annullamento**: `flusso.ordineAnnullabileDalCliente` è l'unica regola (pagina,
+  `/ordini/:id/elimina`, `/richieste/:id/elimina`, API dell'app) e vuole `stato = 'inviato'` **e** `consegnato_il` vuoto: con la
+  rotta provvisoria `/consegnato-prova` un ordine risulta consegnato restando `inviato`, e prima si poteva annullare (e
+  rimborsare) anche così. Il rifiuto è `OrdineInLavorazione` (con `consegnato` e `messaggioCliente`), nessuna scrittura.
 - **Icona "Stato ordini"** (`views/partials/nav_ordini.ejs`): fase calcolata da
   `flusso.statoIconaOrdini` (sola lettura, non segna le notifiche come lette) nel `Promise.all` del
   middleware di `server.js`, per ogni pagina del cliente. Un errore non rompe la pagina ma si scrive nel
@@ -295,6 +306,18 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   restavano ~85px di testo e "Condizionamento" non ci stava. Il nome può andare su **tre righe**, così
   nessuno finisce in ellissi; `Condizionamento…` ha il corpo ridotto (14px; 13px sotto i 360px di schermo,
   12px sotto i 330px: la parola misura 139px a 15px e il testo ne ha 143 a 375px, 117 a 320px).
+- **Pagine vuote dell'installatore** (richiesta esplicita del 14/10/2026; `views/ordini_cliente.ejs` = "Stato ordini" senza
+  attività, il ramo `!righe.length` di `views/carrello.ejs`; blocco "Pagine vuote" in fondo a `style.css`, classi
+  `vuoto-*`, `cf-*`, `riga-storico`, `uo-*`, `btn-vuoto-*`): figura da 112px (cerchio `--blu-chiaro`, icona 46px a tratto
+  sottile, cerchio tratteggiato `.vuoto-fig-tratt`), titolo Sora 22/800 e sottotitolo, poi in colonna con gap 22px; fondo
+  pagina 96px da `.app-vuoto` (non i ~150px di `.app`). Stato ordini: furgone, scheda "Come funziona" (tre passaggi, la
+  durata è `pricing.getFinestraMinuti`, non un "10" scritto a mano), "Vai al catalogo", riga "Storico ordini" (la vecchia
+  frase "è nel menu account" non c'è più). Carrello: la ricerca è la stessa della home (`.barra-home`, qui `.barra-vuoto`
+  alta 52px, **senza** il pulsante foto; `GET /cerca`), "Sfoglia il catalogo" e, solo se c'è un ordine consegnato,
+  "Il tuo ultimo ordine" (`flusso.ultimoOrdineConsegnato`: una sola query, e solo a carrello vuoto; al massimo 3 righe,
+  data `format.dataCortaRoma` = "12 set"). "Rimetti nel carrello" è il form di "Riordina" dello storico
+  (`POST /storico/:id/riordina`), quindi salta gli articoli non più disponibili e torna a `/carrello` con l'avviso. Le pagine
+  col carrello pieno o con un'attività in corso non cambiano. `iconaInvio` (aeroplanino) è nuova in `src/icone.js`.
 - **Barra in basso** (`.navbar`, richiesta del 05/10/2026, vale anche per quella del banco): pillola tonda
   (raggio 31px, ombra) sollevata di `--nav-stacco` (10px) dal fondo, con 12px di margine ai lati. Il
   contenitore `.navbar` non intercetta i tocchi, solo `.interno`. `--nav-alt` (62px) è l'altezza della pillola,
@@ -417,21 +440,33 @@ Attesa corriere → Da preparare, senza numeri d'ordine delle fasi. Convenzioni 
   `POST /api/distributore/stato` non esiste più.
 - **Intestazione e tendina dell'utente sono UNA sola per tutto il banco** (richiesta esplicita del 14/10/2026,
   non farne un'altra): `partials/banco_testa.ejs` = ditta e filiale (`res.locals.bancoTesta`, in cache 60 s dal
-  middleware di `server.js`), schede Banco/Clienti, "Tutti gli ordini", campanella e cerchio con le iniziali della
-  **filiale** ("Banco Genova Fegino" → BG) che apre la tendina `.menu-account` (Storico richieste, Esci; Clienti e
-  Tutti gli ordini compaiono lì solo dove la barra non li mostra). La home la include; **tutte le altre pagine del
+  middleware di `server.js`), schede Banco/Clienti, "Storico ordini" e cerchio con le iniziali della
+  **filiale** ("Banco Genova Fegino" → BG) che apre la tendina `.menu-account` (Esci; Clienti e Storico ordini
+  compaiono lì solo dove la barra non li mostra). **Niente campanella delle notifiche** (tolta su richiesta esplicita
+  del 14/10/2026, non rimetterla: `/notifiche` esiste ancora ma il banco non ha un link per arrivarci). La home la include; **tutte le altre pagine del
   distributore passano da `partials/appbar.ejs`, che per `ruolo = distributore` delega qui** (anche `/notifiche` e la
   pagina `errore`): un `appbar` nuovo in una vista del banco funziona da solo. Sotto la barra le pagine interne hanno
   una riga con freccia e titolo (`intestazione`/`indietro` di `appbar`), la home no. La scheda attiva si sceglie da
-  `res.locals.percorso` (= `req.path`). **Niente "Punti vendita"** nel menu del banco e `/punti-vendita` gli risponde 404.
+  `res.locals.percorso` (= `req.path`): "Storico ordini" è accesa su `/distributore/storico` **e** su `/distributore/ordini/...` (un
+  ordine fa parte dello storico). **Niente "Punti vendita"** nel menu del banco e `/punti-vendita` gli risponde 404.
 - **Da 900px** il menu in basso non si mostra su nessuna pagina del banco (`nav_distributore`, classe
   `.nav-solo-stretta`, sempre) e la home è una sola schermata con le colonne che scorrono dentro; sotto i 900px le
   colonne si impilano e il menu in basso resta.
 - Le colonne: **Da confermare** = `request_responses.esito = 'in_attesa'` con la finestra aperta; **Attesa corriere** =
   `esito = 'confermato'` e `corriere_stato = 'in_attesa'` (mai con il modulo WhatsApp spento: l'ordine nasce subito);
-  **Da preparare** = `orders.stato = 'inviato'`. "Verifica e conferma" apre il dettaglio della richiesta (lì si accetta);
-  "Non disponibile" è `rispondi` con `rifiuta` e `torna=home`, subito, senza conferma; "Prepara" apre
-  `/distributore/ordini/:id` (che prende l'ordine in carico, quindi la scheda esce dalla colonna).
+  **Da preparare** = `orders.stato = 'inviato'`. **Pulsanti (richiesta esplicita del 14/10/2026, non rimettere "Verifica e conferma")**: nelle schede
+  "Da confermare" **"Conferma"** (46px, arancio, a tutta larghezza) è un form `rispondi` con `azione=prezzo_richiesto` e `torna=home`: **conferma subito tutto
+  il materiale senza aprire il dettaglio** (a modulo spento l'ordine nasce lì e la scheda passa in "Da preparare", altrimenti in "Attesa corriere"; se
+  non riesce il server riporta al dettaglio con `?errore=`). Sotto, affiancati e larghi metà ciascuno (42px, `grid`: con `flex` risultavano disuguali),
+  **"Ispeziona"** (link al dettaglio, con l'occhio) e **"Non disponibile"** (`rispondi` con `rifiuta` e `torna=home`, subito, senza conferma). Nelle
+  schede "Attesa corriere" **"Ispeziona"** è una pillola da 38px in cima a destra (`.btn-ispeziona`; sotto ~300px di scheda va a capo) e il nome del
+  cliente non è più un link. **"Da preparare" (richiesta esplicita del 14/10/2026, non rimettere "Prepara")**: due pulsanti uguali affiancati (42px,
+  `.scheda-azioni-ordine`): **"Ispeziona"** apre `/distributore/richieste/<request_id>` (il dettaglio nello stato "Da preparare", col timer del corriere) e
+  **non tocca l'ordine**, che resta in colonna; **"Preparato"** (blu) è un form `POST /distributore/ordini/:id/preparazione` con `torna=home`: `prendiInCarico`
+  porta l'ordine in `in_evasione` (esce dalla colonna) e avvisa il cliente. Un ordine **senza `request_id`** non ha Ispeziona, solo Preparato a tutta larghezza.
+  **Non c'è più un pulsante dalla home verso `/distributore/ordini/:id`** (la pagina con la bolla/DDT): ci si arriva dallo Storico ordini o da "Gestisci
+  l'ordine" nel dettaglio della richiesta (a ordine già preso in carico); aprirla prende in carico l'ordine `inviato`. L'occhio è `iconaOcchio` (già c'era,
+  per la password; stroke 1.9 dal CSS dei pulsanti).
 - **Tempi**: soglie in `BACHECA` (`server.js`) → `data-soglia-*` sulla bacheca → blocco "Home del banco" di `app.js`: il
   server disegna le classi iniziali, lo script le aggiorna ogni secondo dagli istanti (secondi mancanti + `Date.now()`,
   non un contatore che decrementa). Rosso negli ultimi 180 s, "Nuova" per i primi 180 s, pillola dell'ordine rossa sotto
@@ -441,6 +476,80 @@ Attesa corriere → Da preparare, senza numeri d'ordine delle fasi. Convenzioni 
 - Il ritardo/`secondi_da_risposta`/`secondi_arrivo` si calcolano **in SQL** (`NOW()`), mai con un `Date` di JS sulle colonne
   `TIMESTAMP` (vedi sopra); `corriere_arrivo_il` è `TIMESTAMPTZ`. Tre articoli al massimo per scheda, poi "+N altri
   articoli". Prova: `test/server.test.js` ("home del banco...") con il DB finto.
+
+## Dettaglio richiesta del banco (14/10/2026)
+
+`GET /distributore/richieste/:id` (`server.js`, logica di presentazione in `src/richiesta_banco.js`) + `views/distributore_dettaglio.ejs`, classi `ric-*`
+(blocco "Dettaglio richiesta del banco" in fondo a `style.css`); la logica di risposta (`POST .../rispondi`: `prezzo_richiesto` / `rifiuta`) e
+`POST .../elimina` **non sono cambiate**. Come lo Storico, la vista include `partials/banco_testa` (con "Banco" accesa) e ha il suo titolo, non
+passa da `appbar.ejs`. Richieste esplicite, non rimetterli: niente "Cliente ordinante" nascosto in un `<details>`, niente pulsante rosso
+"Rifiuta: merce non disponibile" né "Accetta ordine" (ora "Conferma: è disponibile" verde e "Non disponibile" neutro), niente grande riquadro vuoto del
+timer, "Elimina dal banco" solo come link di testo in fondo.
+- **Due colonne** (sinistra: materiale e "Cosa succede dopo la conferma"; destra: azione, cliente, elimina; 818 + 400px). Sotto i 900px una colonna
+  sola con l'azione per prima: le colonne diventano `display: contents` e i blocchi si ordinano con `order` (azione, materiale, cliente, passi, elimina).
+- **Stato accanto al titolo** (`statoRichiestaBanco`): Da confermare (arancio), Attesa corriere (viola), Confermata (verde), Nessun corriere (rosso),
+  Non disponibile / Annullata / Chiusa / Scaduta (grigio). A destra "Ricevuta oggi alle HH:MM" (in ora italiana, `fmt.giornoRoma` + `fmt.oraSolaRoma`).
+  Con la conferma a destra compare anche "· confermata alle HH:MM" (`risposto_il` in ora italiana) e il pallino di "Attesa corriere" lampeggia piano
+  (`.ric-punto.pulse`, spento con `prefers-reduced-motion`). Il titolo della tabella è "Materiale confermato" dopo la risposta, "Materiale richiesto" prima.
+- **"Attesa corriere"** (`ric-attesa`, `ric-avanzamento`): la scheda d'azione è un cerchio da 84px viola col **tempo da quando hai confermato, che SALE** (mm:ss, "1 h 05"
+  oltre l'ora) + "in attesa", titolo "Corriere avvisato", "Non preparare ancora: ti avvisiamo appena un corriere accetta.", un riquadro grigio ("Il cliente vede la
+  tua conferma quando un corriere prende la consegna."), la nota della copertura parziale e, se l'ordine esiste già, una riga "Ordine collegato". La seconda scheda a
+  sinistra si chiama **"Avanzamento"** e ogni passo ha una `fase` (`passiDopoConferma`): **fatto** (pallino verde con la spunta, "Fatto alle HH:MM"), **corrente**
+  (pallino viola che pulsa con l'anello, "Corriere avvisato · da N min") e **futuro** (cerchio tratteggiato, testo grigio). In "Da confermare" la scheda resta
+  "Cosa succede dopo la conferma", com'era. I secondi dalla conferma li calcola la route **in SQL** (`secondi_da_risposta`, come la home); il JS li trasforma in
+  un istante (`data-trascorsi`) e ogni secondo aggiorna il cerchio e ogni `[data-da]`, con le stesse funzioni della home (`Minuteria.daMinuti` /
+  `tempoTrascorso` in `app.js`; sul server `fmt.daMinuti` / `fmt.tempoTrascorso`: le due versioni devono restare uguali). Quando un corriere accetta,
+  `data-auto-refresh` ricarica la pagina nello stato "Confermata".
+- **"Da preparare"** (`statoRichiestaBanco`: conferma + ordine del banco ancora `inviato`, non consegnato; pillola verde): la scheda d'azione ha il **timer del
+  corriere** (`.ric-arrivo`: cerchio da 84px con i minuti a `orders.corriere_arrivo_il` e "ore HH:MM", rosso sotto i 15 minuti come la pillola della home, "In ritardo"
+  a zero; `secondi_arrivo` calcolato in SQL dalla route, il JS `[data-ric-arrivo]` lo muove con `Minuteria.durataMinuti`) e **"Preparato"** (stesso POST del
+  pulsante della home). **Come sulla home, quell'orario è la consegna dal cliente** (`corriere_arrivo_il`; nel DB non c'è l'arrivo al banco): la pagina lo
+  dice ("Consegna dal cliente entro le HH:MM"). Senza orario (modulo spento) niente timer, solo "Preparato". "Avanzamento" mostra conferma e corriere **fatti**
+  e "Da preparare" **in corso** (il pallino in corso prende il colore del suo tono: viola dei corrieri, verde del da preparare). Dopo "Preparato" l'ordine è
+  `in_evasione` e la richiesta torna "Confermata", con "Gestisci l'ordine #N".
+- **Timer** (`[data-ric-timer]`, blocco "Dettaglio richiesta del banco" di `app.js`): anello da 80px arancio come sulla home, **rosso negli ultimi
+  2 minuti** (`SOGLIA_URGENTE_SEC = 120`; la home usa 3 minuti, `BACHECA.urgenteSec`). Come sulla home parte dai secondi rimasti e li trasforma in un
+  istante col `Date.now()` del browser; a zero ricarica. "Rispondi entro le HH:MM" è `requests.scade_il` in ora italiana.
+- **Tabella del materiale** (`tabellaMateriale`): Q.tà, articolo e codice, listino, prezzo per il cliente (sconto del banco + servizio, `cad. + IVA`),
+  totale di riga. **"Totale per il cliente" = merce + contributo RAEE, IVA esclusa, senza la spedizione fissa** (che l'installatore paga alla piattaforma, non
+  al banco: prima si mostrava `totali.imponibile`, che la include). Prima della risposta e se il banco rifiuta contano le quantità richieste; confermata,
+  quelle confermate (le mancanti hanno "richiesti N, mancano M").
+- **Passi**: con `WHATSAPP_ATTIVO=1` sono tre (conferma → avvisiamo i corrieri → prepari); **a modulo spento sono due**, perché non ci
+  sono corrieri da avvisare e l'ordine nasce subito (vale anche per "Avanzamento"). Si vedono solo da confermare e in attesa del corriere.
+- **Cliente sempre in vista**: nome, P. IVA, indirizzo (destinazione della richiesta, se no quello di consegna del cliente), telefono `tel:`. "Apri scheda
+  cliente" solo se `anagrafiche.legame(banco, cliente)` esiste (altrimenti la pagina risponde 404: niente link morto).
+- Prova: sei test "banco: richiesta ..." / "Preparato ..." in `test/server.test.js` (DB finto `richiestaProva`, che tiene la richiesta 177) e `test/richiesta_banco.test.js`.
+  Sul DB vero: richiesta, cliente e utente banco di prova sul **banco AFIS (id 1, disattivato)**, inseriti con SQL (nessuna notifica, nessun banco vero la
+  vede), poi cancellati; il timer di 30 s chiude da solo le richieste di prova scadute.
+
+## Storico ordini del banco (14/10/2026)
+
+`GET /distributore/storico` (`server.js`, logica in `src/storico_banco.js`) + `views/distributore_storico.ejs`, classi `sto-*` (blocco
+"Storico ordini del banco" in fondo a `style.css`). **Prende il posto di "Tutti gli ordini" e di "Storico richieste"**: la vecchia lista
+`/distributore/ordini` è un **301** verso lo storico (con la query string; il dettaglio `/distributore/ordini/:id` e i suoi POST non
+sono cambiati, i ripieghi dei POST vanno a `/distributore/storico`) e le richieste chiuse non hanno più una pagina. Richieste esplicite,
+non rimetterli: niente freccia indietro (è una scheda dell'intestazione, come Clienti: la vista include `banco_testa`, non `appbar`), niente
+nota "Flusso del banco: …" in fondo.
+- **Stato di un ordine**: `statoStorico(o)` è l'unico punto (e `CONDIZIONE_STATO` è la stessa regola in SQL: conteggi delle schede e filtro
+  della lista non possono divergere). **`consegnato_il` si guarda per primo**: con `/consegnato-prova` un ordine risulta consegnato restando
+  `inviato` (oggi l'ordine #91 è così). Poi `inviato` = Da preparare (verde), `in_evasione` = In preparazione (arancio), `evaso` = Partito (blu),
+  consegnato = grigio.
+- **Filtri nell'URL**, tutti lato server: `?stato=tutti|da_preparare|in_preparazione|partiti|consegnati&periodo=oggi|7|30|tutti&q=&pagina=N`
+  (default tutti e 7 giorni; valori sconosciuti tornano al default). Il periodo ragiona in **ora italiana** sulle colonne `TIMESTAMP` UTC: "oggi" è
+  la mezzanotte di Roma, 7 e 30 sono gli ultimi N giorni da adesso. La ricerca è `ILIKE` su ragione sociale e numero DDT, più `o.id =` se quello che
+  si scrive (tolto un `#`) è solo cifre; i `%` e `_` scritti dall'utente valgono per sé; sempre con segnaposto. **I conteggi delle schede** sono una
+  query con `COUNT(*) FILTER` con gli stessi filtri di periodo e ricerca ma **senza** lo stato (il numero dice cosa si trova cliccando). Lista: `o.id DESC`,
+  50 per pagina (`partials/paginazione.ejs`, con `parametro: 'pagina'` e `unita: 'ordini'`; una pagina oltre l'ultima mostra l'ultima), materiale con una
+  sola lettura di `order_items` per tutta la pagina. Righe raggruppate per giorno italiano (`fmt.giornoRoma`); "N ordini" conta le righe della pagina.
+- **Aggiornamento automatico**: la pagina ha `data-auto-refresh` e `data-versione` come le altre del banco, e il blocco in `app.js` **non ricarica**
+  finché un campo con `data-non-ricaricare` (la ricerca) ha testo non ancora inviato (`value !== defaultValue`), anche senza fuoco. Si ricarica
+  solo quando i contatori della home cambiano: una consegna (`consegnato_il`) non li cambia, quindi non fa ricaricare lo storico da sola.
+- **Sotto i 900px**: ricerca a tutta larghezza, schede che scorrono di lato senza barra, la tabella diventa una lista di card (quattro righe, senza la
+  città). Da 640px in giù il pulsante "Storico ordini" della barra sparisce e resta la voce nella tendina; il menu in basso è sempre Home e Clienti.
+- Prove: `test/storico_banco.test.js` (parti pure) e i quattro test "banco: Storico ordini…" / "/distributore/ordini porta allo Storico" in
+  `test/server.test.js` (DB finto che tiene SQL e parametri delle query). Per provarlo sul DB vero serve un utente `distributore` di prova (non quelli
+  del README: sono persone vere): `INSERT INTO users` con `bcrypt`, poi cancellarlo con le sue `session`. **Non aprire dal browser il dettaglio di un
+  ordine `inviato`**: `prendiInCarico` lo porta in preparazione e avvisa il cliente.
 
 ## Clienti del banco (14/10/2026)
 

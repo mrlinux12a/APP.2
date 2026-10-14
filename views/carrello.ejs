@@ -4,19 +4,58 @@
   <%- include('partials/app_head', { titolo }) %>
 </head>
 <body data-loggato="1">
-  <div class="app<%= righe.length ? ' app-carrello' : '' %>">
+  <div class="app<%= righe.length ? ' app-carrello' : ' app-vuoto' %>">
     <%- include('partials/appbar', { titolo, intestazione: 'Carrello' }) %>
 
     <% if (!righe.length) { %>
-      <div class="contenuto">
+      <%# Carrello vuoto: figura, titolo, ricerca (la stessa della home), catalogo e, se c'è, l'ultimo ordine consegnato
+          con "Rimetti nel carrello" (stesso POST di "Riordina" nello storico). Classi vuoto-*, uo-* (blocco "Pagine vuote"). %>
+      <div class="contenuto vuoto-pagina">
         <% if (avviso) { %><div class="avviso avviso-attenzione" role="status"><%= avviso %></div><% } %>
-        <div class="vuoto">
-          <span class="emoji"><%- iconaCarrello %></span>
-          Il carrello è vuoto.
-          <div style="margin-top:6px;font-size:0.9rem;">Aggiungi articoli dalle categorie o dalla ricerca.</div>
+
+        <div class="vuoto-fig" aria-hidden="true">
+          <span class="vuoto-fig-tratt"></span>
+          <%- iconaCarrello %>
         </div>
-        <a class="btn btn-primary btn-blocco" href="/home">Vai al catalogo</a>
-        <a class="btn btn-chiaro btn-blocco" href="/cerca" style="margin-top:8px;">Cerca un pezzo</a>
+
+        <div class="vuoto-testa">
+          <h1 class="vuoto-titolo">Il carrello è vuoto</h1>
+          <p class="vuoto-sotto">Cerca il pezzo che ti manca o sfoglia le categorie.</p>
+        </div>
+
+        <form class="barra-ricerca barra-home barra-vuoto" method="GET" action="/cerca" role="search">
+          <span class="lente" aria-hidden="true"><%- iconaLente %></span>
+          <input type="search" name="q" enterkeyhint="search"
+                 placeholder="Nome o misura: valv 3/4"
+                 aria-label="Cerca un pezzo"
+                 autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+          <button type="submit" class="btn-cerca">Cerca</button>
+        </form>
+
+        <a class="btn-vuoto-bordo" href="/home"><%- iconaCatalogo %><span>Sfoglia il catalogo</span></a>
+
+        <% if (ultimoOrdine) { %>
+          <section class="uo-scheda" aria-labelledby="uo-occhiello">
+            <div class="uo-testa">
+              <h2 class="uo-occhiello" id="uo-occhiello">Il tuo ultimo ordine</h2>
+              <span class="uo-data"><%= ultimoOrdine.data %></span>
+            </div>
+            <ul class="uo-righe">
+              <% ultimoOrdine.righe.forEach(function (r) { %>
+                <li class="uo-riga">
+                  <span class="uo-qta"><%= r.quantita %>×</span>
+                  <span class="uo-nome"><%= r.nome %></span>
+                </li>
+              <% }); %>
+            </ul>
+            <% if (ultimoOrdine.altri) { %>
+              <p class="uo-altri">+ <%= ultimoOrdine.altri %> <%= ultimoOrdine.altri === 1 ? 'altro' : 'altri' %></p>
+            <% } %>
+            <form class="uo-form" method="POST" action="/storico/<%= ultimoOrdine.id %>/riordina">
+              <button type="submit" class="uo-btn"><%- iconaRiprova %><span>Rimetti nel carrello</span></button>
+            </form>
+          </section>
+        <% } %>
       </div>
     <% } else { %>
       <%

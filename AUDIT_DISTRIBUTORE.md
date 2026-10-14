@@ -23,10 +23,11 @@ deciso se le "24 ore" dichiarate includano già il viaggio.
 2. **Nessun promemoria a ridosso della scadenza**: se il banco non ha la scheda aperta l'unico
    avviso è la notifica iniziale; niente secondo avviso (es. a 2 minuti dalla chiusura). Spiega
    in parte le tante "Non risposta" nello storico.
-3. **"Storico richieste" è una lista unica**, senza filtri (per stato o cliente) né paginazione:
-   con un banco reale e decine di richieste al giorno diventa inutilizzabile.
-4. **Nessun "segna tutte come lette"** nelle notifiche: con più clienti il campanello resta con un
-   badge enorme.
+3. ~~**"Storico richieste" è una lista unica**, senza filtri né paginazione~~ — *risolto il 14/10/2026*: lo "Storico ordini"
+   (`/distributore/storico`) ha schede di stato, periodo, ricerca e pagine da 50. Le richieste chiuse senza ordine non hanno più una
+   pagina propria.
+4. ~~**Nessun "segna tutte come lette"** nelle notifiche~~ — *superato il 14/10/2026*: il banco non ha più la campanella (la pagina
+   `/notifiche` esiste ma nessun link ci porta).
 5. **La pagina Clienti non ha ricerca né filtro**: va bene con 3 clienti demo, non con decine o
    centinaia di clienti approvati.
 6. **Nessuna vista d'insieme giornaliera** oltre ai 3 contatori (da confermare / da preparare /

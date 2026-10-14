@@ -740,7 +740,7 @@ th { color: var(--grigio); font-weight: 600; }
 /* ---------- Home del banco: bacheca a 3 colonne (views/distributore_richieste.ejs) ---------- */
 
 /* Intestazione (views/partials/banco_testa.ejs): è la stessa su TUTTE le pagine del banco, non solo sulla home.
-   Barra bianca da 64px con ditta e filiale, menu a schede, "Tutti gli ordini", campanella e cerchio con le iniziali.
+   Barra bianca da 64px con ditta e filiale, menu a schede, "Storico ordini" e cerchio con le iniziali (niente campanella).
    Da 900px in su il menu sospeso in basso (nav_distributore, .nav-solo-stretta) non si mostra, su nessuna pagina del
    banco: il menu sta qui. Sotto, il menu in basso resta e le schede qui spariscono. */
 .banco-testa {
@@ -797,7 +797,7 @@ th { color: var(--grigio); font-weight: 600; }
 }
 
 .banco-azioni { display: flex; align-items: center; gap: 4px; margin-left: auto; flex: none; }
-.banco-tutti {
+.banco-storico {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
@@ -807,8 +807,8 @@ th { color: var(--grigio); font-weight: 600; }
   font-weight: 600;
   text-decoration: none;
 }
-.banco-tutti:hover { text-decoration: underline; }
-.banco-tutti.attiva { padding: 0 18px; border-radius: 22px; background: var(--blu-chiaro); color: var(--blu-scuro); text-decoration: none; }
+.banco-storico:hover { text-decoration: underline; }
+.banco-storico.attiva { padding: 0 18px; border-radius: 22px; background: var(--blu-chiaro); color: var(--blu-scuro); font-weight: 700; text-decoration: none; }
 
 /* Riga col titolo della pagina, sotto l'intestazione, per le pagine interne del banco (clienti, richiesta, ordine,
    storico, notifiche...): freccia indietro e titolo. La home non l'ha. Allineata al contenuto (.contenuto: 14px). */
@@ -839,35 +839,6 @@ th { color: var(--grigio); font-weight: 600; }
 @media (min-width: 720px) {
   .app > .banco-titolo { max-width: 1400px; margin-left: auto; margin-right: auto; padding-left: 14px; padding-right: 14px; }
 }
-.banco-campanella {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  color: var(--blu);
-  font-size: 24px;
-  text-decoration: none;
-}
-.banco-campanella:hover { background: var(--sfondo); }
-.banco-campanella-conta {
-  position: absolute;
-  top: 2px;
-  right: -4px;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 5px;
-  border-radius: 10px;
-  background: var(--rosso);
-  color: #fff;
-  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 20px;
-  text-align: center;
-}
 .banco-avatar-btn {
   display: flex;
   align-items: center;
@@ -882,8 +853,8 @@ th { color: var(--grigio); font-weight: 600; }
   cursor: pointer;
 }
 .banco-avatar-btn .avatar { box-shadow: 0 0 0 3px var(--blu-chiaro); }
-.banco-avatar-btn:focus-visible, .banco-campanella:focus-visible, .banco-voce:focus-visible,
-.banco-tutti:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; }
+.banco-avatar-btn:focus-visible, .banco-voce:focus-visible,
+.banco-storico:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; }
 /* Le voci della tendina già presenti nella barra (o nel menu in basso) si mostrano solo dove la barra non le ha. */
 .menu-account .tendina .voce-solo-stretta, .menu-account .tendina .voce-solo-piccola { display: none; }
 
@@ -1082,21 +1053,25 @@ th { color: var(--grigio); font-weight: 600; }
 .btn-banco:focus-visible { outline: 3px solid var(--blu); outline-offset: 2px; }
 .btn-banco-conferma { background: var(--arancio); color: #fff; }
 .btn-banco-conferma:hover { background: #963f1b; }
-.btn-banco-secondario { background: var(--surface); border-color: #d6d1c4; color: var(--testo); }
+.btn-banco-secondario { background: var(--surface); border-color: #d6d1c6; color: var(--testo); }
 .btn-banco-secondario:hover { background: var(--sfondo); }
 .btn-banco-prepara { width: 100%; background: var(--blu); color: #fff; }
 .btn-banco-prepara:hover { background: var(--blu-scuro); }
-.scheda-azioni { display: flex; gap: 10px; }
-.scheda-azioni > a { flex: 1 1 auto; }
-.scheda-azioni > form { flex: 0 0 auto; margin: 0; }
-.scheda-azioni > form .btn-banco { width: 100%; padding: 0 20px; }
-/* Da 900px le colonne sono ~270px: i due pulsanti non ci stanno affiancati e vanno uno sotto l'altro. Si decide dalla
-   larghezza della scheda (non dello schermo): la stessa regola vale anche sul telefono. */
+/* Da confermare: "Conferma" a tutta larghezza (conferma subito, senza aprire il dettaglio), sotto "Ispeziona" e "Non disponibile"
+   affiancati e larghi metà ciascuno. */
+.scheda-azioni { display: flex; flex-direction: column; gap: 8px; }
+.scheda-azioni form { margin: 0; }
+.scheda-azione-conferma .btn-banco { width: 100%; }
+.scheda-azioni-secondarie { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.scheda-azioni-secondarie > a, .scheda-azioni-secondarie > form { min-width: 0; }
+.scheda-azioni-secondarie .btn-banco { width: 100%; }
+/* Da preparare: "Ispeziona" e "Preparato" affiancati e uguali; senza Ispeziona (ordine senza richiesta) "Preparato" occupa tutta la riga. */
+.scheda-azioni-ordine { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+.scheda-azioni-ordine .btn-banco { width: 100%; }
+.btn-banco-medio { min-height: 46px; }
+.btn-banco-piccolo { min-height: 42px; gap: 6px; padding: 0 8px; font-size: 14.5px; }
+.btn-banco-piccolo svg { width: 18px; height: 18px; stroke-width: 1.9; }
 .scheda { container-type: inline-size; }
-@container (max-width: 340px) {
-  .scheda-azioni { flex-direction: column; }
-  .scheda-azioni > form { flex: 1 1 auto; }
-}
 
 /* Attesa corriere: icona viola, riga di stato e una nota grigia. */
 .scheda-icona {
@@ -1111,6 +1086,18 @@ th { color: var(--grigio); font-weight: 600; }
   color: var(--viola);
   font-size: 20px;
 }
+/* "Ispeziona": pillola secondaria da 38px in cima a destra della scheda (apre il dettaglio). Se il nome non ci sta, va a capo sotto. */
+.scheda-testa-corriere { flex-wrap: wrap; row-gap: 10px; }
+.scheda-testa-corriere .scheda-testi { flex: 1 1 150px; }
+.btn-ispeziona {
+  position: relative; flex: none; align-self: flex-start; margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+  height: 38px; padding: 0 14px 0 12px; border: 1.5px solid #d6d1c6; border-radius: 19px; background: var(--surface);
+  color: var(--testo); font-family: inherit; font-size: 14px; font-weight: 600; line-height: 1; text-decoration: none; white-space: nowrap;
+}
+.btn-ispeziona::after { content: ""; position: absolute; inset: -3px; } /* area di tocco da 44px */
+.btn-ispeziona svg { width: 18px; height: 18px; stroke-width: 1.9; }
+.btn-ispeziona:hover { background: var(--sfondo); }
+.btn-ispeziona:focus-visible { outline: 3px solid var(--blu); outline-offset: 2px; }
 .stato-corriere { margin-top: 2px; color: #4b3480; font-size: 13px; font-weight: 600; line-height: 1.35; }
 .stato-corriere::before {
   content: "";
@@ -1177,12 +1164,8 @@ th { color: var(--grigio); font-weight: 600; }
   .colonna-lista { overflow: visible; }
 }
 @media (max-width: 639.98px) {
-  .banco-tutti { display: none; }
+  .banco-storico { display: none; }
   .menu-account .tendina .voce-solo-piccola { display: block; }
-}
-@media (max-width: 380px) {
-  .scheda-azioni { flex-direction: column; }
-  .scheda-azioni > form { flex: 1 1 auto; }
 }
 
 /* ---------- Geolocalizzazione ---------- */
@@ -3949,4 +3932,706 @@ html.misura-aperta { overflow: hidden; }
 @media (max-width: 480px) {
   .contenuto.pag { padding-left: 10px; padding-right: 10px; }
   .pag-elemento { margin-left: -8px; margin-right: -8px; }
+}
+
+/* ---------- Pagine vuote dell'installatore: Stato ordini (views/ordini_cliente.ejs) e Carrello (views/carrello.ejs) ---------- */
+
+/* In fondo solo la navbar sospesa + un margine (circa 96px), come .app-storico: non i ~150px di .app, pensati per le barre fisse. */
+.app-vuoto { padding-bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + 24px); }
+
+.contenuto.vuoto-pagina {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 28px 16px 0;
+}
+.vuoto-pagina > .avviso { margin-bottom: 0; }
+
+/* Figura: cerchio da 112px con l'icona da 46px a tratto sottile e, dentro, un cerchio tratteggiato decorativo. */
+.vuoto-fig {
+  position: relative;
+  flex: none;
+  align-self: center;
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  background: var(--blu-chiaro);
+  color: var(--blu);
+  font-size: 46px; /* le icone di src/icone.js sono 1em */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.vuoto-fig svg { stroke-width: 1.3; vertical-align: 0; }
+.vuoto-fig-tratt {
+  position: absolute;
+  inset: 14px;
+  border: 2px dashed var(--blu);
+  border-radius: 50%;
+  opacity: 0.35;
+}
+
+.vuoto-testa { text-align: center; }
+.vuoto-titolo {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--testo);
+}
+.vuoto-sotto {
+  max-width: 300px;
+  margin: 8px auto 0;
+  color: var(--grigio);
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+/* "Come funziona" */
+.cf-scheda {
+  background: var(--surface);
+  border: 1px solid var(--bordo);
+  border-radius: 16px;
+  padding: 16px;
+}
+.cf-occhiello {
+  margin: 0 0 14px;
+  color: var(--grigio);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+.cf-passi { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.cf-passo { display: flex; align-items: center; gap: 12px; }
+.cf-ico {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+.cf-blu { background: var(--blu-chiaro); color: var(--blu); }
+.cf-arancio { background: var(--arancio-chiaro); color: var(--arancio); }
+.cf-verde { background: var(--verde-chiaro); color: var(--verde); }
+.cf-testi { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.cf-testi strong { font-size: 15px; font-weight: 700; line-height: 1.3; }
+.cf-testi span { color: var(--grigio); font-size: 13.5px; line-height: 1.35; }
+
+/* Pulsanti a tutta larghezza: pieno (Stato ordini) e a contorno (Carrello). Alti più di 44px. */
+.btn-vuoto-pieno, .btn-vuoto-bordo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn-vuoto-pieno svg, .btn-vuoto-bordo svg { font-size: 22px; flex: none; }
+.btn-vuoto-pieno {
+  min-height: 54px;
+  border-radius: 27px;
+  background: var(--blu);
+  color: var(--su-blu);
+  font-size: 17px;
+}
+.btn-vuoto-pieno:hover { background: var(--blu-scuro); }
+.btn-vuoto-bordo {
+  min-height: 50px;
+  border: 1.5px solid var(--blu);
+  border-radius: 25px;
+  background: var(--surface);
+  color: var(--blu);
+  font-size: 16px;
+}
+.btn-vuoto-bordo:hover { background: var(--blu-chiaro); }
+.btn-vuoto-pieno:focus-visible, .btn-vuoto-bordo:focus-visible { outline: 3px solid var(--blu); outline-offset: 2px; }
+
+/* Riga "Storico ordini" */
+.riga-storico {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--bordo);
+  border-radius: 16px;
+  color: inherit;
+  text-decoration: none;
+}
+.riga-storico:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+.riga-storico-ico {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #f1efea;
+  color: var(--testo);
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.riga-storico-testi { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.riga-storico-testi strong { font-size: 15px; font-weight: 700; line-height: 1.3; }
+.riga-storico-testi span { color: var(--grigio); font-size: 13px; line-height: 1.35; }
+.riga-storico-freccia { flex: none; color: #a8a69b; font-size: 24px; line-height: 1; }
+
+/* Barra di ricerca del carrello vuoto: quella della home (.barra-home) ma alta 52px, senza il pulsante foto. */
+.barra-ricerca.barra-vuoto {
+  height: 52px;
+  padding: 0 3px 0 14px;
+  border-radius: 26px;
+}
+
+/* "Il tuo ultimo ordine" */
+.uo-scheda {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--bordo);
+  border-radius: 16px;
+}
+.uo-testa { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.uo-occhiello {
+  margin: 0;
+  color: var(--grigio);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+.uo-data { flex: none; color: var(--grigio); font-size: 13px; }
+.uo-righe { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.uo-riga { display: flex; align-items: center; gap: 10px; }
+.uo-qta {
+  flex: none;
+  min-width: 34px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: var(--blu-chiaro);
+  color: #1a4468;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.3;
+  text-align: center;
+}
+.uo-nome {
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.uo-altri { margin: -4px 0 0; color: var(--grigio); font-size: 13.5px; font-weight: 600; }
+.uo-form { margin: 0; }
+.uo-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1.5px solid var(--blu);
+  border-radius: 22px;
+  background: var(--surface);
+  color: var(--blu);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.uo-btn svg { font-size: 18px; flex: none; }
+.uo-btn:hover { background: var(--blu-chiaro); }
+.uo-btn:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+
+/* ---------- Ordine consegnato (views/ordine_dettaglio.ejs, ramo "consegnato"): stessa struttura di "Ordine in consegna", in verde e fermo ---------- */
+
+/* In fondo solo la navbar sospesa + un margine (circa 96px), non i ~150px di .app. */
+.app-consegnato { padding-bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + 24px); }
+
+/* Scheda di stato: ordine chiuso, quindi niente anello che si svuota ma un cerchio pieno con la spunta. */
+.att-timer.att-consegnato { padding: 22px 16px 18px; }
+.att-esito {
+  width: 120px; height: 120px; margin: 0 auto 16px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; background: var(--verde-chiaro);
+}
+.att-esito > span {
+  width: 76px; height: 76px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: var(--verde); color: #fff;
+}
+.att-esito svg { display: block; }
+
+/* "Riordina gli stessi pezzi": il pulsante blu di "Rinvia richiesta" (.att-rinvia), con l'icona a sinistra */
+.att-riordina { margin: 0 0 12px; }
+.att-riordina .att-rinvia { margin-top: 0; }
+.att-riordina .att-rinvia svg { flex: none; font-size: 20px; }
+
+/* Banco, materiale e costi in una scheda sola: intestazione col banco e "Ordine #N", poi righe e riepilogo */
+.att-ordine-testa { display: flex; align-items: center; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid #ece9e2; }
+.att-ordine-testa .att-occhiello { margin-bottom: 1px; }
+.att-ordine-id { flex: none; color: var(--grigio); font-size: 13px; line-height: 1.2; white-space: nowrap; }
+.att-ordine .att-righe { margin-top: 6px; }
+
+/* ---------- Storico ordini del banco (views/distributore_storico.ejs, src/storico_banco.js; classi sto-*) ---------- */
+
+/* Contenuto largo 1240px (1288px con i 24px di margine per lato), come nel disegno. Sotto i 900px: schede che scorrono,
+   righe come card (vedi in fondo al blocco). */
+.pagina-storico { --sto-sora: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+.sto-pagina {
+  max-width: 1288px;
+  margin: 0 auto;
+  padding: 24px max(24px, env(safe-area-inset-right, 0px)) 56px max(24px, env(safe-area-inset-left, 0px));
+}
+
+/* Titolo, ricerca e periodo sulla stessa riga */
+.sto-testata { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+.sto-titolo { margin: 0 auto 0 0; font-family: var(--sto-sora); font-size: 28px; font-weight: 800; line-height: 1.2; }
+
+.sto-cerca { position: relative; flex: 0 1 393px; min-width: 0; margin: 0; }
+.sto-cerca-ico {
+  position: absolute; top: 50%; left: 16px; display: inline-flex; transform: translateY(-50%);
+  color: var(--testo); font-size: 20px; pointer-events: none;
+}
+.sto-cerca input[type="search"] {
+  display: block; width: 100%; height: 44px; margin: 0; padding: 0 44px 0 46px;
+  border: 1px solid var(--bordo); border-radius: 22px; background: var(--surface); color: var(--testo);
+  font-size: 16px; /* sotto i 16px Safari su iPhone ingrandisce la pagina al tocco */
+  -webkit-appearance: none; appearance: none;
+}
+/* La "×" è la nostra (sto-cerca-x): quella del browser non si vede, così non ce ne sono due. */
+.sto-cerca input[type="search"]::-webkit-search-cancel-button,
+.sto-cerca input[type="search"]::-webkit-search-decoration { -webkit-appearance: none; display: none; }
+.sto-cerca input[type="search"]::placeholder { color: var(--grigio); opacity: 1; }
+.sto-cerca input[type="search"]:focus { border-color: var(--blu); outline: 2px solid var(--blu); outline-offset: 1px; }
+.sto-cerca-x {
+  position: absolute; top: 0; right: 0; display: flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border-radius: 50%; color: var(--grigio); font-size: 18px; text-decoration: none;
+}
+.sto-cerca-x:hover { color: var(--testo); }
+.sto-cerca-x:focus-visible { outline: 2px solid var(--blu); outline-offset: -2px; }
+
+/* Selettore a segmenti: Oggi | 7 giorni | 30 giorni | Tutti */
+.sto-periodo { display: flex; flex: none; gap: 2px; padding: 4px; border-radius: 14px; background: #efede6; }
+.sto-periodo a {
+  position: relative; display: flex; align-items: center; justify-content: center; min-height: 38px; padding: 0 14px;
+  border-radius: 10px; color: var(--grigio); font-size: 14px; font-weight: 600; text-decoration: none; white-space: nowrap;
+}
+.sto-periodo a::after { content: ""; position: absolute; inset: -4px -1px; } /* area di tocco da 46px */
+.sto-periodo a:hover { color: var(--testo); }
+.sto-periodo a.attivo { background: var(--surface); color: var(--testo); font-weight: 700; box-shadow: 0 1px 3px rgba(35, 32, 25, 0.14); }
+.sto-periodo a:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; }
+
+/* Schede di stato, a pillola: "Tutti 24 | ● Da preparare 3 | ..." */
+.sto-schede { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+.sto-scheda {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px 0 16px;
+  border: 1px solid var(--bordo); border-radius: 22px; background: var(--surface); color: var(--testo);
+  font-size: 15px; font-weight: 700; text-decoration: none; white-space: nowrap;
+}
+.sto-scheda:hover { border-color: #cfcabd; }
+.sto-scheda:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+.sto-scheda-num {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; padding: 0 7px;
+  border-radius: 13px; background: #f1f0ec; color: #5c5b52; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.sto-scheda.vuota .sto-scheda-num { color: #a8a69b; } /* zero risultati: resta cliccabile, ma il numero è grigio */
+.sto-scheda.attiva { border-color: #1d1b16; background: #1d1b16; color: #fff; }
+.sto-scheda.attiva .sto-scheda-num { background: rgba(255, 255, 255, 0.18); color: #fff; }
+.sto-scheda.attiva.vuota .sto-scheda-num { color: rgba(255, 255, 255, 0.6); }
+
+/* Colori di stato: pallino delle schede e pillola delle righe (da preparare verde, in preparazione arancio, partito blu,
+   consegnato grigio). Una sola regola per i due usi: --st è il colore, --st-sfondo lo sfondo della pillola. */
+.sto-st-da_preparare { --st: var(--verde); --st-sfondo: var(--verde-chiaro); }
+.sto-st-in_preparazione { --st: var(--arancio); --st-sfondo: var(--arancio-chiaro); }
+.sto-st-partito { --st: var(--blu); --st-sfondo: var(--blu-chiaro); }
+.sto-st-consegnato { --st: var(--grigio); --st-sfondo: #f1f0ec; }
+.sto-punto { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--st); }
+.sto-pillola {
+  display: inline-flex; align-items: center; gap: 7px; padding: 4px 12px 4px 10px; border-radius: 999px;
+  background: var(--st-sfondo); color: var(--st); font-size: 13px; font-weight: 700; line-height: 1.3; white-space: nowrap;
+}
+.sto-pillola .sto-punto { width: 7px; height: 7px; }
+
+/* Tabella: una scheda con intestazione, righe raggruppate per giorno e una riga-link per ordine */
+.sto-tabella { overflow: hidden; border: 1px solid var(--bordo); border-radius: 16px; background: var(--surface); }
+.sto-testa, .sto-riga {
+  display: grid;
+  grid-template-columns: 96px 70px minmax(0, 1.3fr) minmax(0, 2fr) 110px 120px 150px 32px;
+  align-items: center; column-gap: 14px; padding-right: 20px; padding-left: 20px;
+}
+.sto-testa {
+  min-height: 44px; border-bottom: 1px solid var(--bordo);
+  color: var(--grigio); font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.sto-giorno {
+  display: flex; align-items: baseline; gap: 8px; padding: 10px 20px;
+  border-bottom: 1px solid var(--bordo); background: #f7f6f2;
+}
+.sto-giorno strong { font-family: var(--sto-sora); font-size: 15px; font-weight: 700; }
+.sto-giorno span { color: var(--grigio); font-size: 13px; }
+.sto-riga {
+  min-height: 56px; padding-top: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--bordo);
+  color: var(--testo); font-size: 15px; text-decoration: none;
+}
+.sto-riga:hover { background: #faf9f6; }
+.sto-riga:focus-visible { outline: 2px solid var(--blu); outline-offset: -2px; }
+.sto-tabella > :last-child { border-bottom: none; }
+
+.sto-c-ordine { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.sto-c-ora { color: var(--grigio); font-size: 14px; font-variant-numeric: tabular-nums; }
+.sto-c-cliente { display: flex; flex-direction: column; min-width: 0; }
+.sto-cliente-nome { overflow: hidden; font-size: 15px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.sto-cliente-citta { overflow: hidden; color: var(--grigio); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.sto-c-materiale { display: flex; min-width: 0; color: #3f3e37; font-size: 14px; }
+.sto-mat-nome { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sto-mat-altri { flex: none; padding-left: 6px; color: var(--grigio); white-space: nowrap; } /* resta visibile quando il nome è tagliato */
+.sto-c-totale { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.sto-c-ddt { overflow: hidden; color: var(--grigio); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.sto-nessuno { color: var(--grigio); }
+.sto-ddt-sigla { display: none; }
+.sto-c-freccia { display: flex; justify-content: flex-end; color: #8f8d82; font-size: 18px; }
+
+/* Stati vuoti */
+.sto-vuoto {
+  padding: 48px 16px; border: 1px solid var(--bordo); border-radius: 16px; background: var(--surface);
+  color: var(--grigio); font-size: 16px; text-align: center;
+}
+.sto-vuoto p { margin: 0 0 16px; }
+.sto-vuoto-ico { display: block; margin-bottom: 8px; font-size: 2.2rem; }
+.sto-vuoto .btn { display: inline-flex; align-items: center; min-height: 44px; }
+.sto-pagina .paginazione { margin-top: 20px; }
+
+/* Sotto i 900px: titolo, ricerca e periodo uno sotto l'altro; le schede scorrono di lato senza barra; la tabella diventa
+   una lista di card (niente intestazione): "#91 · 22:29" e stato, cliente, materiale, totale e DDT. */
+@media (max-width: 899.98px) {
+  .sto-pagina { padding: 16px max(16px, env(safe-area-inset-right, 0px)) calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + 24px) max(16px, env(safe-area-inset-left, 0px)); }
+  .sto-testata { flex-direction: column; align-items: stretch; gap: 12px; margin-bottom: 16px; }
+  .sto-titolo { margin: 0; font-size: 24px; }
+  .sto-cerca { flex: none; width: 100%; }
+  .sto-periodo a { flex: 1; padding: 0 8px; }
+
+  .sto-schede {
+    flex-wrap: nowrap; overflow-x: auto; margin: 0 calc(-1 * max(16px, env(safe-area-inset-right, 0px))) 12px;
+    padding: 2px max(16px, env(safe-area-inset-right, 0px)) 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .sto-schede::-webkit-scrollbar { display: none; }
+  .sto-scheda { flex: none; }
+
+  .sto-tabella { overflow: visible; border: none; border-radius: 0; background: none; }
+  .sto-testa, .sto-c-freccia { display: none; }
+  .sto-giorno { padding: 14px 4px 8px; border-bottom: none; background: none; }
+  .sto-riga {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "ordine ora stato" "cliente cliente cliente" "materiale materiale materiale" "totale totale ddt";
+    column-gap: 6px; row-gap: 6px; margin-bottom: 10px; padding: 12px 14px;
+    border: 1px solid var(--bordo); border-radius: 14px; background: var(--surface);
+  }
+  .sto-tabella > :last-child { border-bottom: 1px solid var(--bordo); }
+  .sto-c-ordine { grid-area: ordine; }
+  .sto-c-ora { grid-area: ora; }
+  .sto-c-ora::before { content: "·"; margin-right: 6px; }
+  .sto-c-stato { grid-area: stato; justify-self: end; }
+  .sto-c-cliente { grid-area: cliente; }
+  .sto-cliente-citta { display: none; } /* la scheda ha quattro righe: la città si vede da schermo largo */
+  .sto-c-materiale { grid-area: materiale; }
+  .sto-c-totale { grid-area: totale; text-align: left; font-size: 16px; }
+  .sto-c-ddt { grid-area: ddt; align-self: center; }
+  .sto-c-ddt.sto-senza { display: none; }
+  .sto-ddt-sigla { display: inline; }
+}
+
+/* ---------- Dettaglio richiesta del banco (views/distributore_dettaglio.ejs, src/richiesta_banco.js; classi ric-*) ---------- */
+
+/* Due colonne (materiale | cosa fare) larghe in tutto 1240px; sotto i 900px una colonna sola con l'azione per prima. */
+.pagina-richiesta { --ric-sora: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+.ric-pagina {
+  max-width: 1288px;
+  margin: 0 auto;
+  padding: 24px max(24px, env(safe-area-inset-right, 0px)) 56px max(24px, env(safe-area-inset-left, 0px));
+}
+
+/* Titolo: freccia, "Richiesta #N", stato; a destra quando è arrivata. */
+.ric-testata { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-bottom: 20px; }
+.ric-indietro {
+  display: flex; align-items: center; justify-content: center; flex: none; width: 46px; height: 46px;
+  border: 1px solid var(--bordo); border-radius: 50%; background: var(--surface); color: var(--blu); font-size: 24px; text-decoration: none;
+}
+.ric-indietro:hover { background: var(--sfondo); }
+.ric-indietro:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+.ric-titolo { margin: 0; font-family: var(--ric-sora); font-size: 28px; font-weight: 800; line-height: 1.2; }
+.ric-ricevuta { margin-left: auto; color: var(--grigio); font-size: 14px; }
+
+/* Stato: pillola con pallino. --st è il colore, --st-sfondo lo sfondo (come le pillole dello Storico ordini). */
+.ric-st-da_confermare { --st: var(--arancio); --st-sfondo: var(--arancio-chiaro); }
+.ric-st-attesa_corriere { --st: #4b3480; --st-sfondo: var(--viola-chiaro); }
+.ric-st-confermata, .ric-st-da_preparare { --st: var(--verde); --st-sfondo: var(--verde-chiaro); }
+.ric-st-senza_corriere { --st: #991b1b; --st-sfondo: var(--rosso-chiaro); }
+.ric-st-non_disponibile, .ric-st-annullata, .ric-st-chiusa, .ric-st-scaduta { --st: var(--grigio); --st-sfondo: #f1f0ec; }
+.ric-stato {
+  display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 12px; border-radius: 999px;
+  background: var(--st-sfondo); color: var(--st); font-size: 14px; font-weight: 700; line-height: 1.3; white-space: nowrap;
+}
+.ric-punto { flex: none; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+.ric-corpo { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 22px; align-items: start; }
+.ric-colonna { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.ric-scheda { background: var(--surface); border: 1px solid var(--bordo); border-radius: 16px; }
+.ric-h2 { margin: 0; font-family: var(--ric-sora); font-size: 17px; font-weight: 700; line-height: 1.3; }
+.ric-occhiello { margin: 0 0 12px; color: var(--grigio); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+
+/* Materiale richiesto: tabella con listino, prezzo per il cliente e totale. */
+.ric-mat-testa { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px; }
+.ric-conta { color: var(--grigio); font-size: 13px; white-space: nowrap; }
+.ric-tab-testa, .ric-riga {
+  display: grid; grid-template-columns: 64px minmax(0, 1fr) 80px 130px 100px; align-items: center; column-gap: 16px; padding: 0 20px;
+}
+.ric-tab-testa {
+  min-height: 34px; border-top: 1px solid var(--bordo); border-bottom: 1px solid var(--bordo); background: #faf9f6;
+  color: var(--grigio); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.ric-riga { min-height: 72px; padding-top: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--bordo); }
+.ric-num { text-align: right; font-variant-numeric: tabular-nums; }
+.ric-qta {
+  display: inline-flex; align-items: center; justify-self: start; min-width: 44px; height: 32px; padding: 0 10px; border-radius: 8px;
+  background: var(--blu-chiaro); color: var(--blu-scuro); font-family: var(--ric-sora); font-size: 14px; font-weight: 700;
+}
+.ric-articolo { display: flex; flex-direction: column; min-width: 0; }
+.ric-nome { font-size: 16px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.ric-cod { margin-top: 2px; color: var(--grigio); font-size: 13px; }
+.ric-mancano { margin-top: 2px; color: var(--rosso); font-size: 13px; font-weight: 600; }
+.ric-listino { color: var(--grigio); font-size: 14px; }
+.ric-prezzo { display: flex; flex-direction: column; align-items: flex-end; }
+.ric-prezzo strong { font-size: 15px; font-weight: 700; }
+.ric-prezzo small { color: var(--grigio); font-size: 12px; }
+.ric-tot { font-size: 15px; font-weight: 700; }
+.ric-totale {
+  display: flex; align-items: baseline; justify-content: flex-end; flex-wrap: wrap; gap: 4px 12px; padding: 16px 20px;
+  border-radius: 0 0 16px 16px; background: #faf9f6;
+}
+.ric-raee { margin-right: auto; color: var(--grigio); font-size: 13px; }
+.ric-totale-label { color: var(--grigio); font-size: 15px; }
+.ric-totale-cifra { font-family: var(--ric-sora); font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.ric-iva { color: var(--grigio); font-size: 13px; }
+
+/* Cosa succede dopo la conferma: tre passi uniti da una linea, così chi è al banco sa che non deve preparare subito. */
+.ric-passi { padding: 18px 20px 14px; }
+.ric-elenco-passi { margin: 14px 0 0; padding: 0; list-style: none; }
+.ric-passo { position: relative; display: flex; gap: 14px; padding-bottom: 18px; }
+.ric-passo:last-child { padding-bottom: 0; }
+.ric-passo::before { /* la linea che porta al passo dopo */
+  content: ""; position: absolute; top: 36px; bottom: 2px; left: 15px; width: 2px; background: #e4e0d6;
+}
+.ric-passo:last-child::before { display: none; }
+.ric-passo-punto {
+  flex: none; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%;
+  background: var(--p-sfondo); position: relative; z-index: 1;
+}
+.ric-passo-punto::after { content: ""; width: 11px; height: 11px; border-radius: 50%; background: var(--p-colore); }
+.ric-passo-arancio { --p-sfondo: var(--arancio-chiaro); --p-colore: var(--arancio); }
+.ric-passo-viola { --p-sfondo: var(--viola-chiaro); --p-colore: var(--viola); }
+.ric-passo-verde { --p-sfondo: var(--verde-chiaro); --p-colore: var(--verde); }
+.ric-passo.corrente .ric-passo-punto { box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--p-colore); }
+.ric-passo-testi { display: flex; flex-direction: column; gap: 1px; min-width: 0; padding-top: 3px; }
+.ric-passo-testi strong { font-size: 15px; font-weight: 700; line-height: 1.3; }
+.ric-passo-testi span { color: var(--grigio); font-size: 14px; line-height: 1.4; }
+
+/* A destra: timer e pulsanti. Il timer è arancio come sulla home del banco e passa al rosso negli ultimi 2 minuti. */
+.ric-azione { padding: 20px; }
+.ric-timer { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+.ric-anello { position: relative; flex: none; width: 80px; height: 80px; }
+.ric-anello svg { display: block; width: 80px; height: 80px; }
+.ric-anello circle { fill: none; stroke-width: 7; }
+.ric-anello-traccia { stroke: var(--arancio-chiaro); transition: stroke 0.3s; }
+.ric-anello-barra { stroke: var(--arancio); stroke-linecap: round; transition: stroke-dashoffset 1s linear, stroke 0.3s; }
+.ric-anello-tempo {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--arancio);
+  font-family: var(--ric-sora); font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; transition: color 0.3s;
+}
+.ric-timer.urgente .ric-anello-traccia { stroke: var(--rosso-chiaro); }
+.ric-timer.urgente .ric-anello-barra { stroke: var(--rosso); }
+.ric-timer.urgente .ric-anello-tempo { color: var(--rosso); }
+.ric-timer-testi { min-width: 0; }
+.ric-timer-titolo { margin: 0; font-family: var(--ric-sora); font-size: 18px; font-weight: 700; line-height: 1.25; }
+.ric-timer-testi p { margin: 4px 0 0; color: var(--grigio); font-size: 13px; line-height: 1.35; }
+
+.ric-pulsanti { display: flex; flex-direction: column; gap: 12px; margin: 0; }
+.ric-btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 50px; padding: 0 20px;
+  border: 1.5px solid transparent; border-radius: 28px; font-family: inherit; font-size: 16px; font-weight: 700; line-height: 1.2;
+  text-align: center; text-decoration: none; cursor: pointer;
+}
+.ric-btn:focus-visible { outline: 3px solid var(--blu); outline-offset: 2px; }
+.ric-btn svg { flex: none; font-size: 20px; }
+.ric-btn-conferma { min-height: 56px; background: var(--verde); color: #fff; font-size: 17px; }
+.ric-btn-conferma:hover { background: #1f6a31; }
+.ric-btn-neutro { background: var(--surface); border-color: #cfcabd; color: var(--testo); }
+.ric-btn-neutro:hover { background: var(--sfondo); }
+.ric-btn-ordine { margin-top: 4px; background: var(--blu); color: #fff; }
+.ric-btn-ordine:hover { background: var(--blu-scuro); }
+
+/* Dopo la risposta la scheda cambia colore: viola = corriere avvisato (non preparare ancora), verde = confermata, rosso =
+   nessun corriere, grigio = chiusa senza ordine. */
+.ric-esito { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 14px; }
+.ric-esito-icona {
+  flex: none; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%;
+  background: var(--e-colore); color: #fff; font-size: 22px;
+}
+.ric-esito-testi { flex: 1 1 200px; min-width: 0; }
+.ric-esito-titolo { margin: 0; font-family: var(--ric-sora); font-size: 18px; font-weight: 700; line-height: 1.3; color: var(--e-testo); }
+.ric-esito-testi p { margin: 6px 0 0; color: var(--e-testo); font-size: 14px; line-height: 1.45; }
+.ric-esito-testi .ric-esito-nota { font-size: 13px; opacity: 0.9; }
+.ric-esito .ric-btn { flex: 1 1 100%; }
+.ric-esito-verde { --e-colore: var(--verde); --e-testo: #1f5f2e; border-color: #bfe0c6; background: var(--verde-chiaro); }
+.ric-esito-rosso { --e-colore: var(--rosso); --e-testo: #7a1f1f; border-color: #eab9b6; background: var(--rosso-chiaro); }
+.ric-esito-grigio { --e-colore: #8f8d82; --e-testo: #3f3e37; background: #f1f0ec; }
+
+/* Cliente: sempre in vista (prima stava dentro "Cliente ordinante"). */
+.ric-cliente { padding: 18px 20px; }
+.ric-cliente-testa { display: flex; align-items: center; gap: 14px; }
+.ric-cliente-nome { display: flex; flex-direction: column; min-width: 0; }
+.ric-cliente-nome strong { font-family: var(--ric-sora); font-size: 16px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.ric-cliente-nome small { color: var(--grigio); font-size: 13px; }
+.ric-cliente-dati { margin: 14px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.ric-cliente-dati li { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+.ric-dato-icona { flex: none; display: inline-flex; margin-top: 1px; color: var(--grigio); font-size: 18px; }
+.ric-cliente-dati a { color: var(--testo); }
+.ric-apri-cliente {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 44px; margin-top: 4px; color: var(--blu);
+  font-size: 14px; font-weight: 700; text-decoration: none;
+}
+.ric-apri-cliente:hover { text-decoration: underline; }
+
+/* "Elimina dal banco": un link di testo in fondo, piccolo, così non si preme per sbaglio. */
+.ric-elimina-riga { display: flex; justify-content: center; margin: 4px 0 0; }
+.ric-elimina {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border: none; background: none;
+  color: #a33232; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.ric-elimina svg { font-size: 16px; }
+.ric-elimina:hover { text-decoration: underline; }
+.ric-elimina:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ric-anello-barra, .ric-anello-traccia, .ric-anello-tempo { transition: none; }
+}
+
+/* Sotto i 900px: una colonna. L'azione (timer e pulsanti) viene per prima, poi il materiale, il cliente, i passi e in fondo
+   "Elimina dal banco". Le due colonne diventano trasparenti (display: contents) e i blocchi si ordinano con `order`. */
+@media (max-width: 899.98px) {
+  .ric-pagina { padding: 16px max(16px, env(safe-area-inset-right, 0px)) calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + 24px) max(16px, env(safe-area-inset-left, 0px)); }
+  .ric-titolo { font-size: 24px; }
+  .ric-ricevuta { flex: 1 0 100%; margin-left: 0; }
+  .ric-corpo { display: flex; flex-direction: column; align-items: stretch; gap: 16px; }
+  .ric-colonna { display: contents; }
+  .ric-azione { order: 1; }
+  .ric-materiale { order: 2; }
+  .ric-cliente { order: 3; }
+  .ric-passi { order: 4; }
+  .ric-elimina-riga { order: 5; }
+
+  /* La tabella diventa una lista: quantità, nome e totale sulla prima riga; prezzi in piccolo sotto. */
+  .ric-tab-testa { display: none; }
+  .ric-mat-testa { padding: 14px 16px 10px; }
+  .ric-riga {
+    grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "qta articolo tot" ". prezzo prezzo" ". listino listino";
+    column-gap: 12px; row-gap: 4px; padding: 12px 16px; border-top: 1px solid var(--bordo);
+  }
+  .ric-qta { grid-area: qta; align-self: start; }
+  .ric-articolo { grid-area: articolo; }
+  .ric-tot { grid-area: tot; align-self: start; }
+  .ric-prezzo { grid-area: prezzo; flex-direction: row; align-items: baseline; justify-content: flex-start; gap: 6px; }
+  .ric-prezzo::before { content: "Cliente"; color: var(--grigio); font-size: 13px; }
+  .ric-listino { grid-area: listino; text-align: left; font-size: 13px; }
+  .ric-listino::before { content: "Listino "; }
+  .ric-totale { padding: 14px 16px; }
+  .ric-passi, .ric-cliente, .ric-azione { padding-left: 16px; padding-right: 16px; }
+}
+
+/* ---------- Dettaglio richiesta, stato "Attesa corriere" (views/distributore_dettaglio.ejs) ---------- */
+
+/* Il pallino dell'etichetta di stato lampeggia piano finché si aspetta il corriere. */
+.ric-punto.pulse { animation: ric-lampeggia 1.8s ease-in-out infinite; }
+@keyframes ric-lampeggia { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(0.75); } }
+@keyframes ric-batte { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(0.7); opacity: 0.45; } }
+
+/* Avanzamento: i passi con a che punto siamo. Fatto = pallino verde con la spunta, in corso = pallino viola che pulsa col suo
+   anello, da fare = cerchio tratteggiato. La linea verso il passo dopo è verde dopo un passo fatto. */
+.ric-avanzamento .ric-passo-punto::after { display: none; }
+.ric-fase-fatto::before { background: #297c3c; }
+.ric-fase-fatto .ric-passo-punto { background: #297c3c; color: #fff; font-size: 18px; }
+.ric-fase-fatto .ric-passo-punto svg { stroke-width: 2.8; }
+.ric-fase-corrente::before { top: 42px; }
+.ric-fase-corrente .ric-passo-punto { background: var(--p-sfondo); box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--p-colore); }
+.ric-fase-corrente .ric-passo-punto::after {
+  display: block; width: 11px; height: 11px; border-radius: 50%; background: var(--p-colore); animation: ric-batte 1.6s ease-in-out infinite;
+}
+.ric-fase-futuro .ric-passo-punto { background: transparent; border: 2px dashed #cfc8b8; }
+.ric-fase-futuro .ric-passo-testi strong, .ric-fase-futuro .ric-passo-testi span { color: #8a887e; }
+
+/* Scheda d'azione: come quella del timer, con il tempo che passa da quando hai confermato. */
+.ric-attesa { padding: 20px; border: 1.5px solid #d9ccf0; }
+.ric-attesa-testa { display: flex; align-items: center; gap: 16px; }
+.ric-attesa-cerchio {
+  flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 84px; height: 84px;
+  border-radius: 50%; background: #eee8f7; color: #4b3480; text-align: center; line-height: 1.1;
+}
+.ric-attesa-tempo { font-family: var(--ric-sora); font-size: 19px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ric-attesa-sotto { margin-top: 3px; font-size: 11px; font-weight: 600; }
+.ric-attesa-testi { min-width: 0; }
+.ric-attesa-titolo { margin: 0; color: #4b3480; font-family: var(--ric-sora); font-size: 18px; font-weight: 700; line-height: 1.25; }
+.ric-attesa-testi p { margin: 4px 0 0; color: var(--grigio); font-size: 13.5px; line-height: 1.4; }
+.ric-attesa-nota { margin: 16px 0 0; padding: 12px 14px; border-radius: 12px; background: #f7f6f2; color: #4f4d44; font-size: 13.5px; line-height: 1.45; }
+.ric-attesa-parziale { margin: 10px 0 0; color: #8a5a12; font-size: 13px; line-height: 1.4; }
+.ric-attesa-ordine {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 10px 14px;
+  border-radius: 12px; background: var(--viola-chiaro); font-size: 14px;
+}
+.ric-attesa-ordine a { display: inline-flex; align-items: center; min-height: 44px; margin: -10px 0; color: var(--blu); font-weight: 700; text-decoration: none; }
+.ric-attesa-ordine a:hover { text-decoration: underline; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ric-punto.pulse, .ric-fase-corrente .ric-passo-punto::after { animation: none; }
+}
+
+/* ---------- Dettaglio richiesta, stato "Da preparare" ---------- */
+
+/* Scheda d'azione: il timer del corriere (stessi minuti e stesso rosso della pillola della home) e "Preparato". */
+.ric-arrivo { padding: 20px; border: 1.5px solid #bfe0c6; }
+.ric-arrivo-testa { display: flex; align-items: center; gap: 16px; }
+.ric-arrivo-cerchio {
+  flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 84px; height: 84px;
+  border-radius: 50%; background: var(--verde-chiaro); color: var(--verde); text-align: center; line-height: 1.1; transition: background-color 0.3s, color 0.3s;
+}
+.ric-arrivo-min { font-family: var(--ric-sora); font-size: 19px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ric-arrivo-sotto { margin-top: 3px; font-size: 12px; font-weight: 600; }
+.ric-arrivo-testa.vicino .ric-arrivo-cerchio { background: var(--rosso-chiaro); color: var(--rosso); }
+.ric-arrivo-testi { min-width: 0; }
+.ric-arrivo-titolo { margin: 0; font-family: var(--ric-sora); font-size: 18px; font-weight: 700; line-height: 1.25; color: #1f5f2e; }
+.ric-arrivo-testi p { margin: 4px 0 0; color: var(--grigio); font-size: 13.5px; line-height: 1.4; }
+.ric-arrivo .ric-pulsanti { margin-top: 18px; }
+.ric-arrivo-nota { margin: 12px 0 0; color: var(--grigio); font-size: 13px; line-height: 1.4; text-align: center; }
+@media (prefers-reduced-motion: reduce) {
+  .ric-arrivo-cerchio { transition: none; }
+}
+
+/* Fra 900 e 1100px la colonna di sinistra è stretta (~500px): a destra 340px e la tabella senza il listino, così il nome dell'articolo
+   non si spezza lettera per lettera. */
+@media (min-width: 900px) and (max-width: 1099.98px) {
+  .ric-corpo { grid-template-columns: minmax(0, 1fr) 340px; }
+  .ric-tab-testa, .ric-riga { grid-template-columns: 52px minmax(0, 1fr) 110px 84px; column-gap: 12px; }
+  .ric-tab-testa > :nth-child(3), .ric-listino { display: none; }
 }

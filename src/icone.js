@@ -121,6 +121,11 @@ const iconaFurgone = svg(
   '<circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>'
 );
 
+// Aeroplanino di carta: "Mandi la richiesta" nella pagina Stato ordini vuota.
+const iconaInvio = svg(
+  '<path d="M21.5 2.5 10.8 13.2"/><path d="M21.5 2.5 14.8 21.5l-4-8.3-8.3-4 19-6.7Z"/>'
+);
+
 // Inquadratura (quattro angoli + cerchio): "cerca con una foto o il codice a barre" nella home.
 const iconaInquadra = svg(
   '<path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/>' +
@@ -295,6 +300,7 @@ module.exports = {
   iconaCarrello,
   iconaOrdini,
   iconaFurgone,
+  iconaInvio,
   iconaInquadra,
   iconaHome,
   iconaClienti,

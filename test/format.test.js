@@ -1,7 +1,7 @@
 // Date brevi dello Storico (src/format.js): "Oggi · 21:20", "Ieri · 18:05", "12 set · 09:40" e il mese in ora italiana.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { dataBreveRoma, dataSolaRoma, meseRoma } = require('../src/format');
+const { dataBreveRoma, dataCortaRoma, dataEstesaRoma, dataSolaRoma, meseRoma, durataMinuti, daMinuti, tempoTrascorso } = require('../src/format');
 
 // Le colonne TIMESTAMP sono UTC senza fuso: a Roma d'estate (ottobre) sono +2 ore, d'inverno +1.
 const adesso = new Date('2026-10-05T20:00:00Z');
@@ -48,4 +48,47 @@ test('meseRoma: mese e anno in ora italiana, maiuscola iniziale', () => {
   // 22:30 UTC del 30 settembre sono già l'1 ottobre a Roma
   assert.deepEqual(meseRoma('2026-09-30 22:30:00'), { chiave: '2026-10', titolo: 'Ottobre 2026' });
   assert.deepEqual(meseRoma(null), { chiave: '', titolo: '—' });
+});
+
+test('dataCortaRoma: giorno e mese in ora italiana, senza "Oggi" né ora; l’anno solo se non è quello corrente', () => {
+  assert.equal(dataCortaRoma('2026-09-12 07:40:00', adesso), '12 set');
+  assert.equal(dataCortaRoma('2026-10-05 19:20:00', adesso), '5 ott'); // anche oggi: niente "Oggi"
+  assert.equal(dataCortaRoma('2025-03-12 10:40:00', adesso), '12 mar 2025');
+  // 23:30 UTC del 30 settembre sono già l'1 ottobre a Roma
+  assert.equal(dataCortaRoma('2026-09-30 23:30:00', adesso), '1 ott');
+  assert.equal(dataCortaRoma(new Date(2026, 8, 12, 7, 40), adesso), '12 set'); // come la leggerebbe pg
+  assert.equal(dataCortaRoma(null, adesso), '—');
+});
+
+test('dataEstesaRoma: giorno della settimana e mese in italiano con la maiuscola, ora italiana; l’anno solo se non è quello corrente', () => {
+  // 18:10 UTC del 14 ottobre 2026 sono le 20:10 a Roma (mercoledì)
+  assert.equal(dataEstesaRoma('2026-10-14 18:10:00', new Date('2026-10-14T20:00:00Z')), 'Mercoledì 14 ottobre alle 20:10');
+  assert.equal(dataEstesaRoma('2025-10-14 18:10:00', new Date('2026-10-14T20:00:00Z')), 'Martedì 14 ottobre 2025 alle 20:10');
+  // 23:30 UTC del 31 dicembre sono già l'1 gennaio a Roma
+  assert.equal(dataEstesaRoma('2026-12-31 23:30:00', new Date('2026-12-31T12:00:00Z')), 'Venerdì 1 gennaio 2027 alle 00:30');
+  assert.equal(dataEstesaRoma(new Date(2026, 9, 14, 18, 10), new Date('2026-10-14T20:00:00Z')), 'Mercoledì 14 ottobre alle 20:10'); // come la leggerebbe pg
+  assert.equal(dataEstesaRoma(null), '—');
+});
+
+test('durataMinuti, daMinuti e tempoTrascorso: i tempi della home e del dettaglio della richiesta', () => {
+  assert.equal(durataMinuti(8), '8 min');
+  assert.equal(durataMinuti(59), '59 min');
+  assert.equal(durataMinuti(60), '1 h 00');
+  assert.equal(durataMinuti(65), '1 h 05');
+  assert.equal(durataMinuti(125), '2 h 05');
+  // "da N min": sotto il minuto si dice "meno di 1 min"
+  assert.equal(daMinuti(0), 'meno di 1 min');
+  assert.equal(daMinuti(59), 'meno di 1 min');
+  assert.equal(daMinuti(60), '1 min');
+  assert.equal(daMinuti(253), '4 min');
+  assert.equal(daMinuti(3905), '1 h 05');
+  assert.equal(daMinuti(-5), 'meno di 1 min');
+  assert.equal(daMinuti(null), 'meno di 1 min');
+  // il cerchio dell'attesa: mm:ss che sale, "1 h 05" oltre l'ora
+  assert.equal(tempoTrascorso(0), '00:00');
+  assert.equal(tempoTrascorso(253), '04:13');
+  assert.equal(tempoTrascorso(3599), '59:59');
+  assert.equal(tempoTrascorso(3600), '1 h 00');
+  assert.equal(tempoTrascorso(3905), '1 h 05');
+  assert.equal(tempoTrascorso(-3), '00:00');
 });

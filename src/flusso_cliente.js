@@ -231,14 +231,25 @@ async function reinviaRichiesta(richiesta) {
 
 // Il cliente può togliere un ordine solo finché il banco non l'ha preso in carico: dopo, la
 // merce è in preparazione o partita e cancellarlo lo farebbe sparire anche al distributore.
+// Un ordine consegnato non si annulla mai: "Consegnato" non cambia `stato` (con la rotta provvisoria
+// /consegnato-prova un ordine può risultare consegnato restando 'inviato'), quindi si guarda anche consegnato_il.
+// Questa è l'unica regola: la usano la pagina dell'ordine, le rotte del sito (/ordini/:id/elimina e
+// /richieste/:id/elimina) e l'API dell'app.
 function ordineAnnullabileDalCliente(ordine) {
-  return ordine.stato === 'inviato';
+  return ordine.stato === 'inviato' && !ordine.consegnato_il;
 }
 
+// Lanciata quando l'ordine non si può più annullare. Non cambia niente nel DB. `messaggioCliente` è il testo da
+// mostrare (sito e app): diverso se l'ordine è già consegnato o se il banco l'ha solo preso in carico.
 class OrdineInLavorazione extends Error {
   constructor(ordine) {
-    super('ordine già preso in carico');
+    const consegnato = !!ordine.consegnato_il;
+    super(consegnato ? 'ordine già consegnato' : 'ordine già preso in carico');
     this.ordine = ordine;
+    this.consegnato = consegnato;
+    this.messaggioCliente = consegnato
+      ? 'Questo ordine è già stato consegnato e non si può più annullare.'
+      : 'Il distributore ha già preso in carico questo ordine: per annullarlo contattalo direttamente.';
   }
 }
 
@@ -630,6 +641,31 @@ async function articoliDaRiordinare(clienteId, ordineId) {
   return { articoli, saltati };
 }
 
+// La scheda "Il tuo ultimo ordine" del carrello vuoto: l'ordine consegnato più recente del cliente, con data e
+// righe. Una sola lettura (ordine + righe insieme); le righe mostrate sono al massimo `massimo`, il resto è
+// `altri`. Ritorna null se il cliente non ha mai avuto un ordine consegnato.
+async function ultimoOrdineConsegnato(clienteId, massimo = 3) {
+  const righe = await db
+    .prepare(
+      `SELECT o.id AS ordine_id, o.creato_il, oi.quantita, oi.nome_snapshot
+         FROM orders o
+         JOIN order_items oi ON oi.order_id = o.id
+        WHERE o.id = (SELECT id FROM orders
+                       WHERE cliente_id = ? AND consegnato_il IS NOT NULL
+                       ORDER BY creato_il DESC, id DESC
+                       LIMIT 1)
+        ORDER BY oi.id`
+    )
+    .all(clienteId);
+  if (!righe.length) return null;
+  return {
+    id: righe[0].ordine_id,
+    data: format.dataCortaRoma(righe[0].creato_il),
+    righe: righe.slice(0, massimo).map((r) => ({ quantita: r.quantita, nome: r.nome_snapshot })),
+    altri: Math.max(0, righe.length - massimo),
+  };
+}
+
 // "Stato ordini": mostra sempre e solo UNA cosa, mai un elenco — quella più rilevante, in
 // ordine di priorità: in attesa > in consegna > scaduta senza conferme. Ogni
 // livello ha una finestra oltre la quale non conta più come "attivo" (resta comunque
@@ -795,5 +831,6 @@ module.exports = {
   richiesteClienteConStato,
   storicoCliente,
   articoliDaRiordinare,
+  ultimoOrdineConsegnato,
   attivitaCorrente,
 };
