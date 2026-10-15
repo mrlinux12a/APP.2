@@ -758,6 +758,8 @@ app.get('/carrello', requireRole('cliente'), async (req, res) => {
 
   res.render('carrello', {
     titolo: 'Riepilogo',
+    // Una chiave nuova a ogni apertura della pagina: identifica l'invio di QUESTO carrello (vedi flusso.chiaveInvioValida).
+    chiaveInvio: require('crypto').randomBytes(12).toString('hex'),
     avviso: saltati === 1 ? '1 articolo non è più disponibile' : saltati > 1 ? saltati + ' articoli non sono più disponibili' : '',
     righe,
     ...riepilogo,
@@ -802,8 +804,13 @@ app.post('/richieste', requireRole('cliente'), async (req, res) => {
   aggiornaCarrelloDaForm(req, req.body && req.body.modo === 'imposta' ? 'imposta' : 'aggiungi');
   let requestId;
   try {
-    const dati = { destinazione: req.body && req.body.destinazione, note: req.body && req.body.note };
-    if (stripePagamenti.attivo()) {
+    // `chiave_invio` è scritta nella pagina del carrello: la stessa pagina dà una richiesta sola, comunque si clicchi.
+    const dati = {
+      destinazione: req.body && req.body.destinazione,
+      note: req.body && req.body.note,
+      chiaveInvio: req.body && req.body.chiave_invio,
+    };
+    if (stripePagamenti.pagaConStripe()) {
       // Con Stripe la richiesta non parte da qui: parte quando la carta è autorizzata (vedi /pagamento/esito, il
       // webhook e il timer). Il carrello si svuota solo allora.
       const pagamentoId = await stripePagamenti.avviaPagamento(req.session.user.id, await righeCarrello(req), dati);
@@ -812,6 +819,11 @@ app.post('/richieste', requireRole('cliente'), async (req, res) => {
     requestId = await flusso.nuovaRichiesta(req.session.user.id, await righeCarrello(req), dati);
   } catch (e) {
     if (!(e instanceof flusso.ErroreFlusso)) throw e;
+    // Questo invio ha già dato una richiesta (secondo clic, o "indietro" sulla stessa pagina): si va a quella.
+    if (e.codice === 'gia_inviata' && e.requestId) {
+      req.session.carrello = {};
+      return res.redirect('/richieste/' + e.requestId);
+    }
     return paginaErroreFlusso(res, e);
   }
   req.session.carrello = {};
@@ -870,6 +882,18 @@ app.get('/pagamento/:id', requireRole('cliente'), async (req, res) => {
   });
 });
 
+// La striscia di schede in cima a una pagina di dettaglio del cliente (partials/striscia_ordini.ejs): solo se le voci di "Stato ordini"
+// sono due o più E la pagina aperta è una di loro (`voce` = "richiesta-12" o "ordine-7"); altrimenti null (per esempio un ordine
+// consegnato aperto dallo storico). Le voci sono quelle già lette dal middleware per l'icona in basso, così icona e striscia dicono
+// la stessa cosa; qui si aggiunge solo il materiale (una lettura per tutte).
+async function strisciaPer(req, res, voce) {
+  const so = res.locals.statoOrdini;
+  const voci = so && Array.isArray(so.voci) ? so.voci : [];
+  if (!req.session.user || req.session.user.ruolo !== 'cliente' || voci.length < 2) return null;
+  if (!voci.some((v) => v.voce === voce)) return null;
+  return { voci: await flusso.conBreve(voci), attiva: voce, firma: so.firma || flusso.firmaVoci(voci) };
+}
+
 app.get('/richieste/:id', requireRole('cliente'), async (req, res) => {
   const richiesta = await richieste.aggiornaScadenza(req.params.id);
   if (!richiesta || richiesta.cliente_id !== req.session.user.id) {
@@ -883,9 +907,13 @@ app.get('/richieste/:id', requireRole('cliente'), async (req, res) => {
   // dettaglioRichiesta segna lette le notifiche, ma res.locals.ordiniNonLetti è già stato
   // calcolato dal middleware prima di questa route: va azzerato qui, altrimenti questa
   // stessa risposta renderizzerebbe ancora il conteggio vecchio.
-  const dati = await flusso.dettaglioRichiesta(richiesta);
+  // Dettaglio e materiale della striscia non dipendono uno dall'altro: un solo giro di rete invece di due.
+  const [dati, striscia] = await Promise.all([
+    flusso.dettaglioRichiesta(richiesta),
+    strisciaPer(req, res, 'richiesta-' + richiesta.id),
+  ]);
   res.locals.ordiniNonLetti = 0;
-  const vista = { titolo: 'Richiesta #' + richiesta.id, ...dati };
+  const vista = { titolo: 'Richiesta #' + richiesta.id, striscia, ...dati };
   if (richiesta.stato === 'in_attesa') return res.render('richiesta_attesa', vista);
   return res.render('richiesta_chiusa', vista);
 });
@@ -920,7 +948,7 @@ app.post('/richieste/:id/reinvia', requireRole('cliente'), async (req, res) => {
   if (!richiesta || richiesta.cliente_id !== req.session.user.id) return res.redirect('/ordini');
   // Con Stripe il blocco sulla carta è stato rilasciato alla chiusura: per rinviare si autorizza di nuovo, e la
   // richiesta si riapre a pagamento fatto.
-  if (stripePagamenti.attivo() && richiesta.stato === 'nessuna_offerta') {
+  if (stripePagamenti.pagaConStripe() && richiesta.stato === 'nessuna_offerta') {
     try {
       return res.redirect(303, '/pagamento/' + (await stripePagamenti.avviaPagamentoReinvio(req.session.user.id, richiesta)));
     } catch (e) {
@@ -982,7 +1010,10 @@ app.post('/distributore/richieste/:id/elimina', requireRole('distributore'), asy
 // Non c'è più "riepilogo con il distributore scelto" né "Invia l'ordine": l'installatore paga con la
 // richiesta e l'ordine nasce da solo quando il corriere prende la consegna (src/richieste.js).
 
-// "Stato ordini": porta dritto all'unica attività in corso (vedi flusso.attivitaCorrente).
+// "Stato ordini": con una sola attività in corso porta dritto alla sua pagina (richiesta in attesa o ordine in consegna); con due o
+// più porta a quella indicata da ?voce=<tipo>-<id> (se è fra le voci) o alla PRIMA, la più urgente: lì, sopra la pagina intera
+// dell'ordine, c'è la striscia di schede per passare dall'uno all'altro (partials/striscia_ordini.ejs); senza niente, la pagina
+// vuota. Le voci e il loro ordine sono quelli dell'icona in basso (flusso.vociStriscia).
 // Solo il link "Stato ordini" della barra in basso, già aggiornato: lo richiede lo script di
 // partials/nav_ordini.ejs mentre una richiesta è in attesa o un ordine è in consegna. Dalla home
 // (?scheda=1) segue anche la scheda di stato in cima (partials/stato_home.ejs).
@@ -995,8 +1026,12 @@ app.get('/nav/stato-ordini', requireRole('cliente'), (req, res) => {
 });
 
 app.get('/ordini', requireRole('cliente'), async (req, res) => {
-  const attivo = await flusso.attivitaCorrente(req.session.user.id);
-  if (attivo) return res.redirect((attivo.tipo === 'ordine' ? '/ordini/' : '/richieste/') + attivo.id);
+  const voci = await flusso.vociStriscia(req.session.user.id, { segnaLette: true, breve: false });
+  if (voci.length >= 2) {
+    const scelta = voci.find((v) => v.voce === String(req.query.voce || ''));
+    return res.redirect((scelta || voci[0]).href);
+  }
+  if (voci.length === 1) return res.redirect(voci[0].href);
   res.render('ordini_cliente', { titolo: 'Stato ordini', minutiRisposta: await pricing.getFinestraMinuti() });
 });
 
@@ -1038,19 +1073,25 @@ app.get('/ordini/:id', requireLogin, async (req, res) => {
   }
   // Il cliente sta guardando proprio questo ordine: un suo cambio di stato non deve
   // anche accendere il pallino "Stato ordini" in basso.
-  if (req.session.user.ruolo === 'cliente') {
-    await notifiche.segnaLetteCategoria(req.session.user.id, 'ordini');
-    await notifiche.segnaLetteCategoria(req.session.user.id, 'richieste');
+  const eCliente = req.session.user.ruolo === 'cliente';
+  // Le due notifiche segnate lette, il dettaglio e il materiale della striscia non dipendono uno dall'altro: partono insieme
+  // (questa pagina si apre a ogni passaggio fra gli ordini di "Stato ordini", e ogni lettura in fila è un giro di rete).
+  const [, , dettaglio, striscia] = await Promise.all([
+    eCliente ? notifiche.segnaLetteCategoria(req.session.user.id, 'ordini') : null,
+    eCliente ? notifiche.segnaLetteCategoria(req.session.user.id, 'richieste') : null,
+    flusso.dettaglioOrdine(ordine),
+    strisciaPer(req, res, 'ordine-' + ordine.id),
+  ]);
+  if (eCliente) {
     res.locals.ordiniNonLetti = 0;
+    // Il cliente vede la ditta, non la filiale; banchi e agente sì (da dove parte il pacco).
+    dettaglio.distributore = flusso.senzaFiliale(dettaglio.distributore);
   }
-
-  const dettaglio = await flusso.dettaglioOrdine(ordine);
-  // Il cliente vede la ditta, non la filiale; banchi e agente sì (da dove parte il pacco).
-  if (req.session.user.ruolo === 'cliente') dettaglio.distributore = flusso.senzaFiliale(dettaglio.distributore);
   res.render('ordine_dettaglio', {
     titolo: 'Ordine #' + ordine.id,
     ordine,
     nuovo: req.query.nuovo === '1',
+    striscia,
     ...dettaglio,
   });
 });
@@ -1061,7 +1102,8 @@ app.post('/ordini/:id/consegnato', requireRole('cliente'), async (req, res) => {
     return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Ordine non trovato.' });
   }
   await flusso.segnaConsegnato(ordine);
-  res.redirect('/ordini/' + ordine.id);
+  // Come per la rotta provvisoria qui sotto: dopo "Ordine consegnato" si va in "Stato ordini".
+  res.redirect('/ordini');
 });
 
 // PROVVISORIO: "Consegnato" cliccabile sulla scheda della home, per non mostrare più l'ordine in consegna.
@@ -1073,10 +1115,10 @@ app.post('/ordini/:id/consegnato-prova', requireRole('cliente'), async (req, res
     return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Ordine non trovato.' });
   }
   await flusso.segnaConsegnatoProva(ordine);
-  // Dalla pagina dell'ordine si torna all'ordine (ora consegnato); dalle altre parti, alla home. Si accettano
-  // solo percorsi /ordini/<numero>: niente redirect aperti.
-  const ritorno = /^\/ordini\/\d+$/.test((req.body && req.body.ritorno) || '') ? req.body.ritorno : '/home';
-  res.redirect(ritorno);
+  // Dopo "Ordine consegnato" si va in "Stato ordini" (richiesta esplicita del 15/10/2026), non sulla pagina dell'ordine né in
+  // catalogo: lì c'è l'altro ordine in corso, se c'è, altrimenti la pagina "nessun ordine in corso". L'ordine appena chiuso si
+  // rivede dallo Storico. (Il pulsante sta solo nella pagina dell'ordine.)
+  res.redirect('/ordini');
 });
 
 // Elimina ordine (cliente) — globale
@@ -1798,8 +1840,19 @@ for (const avviso of stripePagamenti.controllaConfigurazione()) console.warn('[s
 // Gruppo WhatsApp dei corrieri: si collega solo con WHATSAPP_ATTIVO=1 (vedi src/whatsapp.js).
 whatsapp.avvia();
 
-const server = app.listen(PORT,'127.0.0.1', () => {
+// Su quale indirizzo ascolta: di default solo sul computer stesso (127.0.0.1), che sulla VPS basta e avanza (davanti c'è
+// il proxy). In locale, per aprire il sito dal telefono sulla stessa rete Wi-Fi, si mette HOST=0.0.0.0 nel .env.
+const HOST = process.env.HOST || '127.0.0.1';
+const server = app.listen(PORT, HOST, () => {
   console.log(`Server minuteria in ascolto su http://localhost:${PORT}`);
+  if (HOST === '0.0.0.0' || HOST === '::') {
+    // Gli indirizzi con cui lo raggiunge il telefono (IPv4 delle schede di rete, escluse quelle virtuali di loopback).
+    for (const schede of Object.values(require('os').networkInterfaces())) {
+      for (const s of schede || []) {
+        if (s.family === 'IPv4' && !s.internal) console.log(`  dalla rete locale: http://${s.address}:${PORT}`);
+      }
+    }
+  }
 });
 
 // pm2 (e Ctrl+C in locale) chiedono la chiusura con un segnale: si smette di accettare richieste nuove e

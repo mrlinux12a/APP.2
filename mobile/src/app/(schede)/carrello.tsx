@@ -47,6 +47,11 @@ function Riga({ r, ultima, tolto }: { r: RigaCarrello; ultima: boolean; tolto: b
   );
 }
 
+// Una stringa casuale per distinguere un invio dall'altro (lettere e cifre, tra 8 e 64 caratteri: lo chiede il server).
+function nuovaChiave() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
+}
+
 export default function Carrello() {
   const { c } = useTema();
   const clientDati = useQueryClient();
@@ -72,11 +77,18 @@ export default function Carrello() {
   // mostrava "Il carrello è vuoto / Vai al catalogo" per tutto il tempo in cui si aspetta
   // "Stato ordini", cioè un attimo di catalogo prima dell'attesa delle risposte.
   const partita = useRef(false);
+  // Chiave dell'invio di QUESTO carrello: il server fa partire una richiesta sola per chiave, quindi un doppio tocco o un
+  // nuovo tentativo dopo una risposta persa non crea un secondo ordine. Si rinnova quando il carrello si svuota dopo
+  // l'invio: per un ordine nuovo si riparte da un carrello nuovo.
+  const chiaveInvio = useRef(nuovaChiave());
+  // Il secondo tocco può arrivare prima che `invio` (stato) ridisegni il pulsante come disattivato.
+  const inviando = useRef(false);
   useFocusEffect(
     useCallback(
       () => () => {
         if (!partita.current) return;
         partita.current = false;
+        chiaveInvio.current = nuovaChiave();
         carrello.svuota();
       },
       []
@@ -87,23 +99,22 @@ export default function Carrello() {
   // attivi e si passa a "Stato ordini", che mostra l'attesa. L'ordine nasce da solo quando il corriere
   // prende la consegna: l'installatore non sceglie né conferma altro.
   const inviaRichiesta = async () => {
+    if (inviando.current) return;
+    inviando.current = true;
     setInvio(true);
     try {
       await chiamaApi<{ id: number }>('/richieste', {
         metodo: 'POST',
-        corpo: { righe: carrello.voci(), destinazione: destinazione || '', note },
+        corpo: { righe: carrello.voci(), destinazione: destinazione || '', note, chiave: chiaveInvio.current },
       });
       partita.current = true;
       // 'all': anche se la scheda è già stata vista e non è in primo piano, così non mostra i dati vecchi.
       await clientDati.invalidateQueries({ queryKey: ['stato-ordini'], refetchType: 'all' });
       router.navigate('/ordini');
     } catch (e) {
-      if (e instanceof ErroreApi && e.dati?.codice === 'in_corso') {
-        chiedi('Richiesta già in corso', e.message, 'Apri la richiesta', () => router.navigate('/ordini'));
-      } else {
-        informa('Richiesta non inviata', e instanceof ErroreApi ? e.message : 'Invio non riuscito, riprova.');
-      }
+      informa('Richiesta non inviata', e instanceof ErroreApi ? e.message : 'Invio non riuscito, riprova.');
     } finally {
+      inviando.current = false;
       setInvio(false);
     }
   };

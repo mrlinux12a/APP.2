@@ -92,3 +92,19 @@ test('durataMinuti, daMinuti e tempoTrascorso: i tempi della home e del dettagli
   assert.equal(tempoTrascorso(3905), '1 h 05');
   assert.equal(tempoTrascorso(-3), '00:00');
 });
+
+test('durataFinestraSec: la finestra di conferma, anche per una richiesta rinviata che ha ancora il creato_il di ore fa', () => {
+  const { durataFinestraSec } = require('../src/format');
+  const t = (iso) => new Date(iso + 'Z');
+  // richiesta normale: scade_il = creato_il + 10 minuti
+  assert.equal(durataFinestraSec(t('2026-10-15T10:00:00'), t('2026-10-15T10:10:00'), 10), 600);
+  // finestra più corta di quella configurata (config cambiata dopo): resta quella vera della richiesta
+  assert.equal(durataFinestraSec(t('2026-10-15T10:00:00'), t('2026-10-15T10:05:00'), 10), 300);
+  // rinviata: creata alle 8, finestra ripartita alle 10:00 e scade alle 10:10 -> 2 ore e 10 di differenza, vale la finestra
+  assert.equal(durataFinestraSec(t('2026-10-15T08:00:00'), t('2026-10-15T10:10:00'), 10), 600);
+  assert.equal(durataFinestraSec(t('2026-10-15T08:00:00'), t('2026-10-15T10:10:00'), 15), 900);
+  // dati mancanti o assurdi: la finestra (e 10 minuti se manca anche quella)
+  assert.equal(durataFinestraSec(null, null, 10), 600);
+  assert.equal(durataFinestraSec(t('2026-10-15T10:10:00'), t('2026-10-15T10:00:00'), 10), 600);
+  assert.equal(durataFinestraSec(null, null, undefined), 600);
+});

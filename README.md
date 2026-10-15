@@ -30,10 +30,14 @@ nel repository: va creato a mano sul server con
 DATABASE_URL=...      # stringa di connessione Postgres (pooler di Supabase)
 SESSION_SECRET=...    # firma i cookie di login: se cambia, tutti devono rifare l'accesso
 PORT=3000             # facoltativa
+HOST=127.0.0.1        # facoltativa: indirizzo su cui ascolta. Di default solo il computer stesso; in LOCALE, per aprire il
+                      #   sito dal telefono sullo stesso Wi-Fi, 0.0.0.0 (all'avvio stampa gli indirizzi da digitare)
 DISTRIBUTORE_PREDEFINITO=BOREA SRL   # facoltativa: a chi si collegano i nuovi clienti (vedi "Registrazione e approvazione")
 STRIPE_SECRET_KEY=sk_...             # facoltative, vedi "Pagamenti con Stripe": con la chiave il sito paga con Stripe,
 STRIPE_PUBLISHABLE_KEY=pk_...        #   senza resta simulato (la pubblicabile serve al form di pagamento)
 STRIPE_WEBHOOK_SECRET=whsec_...
+PAGAMENTO_SIMULATO=1  # SOLO nel .env del PC, MAI sulla VPS: "Paga e invia" salta Stripe (pagamento simulato). Sulla VPS è ignorata
+                      #   comunque con la chiave reale (sk_live_) o con NODE_ENV=production, ma la riga non ci deve stare
 APP_URL=https://tuodominio.it        # indirizzo pubblico del sito, per il ritorno da Stripe
 ```
 
@@ -242,8 +246,9 @@ disattivati) sono solo in `db/punti_vendita.js`: lo script che li carica,
 5. **Attesa** — la richiesta parte verso **tutti i distributori attivi** (non filtrata per zona
    né per copertura). Hanno **10 minuti** (`finestra_conferma_min`) per confermare la
    disponibilità e, con il gruppo WhatsApp acceso, trovare un corriere. Il cliente vede un
-   countdown e lo stato di ogni banco: può chiudere la schermata. Una sola richiesta aperta per
-   cliente alla volta; può annullarla (pagamento rimborsato).
+   countdown e lo stato di ogni banco: può chiudere la schermata. Può mandare altre richieste anche
+   con una già in attesa o un ordine in consegna ("Stato ordini" le segue tutte); può annullarla
+   (pagamento rimborsato).
 6. **Ordine automatico** — l'installatore **non sceglie né conferma più niente**. L'ordine nasce da
    solo quando una risposta del banco diventa valida: appena **un corriere prende la consegna**
    nel gruppo (vedi "Gruppo WhatsApp dei corrieri") o, a modulo spento, appena il banco accetta.

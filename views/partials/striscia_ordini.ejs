@@ -1,0 +1,47 @@
+<%#
+  La striscia di schede in cima a "Stato ordini" quando le attività in corso sono due o più (richieste in attesa, ordini in consegna, una
+  richiesta scaduta da rinviare): una scheda per ordine, sotto la pagina completa di quello selezionato. Si include subito sotto
+  l'appbar di richiesta_attesa.ejs, richiesta_chiusa.ejs e ordine_dettaglio.ejs, solo se `striscia` esiste (vedi strisciaPer in server.js).
+  striscia = { voci: [{ fase, href, voce, breve, secondi, durata, minuti }], attiva: 'richiesta-12', firma }. Le voci e il loro ordine
+  sono quelli dell'icona in basso (flusso.vociStriscia). Il tocco su una scheda è un normale link alla pagina di quella voce.
+  I timer delle richieste sono [data-countdown]/[data-arco] dentro la scheda, che porta il suo [data-secondi]: li muove lo script di
+  nav_ordini.ejs, lo stesso dell'icona. data-firma serve a ricaricare la pagina quando le voci cambiano (nuovo ordine, fase diversa).
+%>
+<%
+  const voci = striscia.voci;
+  const n = voci.length;
+  const posizione = voci.findIndex(function (v) { return v.voce === striscia.attiva; }) + 1;
+  const CIRC = 65.97; // 2 * PI * 10.5, come l'anello dell'icona in basso
+%>
+<section class="striscia<%= n >= 4 ? ' striscia-scorre' : '' %>" data-striscia data-firma="<%= striscia.firma %>">
+  <div class="striscia-testa">
+    <span class="striscia-conta"><%= n %> in corso</span>
+    <span class="striscia-pos"><%= posizione %> di <%= n %></span>
+  </div>
+  <nav class="striscia-schede" aria-label="Ordini in corso" style="--n: <%= n %>">
+    <% voci.forEach(function (v) { %>
+      <% const attiva = v.voce === striscia.attiva; %>
+      <a class="str-scheda str-<%= v.fase %><%= attiva ? ' str-attiva' : '' %>" href="<%= v.href %>" data-voce="<%= v.voce %>"<%- attiva ? ' aria-current="page"' : '' %><% if (v.fase === 'richiesta') { %> data-secondi="<%= v.secondi %>" data-durata="<%= v.durata %>"<% } %>>
+        <span class="str-ico" aria-hidden="true">
+          <% if (v.fase === 'richiesta') { %>
+            <svg class="str-anello" viewBox="0 0 24 24">
+              <circle class="traccia" cx="12" cy="12" r="10.5"/>
+              <circle class="avanzamento" data-arco data-circ="<%= CIRC %>" cx="12" cy="12" r="10.5" style="stroke-dashoffset: <%= (CIRC * (1 - v.secondi / (v.durata || 600))).toFixed(2) %>"/>
+            </svg>
+            <span class="str-scatola"><%- iconaOrdini %></span>
+          <% } else if (v.fase === 'consegna') { %>
+            <span class="str-furgone bob"><%- iconaFurgone %></span>
+          <% } else { %>
+            <span class="str-scatola str-spenta"><%- iconaOrdini %></span>
+            <span class="str-allarme">!</span>
+          <% } %>
+        </span>
+        <span class="str-valore"><%
+          if (v.fase === 'richiesta') { %><span data-countdown><%= fmt.mmss(v.secondi) %></span><%
+          } else if (v.fase === 'consegna') { %><%= v.minuti != null ? 'tra ' + v.minuti + ' min' : 'In consegna' %><%
+          } else { %>Rinvia<% } %></span>
+        <span class="str-breve"><%= v.breve %></span>
+      </a>
+    <% }); %>
+  </nav>
+</section>

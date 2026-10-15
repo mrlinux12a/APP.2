@@ -1,11 +1,12 @@
 <%
+  const str = (typeof striscia !== 'undefined' && striscia) ? striscia : null;
   // Anello: stessa durata e stessa formula di partials/nav_ordini.ejs (e dello script in fondo a quel file,
-  // che muove ogni [data-countdown] e [data-arco] della pagina: l'anello e il numero qui sotto e l'icona
-  // "In attesa · mm:ss" della navbar sono un solo conto alla rovescia). Circonferenza = 2 * PI * 64.
+  // che muove ogni [data-countdown] e [data-arco] della pagina, ognuno col conto del suo [data-secondi] più vicino: qui è
+  // .contenuto, cioè i secondi di QUESTA richiesta, non quelli dell'icona, che con più richieste segue un'altra). Circonferenza = 2 * PI * 64.
   const CIRC_ATTESA = 402.12;
-  const inizioFinestra = fmt.toDate(richiesta.creato_il);
-  const fineFinestra = fmt.toDate(richiesta.scade_il);
-  const durataFinestra = inizioFinestra && fineFinestra ? Math.max(1, Math.round((fineFinestra - inizioFinestra) / 1000)) : 600;
+  // La durata è la finestra di conferma, non "scade_il - creato_il": una richiesta rinviata ha creato_il di prima e l'anello
+  // partirebbe quasi vuoto (fmt.durataFinestraSec).
+  const durataFinestra = fmt.durataFinestraSec(richiesta.creato_il, richiesta.scade_il, typeof minutiRisposta !== 'undefined' ? minutiRisposta : 10);
   const offsetAnello = (CIRC_ATTESA * (1 - secondi / durataFinestra)).toFixed(2);
 %>
 <!DOCTYPE html>
@@ -13,11 +14,12 @@
 <head>
   <%- include('partials/app_head', { titolo }) %>
 </head>
-<body data-loggato="1">
+<body data-loggato="1"<%- str ? ' class="con-striscia"' : '' %>>
   <div class="app">
-    <%- include('partials/appbar', { titolo, intestazione: 'Verifica disponibilità', indietro: '/home' }) %>
+    <%- include('partials/appbar', { titolo, intestazione: str ? 'Stato ordini' : 'Verifica disponibilità', indietro: str ? null : '/home' }) %>
+    <% if (str) { %><%- include('partials/striscia_ordini', { striscia: str }) %><% } %>
 
-    <div class="contenuto" data-attesa="<%= richiesta.id %>" data-secondi="<%= secondi %>">
+    <div class="contenuto" data-attesa="<%= richiesta.id %>" data-secondi="<%= secondi %>" data-durata="<%= durataFinestra %>">
       <%# 1. Timer e passaggi %>
       <div class="card att-card att-timer">
         <div class="att-anello">

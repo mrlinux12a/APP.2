@@ -1,6 +1,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#f3f1ec">
+<%# L'utente collegato: public/app.js ci lega le quantità scelte e non ancora aggiunte al carrello (un altro utente sulla stessa scheda non le vede). %>
+<% if (typeof currentUser !== 'undefined' && currentUser) { %><meta name="utente" content="<%= currentUser.id %>"><% } %>
 <%# PWA: manifest e icone (public/manifest.webmanifest, public/icons). Senza <link rel="icon"> il browser chiede /favicon.ico a ogni pagina. %>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icons/icona-192.png" type="image/png">

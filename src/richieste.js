@@ -14,6 +14,14 @@ async function getRichiesta(id) {
   return db.prepare('SELECT * FROM requests WHERE id = ?').get(id);
 }
 
+// La richiesta nata da un invio dal carrello con questa chiave (vedi schema.sql, "Un invio, una richiesta"), o null.
+async function richiestaConChiave(clienteId, chiaveInvio) {
+  if (!chiaveInvio) return null;
+  return (
+    (await db.prepare('SELECT id, stato FROM requests WHERE cliente_id = ? AND chiave_invio = ?').get(clienteId, chiaveInvio)) || null
+  );
+}
+
 async function righeRichiesta(requestId) {
   return db
     .prepare(
@@ -70,14 +78,20 @@ function esitoPerInstallatore(r) {
   return r.esito;
 }
 
+// `bancoConfermato`: il banco (una filiale qualunque della ditta) ha accettato la richiesta, qualunque cosa sia successa dopo.
+// Serve a distinguere, a richiesta chiusa senza ordine, "nessun banco ha confermato" da "il banco ha confermato ma nessun
+// corriere ha preso la consegna" (esito 'scaduto' + bancoConfermato).
 function raggruppaRisposteDitta(risposte) {
   const gruppi = new Map();
   for (const r of risposte) {
     const chiave = r.ditta_id ? 'd' + r.ditta_id : 'f' + r.distributor_id;
     const esito = esitoPerInstallatore(r);
     const attuale = gruppi.get(chiave);
+    const bancoConfermato = r.esito === 'confermato' || !!(attuale && attuale.bancoConfermato);
     if (!attuale || (PRIORITA_ESITO[esito] ?? 9) < (PRIORITA_ESITO[attuale.esito] ?? 9)) {
-      gruppi.set(chiave, { ...r, esito, filiale: '' });
+      gruppi.set(chiave, { ...r, esito, filiale: '', bancoConfermato });
+    } else {
+      attuale.bancoConfermato = bancoConfermato;
     }
   }
   return [...gruppi.values()];
@@ -136,7 +150,7 @@ async function distributoriCandidati(productIds, zona, clienteId = null) {
 async function creaRichiesta(
   cliente,
   righeCarrello,
-  { destinazione = null, note = '', importo = null, metodoPagamento = pagamenti.METODO_SIMULATO } = {}
+  { destinazione = null, note = '', importo = null, metodoPagamento = pagamenti.METODO_SIMULATO, chiaveInvio = null } = {}
 ) {
   const productIds = righeCarrello.map((r) => r.prodotto.id);
   let candidati = await distributoriCandidati(productIds, cliente.zona, cliente.id);
@@ -180,8 +194,8 @@ async function creaRichiesta(
     const info = await db
       .prepare(
         `INSERT INTO requests (cliente_id, zona, stato, scade_il, destinazione, note,
-                               pagamento_stato, pagamento_metodo, pagamento_importo, pagato_il)
-         VALUES (?, ?, ?, NOW() + (? * INTERVAL '1 minute'), ?, ?, ?, ?, ?, ${incasso ? 'NOW()' : 'NULL'})`
+                               pagamento_stato, pagamento_metodo, pagamento_importo, pagato_il, chiave_invio)
+         VALUES (?, ?, ?, NOW() + (? * INTERVAL '1 minute'), ?, ?, ?, ?, ?, ${incasso ? 'NOW()' : 'NULL'}, ?)`
       )
       .run(
         cliente.id,
@@ -192,7 +206,8 @@ async function creaRichiesta(
         note || '',
         incasso ? (candidati.length ? incasso.stato : 'rimborsato') : null,
         incasso ? incasso.metodo : null,
-        incasso ? incasso.importo : null
+        incasso ? incasso.importo : null,
+        chiaveInvio
       );
     const requestId = Number(info.lastInsertRowid);
 
@@ -402,10 +417,14 @@ async function chiudiFinestraRisposte(richiesta) {
   }
   const minuti = await getFinestraMinuti();
   const { notifica } = require('./notifiche');
+  // Un banco che aveva accettato e aspettava il corriere (corriere_stato 'in_attesa', ora 'scaduto') = nessun corriere ha preso la consegna.
+  const senzaCorriere = esito.corrieriScaduti > 0;
   await notifica(richiesta.cliente_id, {
-    titolo: 'Nessuna conferma ricevuta',
+    titolo: senzaCorriere ? 'Nessun corriere ha confermato' : 'Nessuna conferma ricevuta',
     testo:
-      `Nessun distributore ha confermato entro i ${Math.round(minuti)} minuti.` +
+      (senzaCorriere
+        ? `Nessun corriere ha confermato la consegna entro i ${Math.round(minuti)} minuti.`
+        : `Nessun distributore ha confermato entro i ${Math.round(minuti)} minuti.`) +
       (esito.rimborsato ? ' Il pagamento è stato rimborsato.' : '') +
       ' Puoi ripetere la richiesta.',
     link: `/richieste/${requestId}`,
@@ -821,6 +840,7 @@ module.exports = {
   getRichiesta,
   righeRichiesta,
   righeRichieste,
+  richiestaConChiave,
   risposteRichiesta,
   raggruppaRisposteDitta,
   getRisposta,

@@ -1064,7 +1064,7 @@ th { color: var(--grigio); font-weight: 600; }
 .scheda-azione-conferma .btn-banco { width: 100%; }
 .scheda-azioni-secondarie { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .scheda-azioni-secondarie > a, .scheda-azioni-secondarie > form { min-width: 0; }
-.scheda-azioni-secondarie .btn-banco { width: 100%; }
+.scheda-azioni-secondarie .btn-banco { width: 100%; }
 /* Da preparare: "Ispeziona" e "Preparato" affiancati e uguali; senza Ispeziona (ordine senza richiesta) "Preparato" occupa tutta la riga. */
 .scheda-azioni-ordine { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
 .scheda-azioni-ordine .btn-banco { width: 100%; }
@@ -2039,12 +2039,44 @@ html.misura-aperta { overflow: hidden; }
 .navbar a.fase-richiesta .etichetta { color: var(--arancio); font-variant-numeric: tabular-nums; }
 .navbar a.fase-consegna .etichetta { color: var(--verde); }
 .navbar a.fase-scaduta .etichetta { color: var(--rosso); }
+/* Con più attività i colori delle etichette seguono il fotogramma, non il link (che porta la fase della prima). */
+.navbar a .fotogramma.fase-richiesta .etichetta { color: var(--arancio); font-variant-numeric: tabular-nums; }
+.navbar a .fotogramma.fase-consegna .etichetta { color: var(--verde); }
+.navbar a .fotogramma.fase-scaduta .etichetta { color: var(--rosso); }
 @keyframes nav-ordini-pulsa { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.7); } }
 @keyframes nav-ordini-oscilla { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.5px); } }
 @media (prefers-reduced-motion: reduce) {
   .navbar a .ico-stato .puntino,
   .navbar a .ico-stato .furgone { animation: none; }
   .navbar a .ico-stato .anello .avanzamento { transition: none; }
+}
+
+/* Due o più attività: i fotogrammi stanno uno sopra l'altro nella stessa cella e se ne vede uno alla volta (dissolvenza incrociata
+   di 250 ms); sotto, un puntino per attività. L'altezza è quella dell'icona singola (icona 24px + una riga di etichetta da 19px,
+   senza spazio in mezzo), così la barra non cambia quando si passa da una a più attività e le due icone sono sovrapponibili al pixel:
+   se cambia il corpo del testo o l'icona, aggiornare --nav-stato-alt. */
+.nav-ordini.multi .fotogrammi { position: relative; display: block; width: 100%; height: var(--nav-stato-alt, 43px); }
+.nav-ordini.multi .fotogramma {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity 0.25s; pointer-events: none;
+}
+.nav-ordini.multi .fotogramma.attivo { opacity: 1; }
+.nav-ordini .puntini { position: absolute; bottom: 4px; left: 0; right: 0; display: flex; justify-content: center; gap: 4px; pointer-events: none; }
+.nav-ordini .puntini .punto { width: 5px; height: 5px; border-radius: 50%; background: #1C1917; opacity: 0.25; transition: opacity 0.25s; }
+.nav-ordini .puntini .punto.attivo { opacity: 1; }
+/* Appena sostituito il link (aggiornamento dal server) il fotogramma giusto si mostra subito, senza dissolvenza. */
+.nav-ordini.ferma .fotogramma, .nav-ordini.ferma .punto { transition: none; }
+/* Il numero delle attività, solo con "riduci movimento": in alto a sinistra sull'icona, in un pallino scuro. */
+.nav-ordini .conteggio {
+  display: none; position: absolute; top: 1px; left: calc(50% - 22px); z-index: 1;
+  min-width: 15px; height: 15px; box-sizing: border-box; padding: 0 4px; border-radius: 8px;
+  background: #1C1917; border: 1.5px solid var(--surface); color: #fff;
+  font-size: 0.6rem; font-weight: 700; line-height: 12px; text-align: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-ordini.multi .fotogramma, .nav-ordini .puntini .punto { transition: none; }
+  .nav-ordini .puntini { display: none; }
+  .nav-ordini.multi .conteggio { display: block; }
 }
 
 /* ---------- Home installatore (views/home.ejs): ricerca fissa, categorie compatte, scheda di stato ---------- */
@@ -4634,4 +4666,78 @@ html.misura-aperta { overflow: hidden; }
   .ric-corpo { grid-template-columns: minmax(0, 1fr) 340px; }
   .ric-tab-testa, .ric-riga { grid-template-columns: 52px minmax(0, 1fr) 110px 84px; column-gap: 12px; }
   .ric-tab-testa > :nth-child(3), .ric-listino { display: none; }
+}
+
+/* ---------- Striscia degli ordini in corso (views/partials/striscia_ordini.ejs) ---------- */
+
+/* Fascia bianca sotto l'appbar quando le attività in corso sono due o più: una scheda per ordine, e sotto la pagina intera di quello
+   selezionato. Con 2 o 3 schede stanno in una riga a colonne uguali; da 4 in su scorrono di lato (112px l'una, con aggancio). */
+.striscia { background: var(--surface); border-bottom: 1px solid #E2DED3; padding: 2px 12px 12px; }
+.striscia-testa { display: flex; align-items: baseline; justify-content: space-between; padding: 10px 2px 8px; }
+.striscia-conta { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #5C5B52; }
+.striscia-pos { font-size: 13px; color: #6B6A5F; }
+.striscia-schede { display: grid; grid-template-columns: repeat(var(--n, 2), minmax(0, 1fr)); gap: 8px; }
+.striscia-scorre .striscia-schede {
+  display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.striscia-scorre .striscia-schede::-webkit-scrollbar { display: none; }
+.striscia-scorre .str-scheda { flex: 0 0 112px; scroll-snap-align: center; }
+
+.str-scheda {
+  box-sizing: border-box; height: 86px; min-width: 0; padding: 0 6px; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  border-radius: 14px; border: 1.5px solid #E2DED3; background: #fff;
+  color: var(--testo); text-decoration: none; text-align: center;
+}
+.str-scheda:focus-visible { outline: 3px solid var(--blu); outline-offset: 2px; }
+.str-ico { position: relative; flex: none; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; }
+.str-anello { display: block; width: 30px; height: 30px; }
+.str-anello .traccia { fill: none; stroke: var(--arancio-chiaro); stroke-width: 2.4; }
+.str-anello .avanzamento {
+  fill: none; stroke: var(--arancio); stroke-width: 2.4; stroke-linecap: round;
+  stroke-dasharray: 65.97; transform: rotate(-90deg); transform-origin: 12px 12px; transition: stroke-dashoffset 1s linear;
+}
+.str-scatola { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 15px; color: var(--icona-nav); }
+.str-scatola.str-spenta { font-size: 26px; color: var(--grigio); }
+.str-furgone { display: flex; font-size: 28px; color: #1F5F2E; }
+.str-furgone svg { stroke-width: 1.5; }
+.bob { animation: nav-ordini-oscilla 1.1s ease-in-out infinite; }
+.str-allarme {
+  position: absolute; top: -3px; right: -5px; box-sizing: border-box; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 8px;
+  background: var(--rosso); border: 2px solid #fff; color: #fff; font-size: 9px; font-weight: 800; line-height: 11px; text-align: center;
+}
+.str-valore {
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 800; font-size: 14px; line-height: 1.15; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.str-richiesta .str-valore { color: #8A3A14; }
+.str-consegna .str-valore { color: #1F5F2E; }
+.str-scaduta .str-valore { color: #991B1B; }
+.str-breve { max-width: 100%; font-size: 11.5px; line-height: 1.2; color: #6B6A5F; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* La scheda della pagina aperta: sfondo chiaro e bordo da 2px nel colore del suo stato */
+.str-attiva { border-width: 2px; }
+.str-scaduta.str-attiva { background: #FBE4E2; border-color: #BD3A3A; }
+.str-richiesta.str-attiva { background: #FBE6DA; border-color: #AB4D24; }
+.str-consegna.str-attiva { background: #E3F3E6; border-color: #297C3C; }
+@media (prefers-reduced-motion: reduce) {
+  .bob { animation: none; }
+  .str-anello .avanzamento { transition: none; }
+}
+
+/* Con la striscia il blocco in alto della pagina è più compatto (la striscia occupa spazio): anello o cerchio da 148 a 112px, timer da
+   31 a 25px, scheda con meno aria. I numeri del pallino d'allarme e del furgone seguono la stessa scala (112/148). */
+.con-striscia .att-timer { padding: 18px 16px 16px; }
+.con-striscia .att-anello { width: 112px; height: 112px; margin-bottom: 14px; }
+.con-striscia .att-anello > svg { width: 112px; height: 112px; }
+.con-striscia .att-tempo { font-size: 25px; }
+.con-striscia .att-furgone { font-size: 44px; }
+.con-striscia .att-allarme { left: 77px; top: 9px; width: 26px; height: 26px; border-width: 2.5px; font-size: 13px; }
+
+/* Passaggio da un ordine all'altro (public/app.js, "Striscia degli ordini in corso"): il contenuto si sposta e si attenua mentre la pagina
+   nuova arriva dal server; la richiesta parte subito, non dopo l'animazione. */
+.con-striscia .app > .contenuto { transition: transform 0.15s ease-in, opacity 0.15s ease-in; }
+.con-striscia .app > .contenuto.str-cambio { opacity: 0.45; pointer-events: none; }
+.con-striscia .app > .contenuto.swipe-rimbalzo { transition: transform 0.12s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .con-striscia .app > .contenuto, .con-striscia .app > .contenuto.swipe-rimbalzo { transition: none; }
 }

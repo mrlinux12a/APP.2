@@ -196,13 +196,16 @@ router.post('/carrello/riepilogo', richiedeCliente, async (req, res) => {
   });
 });
 
-// Paga (simulato) e invia la richiesta, con destinazione e note scritte nel carrello.
+// Paga (simulato) e invia la richiesta, con destinazione e note scritte nel carrello. `chiave` (facoltativa) identifica
+// l'invio dal carrello: lo stesso invio ripetuto (doppio tocco, ritentativo) risponde con la richiesta già partita, senza
+// crearne un'altra.
 router.post('/richieste', richiedeCliente, async (req, res) => {
   try {
     const body = req.body || {};
     const id = await flusso.nuovaRichiesta(req.utente.id, await flusso.righeDaQuantita(body.righe), {
       destinazione: body.destinazione,
       note: body.note,
+      chiaveInvio: body.chiave,
     });
     res.json({ id });
   } catch (e) {

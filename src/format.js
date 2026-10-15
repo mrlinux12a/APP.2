@@ -187,4 +187,16 @@ function meseRoma(naive) {
   return { chiave: `${d.anno}-${String(d.mese).padStart(2, '0')}`, titolo: `${MESI_ESTESI[d.mese - 1]} ${d.anno}` };
 }
 
-module.exports = { toDate, istanteUtc, dataOra, dataSola, oraSola, oraRoma, dataOraRoma, dataSolaRoma, dataBreveRoma, dataCortaRoma, dataEstesaRoma, oraSolaRoma, giornoRoma, durataMinuti, daMinuti, tempoTrascorso, meseRoma, tempoConsegna, mmss };
+// Durata in secondi della finestra di conferma di una richiesta, per far partire l'anello PIENO: di norma è `scade_il - creato_il`
+// (la finestra configurata), ma una richiesta rinviata ("Rinvia richiesta") riapre la stessa riga con `scade_il` ricalcolato e
+// `creato_il` di prima, e la differenza diventerebbe di ore: l'anello partirebbe quasi vuoto. Oltre la finestra si usa la finestra.
+function durataFinestraSec(creato, scade, finestraMin) {
+  const finestra = Number(finestraMin) > 0 ? Math.round(Number(finestraMin) * 60) : 600;
+  const inizio = toDate(creato);
+  const fine = toDate(scade);
+  if (!inizio || !fine) return finestra;
+  const diff = Math.round((fine - inizio) / 1000);
+  return diff > 0 && diff <= finestra ? diff : finestra;
+}
+
+module.exports = { toDate, istanteUtc, dataOra, dataSola, oraSola, oraRoma, dataOraRoma, dataSolaRoma, dataBreveRoma, dataCortaRoma, dataEstesaRoma, oraSolaRoma, giornoRoma, durataMinuti, daMinuti, tempoTrascorso, meseRoma, tempoConsegna, mmss, durataFinestraSec };

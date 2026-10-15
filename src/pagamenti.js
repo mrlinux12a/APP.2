@@ -22,6 +22,22 @@ function stripeAttivo() {
   return String(process.env.STRIPE_SECRET_KEY || '').trim() !== '';
 }
 
+// Solo per lo sviluppo sul PC: con PAGAMENTO_SIMULATO=1 nel .env LOCALE "Paga e invia" salta Stripe e manda la richiesta con il
+// pagamento simulato, come senza chiavi. Sulla VPS non vale mai: il suo .env non ha quella riga, e anche se l'avesse viene ignorata
+// con la chiave reale (sk_live_) o con NODE_ENV=production. Non si guarda mai l'indirizzo con cui arriva la richiesta (l'intestazione
+// Host la scrive chi chiama: bypassare il pagamento da lì sarebbe un buco). Riguarda solo COME si paga una richiesta nuova: incassi,
+// rilasci e rimborsi dei pagamenti Stripe già fatti (il .env locale ha il DB di produzione) funzionano com'erano.
+function simulatoRichiesto() {
+  return /^(1|true|si|sì|yes)$/i.test(String(process.env.PAGAMENTO_SIMULATO || '').trim());
+}
+function pagamentoSimulatoForzato() {
+  return simulatoRichiesto() && modoStripe() !== 'live' && process.env.NODE_ENV !== 'production';
+}
+// Una richiesta nuova si paga con Stripe (pagina di pagamento del sito)? Stripe acceso e nessun bypass locale.
+function pagaConStripe() {
+  return stripeAttivo() && !pagamentoSimulatoForzato();
+}
+
 // 'live' o 'test', dalla chiave: le righe di stripe_pagamenti portano il modo in cui sono nate e ogni istanza
 // lavora solo le sue (il .env del PC punta al DB di produzione, con una chiave di prova: non deve toccare i
 // pagamenti veri, e viceversa).
@@ -107,6 +123,9 @@ module.exports = {
   METODO_STRIPE,
   stripeAttivo,
   modoStripe,
+  simulatoRichiesto,
+  pagamentoSimulatoForzato,
+  pagaConStripe,
   incasso,
   incassoSimulato,
   impostaElaboratore,

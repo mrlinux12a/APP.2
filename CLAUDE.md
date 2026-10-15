@@ -17,6 +17,12 @@ già scritto lì.
 - `.env` locale punta al **Supabase di produzione condiviso**, nessun DB di test — girare in
   locale scrive sul DB vero, e il server locale esegue anche il timer delle scadenze (30 s) come
   la VPS: fermarlo quando non serve.
+- **Dal telefono sulla stessa rete Wi-Fi** (15/10/2026): il server ascolta di default solo su `127.0.0.1` (così sulla VPS,
+  dietro il proxy); col `HOST=0.0.0.0` nel `.env` **locale** (non in git) ascolta su tutte le schede e all'avvio stampa gli
+  indirizzi (`http://192.168.x.x:3000`). Il firewall di Windows ha già le regole per `node.exe` (Public e Private). Se non si
+  collega lo stesso, la rete può isolare i dispositivi ("AP isolation", rete ospiti). Dal telefono, in HTTP semplice, **non**
+  funziona la pagina di pagamento Stripe (Stripe.js vuole HTTPS fuori da localhost) e `APP_URL=http://localhost:3000` farebbe
+  tornare dal pagamento su un indirizzo sbagliato: per provare i pagamenti da telefono serve un tunnel HTTPS.
 - Server locale **senza auto-reload**: dopo modifiche a `server.js`/file `require`-ati serve
   riavvio manuale (`.ejs`/`public/*` no).
 - Modifiche schema in **entrambi** `db/postgres/schema.sql` e `db/schema.pg.sql` (root, copie
@@ -111,8 +117,10 @@ di query in sequenza**, non la loro complessità. Mai query dentro un ciclo (N+1
   ripetute su ogni riga costavano più della seconda query che sostituivano. Ordine dei pareggi
   `nome, prezzo_listino, id`: prima era arbitrario (con OFFSET le righe potevano ripetersi o
   saltare); la variante "di default" di un gruppo è la più economica fra quelle con lo stesso nome.
-- **Stato ordini** (`attivitaCorrente`): "segna lette" e lettura delle richieste recenti partono
-  insieme; le scadenze si aggiornano dopo, così le notifiche che creano restano da leggere.
+- **Stato ordini** (`attivitaCliente`): "segna lette" e lettura delle richieste recenti partono
+  insieme; le scadenze si aggiornano dopo, così le notifiche che creano restano da leggere. La query delle
+  richieste recenti porta con sé `secondi_rimasti` (dal DB): `aggiornaScadenza` si chiama solo per le richieste con
+  la finestra finita o del vecchio flusso (prima una per ogni richiesta aperta, due letture ciascuna), in parallelo.
 - **Sessioni web**: `touch` al massimo ogni 10 min per sessione (`src/sessioni.js`); con
   `rolling: true` express-session aspetta quell'UPDATE prima di chiudere ogni risposta.
 - `compression` in `server.js`; `/img` e `/vendor` con `maxAge` 7 giorni, CSS/JS solo ETag.
@@ -142,6 +150,14 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   invia `#form-invia` con l'attributo `form=`); `--altezza-barra-paga` in `style.css` è lo spazio da
   lasciare in fondo alla pagina: se la barra cambia altezza, aggiornarlo. L'app mobile non ha ancora seguito
   queste modifiche.
+- **Quantità scelte e non ancora aggiunte** (card classica: ricerca, marchio, con-foto e ricerca live della home; richiesta esplicita del
+  15/10/2026): il + scrive solo nel campo, "Aggiungi (N)" manda al carrello. Prima, cambiando pagina, i campi tornavano a 0. Ora stanno in
+  `scelte` (`{ id: quantità }`, in `app.js`) e in **sessionStorage** (`minuteria.scelte.<id utente>`, dal `<meta name="utente">` di
+  `partials/app_head.ejs`; scadono dopo 12 h), e si rimettono nei campi a ogni pagina, ricerca live (`disegnaRisultati`, ripristino
+  dell'elenco), scroll infinito e ritorno da "indietro" (`applicaScelte`). Il conto "N selezionati" e "Aggiungi (N)" si fanno su `scelte`, non
+  sui campi in vista, e "Aggiungi" manda **tutte** le scelte (anche di card non in pagina; un articolo non più attivo lo salta il server).
+  Cambiare misura su una card scarta la scelta della misura di prima (com'era). La pagina categoria (righe compatte, salvataggio a ogni
+  tocco) non usa niente di tutto questo.
 - **Elenco prodotti della categoria** (richieste esplicite del 04/10/2026, non rimetterli; solo
   `views/categoria.ejs`, le altre pagine — home, cerca, marchio, con-foto — hanno ancora la card classica
   `partials/prodotto.ejs` e lo stepper `[data-passo]` + "Aggiungi"): righe compatte `partials/prodotto_riga.ejs`
@@ -253,7 +269,10 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
 - **Richiesta scaduta** (`views/richiesta_chiusa.ejs`, richiesta esplicita del 05/10/2026; classi `att-*`,
   modificatore `.att-rosso`): vale solo per `nessuna_offerta`; la richiesta **annullata** dall'installatore ha
   ancora il markup vecchio. Niente animazioni. Anello vuoto, "00:00" grigio, pallino "!" a 45° sul bordo, titolo
-  "Nessun banco ha confermato", rimborso in pillola verde ("€ X rimborsati"; se `pagamento_stato` è ancora
+  "Nessun banco ha confermato" (**"Nessun corriere ha confermato"** se un banco aveva accettato e nessun corriere ha preso la consegna in
+  tempo, richiesta esplicita del 15/10/2026: `raggruppaRisposteDitta` porta `bancoConfermato` e la vista lo legge con `esito === 'scaduto'`;
+  in quel caso il banco ha il chip verde "Disponibile", e la notifica di chiusura dice lo stesso, scelta da `esito.corrieriScaduti` in
+  `chiudiFinestraRisposte`), rimborso in pillola verde ("€ X rimborsati"; se `pagamento_stato` è ancora
   `pagato` "Rimborso in corso"; senza pagamento niente pillola), un banco per ditta con il suo stato reale.
   Il pulsante è "Rinvia richiesta" (una sola "i", niente "paghi di nuovo €"): l'azione e il pagamento sono
   quelli di prima. La data è `fmt.dataOraRoma(creato_il, ', ')`, in ora italiana. "Eliminare" è un link con la
@@ -282,7 +301,8 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   `/ordini/:id/elimina`, `/richieste/:id/elimina`, API dell'app) e vuole `stato = 'inviato'` **e** `consegnato_il` vuoto: con la
   rotta provvisoria `/consegnato-prova` un ordine risulta consegnato restando `inviato`, e prima si poteva annullare (e
   rimborsare) anche così. Il rifiuto è `OrdineInLavorazione` (con `consegnato` e `messaggioCliente`), nessuna scrittura.
-- **Icona "Stato ordini"** (`views/partials/nav_ordini.ejs`): fase calcolata da
+- **Icona "Stato ordini"** (`views/partials/nav_ordini.ejs`; con più attività in corso segue la **prima inviata**, vedi
+  "Più ordini insieme in Stato ordini"): fase calcolata da
   `flusso.statoIconaOrdini` (sola lettura, non segna le notifiche come lette) nel `Promise.all` del
   middleware di `server.js`, per ogni pagina del cliente. Un errore non rompe la pagina ma si scrive nel
   log come `[nav] ...` (ingoiarlo in silenzio lasciava l'icona sempre uguale: così si è scoperto che
@@ -295,9 +315,11 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   `flusso.segnaConsegnatoProva`, scrive `consegnato_il` per qualunque stato dell'ordine, quindi la scheda
   sparisce): sta **solo nella pagina dell'ordine** (`ordine_dettaglio.ejs`, "Stato ordini"; con l'ordine
   `evaso` vale invece la rotta vera `/consegnato`), **non** nella scheda della home, dove "Consegnato" è
-  un'etichetta non cliccabile (richiesta esplicita del 05/10/2026, non rimetterlo). La rotta accetta un campo
-  `ritorno` (solo `/ordini/<numero>`) per riportare sull'ordine; senza va in home. Da togliere insieme alla
-  rotta quando c'è l'evento vero.
+  un'etichetta non cliccabile (richiesta esplicita del 05/10/2026, non rimetterlo). **Dopo il clic si va SEMPRE in `/ordini`**
+  ("Stato ordini": l'altro ordine in corso, se c'è, altrimenti la pagina "nessun ordine in corso"), anche con la rotta vera `/consegnato`;
+  richiesta esplicita del 15/10/2026, che ho prima letto al contrario: **non** riportare sulla pagina "Consegnato" dell'ordine né in
+  catalogo/home (il vecchio campo `ritorno`, che senza valore finiva in home, non c'è più). La pagina "Consegnato" si raggiunge dallo
+  Storico. Da togliere insieme alla rotta quando c'è l'evento vero.
 - **Home installatore** (`views/home.ejs`): ricerca fissa (`.ricerca-fissa`, `top` = `--altezza-appbar`,
   52px), un'unica griglia compatta di categorie senza conteggi, pulsante "foto/codice a barre" **volutamente
   disabilitato** (funzione non ancora esistente). I nomi delle categorie sono quelli del DB, più lunghi di
@@ -330,9 +352,22 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
 - Zona non filtra più i distributori candidati (`distributoriCandidati` in `src/richieste.js`
   ignora il parametro `zona`): campo residuo su `distributors`/`users`, non aspettarsi che
   limiti chi riceve una richiesta.
-- Il DB ammette **una sola richiesta aperta** (`in_attesa`/`con_offerte`) per cliente
-  (`idx_requests_cliente_aperta`): negli script di prova chiudere (`flusso.annullaRichiesta`) quella
-  precedente prima di crearne un'altra.
+- **Un cliente può avere più richieste aperte insieme** (richiesta del 15/10/2026): l'indice unico
+  `idx_requests_cliente_aperta` è stato **tolto** dal DB (blocco "Più richieste aperte per cliente" in fondo a
+  `schema.sql`) e dal codice sono spariti `richiestaBloccante`, l'errore `in_corso` e la gestione del 23505. Il
+  "Più richieste" vuol dire **ordini nuovi dal carrello, mai lo stesso ordine ricliccato** (richiesta esplicita del 15/10/2026,
+  dopo che avevo scritto il contrario): vedi "Un invio, una richiesta" qui sotto. Vedi anche "Più ordini insieme in Stato ordini".
+- **Un invio, una richiesta** (`requests.chiave_invio`, indice unico `(cliente_id, chiave_invio)` dove la chiave c'è; blocco "Un invio,
+  una richiesta" in fondo a `schema.sql`): ogni apertura della pagina del carrello scrive nel modulo `#form-invia` una chiave nuova
+  (`chiave_invio`, 24 caratteri esadecimali, da `server.js`); l'app ne genera una per carrello (`chiave` nel corpo di
+  `POST /api/v1/richieste`, si rinnova quando il carrello si svuota dopo l'invio). La **stessa chiave dà una richiesta sola**: un doppio
+  clic (anche in parallelo: lo decide l'indice unico, errore 23505), un secondo tentativo dopo una risposta persa o il tasto
+  "indietro" sulla stessa pagina portano alla richiesta già partita (`flusso.nuovaRichiesta`, `chiaveInvioValida`: senza chiave o fuori
+  forma non c'è controllo). Il controllo è **prima** di validare il carrello (con "indietro" il carrello può essere già vuoto). Con Stripe:
+  la chiave sta anche su `stripe_pagamenti`; un secondo clic mentre il pagamento è ancora da fare riporta alla stessa pagina (stesso
+  PaymentIntent), a invio già diventato richiesta porta a quella (`ErroreFlusso('gia_inviata')`, la route lo trasforma in redirect), e una
+  seconda carta autorizzata per lo stesso invio (due schede) si respinge e si rilascia (`inCasoDiDuplicato: 'rifiuta'`). Un ordine
+  identico a uno precedente ma fatto da un carrello nuovo parte normalmente.
 - **Dal 04/10/2026 l'installatore paga alla richiesta e non sceglie più l'offerta.** Niente più
   "riepilogo / Invia l'ordine", finestra di scelta, assegnatore a tolleranza, ritiro al banco: l'ordine
   nasce da solo (`richieste.assegnaOrdine` → `flusso_cliente.creaOrdineDaRisposta`) quando una risposta
@@ -382,6 +417,14 @@ Stripe (prima era Checkout ospitato: cambiato lo stesso giorno, su richiesta), *
   come `51UQ…`, 99 caratteri): se è tutta alfanumerica e lunga (`chiaveSenzaPrefisso`) il prefisso si ricava dalla chiave
   segreta (`sk_test_` → `pk_test_`) e all'avvio si scrive un avviso (`controllaConfigurazione`); se non ha proprio la forma
   di una chiave, `/pagamento/<id>` risponde 503 "non configurato" (in locale con l'indicazione di cosa guardare).
+- **Bypass del pagamento in locale** (richiesta esplicita del 15/10/2026, "momentaneamente"): con `PAGAMENTO_SIMULATO=1` nel `.env`
+  **del PC** (non in git) "Paga e invia" e "Rinvia richiesta" saltano la pagina Stripe e partono con il pagamento simulato
+  (`pagamenti.pagaConStripe()`, usata da `server.js`; `stripePagamenti.attivo()` resta quello di prima). **Sulla VPS deve funzionare
+  sempre Stripe**: la riga non c'è nel suo `.env` e `pagamentoSimulatoForzato()` la ignora con la chiave reale (`sk_live_`) o con
+  `NODE_ENV=production`; non guarda MAI l'indirizzo della richiesta (l'intestazione Host la scrive chi chiama: sarebbe un buco). Il
+  bypass cambia solo COME si paga una richiesta nuova: rimborsi, rilasci e incassi di pagamenti Stripe già fatti (il `.env` locale ha il
+  DB di produzione) funzionano uguale, quindi `stripeAttivo()` non cambia. All'avvio il log dice `[stripe] PAGAMENTO_SIMULATO=1...` (o
+  che è ignorata). Anche con il bypass la richiesta va ai banchi veri, come ogni prova locale. Per togliere il bypass: via la riga.
 - **Nessuna chiamata a Stripe dentro una transazione.** `pagamenti.rimborsa` e `segnaDaIncassare` girano dentro le
   transazioni del flusso (chiusura finestra, creazione ordine, eliminazioni) e **scrivono solo sul DB** (`stato` di
   `stripe_pagamenti` → `da_incassare` / `da_rilasciare` / `da_rimborsare`); le esegue `stripePagamenti.elabora()`, 2 s dopo
@@ -476,6 +519,74 @@ Attesa corriere → Da preparare, senza numeri d'ordine delle fasi. Convenzioni 
 - Il ritardo/`secondi_da_risposta`/`secondi_arrivo` si calcolano **in SQL** (`NOW()`), mai con un `Date` di JS sulle colonne
   `TIMESTAMP` (vedi sopra); `corriere_arrivo_il` è `TIMESTAMPTZ`. Tre articoli al massimo per scheda, poi "+N altri
   articoli". Prova: `test/server.test.js` ("home del banco...") con il DB finto.
+
+## Più ordini insieme in Stato ordini (15/10/2026)
+
+Richiesta esplicita: l'installatore può avere più richieste/ordini in corso nello stesso momento. Tre fasi: **1** richiesta in
+attesa di banco e corriere (`requests.stato = 'in_attesa'`), **2** ordine in consegna (`eInConsegna`: non consegnato, nato da
+meno di 24 h), **3** consegnato (`consegnato_il`): la 3 **non è più attiva**, sta solo nello Storico. Logica in
+`src/flusso_cliente.js` (`leggiVoci`, `vociStriscia`, `statoIconaOrdini`, `attivitaCliente`); prove in `test/stato_ordini.test.js` e nei test
+"Stato ordini..." / "striscia..." di `test/server.test.js`.
+- **`/ordini` e la striscia di schede** (richiesta esplicita del 15/10/2026; sostituisce la lista `ordini_attivi.ejs`, tolta con il suo CSS e
+  l'evento `stato-ordini-aggiorna`: non rimetterli). `/ordini` non rende più un elenco: **0 voci** → `ordini_cliente` (pagina vuota), **1** →
+  redirect alla sua pagina, **2 o più** → redirect a `?voce=<tipo>-<id>` se è fra le voci, altrimenti alla PRIMA (la più urgente). Sopra la
+  pagina di dettaglio (`richiesta_attesa`, `richiesta_chiusa`, `ordine_dettaglio` del cliente) c'è `partials/striscia_ordini.ejs`, solo se le
+  voci sono 2+ **e** la pagina aperta è una di loro (`strisciaPer` in `server.js`: un ordine consegnato aperto dallo storico non ha la striscia;
+  usa le voci già lette dal middleware per l'icona e aggiunge solo il materiale con `flusso.conBreve`, una lettura per tutte). Con la striscia:
+  titolo "Stato ordini", niente freccia indietro, `body.con-striscia` (anello 112px, timer 25px, padding 18px 16px 16px: scala anche pallino
+  d'allarme e furgone). Con 4+ schede la striscia scorre (112px, scroll-snap, la attiva portata in vista da `app.js`); con 2-3 sono colonne
+  uguali. Swipe fra gli ordini (solo touch, soglia 60px e 1,5× il verticale, ignorato su campi e contenitori che scorrono in orizzontale,
+  150ms di uscita, rimbalzo da 8px ai capi, niente animazione con "riduci movimento"): blocco "Striscia degli ordini in corso" di `app.js`.
+- **Le voci** (`costruisciVoce`, un'unica costruzione per icona e striscia: non possono dire cose diverse): `{ fase, tipo, id, richiestaId, href,
+  voce: 'tipo-id', secondi/durata (richiesta), minuti (consegna) }` più `breve` (primo articolo + " +N") solo nella striscia. Ordine
+  (`ordinaVociIcona`): scaduta recente, richieste dal timer più corto, consegne dall'arrivo **più vicino** (senza minuti in fondo). **Cambio di
+  ripartenza**: nella lista di prima le consegne andavano dalla più lontana. `firmaVoci` (`tipo-id-fase`, in ordine alfabetico, non dipende dal
+  tempo né dall'ordine) sta in `data-firma` del link dell'icona e della striscia: la pagina con la striscia **si ricarica** quando il controllo
+  periodico di `nav_ordini` vede una firma diversa (ordine passato di fase, nuovo, finito); se cambia solo il tempo si muovono solo i timer.
+  I timer delle schede sono `[data-countdown]`/`[data-arco]` dentro `a[data-secondi]`, mossi dallo stesso tick dell'icona (`closest`).
+- **Il tocco sull'icona** porta **dritto alla pagina** della voce mostrata in quel momento (`data-href` su ogni fotogramma, href aggiornato a
+  ogni cambio; con UNA sola voce l'href è la sua pagina; con 0 resta `/ordini`). Non passa più da `/ordini?voce=...` (che esiste ancora e
+  funziona, ma era un redirect in più: ~250 ms). Le pagine di richiesta e ordine segnano da sé le notifiche come lette.
+- **Velocità del passaggio fra ordini** (richiesta esplicita del 15/10/2026): le pagine `/ordini/:id` e `/richieste/:id` partono con le
+  letture in **parallelo** (`flusso.dettaglioOrdine`/`dettaglioRichiesta`, segna-lette e materiale della striscia nella stessa `Promise.all`):
+  ogni lettura in fila è un giro di rete (~45 ms) e prima erano 8-9 (pagina dell'ordine da ~470 ms a ~290 ms sul DB vero). Non rimetterle in
+  fila. Sulla striscia il tocco (`click`) e lo swipe marcano subito la scheda di destinazione come attiva e attenuano il contenuto
+  (`.str-cambio`), e lo swipe **non aspetta più i 150 ms** di animazione prima di chiedere la pagina (blocco "Striscia degli ordini in corso"
+  di `app.js`). Una pagina intera si ricarica comunque: un cambio senza ricarica (fetch + sostituzione del contenuto) richiederebbe di
+  rendere ri-eseguibili i blocchi di `app.js` di attesa e consegna, per ora non fatto.
+- **L'API dell'app segue UNA sola attività: la PRIMA INVIATA** (richiesta con id più basso fra quelle in corso, qualunque fase;
+  `attivitaCorrente`). L'app nativa (`GET /api/v1/stato-ordini` → `{ attivo }`) vede un'attività sola: non ha l'elenco né la striscia.
+- **Home: una scheda per ogni attività** (richiesta del 15/10/2026): `partials/stato_home.ejs` fa un ciclo sulle `voci` dell'icona (solo
+  `richiesta` e `consegna`: la scaduta non ha scheda, come prima) e disegna per ognuna la scheda di sempre, una sotto l'altra, nell'ordine
+  dell'icona. Ogni scheda porta alla pagina della sua attività (`voce.href`) e ogni richiesta ha il suo `[data-secondi]`, quindi il suo
+  conto. Le voci di consegna portano `corriere` e `progresso` (la barra a metà) proprio per questo. Il controllo periodico di `nav_ordini`
+  rimpiazza tutto lo slot `[data-stato-home]`: una scheda sparisce da sola quando l'attività finisce.
+- **"Nessuna risposta" (fase `scaduta`) solo se è l'ULTIMA cosa successa** (`scadutaRecente`: la richiesta con l'id più alto è
+  `nessuna_offerta` da meno di 3 h). Prima bastava una scaduta qualunque fra le ultime cinque: con un ordine consegnato (fase 3)
+  l'icona diceva comunque "Nessuna risposta" (bug segnalato il 15/10/2026).
+- Si guardano le ultime **30** richieste (`RICHIESTE_RECENTI`), non più 5.
+- **L'icona alterna le attività quando sono 2 o più** (richiesta del 15/10/2026): `statoIconaOrdini` ritorna, oltre ai campi di sempre
+  (la prima inviata), `voci` = TUTTE le attività nell'ordine di alternanza
+  (`ordinaVociIcona`, funzione pura: prima la `scaduta`, poi le `richiesta` dal timer più corto, poi le `consegna` da chi arriva prima, senza
+  minuti in fondo; a parità la più vecchia). La **scaduta** entra fra le voci anche con altre attività (la vecchia regola la nascondeva).
+  `views/partials/nav_ordini.ejs`: con `voci.length >= 2` il link ha `multi`, `data-fasi="richiesta,consegna"`, `data-fase` della prima voce e
+  `aria-label` ("Stato ordini: 2 attivi. In attesa, 07:42 rimasti. Arriva tra 18 minuti."), dentro un `.fotogramma` per voce (sovrapposti,
+  dissolvenza di 250 ms, `aria-hidden`) e i `.puntini`; con 0 o 1 voce il markup è quello di sempre. Il contenuto di una fase sta **solo** in
+  `partials/nav_ordini_fase.ejs`. Altezza dei fotogrammi `--nav-stato-alt` (43px = icona 24 + etichetta 19,2, **senza gap**: sovrapponibile al
+  pixel all'icona singola, misurato): se cambia il corpo del testo va aggiornata. Script: giro ogni 2,5 s con UN solo `setInterval` (non si
+  ricrea a ogni aggiornamento, altrimenti il cambio slitta), fermo a pagina nascosta; con `prefers-reduced-motion` non alterna, resta il primo
+  e compare `.conteggio` (numero in un pallino scuro). Dopo ogni sostituzione del link si riparte dall'indice in cui si era (`indice`, `ferma`
+  toglie la dissolvenza per quell'istante). Aggiornamento ogni 15 s se fra le fasi c'è `richiesta`, altrimenti 60 s se c'è `consegna`; un conto
+  che arriva a 00:00 chiama subito `aggiorna()` (una volta per contenitore). Il bottone/elenco di `/ordini` non cambia. L'app Expo **non** ha
+  l'icona dinamica (la scheda "Stato ordini" ha un'icona fissa): da fare a parte.
+- **Conti alla rovescia: ognuno col SUO `[data-secondi]`** (non più uno unico dell'icona): `[data-countdown]`/`[data-arco]` leggono secondi e
+  `data-durata` dal contenitore più vicino (`closest`): il fotogramma, il link (icona singola), la scheda della home, `.contenuto` della schermata
+  di attesa. Prima, con più richieste, la schermata della seconda partiva col tempo della prima ("timer non pieno"). La fine di un contenitore si
+  fissa la prima volta che lo si vede (WeakMap): un contenitore che non viene sostituito non deve ripartire a ogni `avvia()`.
+- **Durata dell'anello = la finestra, non `scade_il - creato_il`** (`format.durataFinestraSec`, anche in `richiesta_attesa.ejs`): "Rinvia" riapre la
+  stessa riga con `scade_il` ricalcolato e `creato_il` di prima (es. la richiesta 188: durata 7586 s), e l'anello partiva quasi vuoto.
+- Prova sul DB vero: richieste/ordini inseriti con SQL sul **banco AFIS (id 1, disattivato)** per un cliente usa-e-getta, poi
+  cancellati per id. **Non creare richieste vere** (`creaRichiesta` le manda a tutti i banchi attivi, cioè a Borea).
 
 ## Dettaglio richiesta del banco (14/10/2026)
 

@@ -52,8 +52,15 @@ const chiavePubblica = () => {
 
 // Cosa non va nel .env (testi per il log all'avvio). Vuota se Stripe è spento o tutto è a posto.
 function controllaConfigurazione() {
-  if (!attivo()) return [];
   const avvisi = [];
+  if (pagamenti.simulatoRichiesto()) {
+    avvisi.push(
+      pagamenti.pagamentoSimulatoForzato()
+        ? 'PAGAMENTO_SIMULATO=1: "Paga e invia" salta Stripe e usa il pagamento simulato. Va bene solo sul PC: sulla VPS quella riga non deve esserci.'
+        : 'PAGAMENTO_SIMULATO=1 è ignorata (chiave reale o NODE_ENV=production): si paga con Stripe.'
+    );
+  }
+  if (!attivo()) return avvisi;
   const pk = chiavePubblica();
   if (!chiavePubblicaGrezza()) {
     avvisi.push('STRIPE_PUBLISHABLE_KEY (o STRIPE_PUBLIC_KEY) manca: la pagina di pagamento non si può aprire e i clienti non possono pagare.');
@@ -93,14 +100,14 @@ const SQL_RIGA = `SELECT *, EXTRACT(EPOCH FROM (NOW() - creato_il))::int AS eta_
 
 // Crea la riga e il PaymentIntent; ritorna l'id della riga (la pagina di pagamento è /pagamento/<id>). Se Stripe non
 // risponde la riga resta 'fallito' e il cliente vede un errore, non una pagina rotta.
-async function creaIntento({ cliente, tipo, importoCent, voci, destinazione, note, requestId }) {
+async function creaIntento({ cliente, tipo, importoCent, voci, destinazione, note, requestId, chiaveInvio = null }) {
   const modo = pagamenti.modoStripe();
   const ins = await db
     .prepare(
-      `INSERT INTO stripe_pagamenti (cliente_id, tipo, modo, importo_cent, righe, destinazione, note, request_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO stripe_pagamenti (cliente_id, tipo, modo, importo_cent, righe, destinazione, note, request_id, chiave_invio)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(cliente.id, tipo, modo, importoCent, JSON.stringify(voci), destinazione || null, note || '', requestId || null);
+    .run(cliente.id, tipo, modo, importoCent, JSON.stringify(voci), destinazione || null, note || '', requestId || null, chiaveInvio);
   const id = Number(ins.lastInsertRowid);
 
   try {
@@ -135,10 +142,23 @@ async function creaIntento({ cliente, tipo, importoCent, voci, destinazione, not
   }
 }
 
-// Dal carrello: controlla (minimo, richiesta già aperta...) e prepara il pagamento. Ritorna l'id della pagina.
-async function avviaPagamento(clienteId, righe, { destinazione = '', note = '' } = {}) {
+// Dal carrello: controlla (minimo, carrello non vuoto) e prepara il pagamento. Ritorna l'id della pagina.
+// `chiaveInvio` identifica l'invio dal carrello (vedi flusso.chiaveInvioValida): un secondo clic sullo stesso invio non apre
+// un altro pagamento. Se l'invio ha già dato una richiesta lancia ErroreFlusso('gia_inviata', requestId); se il pagamento è
+// ancora da fare si riporta alla stessa pagina (stesso PaymentIntent).
+async function avviaPagamento(clienteId, righe, { destinazione = '', note = '', chiaveInvio = null } = {}) {
+  const chiave = flusso.chiaveInvioValida(chiaveInvio);
+  if (chiave) {
+    const gia = await richieste.richiestaConChiave(clienteId, chiave);
+    if (gia) throw new ErroreFlusso('gia_inviata', 'Ordine già inviato', 'Questo ordine è già stato inviato: non ne parte un altro.', { requestId: gia.id });
+    const aperto = await db
+      .prepare(`SELECT * FROM stripe_pagamenti WHERE cliente_id = ? AND chiave_invio = ? AND stato = 'da_pagare' ORDER BY id LIMIT 1`)
+      .get(clienteId, chiave);
+    if (aperto && aperto.payment_intent_id) return aperto.id;
+  }
   const { cliente, totali } = await flusso.validaRichiesta(clienteId, righe);
   return creaIntento({
+    chiaveInvio: chiave,
     cliente,
     tipo: 'richiesta',
     importoCent: centesimi(totali.totale_ivato),
@@ -153,15 +173,6 @@ async function avviaPagamento(clienteId, righe, { destinazione = '', note = '' }
 async function avviaPagamentoReinvio(clienteId, richiesta) {
   if (richiesta.cliente_id !== clienteId || richiesta.stato !== 'nessuna_offerta') {
     throw new ErroreFlusso('reinvio', 'Richiesta non rinviabile', 'Questa richiesta non si può più rinviare.');
-  }
-  const bloccante = await flusso.richiestaBloccante(clienteId);
-  if (bloccante) {
-    throw new ErroreFlusso(
-      'in_corso',
-      'Richiesta già in corso',
-      "Hai già una richiesta in attesa di risposta: aspetta che si chiuda prima di inviarne un'altra.",
-      { requestId: bloccante.id }
-    );
   }
   const importoCent = centesimi(richiesta.pagamento_importo);
   if (!(importoCent > 0)) {
@@ -280,11 +291,15 @@ async function completaRiga(riga, intentoNoto = null) {
           note: riga.note,
           metodoPagamento: pagamenti.METODO_STRIPE,
           importoPagato: riga.importo_cent / 100,
+          // Lo stesso invio non può dare due richieste: se un altro pagamento dello stesso carrello è arrivato prima, questo
+          // (una seconda carta autorizzata) si respinge e la carta si rilascia.
+          chiaveInvio: riga.chiave_invio,
+          inCasoDiDuplicato: 'rifiuta',
         }
       );
     }
   } catch (e) {
-    // Una regola del flusso (richiesta già aperta, carrello svuotato dal catalogo...) o un guasto: la carta non
+    // Una regola del flusso (minimo non più raggiunto, carrello svuotato dal catalogo...) o un guasto: la carta non
     // va incassata, si rilascia e il cliente lo vede.
     const previsto = e instanceof ErroreFlusso;
     if (!previsto) console.error(`[stripe] pagamento ${riga.id}: richiesta non creata:`, e.message);
@@ -314,15 +329,6 @@ async function riapriRichiesta(riga) {
   const richiesta = await richieste.getRichiesta(riga.request_id);
   if (!richiesta || richiesta.cliente_id !== riga.cliente_id || richiesta.stato !== 'nessuna_offerta') {
     throw new ErroreFlusso('reinvio', 'Richiesta non rinviabile', 'Questa richiesta non si può più rinviare.');
-  }
-  const bloccante = await flusso.richiestaBloccante(riga.cliente_id);
-  if (bloccante) {
-    throw new ErroreFlusso(
-      'in_corso',
-      'Richiesta già in corso',
-      "Hai già una richiesta in attesa di risposta: aspetta che si chiuda prima di inviarne un'altra.",
-      { requestId: bloccante.id }
-    );
   }
   const riaperta = await richieste.reinviaRichiesta(richiesta.id, { metodoPagamento: pagamenti.METODO_STRIPE });
   if (!riaperta) throw new ErroreFlusso('reinvio', 'Richiesta non rinviabile', 'Questa richiesta non si può più rinviare.');
@@ -517,6 +523,7 @@ pagamenti.impostaElaboratore(elabora);
 
 module.exports = {
   attivo,
+  pagaConStripe: pagamenti.pagaConStripe,
   chiavePubblica,
   controllaConfigurazione,
   impostaStripe,

@@ -1,11 +1,13 @@
+<% const str = (typeof striscia !== 'undefined' && striscia) ? striscia : null; %>
 <!DOCTYPE html>
 <html lang="it">
 <head>
   <%- include('partials/app_head', { titolo }) %>
 </head>
-<body data-loggato="1">
+<body data-loggato="1"<%- str ? ' class="con-striscia"' : '' %>>
   <div class="app">
-    <%- include('partials/appbar', { titolo, intestazione: 'Richiesta', indietro: '/home' }) %>
+    <%- include('partials/appbar', { titolo, intestazione: str ? 'Stato ordini' : 'Richiesta', indietro: str ? null : '/home' }) %>
+    <% if (str) { %><%- include('partials/striscia_ordini', { striscia: str }) %><% } %>
 
     <%# Una richiesta senza ordine: annullata dall'installatore o chiusa perché nessun banco (o nessun
         corriere) ha confermato in tempo. Se è andata a buon fine si apre direttamente l'ordine.
@@ -15,10 +17,10 @@
       <% if (richiesta.stato === 'nessuna_offerta') { %>
         <%
           // Durata vera della finestra (come l'anello della pagina di attesa), non il valore di configurazione di oggi.
-          const inizioFinestra = fmt.toDate(richiesta.creato_il);
-          const fineFinestra = fmt.toDate(richiesta.scade_il);
-          const minutiFinestra = inizioFinestra && fineFinestra ? Math.max(1, Math.round((fineFinestra - inizioFinestra) / 60000)) : Math.round(minutiRisposta);
+          const minutiFinestra = Math.max(1, Math.round(fmt.durataFinestraSec(richiesta.creato_il, richiesta.scade_il, minutiRisposta) / 60));
           const testoFinestra = minutiFinestra === 1 ? '1 minuto' : minutiFinestra + ' minuti';
+          // Il banco ha accettato ma nessun corriere ha preso la consegna in tempo: la causa è il corriere, non il banco.
+          const senzaCorriere = risposte.some(function (r) { return r.bancoConfermato && r.esito === 'scaduto'; });
           const spunta = '<span class="att-spunta" aria-hidden="true"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>';
         %>
 
@@ -31,7 +33,7 @@
             <span class="att-tempo att-tempo-spento">00:00</span>
             <span class="att-allarme" aria-hidden="true">!</span>
           </div>
-          <h2 class="att-titolo">Nessun banco ha confermato</h2>
+          <h2 class="att-titolo"><%= senzaCorriere ? 'Nessun corriere ha confermato' : 'Nessun banco ha confermato' %></h2>
           <p class="att-sotto">Il tempo di <%= testoFinestra %> è scaduto.</p>
           <% if (richiesta.pagamento_stato === 'rimborsato') { %>
             <div class="att-rimborso-riga"><span class="att-rimborso"><%- spunta %>€ <%= euro(richiesta.pagamento_importo) %> rimborsati</span></div>
@@ -62,7 +64,7 @@
               <div class="att-occhiello">Banco interpellato</div>
               <div class="att-banco-nome"><%= r.distributore_nome %></div>
             </div>
-            <% if (r.esito === 'confermato') { %>
+            <% if (r.esito === 'confermato' || (r.bancoConfermato && r.esito === 'scaduto')) { %>
               <span class="att-chip-ok"><%- spunta %>Disponibile</span>
             <% } else { %>
               <span class="att-chip-no"><%= r.esito === 'non_disponibile' ? 'Non disponibile' : 'Nessuna risposta' %></span>

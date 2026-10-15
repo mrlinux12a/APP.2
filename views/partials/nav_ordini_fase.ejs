@@ -1,0 +1,30 @@
+<%#
+  Il contenuto dell'icona "Stato ordini" per UNA fase (icona + etichetta): lo usa partials/nav_ordini.ejs sia da solo (una
+  sola attività) sia dentro ogni fotogramma (due o più, che si alternano). Un solo markup per fase, così non si duplica.
+  Parametri: v = { fase: 'richiesta' | 'consegna' | 'scaduta', secondi, durata, minuti } e CIRC (2 * PI * 10.5).
+  L'anello e il numero di una richiesta ([data-arco], [data-countdown]) li muove lo script di nav_ordini.ejs col conto
+  del contenitore [data-secondi] più vicino.
+%>
+<% if (v.fase === 'richiesta') { %>
+  <span class="ico ico-stato">
+    <svg class="anello" viewBox="0 0 24 24" aria-hidden="true">
+      <circle class="traccia" cx="12" cy="12" r="10.5"/>
+      <circle class="avanzamento" data-arco data-circ="<%= CIRC %>" cx="12" cy="12" r="10.5" style="stroke-dashoffset: <%= (CIRC * (1 - v.secondi / (v.durata || 600))).toFixed(2) %>"/>
+    </svg>
+    <span class="ico-interna"><%- iconaOrdini %></span>
+    <span class="puntino"></span>
+  </span>
+  <span class="etichetta">In attesa · <span data-countdown><%= fmt.mmss(v.secondi) %></span></span>
+<% } else if (v.fase === 'consegna') { %>
+  <span class="ico ico-stato">
+    <span class="furgone"><%- iconaFurgone %></span>
+    <% if (v.minuti != null) { %><span class="badge-eta"><%= v.minuti %>′</span><% } %>
+  </span>
+  <span class="etichetta"><%= v.minuti != null ? 'Arriva tra ' + v.minuti + ' min' : 'In consegna' %></span>
+<% } else if (v.fase === 'scaduta') { %>
+  <span class="ico ico-stato">
+    <span class="scatola-spenta"><%- iconaOrdini %></span>
+    <span class="badge-alert">!</span>
+  </span>
+  <span class="etichetta">Nessuna risposta</span>
+<% } %>

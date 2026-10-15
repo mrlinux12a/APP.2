@@ -1,29 +1,35 @@
 <%#
-  Scheda "Stato ordine" in cima alla home dell'installatore. Compare solo con una richiesta in attesa
-  (anello che si svuota + conto alla rovescia) o un ordine in consegna (minuti, corriere, avanzamento).
-  Legge gli stessi dati dell'icona nella barra in basso (res.locals.statoOrdini). Anello e conto alla
-  rovescia li aggiorna lo script di nav_ordini.ejs (elementi [data-arco] e [data-countdown]); quando la
-  fase cambia lo stesso script rimpiazza la scheda intera con GET /nav/stato-ordini?scheda=1.
-  Il contenitore [data-stato-home] c'è sempre, anche vuoto, perché è lì che la scheda può comparire.
+  Schede "Stato ordine" in cima alla home dell'installatore: UNA per ogni richiesta in attesa (anello che si svuota + conto alla
+  rovescia) e per ogni ordine in consegna (minuti, corriere, avanzamento), una sotto l'altra, tutte nello stesso formato. Con una sola
+  attività è la scheda di sempre. L'ordine è quello delle voci dell'icona in basso e della striscia di "Stato ordini": le richieste dal
+  timer più corto, poi le consegne dall'arrivo più vicino. La richiesta scaduta da rinviare non ha scheda (come prima: si vede
+  nell'icona e nella striscia). Ogni scheda porta alla pagina della sua attività.
+  Legge le voci dell'icona (res.locals.statoOrdini.voci). Anello e conto alla rovescia li aggiorna lo script di nav_ordini.ejs (elementi
+  [data-arco] e [data-countdown], col conto del suo [data-secondi]: ogni richiesta ha il suo); quando le voci cambiano lo stesso script
+  rimpiazza tutte le schede con GET /nav/stato-ordini?scheda=1.
+  Il contenitore [data-stato-home] c'è sempre, anche vuoto, perché è lì che le schede possono comparire.
 %>
 <%
-  const so = (typeof statoOrdini !== 'undefined' && statoOrdini) ? statoOrdini : { fase: 'nessuna' };
+  const soHome = (typeof statoOrdini !== 'undefined' && statoOrdini) ? statoOrdini : null;
+  const schede = soHome && Array.isArray(soHome.voci) ? soHome.voci.filter(function (v) { return v.fase === 'richiesta' || v.fase === 'consegna'; }) : [];
   const CIRC_SCHEDA = 150.8; // 2 * PI * 24
-  const durataScheda = so.durata || 600;
-  const offsetScheda = so.fase === 'richiesta' ? (CIRC_SCHEDA * (1 - so.secondi / durataScheda)).toFixed(2) : 0;
-  const minutiFinestra = Math.max(1, Math.round(durataScheda / 60));
-  const nomeCorriere = so.fase === 'consegna' ? (so.corriere || '') : '';
 %>
 <div class="stato-home-slot" data-stato-home>
-<% if (so.fase === 'richiesta') { %>
-  <a class="stato-home stato-richiesta" href="/ordini">
+<% schede.forEach(function (v) { %>
+<% if (v.fase === 'richiesta') { %>
+  <%
+    const durataScheda = v.durata || 600;
+    const offsetScheda = (CIRC_SCHEDA * (1 - v.secondi / durataScheda)).toFixed(2);
+    const minutiFinestra = Math.max(1, Math.round(durataScheda / 60));
+  %>
+  <a class="stato-home stato-richiesta" href="<%= v.href %>" data-secondi="<%= v.secondi %>" data-durata="<%= durataScheda %>">
     <div class="stato-riga">
       <span class="stato-anello">
         <svg viewBox="0 0 56 56" aria-hidden="true">
           <circle class="traccia" cx="28" cy="28" r="24"/>
           <circle class="avanzamento" data-arco data-circ="<%= CIRC_SCHEDA %>" cx="28" cy="28" r="24" style="stroke-dashoffset: <%= offsetScheda %>"/>
         </svg>
-        <span class="stato-tempo" data-countdown><%= fmt.mmss(so.secondi) %></span>
+        <span class="stato-tempo" data-countdown><%= fmt.mmss(v.secondi) %></span>
       </span>
       <span class="stato-testi">
         <span class="stato-occhiello">Richiesta inviata</span>
@@ -33,14 +39,15 @@
       <span class="stato-freccia" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span>
     </div>
   </a>
-<% } else if (so.fase === 'consegna') { %>
+<% } else { %>
+  <% const nomeCorriere = v.corriere || ''; %>
   <div class="stato-home stato-consegna">
-   <a class="stato-corpo" href="/ordini">
+   <a class="stato-corpo" href="<%= v.href %>">
     <div class="stato-riga">
       <span class="stato-furgone"><span class="furgone"><%- iconaFurgone %></span></span>
       <span class="stato-testi">
         <span class="stato-occhiello">Accettato · In consegna</span>
-        <span class="stato-titolo"><%= so.minuti != null ? 'Arriva tra ' + so.minuti + ' min' : 'In consegna' %></span>
+        <span class="stato-titolo"><%= v.minuti != null ? 'Arriva tra ' + v.minuti + ' min' : 'In consegna' %></span>
         <% if (nomeCorriere) { %>
           <span class="stato-sub">
             <span class="stato-iniziale" aria-hidden="true"><%= Array.from(nomeCorriere)[0].toUpperCase() %></span>
@@ -50,7 +57,7 @@
       </span>
       <span class="stato-freccia" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span>
     </div>
-    <div class="stato-barra" aria-hidden="true"><span style="width: <%= Math.round((so.progresso != null ? so.progresso : 0.5) * 100) %>%"></span></div>
+    <div class="stato-barra" aria-hidden="true"><span style="width: <%= Math.round((v.progresso != null ? v.progresso : 0.5) * 100) %>%"></span></div>
    </a>
     <%# La barra sta a metà ("In viaggio") finché non c'è l'evento che segna la consegna. "Consegnato" qui è solo
         un'etichetta: non si può toccare dalla home. Il pulsante PROVVISORIO che chiude l'ordine (POST
@@ -62,4 +69,5 @@
     </div>
   </div>
 <% } %>
+<% }); %>
 </div>

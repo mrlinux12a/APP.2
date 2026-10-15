@@ -30,6 +30,8 @@ const naive = (d) => new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(
 const fa = (ms) => naive(new Date(Date.now() - ms));
 const storico = {
   attivo: false,
+  // Le risposte dei banchi per id di richiesta (request_responses + distributors), per le pagine delle richieste chiuse.
+  risposte: {},
   richieste: [
     { id: 6, stato: 'in_attesa', creato_il: fa(60000), scade_il: naive(new Date(Date.now() + 300000)), order_id: null, pagamento_stato: 'pagato', pagamento_importo: 66.9 },
     { id: 5, stato: 'ordinata', creato_il: fa(2 * 3600000), scade_il: fa(3600000), order_id: 50, pagamento_stato: 'pagato', pagamento_importo: 66.9 },
@@ -74,8 +76,19 @@ const ultimoOrdineRighe = [
 function eseguiStorico(s, p, modo) {
   if (/FROM orders o JOIN order_items oi/.test(s)) return ultimoOrdineRighe;
   if (/SELECT \* FROM requests WHERE cliente_id = \? ORDER BY id DESC LIMIT 50/.test(s)) return storico.richieste;
-  if (/SELECT id, stato, creato_il, scade_il, order_id FROM requests WHERE cliente_id/.test(s)) return storico.richieste.slice(0, 5);
+  // Le richieste recenti dell'icona e di "Stato ordini": la query porta anche i secondi che mancano alla fine della
+  // finestra di conferma (qui calcolati da scade_il, che è un TIMESTAMP UTC letto come ora locale).
+  if (/SELECT id, stato, creato_il, scade_il, order_id, EXTRACT\(EPOCH FROM \(scade_il - NOW\(\)\)\)::int AS secondi_rimasti FROM requests WHERE cliente_id/.test(s)) {
+    const utc = (d) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds());
+    return storico.richieste.slice(0, 30).map((r) => ({ ...r, secondi_rimasti: Math.round((utc(r.scade_il) - Date.now()) / 1000) }));
+  }
+  // Gli ordini delle richieste "ordinata" per l'icona e per "Stato ordini": si accendono con storico.conOrdini, così le
+  // altre prove vedono la sola richiesta in attesa (l'ordine 50 è in consegna, gli altri sono consegnati).
+  if (storico.conOrdini && /SELECT id, stato, consegnato_il, creato_il, corriere_arrivo_il, corriere_risposto_il, corriere_nome FROM orders WHERE id IN/.test(s)) {
+    return p.map((id) => storico.ordini[id]).filter(Boolean);
+  }
   if (/SELECT \* FROM requests WHERE id = \?/.test(s)) return storico.richieste.find((r) => r.id === Number(p[0])) || null;
+  if (/FROM request_responses rr JOIN distributors d ON d\.id = rr\.distributor_id WHERE rr\.request_id = \?/.test(s)) return storico.risposte[Number(p[0])] || [];
   if (/EXTRACT\(EPOCH FROM/.test(s)) return { s: 300 };
   if (/FROM request_items ri JOIN products p/.test(s)) return p.flatMap((id) => (storico.righe[id] || []).map((x) => ({ request_id: id, ...x })));
   if (/FROM orders o LEFT JOIN distributors d/.test(s)) return p.map((id) => storico.ordini[id]).filter(Boolean);
@@ -103,6 +116,8 @@ ordiniProva.ordini = {
   70: { ...ordiniProva.base, id: 70, stato: 'evaso', creato_il: fa(3 * 86400000), consegnato_il: consegnatoIl, ddt_numero: 'A/12', ddt_data: fa(3 * 86400000) },
   71: { ...ordiniProva.base, id: 71, stato: 'inviato', creato_il: fa(3600000), consegnato_il: consegnatoIl },
   72: { ...ordiniProva.base, id: 72, stato: 'inviato', creato_il: fa(3600000), consegnato_il: null },
+  // l'ordine 50 dello storico (richiesta 5, in consegna, senza orario del corriere): la sua pagina per la prova della striscia
+  50: { ...ordiniProva.base, id: 50, stato: 'inviato', creato_il: fa(2 * 3600000), consegnato_il: null, request_id: 5 },
 };
 const righeOrdineProva = [{ id: 1, quantita: 1, codice_snapshot: '12364959', nome_snapshot: '87 Elemento A "t" 87gr Diam. 100', subtotale_cliente: 112.53 }];
 
@@ -329,6 +344,10 @@ function esegui(sql, p, modo) {
   if (/FROM products WHERE attivo = 1 AND id IN/.test(s)) return p.map((id) => catalogo[id]).filter(Boolean);
   if (/FROM products WHERE attivo = 1 AND id = ANY/.test(s)) return (p[0] || []).filter((id) => catalogo[id]).map((id) => ({ id }));
   if (/SELECT id FROM products WHERE id = \? AND attivo = 1/.test(s)) return catalogo[p[0]] ? { id: p[0] } : null;
+  // "Un invio, una richiesta": la chiave 'chiave-esistente-1' è quella di un invio che ha già dato la richiesta 321.
+  if (/SELECT id, stato FROM requests WHERE cliente_id = \? AND chiave_invio = \?/.test(s)) {
+    return p[1] === 'chiave-esistente-1' ? { id: 321, stato: 'in_attesa' } : null;
+  }
   if (/FROM macro_categorie m/.test(s)) return [{ slug: 'idraulica', nome: 'Idraulica', in_evidenza: 1, n_prodotti: 2 }, { slug: 'scarichi', nome: 'Scarichi', in_evidenza: 0, n_prodotti: 1 }];
   if (/COUNT\(\*\) AS n FROM products WHERE attivo = 1 AND foto_url/.test(s)) return { n: 0 };
   if (/COUNT\(\*\)/.test(s)) return modo === 'get' ? { n: 0 } : [];
@@ -349,9 +368,10 @@ require.cache[percorsoDb] = { id: percorsoDb, filename: percorsoDb, loaded: true
 
 // Le prove non dipendono dal .env vero (che server.js carica con dotenv, senza sovrascrivere le variabili già definite):
 // chiavi Stripe e indirizzo del sito vuoti = spenti, come su un PC senza configurazione.
-for (const nome of ['STRIPE_SECRET_KEY', 'STRIPE_PUBLISHABLE_KEY', 'STRIPE_PUBLIC_KEY', 'STRIPE_WEBHOOK_SECRET', 'APP_URL', 'APPROVAZIONE_AUTOMATICA', 'DISTRIBUTORE_PREDEFINITO']) {
+for (const nome of ['STRIPE_SECRET_KEY', 'STRIPE_PUBLISHABLE_KEY', 'STRIPE_PUBLIC_KEY', 'STRIPE_WEBHOOK_SECRET', 'APP_URL', 'APPROVAZIONE_AUTOMATICA', 'DISTRIBUTORE_PREDEFINITO', 'PAGAMENTO_SIMULATO']) {
   process.env[nome] = '';
 }
+process.env.HOST = '127.0.0.1'; // il .env del PC può avere 0.0.0.0 (telefono sulla stessa rete): le prove restano sul computer
 
 const consoleOriginale = { log: console.log, warn: console.warn, error: console.error };
 const erroriServer = [];
@@ -671,13 +691,260 @@ test('Stato ordini vuoto: furgone, "Come funziona" in tre passaggi, catalogo e r
   assert.match(t, /<a class="riga-storico" href="\/storico">[\s\S]*?<strong>Storico ordini<\/strong>\s*<span>Richieste e ordini passati<\/span>/);
   // niente più la frase che mandava al menu account, né la scatola e il pulsante di prima
   assert.doesNotMatch(t, /menu account|Crea il tuo ordine dal catalogo|class="btn btn-primary btn-blocco"/);
-  // con una richiesta in corso la pagina non c'è: si va dritti alla richiesta
+  // con una sola richiesta in corso la pagina non c'è: si va dritti alla richiesta
   storico.attivo = true;
   try {
-    assert.equal((await chiedi('/ordini')).status, 302);
+    const r2 = await chiedi('/ordini');
+    assert.equal(r2.status, 302);
+    assert.equal(r2.headers.get('location'), '/richieste/6');
   } finally {
     storico.attivo = false;
   }
+});
+
+test('Stato ordini con più attività: /ordini porta alla più urgente, ?voce= sceglie, e sopra la pagina c\'è la striscia di schede', async () => {
+  storico.attivo = true;
+  storico.conOrdini = true;
+  ordiniProva.attivo = true;
+  try {
+    // le voci, nell'ordine dell'icona: la richiesta 6 in attesa e l'ordine 50 in consegna
+    let r = await chiedi('/ordini');
+    assert.equal(r.status, 302, 'non si rende più una lista');
+    assert.equal(r.headers.get('location'), '/richieste/6', 'la più urgente');
+    assert.equal((await chiedi('/ordini?voce=ordine-50')).headers.get('location'), '/ordini/50');
+    assert.equal((await chiedi('/ordini?voce=richiesta-6')).headers.get('location'), '/richieste/6');
+    // una voce che non c'è (o scritta male): la prima
+    for (const voce of ['ordine-999', 'richiesta-5', 'qualcosa', '', 'ordine-50x']) {
+      assert.equal((await chiedi('/ordini?voce=' + voce)).headers.get('location'), '/richieste/6', voce);
+    }
+
+    // la pagina della richiesta 6: titolo "Stato ordini" senza freccia indietro, striscia con la sua scheda attiva
+    let t = await (await chiedi('/richieste/6')).text();
+    assert.match(t, /<body data-loggato="1" class="con-striscia">/);
+    assert.match(t, /class="titolo">Stato ordini</);
+    assert.doesNotMatch(t, /aria-label="Indietro"/);
+    assert.match(t, /<section class="striscia" data-striscia data-firma="ordine-50-consegna,richiesta-6-richiesta">/);
+    assert.match(t, /<span class="striscia-conta">2 in corso<\/span>\s*<span class="striscia-pos">1 di 2<\/span>/);
+    assert.match(t, /<nav class="striscia-schede" aria-label="Ordini in corso" style="--n: 2">/);
+    const schede = (testo) => [...testo.matchAll(/<a class="str-scheda str-(\w+)( str-attiva)?" href="([^"]+)" data-voce="([^"]+)"( aria-current="page")?/g)]
+      .map((m) => [m[1], !!m[2], m[3], m[4], !!m[5]]);
+    assert.deepEqual(schede(t), [
+      ['richiesta', true, '/richieste/6', 'richiesta-6', true],
+      ['consegna', false, '/ordini/50', 'ordine-50', false],
+    ]);
+    // la scheda della richiesta ha il suo timer; quella della consegna il suo valore; ognuna il suo articolo
+    assert.match(t, /data-voce="richiesta-6" aria-current="page" data-secondi="\d+" data-durata="360">/);
+    assert.match(t, /<span data-countdown>0[45]:\d\d<\/span><\/span>\s*<span class="str-breve">Bocchettone A 90°<\/span>/);
+    assert.match(t, /<span class="str-valore">In consegna<\/span>\s*<span class="str-breve">Adattatore Ø80\/100mm<\/span>/);
+    // il blocco in alto della pagina c'è ancora (qui nella versione compatta, a carico del CSS)
+    assert.match(t, /<div class="card att-card att-timer">/);
+
+    // la pagina dell'ordine 50 (in consegna): stessa striscia, scheda attiva l'ordine
+    t = await (await chiedi('/ordini/50')).text();
+    assert.match(t, /<body data-loggato="1" class="con-striscia">/);
+    assert.match(t, /class="titolo">Stato ordini</);
+    assert.doesNotMatch(t, /aria-label="Indietro"/);
+    assert.match(t, /<span class="striscia-pos">2 di 2<\/span>/);
+    assert.deepEqual(schede(t), [
+      ['richiesta', false, '/richieste/6', 'richiesta-6', false],
+      ['consegna', true, '/ordini/50', 'ordine-50', true],
+    ]);
+
+    // la barra in basso alterna le due attività e il suo tocco porta DRITTO alla pagina della voce mostrata (la prima all'inizio):
+    // niente passaggio da /ordini?voce=, che costava un giro in più a ogni cambio di ordine
+    const nav = t.slice(t.indexOf('<a href="/richieste/6" class="nav-ordini multi'), t.indexOf('</a>', t.indexOf('<a href="/richieste/6" class="nav-ordini multi')));
+    assert.match(nav, /^<a href="\/richieste\/6" class="nav-ordini multi fase-richiesta attivo" data-fase="richiesta" data-fasi="richiesta,consegna" data-attivo="ordini" data-firma="ordine-50-consegna,richiesta-6-richiesta" aria-label="Stato ordini: 2 attivi\. In attesa, 0[45]:\d\d rimasti\. In consegna\.">/);
+    assert.deepEqual([...nav.matchAll(/<span class="fotogramma fase-(\w+)( attivo)?" data-voce="([^"]+)" data-href="([^"]+)"/g)].map((m) => [m[1], !!m[2], m[3], m[4]]),
+      [['richiesta', true, 'richiesta-6', '/richieste/6'], ['consegna', false, 'ordine-50', '/ordini/50']]);
+    assert.match(nav, /<span class="punto attivo"><\/span><span class="punto"><\/span>/);
+    assert.match(nav, /<span class="conteggio">2<\/span>/);
+  } finally {
+    storico.attivo = false;
+    storico.conOrdini = false;
+    ordiniProva.attivo = false;
+  }
+});
+
+test('striscia: con una sola attività niente striscia e tutto come prima; neanche per un ordine consegnato aperto dallo storico', async () => {
+  storico.attivo = true; // c'è solo la richiesta 6 in attesa
+  try {
+    let r = await chiedi('/ordini');
+    assert.equal(r.status, 302);
+    assert.equal(r.headers.get('location'), '/richieste/6');
+    let t = await (await chiedi('/richieste/6')).text();
+    assert.doesNotMatch(t, /<section class="striscia"|striscia-schede"|class="con-striscia"/);
+    assert.match(t, /class="titolo">Verifica disponibilità</);
+    assert.match(t, /<a class="icona-btn" href="\/home" aria-label="Indietro">/);
+
+    // con due attività, un ordine consegnato aperto dallo storico non fa parte delle voci: niente striscia
+    storico.conOrdini = true;
+    ordiniProva.attivo = true;
+    t = await (await chiedi('/ordini/71')).text();
+    assert.doesNotMatch(t, /<section class="striscia"|striscia-schede"|class="con-striscia"/);
+    assert.match(t, /<a class="icona-btn" href="\/home" aria-label="Indietro">/);
+    // lo stesso per una richiesta che non è una delle voci (la 5, ormai ordine)
+    r = await chiedi('/richieste/4');
+    assert.doesNotMatch(await r.text(), /<section class="striscia"|class="con-striscia"/);
+  } finally {
+    storico.attivo = false;
+    storico.conOrdini = false;
+    ordiniProva.attivo = false;
+  }
+});
+
+test('richiesta scaduta: "Nessun corriere ha confermato" se il banco aveva accettato, "Nessun banco ha confermato" negli altri casi', async () => {
+  storico.attivo = true; // la richiesta 4 è chiusa senza ordine (nessuna_offerta), rimborsata
+  try {
+    const riga = (extra) => ({ id: 1, request_id: 4, distributor_id: 2, distributore_nome: 'Borea', filiale: 'Fegino', ditta_id: 6, esito: 'scaduto', corriere_stato: null, ...extra });
+    const titolo = (t) => (t.match(/<h2 class="att-titolo">([^<]*)<\/h2>/) || [])[1];
+    const pagina = async () => (await chiedi('/richieste/4')).text();
+
+    // il banco non ha risposto in tempo: la scritta di sempre, e il suo stato "Nessuna risposta"
+    storico.risposte[4] = [riga({})];
+    let t = await pagina();
+    assert.equal(titolo(t), 'Nessun banco ha confermato');
+    assert.match(t, /<span class="att-chip-no">Nessuna risposta<\/span>/);
+
+    // il banco ha rifiutato: ancora "nessun banco"
+    storico.risposte[4] = [riga({ esito: 'non_disponibile' })];
+    t = await pagina();
+    assert.equal(titolo(t), 'Nessun banco ha confermato');
+    assert.match(t, /<span class="att-chip-no">Non disponibile<\/span>/);
+
+    // il banco ha accettato ma nessun corriere ha preso la consegna: la causa è il corriere, e il banco risulta disponibile
+    storico.risposte[4] = [riga({ esito: 'confermato', corriere_stato: 'scaduto' })];
+    t = await pagina();
+    assert.equal(titolo(t), 'Nessun corriere ha confermato');
+    assert.match(t, /<span class="att-chip-ok">[\s\S]*?Disponibile<\/span>/);
+    assert.doesNotMatch(t, /Nessun banco ha confermato/);
+    assert.match(t, /Il tempo di \d+ minuti è scaduto\./);
+
+    // due filiali della stessa ditta: vale quella che aveva accettato, anche se l'altra (chiusa) viene prima nell'elenco
+    storico.risposte[4] = [riga({ id: 1, distributor_id: 2, esito: 'scaduto' }), riga({ id: 2, distributor_id: 181, filiale: 'Staglieno', esito: 'confermato', corriere_stato: 'scaduto' })];
+    t = await pagina();
+    assert.equal(titolo(t), 'Nessun corriere ha confermato');
+    assert.equal((t.match(/class="card att-card att-banco"/g) || []).length, 1, 'una ditta, una voce');
+  } finally {
+    storico.attivo = false;
+    storico.risposte = {};
+  }
+});
+
+test('"Ordine consegnato" riporta in "Stato ordini" (altro ordine in corso o pagina vuota), non sull\'ordine né in catalogo', async () => {
+  ordiniProva.attivo = true;
+  try {
+    // rotta provvisoria (qualunque stato): sempre /ordini, qualunque cosa dica il corpo
+    for (const corpo of [{}, { ritorno: '/ordini/72' }, { ritorno: '/home' }, { ritorno: '//sito.esempio/x' }]) {
+      const r = await chiedi('/ordini/72/consegnato-prova', form(corpo));
+      assert.equal(r.status, 302);
+      assert.equal(r.headers.get('location'), '/ordini', JSON.stringify(corpo));
+    }
+    // rotta vera (ordine partito dal banco): lo stesso
+    const r = await chiedi('/ordini/70/consegnato', form({}));
+    assert.equal(r.status, 302);
+    assert.equal(r.headers.get('location'), '/ordini');
+    // la pagina dell'ordine in consegna ha il pulsante, senza campi per scegliere dove tornare
+    const inConsegna = await (await chiedi('/ordini/72')).text();
+    assert.match(inConsegna, /action="\/ordini\/72\/consegnato-prova"/);
+    assert.doesNotMatch(inConsegna, /name="ritorno"/);
+    // l'ordine già consegnato resta consultabile (dallo Storico): la sua pagina "Consegnato" c'è ancora
+    const t = await (await chiedi('/ordini/71')).text();
+    assert.match(t, /<h2 class="att-titolo">Consegnato<\/h2>/);
+  } finally {
+    ordiniProva.attivo = false;
+  }
+});
+
+test('catalogo: la testata porta l\'utente collegato (le quantità scelte e non ancora aggiunte si legano a lui)', async () => {
+  const t = await (await chiedi('/home')).text();
+  assert.match(t, /<meta name="utente" content="1">/);
+  // senza sessione non c'è
+  const anonimo = await fetch(base + '/login');
+  assert.doesNotMatch(await anonimo.text(), /<meta name="utente"/);
+});
+
+test('icona con una sola attività: quella di sempre, senza fotogrammi né puntini; la scheda della home ha il suo conto', async () => {
+  storico.attivo = true; // senza conOrdini: c'è solo la richiesta 6 in attesa
+  try {
+    const t = await (await chiedi('/home')).text();
+    // con una sola attività il tocco porta dritto alla sua pagina (non da /ordini, che la rimanderebbe lì con un giro in più)
+    const a = t.indexOf('<a href="/richieste/6" class="nav-ordini');
+    const nav = t.slice(a, t.indexOf('</a>', a));
+    assert.match(nav, /^<a href="\/richieste\/6" class="nav-ordini fase-richiesta " data-fase="richiesta" data-attivo="home" data-firma="richiesta-6-richiesta" data-secondi="\d+" data-durata="360">/);
+    assert.doesNotMatch(nav, /multi|fotogramm|puntini|data-fasi|aria-label/);
+    assert.match(nav, /<span class="etichetta">In attesa · <span data-countdown>0[45]:\d\d<\/span><\/span>/);
+    // il conto dell'icona è quello del suo link; la scheda in cima alla home ha il suo [data-secondi]
+    const scheda = t.slice(t.indexOf('<a class="stato-home stato-richiesta"'), t.indexOf('</a>', t.indexOf('<a class="stato-home stato-richiesta"')));
+    assert.match(scheda, /^<a class="stato-home stato-richiesta" href="\/richieste\/6" data-secondi="\d+" data-durata="360">/);
+  } finally {
+    storico.attivo = false;
+  }
+});
+
+test('home: una scheda per ogni richiesta in attesa e ordine in consegna, nello stesso formato, una sotto l\'altra', async () => {
+  storico.attivo = true;
+  storico.conOrdini = true; // la richiesta 6 in attesa e l'ordine 50 in consegna (senza orario del corriere)
+  try {
+    const t = await (await chiedi('/home')).text();
+    const inizio = t.indexOf('<div class="stato-home-slot" data-stato-home>');
+    assert.ok(inizio > -1);
+    const slot = t.slice(inizio, t.indexOf('<h1 class="domanda">', inizio)); // fino alla ricerca che segue le schede
+    // le schede, nell'ordine dell'icona: prima la richiesta, poi la consegna
+    const schede = [...slot.matchAll(/<(?:a|div) class="stato-home stato-(richiesta|consegna)"/g)].map((m) => m[1]);
+    assert.deepEqual(schede, ['richiesta', 'consegna']);
+    // ognuna porta alla pagina della sua attività
+    assert.match(slot, /<a class="stato-home stato-richiesta" href="\/richieste\/6" data-secondi="\d+" data-durata="360">/);
+    assert.match(slot, /<a class="stato-corpo" href="\/ordini\/50">/);
+    // formato di sempre: la richiesta con anello, conto alla rovescia e frase del rimborso; la consegna con furgone, barra e tappe
+    assert.match(slot, /<span class="stato-tempo" data-countdown>0[45]:\d\d<\/span>/);
+    assert.match(slot, /<span class="stato-occhiello">Richiesta inviata<\/span>\s*<span class="stato-titolo">Aspettiamo che un banco accetti<\/span>\s*<span class="stato-sub">Se nessuno accetta entro 6 min, ti rimborsiamo\.<\/span>/);
+    assert.match(slot, /<span class="stato-occhiello">Accettato · In consegna<\/span>\s*<span class="stato-titolo">In consegna<\/span>/);
+    assert.match(slot, /<div class="stato-barra" aria-hidden="true"><span style="width: 50%"><\/span><\/div>/);
+    assert.match(slot, /<div class="stato-tappe" aria-hidden="true">\s*<span>Accettato<\/span>\s*<span>In viaggio<\/span>\s*<span>Consegnato<\/span>/);
+    // un solo conto alla rovescia (una sola richiesta): le consegne non ne hanno
+    assert.equal((slot.match(/data-countdown/g) || []).length, 1);
+  } finally {
+    storico.attivo = false;
+    storico.conOrdini = false;
+  }
+});
+
+test('si può inviare una nuova richiesta anche con una già in attesa: nessun "Richiesta già in corso"', async () => {
+  storico.attivo = true;
+  try {
+    await chiedi('/carrello/svuota', { method: 'POST' });
+    await chiedi('/api/carrello/imposta', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: 1, qty: 50 }),
+    });
+    const r = await chiedi('/richieste', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'destinazione=Via+Prova+1' });
+    const t = await r.text();
+    assert.doesNotMatch(t, /Richiesta già in corso|già una richiesta in attesa/);
+  } finally {
+    storico.attivo = false;
+  }
+});
+
+test('un invio, una richiesta: ogni apertura del carrello ha la sua chiave; un invio già partito riporta alla sua richiesta', async () => {
+  await chiedi('/carrello/svuota', { method: 'POST' });
+  await chiedi('/api/carrello/imposta', json({ id: 1, qty: 50 }));
+  const chiavi = [];
+  for (let i = 0; i < 2; i++) {
+    const t = await (await chiedi('/carrello')).text();
+    const m = t.match(/<input type="hidden" name="chiave_invio" value="([0-9a-f]{24})">/);
+    assert.ok(m, 'la chiave è nel modulo di invio');
+    assert.ok(t.indexOf(m[0]) > t.indexOf('id="form-invia"'), 'dentro il modulo che invia la richiesta');
+    chiavi.push(m[1]);
+  }
+  assert.notEqual(chiavi[0], chiavi[1], 'un carrello riaperto è un invio nuovo');
+
+  // secondo clic (o "indietro") sullo stesso invio: si va alla richiesta già partita, e non se ne scrive un'altra
+  const prima = registro.length;
+  const r = await chiedi('/richieste', form({ modo: 'imposta', chiave_invio: 'chiave-esistente-1', destinazione: 'Via Prova 1' }));
+  assert.equal(r.status, 302);
+  assert.equal(r.headers.get('location'), '/richieste/321');
+  assert.ok(!registro.slice(prima).some((q) => /INSERT INTO requests/.test(q)), 'nessuna richiesta nuova');
+  // il carrello di quell'invio non serve più
+  assert.match(await (await chiedi('/carrello')).text(), /Il carrello è vuoto/);
 });
 
 test('carrello vuoto: figura, ricerca come la home, catalogo; l\'ultimo ordine solo se consegnato', async () => {
@@ -2070,6 +2337,62 @@ test('Stripe: webhook con firma sul corpo grezzo, "Paga e invia" verso la pagina
     assert.equal(risposta.status, 503);
     assert.match(await risposta.text(), /Il pagamento online non è ancora configurato/);
     process.env.STRIPE_PUBLISHABLE_KEY = 'pk_test_finta';
+
+    // Sul PC di sviluppo, con PAGAMENTO_SIMULATO=1, "Paga e invia" salta Stripe: la richiesta parte con il pagamento simulato
+    // e non si apre nessuna pagina di pagamento. Sulla VPS non deve valere MAI: né con la chiave reale né con NODE_ENV=production.
+    // (Si ripete il carrello perché la richiesta simulata lo svuota.)
+    const nuovoCarrello = async () => {
+      await chiedi('/carrello/svuota', { method: 'POST' });
+      await chiedi('/api/carrello/imposta', json({ id: 1, qty: 10 }));
+    };
+    const pagaDalCarrello = () => chiedi('/richieste', form({ modo: 'imposta', destinazione: 'Via Puggia 22/3' }));
+    const nodeEnvPrima = process.env.NODE_ENV;
+    cookie = '';
+    await chiedi('/login', form({ username: 'prova', password: 'password-di-prova' }));
+    process.env.PAGAMENTO_SIMULATO = '1';
+    try {
+      await nuovoCarrello();
+      const intentiPrima = intentiCreati.length;
+      const registroPrima = registro.length;
+      risposta = await pagaDalCarrello();
+      assert.equal(risposta.status, 302, 'con il bypass non si va a /pagamento (303)');
+      assert.match(risposta.headers.get('location'), /^\/richieste\//);
+      assert.equal(intentiCreati.length, intentiPrima, 'nessun PaymentIntent');
+      assert.ok(registro.slice(registroPrima).some((q) => /INSERT INTO requests/.test(q)), 'la richiesta nasce subito');
+
+      // con NODE_ENV=production il bypass è ignorato: si paga con Stripe
+      process.env.NODE_ENV = 'production';
+      await nuovoCarrello();
+      risposta = await pagaDalCarrello();
+      assert.equal(risposta.status, 303);
+      assert.match(risposta.headers.get('location'), /^\/pagamento\/\d+$/);
+      assert.equal(intentiCreati.length, intentiPrima + 1);
+      delete process.env.NODE_ENV;
+
+      // con la chiave reale (sk_live_) idem
+      process.env.STRIPE_SECRET_KEY = 'sk_live_finta';
+      process.env.STRIPE_PUBLISHABLE_KEY = 'pk_live_finta';
+      await nuovoCarrello();
+      risposta = await pagaDalCarrello();
+      assert.equal(risposta.status, 303);
+      assert.match(risposta.headers.get('location'), /^\/pagamento\/\d+$/);
+      assert.equal(intentiCreati.length, intentiPrima + 2);
+      process.env.STRIPE_SECRET_KEY = 'sk_test_finta';
+      process.env.STRIPE_PUBLISHABLE_KEY = 'pk_test_finta';
+
+      // senza la riga nel .env: Stripe come sempre
+      delete process.env.PAGAMENTO_SIMULATO;
+      await nuovoCarrello();
+      risposta = await pagaDalCarrello();
+      assert.equal(risposta.status, 303);
+      assert.equal(intentiCreati.length, intentiPrima + 3);
+    } finally {
+      delete process.env.PAGAMENTO_SIMULATO;
+      if (nodeEnvPrima === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = nodeEnvPrima;
+      process.env.STRIPE_SECRET_KEY = 'sk_test_finta';
+      process.env.STRIPE_PUBLISHABLE_KEY = 'pk_test_finta';
+    }
 
     // senza accesso, al login
     await chiedi('/logout', { method: 'POST' });

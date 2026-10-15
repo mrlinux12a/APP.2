@@ -113,6 +113,7 @@
 
             <form method="POST" action="/richieste" id="form-invia" data-invia-carrello>
               <input type="hidden" name="modo" value="imposta">
+              <input type="hidden" name="chiave_invio" value="<%= chiaveInvio %>">
 
               <%# Consegna: il campo "destinazione" è lo stesso di prima, si apre con "Cambia" (o subito, se l'indirizzo è vuoto). %>
               <div class="card consegna-card" data-consegna>

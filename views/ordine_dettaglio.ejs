@@ -1,9 +1,10 @@
+<% const str = (typeof striscia !== 'undefined' && striscia) ? striscia : null; %>
 <!DOCTYPE html>
 <html lang="it">
 <head>
   <%- include('partials/app_head', { titolo }) %>
 </head>
-<body data-loggato="1">
+<body data-loggato="1"<%- str ? ' class="con-striscia"' : '' %>>
   <%
     // Ordine consegnato, visto dal cliente: pagina in verde con scheda di stato, "Riordina", materiale e costi (vedi il
     // ramo più sotto). Banco e agente vedono ancora la scheda di sempre.
@@ -12,9 +13,10 @@
   <div class="app<%= currentUser.ruolo === 'cliente' ? (consegnato ? ' app-consegnato' : '') : ' app-largo' %>">
     <%- include('partials/appbar', {
           titolo,
-          intestazione: currentUser.ruolo === 'cliente' ? 'Ordine' : 'Ordine #' + ordine.id,
-          indietro: currentUser.ruolo === 'agente' ? '/agente/ordini' : (currentUser.ruolo === 'distributore' ? '/distributore' : '/home')
+          intestazione: str ? 'Stato ordini' : (currentUser.ruolo === 'cliente' ? 'Ordine' : 'Ordine #' + ordine.id),
+          indietro: str ? null : (currentUser.ruolo === 'agente' ? '/agente/ordini' : (currentUser.ruolo === 'distributore' ? '/distributore' : '/home'))
         }) %>
+    <% if (str) { %><%- include('partials/striscia_ordini', { striscia: str }) %><% } %>
 
     <div class="contenuto">
       <%
@@ -196,14 +198,13 @@
 
         <%# "Consegnato": si segna da qui, non dalla home. Con l'ordine evaso vale la rotta vera (/consegnato); negli
             altri stati la rotta PROVVISORIA (/consegnato-prova, vale per qualunque stato), da togliere quando la
-            consegna verrà segnata da un evento vero. Il campo "ritorno" riporta qui, sull'ordine consegnato. %>
+            consegna verrà segnata da un evento vero. Entrambe riportano in "Stato ordini" (/ordini). %>
         <% if (ordine.stato === 'evaso') { %>
           <form method="POST" action="/ordini/<%= ordine.id %>/consegnato">
             <button class="btn btn-primary btn-blocco" type="submit">Ordine consegnato</button>
           </form>
         <% } else { %>
           <form method="POST" action="/ordini/<%= ordine.id %>/consegnato-prova">
-            <input type="hidden" name="ritorno" value="/ordini/<%= ordine.id %>">
             <button class="btn btn-primary btn-blocco" type="submit" title="Provvisorio: segna l'ordine come consegnato">Ordine consegnato</button>
           </form>
         <% } %>

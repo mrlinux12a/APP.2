@@ -400,12 +400,8 @@ CREATE INDEX IF NOT EXISTS idx_request_responses_distributor ON request_response
 -- in futuro. Verificato prima di crearlo: nessuna riga esistente lo violava.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_request_unico ON orders(request_id) WHERE request_id IS NOT NULL;
 
--- Una sola richiesta aperta per cliente alla volta: senza questo vincolo un doppio tap su
--- "Procedi" poteva creare due richieste 'in_attesa' per lo stesso cliente (il controllo
--- applicativo richiestaBloccante() legge e poi scrive, non è atomico). Verificato prima
--- di crearlo: nessuna riga esistente lo violava.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_requests_cliente_aperta ON requests(cliente_id)
-  WHERE stato IN ('in_attesa', 'con_offerte');
+-- (Il vincolo "una sola richiesta aperta per cliente" non esiste più: vedi in fondo, "Più richieste aperte per
+-- cliente".)
 
 -- Ricerca prodotti: LOWER(nome) LIKE '%termine%' con jolly iniziale non può usare un
 -- indice B-tree, quindi ogni ricerca (richiamata ad ogni digitazione, catalogo.js
@@ -607,3 +603,18 @@ ALTER TABLE stripe_pagamenti DROP COLUMN IF EXISTS session_id;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_stripe_pagamenti_intento ON stripe_pagamenti(payment_intent_id) WHERE payment_intent_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_stripe_pagamenti_request ON stripe_pagamenti(request_id);
 CREATE INDEX IF NOT EXISTS idx_stripe_pagamenti_stato ON stripe_pagamenti(modo, stato);
+
+-- Più richieste aperte per cliente: l'installatore può inviarne altre mentre una è in attesa o un ordine è in
+-- consegna, quindi l'indice unico parziale che ne ammetteva una sola (idx_requests_cliente_aperta) si toglie.
+-- Il blocco si può rilanciare.
+DROP INDEX IF EXISTS idx_requests_cliente_aperta;
+
+-- Un invio, una richiesta: ogni invio dal carrello porta una chiave (scritta nella pagina del carrello, o dall'app) e la
+-- stessa chiave non può dare due richieste allo stesso cliente. Così un doppio clic o un ritorno con "indietro" sulla
+-- stessa pagina non fanno partire due ordini: per un ordine nuovo si ricomincia dal carrello. Le richieste senza chiave
+-- (vecchie, o da client che non la mandano) non sono toccate. In stripe_pagamenti la chiave serve solo a non creare un
+-- secondo PaymentIntent per lo stesso invio. Il blocco si può rilanciare.
+ALTER TABLE requests ADD COLUMN IF NOT EXISTS chiave_invio TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_requests_chiave_invio ON requests(cliente_id, chiave_invio) WHERE chiave_invio IS NOT NULL;
+ALTER TABLE stripe_pagamenti ADD COLUMN IF NOT EXISTS chiave_invio TEXT;
+CREATE INDEX IF NOT EXISTS idx_stripe_pagamenti_chiave ON stripe_pagamenti(cliente_id, chiave_invio) WHERE chiave_invio IS NOT NULL;

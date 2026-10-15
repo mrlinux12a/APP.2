@@ -71,10 +71,10 @@ function esegui(sql, params, modo) {
   sqlViste.push(s);
 
   if (/^INSERT INTO stripe_pagamenti/.test(s)) {
-    const [cliente_id, tipo, modoRiga, importo_cent, righeJson, destinazione, note, request_id] = params;
+    const [cliente_id, tipo, modoRiga, importo_cent, righeJson, destinazione, note, request_id, chiave_invio] = params;
     const r = {
       id: righe.length + 1, cliente_id, tipo, modo: modoRiga, stato: 'da_pagare', payment_intent_id: null,
-      importo_cent, incasso_cent: null, righe: righeJson, destinazione, note, request_id, tentativi: 0, motivo: null, errore: null,
+      importo_cent, incasso_cent: null, righe: righeJson, destinazione, note, request_id, chiave_invio, tentativi: 0, motivo: null, errore: null,
       eta_sec: 0, _vecchia: false,
     };
     righe.push(r);
@@ -207,7 +207,6 @@ function preparati() {
   process.env.STRIPE_PUBLISHABLE_KEY = 'pk_test_finta';
   flusso.validaRichiesta = async () => ({ cliente, totali: { totale_ivato: 66.9 } });
   flusso.righeDaQuantita = async (voci) => voci.map((v) => ({ prodotto: { id: v.id }, quantita: v.quantita }));
-  flusso.richiestaBloccante = async () => null;
   creaRichiesta = async (clienteId, righeCarrello, opzioni) => {
     const id = 100 + richiesteCreate.length;
     richiesteCreate.push({ id, clienteId, righeCarrello, opzioni });
@@ -215,7 +214,11 @@ function preparati() {
     return id;
   };
   flusso.nuovaRichiesta = (...a) => creaRichiesta(...a);
+  // Le richieste già nate da un invio del carrello: chiave -> id (si riempie nelle prove che servono).
+  richiesteConChiave.clear();
+  richieste.richiestaConChiave = async (clienteId, chiave) => (richiesteConChiave.has(chiave) ? { id: richiesteConChiave.get(chiave), stato: 'in_attesa' } : null);
 }
+const richiesteConChiave = new Map();
 
 // Il cliente preme "Paga e invia" e paga nel form: ritorna l'id della pagina e del PaymentIntent.
 async function avviaEPaga(opzioni = {}) {
@@ -390,13 +393,13 @@ test('importo diverso da quello chiesto: la richiesta non nasce e la carta si ri
   assert.equal(stripe.intenti.get(intentoId).status, 'canceled');
 });
 
-test('richiesta rifiutata dal flusso (ne ha già una aperta): carta rilasciata e motivo mostrato al cliente', async () => {
+test('richiesta rifiutata dal flusso (minimo non più raggiunto): carta rilasciata e motivo mostrato al cliente', async () => {
   preparati();
-  creaRichiesta = async () => { throw new flusso.ErroreFlusso('in_corso', 'Richiesta già in corso', 'Hai già una richiesta in attesa di risposta.', { requestId: 42 }); };
+  creaRichiesta = async () => { throw new flusso.ErroreFlusso('ordine_minimo', 'Ordine minimo non raggiunto', 'Ti mancano € 3,00 per l\'ordine minimo.'); };
   const { intentoId } = await avviaEPaga();
   const esito = await stripePagamenti.esitoRitorno(intentoId, cliente.id);
   assert.equal(esito.esito, 'rifiutato');
-  assert.match(esito.messaggio, /Hai già una richiesta in attesa di risposta\. Non è stato addebitato nulla\./);
+  assert.match(esito.messaggio, /Ti mancano € 3,00 per l'ordine minimo\. Non è stato addebitato nulla\./);
   assert.equal(righe[0].stato, 'da_rilasciare');
 
   // chi ricarica la pagina vede lo stesso messaggio, non una seconda richiesta
@@ -639,15 +642,17 @@ test('Rinvia richiesta: si paga di nuovo e la STESSA richiesta si riapre con pag
   assert.equal(righe[0].stato, 'autorizzato');
 });
 
-test('Rinvia richiesta: non per quella di un altro, non se non è chiusa, non se ce n\'è già una aperta', async () => {
+test('Rinvia richiesta: non per quella di un altro, non se non è chiusa; con altre richieste aperte invece sì', async () => {
   preparati();
   const base = { id: 55, cliente_id: cliente.id, stato: 'nessuna_offerta', pagamento_importo: 66.9 };
   await assert.rejects(() => stripePagamenti.avviaPagamentoReinvio(cliente.id, { ...base, cliente_id: 8 }), /non si può più rinviare/);
   await assert.rejects(() => stripePagamenti.avviaPagamentoReinvio(cliente.id, { ...base, stato: 'in_attesa' }), /non si può più rinviare/);
   await assert.rejects(() => stripePagamenti.avviaPagamentoReinvio(cliente.id, { ...base, pagamento_importo: null }), /nuova richiesta dal carrello/);
-  flusso.richiestaBloccante = async () => ({ id: 60 });
-  await assert.rejects(() => stripePagamenti.avviaPagamentoReinvio(cliente.id, base), (e) => e.codice === 'in_corso' && e.requestId === 60);
   assert.equal(righe.length, 0);
+  // Non c'è più il limite di una richiesta aperta alla volta: il pagamento parte anche con altre in attesa.
+  await stripePagamenti.avviaPagamentoReinvio(cliente.id, base);
+  assert.equal(righe.length, 1);
+  assert.equal(righe[0].tipo, 'reinvio');
 });
 
 test('webhook: firma verificata, carta autorizzata e annullata, eventi dell\'altro modo ignorati', async () => {
@@ -737,4 +742,120 @@ test('senza chiave Stripe tutto resta simulato: nessuna query sui pagamenti Stri
   assert.equal(sqlViste.some((q) => /stripe_pagamenti/.test(q)), false);
   assert.deepEqual(pagamenti.incassoSimulato(10), { stato: 'pagato', metodo: 'simulato', importo: 10 });
   assert.deepEqual(pagamenti.incasso(10, 'stripe'), { stato: 'pagato', metodo: 'stripe', importo: 10 });
+});
+
+// ---------------- Un invio, una richiesta ----------------
+
+test('stesso invio cliccato due volte: la seconda volta riporta alla stessa pagina di pagamento, senza un secondo PaymentIntent', async () => {
+  preparati();
+  const opz = { destinazione: 'Via Puggia 22/3', note: '', chiaveInvio: 'carrello-aaaa1111' };
+  const primo = await stripePagamenti.avviaPagamento(cliente.id, carrello, opz);
+  const secondo = await stripePagamenti.avviaPagamento(cliente.id, carrello, opz);
+  assert.equal(secondo, primo);
+  assert.equal(righe.length, 1, 'una riga sola');
+  assert.equal(stripe.chiamate.filter((c) => c[0] === 'create').length, 1, 'un PaymentIntent solo');
+  assert.equal(righe[0].chiave_invio, 'carrello-aaaa1111', 'la chiave resta sulla riga');
+
+  // un invio nuovo (chiave nuova) apre un pagamento nuovo, anche per lo stesso carrello
+  const terzo = await stripePagamenti.avviaPagamento(cliente.id, carrello, { ...opz, chiaveInvio: 'carrello-bbbb2222' });
+  assert.notEqual(terzo, primo);
+  assert.equal(righe.length, 2);
+});
+
+test('invio già diventato richiesta: niente nuovo pagamento, si porta il cliente alla sua richiesta', async () => {
+  preparati();
+  richiesteConChiave.set('carrello-cccc3333', 91);
+  await assert.rejects(
+    () => stripePagamenti.avviaPagamento(cliente.id, carrello, { destinazione: 'Via Puggia 22/3', chiaveInvio: 'carrello-cccc3333' }),
+    (e) => e instanceof flusso.ErroreFlusso && e.codice === 'gia_inviata' && e.requestId === 91
+  );
+  assert.equal(righe.length, 0);
+  assert.equal(stripe.chiamate.filter((c) => c[0] === 'create').length, 0);
+});
+
+test('un pagamento dello stesso invio non più da fare (scaduto) non si riusa: se ne apre uno nuovo', async () => {
+  preparati();
+  const opz = { destinazione: 'Via Puggia 22/3', chiaveInvio: 'carrello-dddd4444' };
+  const primo = await stripePagamenti.avviaPagamento(cliente.id, carrello, opz);
+  righe[0].stato = 'scaduto';
+  const secondo = await stripePagamenti.avviaPagamento(cliente.id, carrello, opz);
+  assert.notEqual(secondo, primo);
+  assert.equal(righe.length, 2);
+});
+
+test('seconda carta dello stesso invio (due schede): la richiesta nasce una volta, la seconda carta si rilascia senza addebito', async () => {
+  preparati();
+  const opz = { destinazione: 'Via Puggia 22/3', note: '', chiaveInvio: 'carrello-eeee5555' };
+  // due pagamenti aperti per lo stesso invio (due schede del browser, prima che uno dei due fosse pagato)
+  const idA = await stripePagamenti.avviaPagamento(cliente.id, carrello, opz);
+  righe[0].stato = 'scaduto'; // così avviaPagamento non riusa il primo e apre il secondo come due schede aperte insieme
+  const idB = await stripePagamenti.avviaPagamento(cliente.id, carrello, opz);
+  righe[0].stato = 'da_pagare';
+  const a = righe[idA - 1];
+  const b = righe[idB - 1];
+  stripe.paga(a.payment_intent_id, {});
+  stripe.paga(b.payment_intent_id, {});
+
+  // il flusso lascia passare la prima e respinge la seconda, come fa l'indice unico del DB
+  let nata = null;
+  creaRichiesta = async (clienteId, righeCarrello, opzioni) => {
+    assert.equal(opzioni.chiaveInvio, 'carrello-eeee5555', 'la chiave arriva al flusso');
+    assert.equal(opzioni.inCasoDiDuplicato, 'rifiuta', 'una seconda carta non si "riporta": si respinge');
+    if (nata) throw new flusso.ErroreFlusso('gia_inviata', 'Ordine già inviato', 'Questo ordine è già stato inviato: non ne parte un altro.', { requestId: nata });
+    nata = 100 + richiesteCreate.length;
+    richiesteCreate.push({ id: nata, clienteId, righeCarrello, opzioni });
+    richiesteDb.set(nata, { pagamento_stato: 'pagato', pagamento_importo: opzioni.importoPagato });
+    return nata;
+  };
+  const esitoA = await stripePagamenti.esitoRitorno(a.payment_intent_id, cliente.id);
+  const esitoB = await stripePagamenti.esitoRitorno(b.payment_intent_id, cliente.id);
+  assert.equal(esitoA.esito, 'ok');
+  assert.equal(esitoB.esito, 'rifiutato');
+  assert.match(esitoB.messaggio, /già stato inviato.*Non è stato addebitato nulla\./);
+  assert.equal(richiesteCreate.length, 1, 'una richiesta sola');
+  assert.equal(b.stato, 'da_rilasciare');
+  await stripePagamenti.elabora();
+  assert.equal(stripe.intenti.get(b.payment_intent_id).status, 'canceled', 'la seconda carta è rilasciata');
+});
+
+// ---------------- Bypass locale del pagamento ----------------
+
+test('PAGAMENTO_SIMULATO: salta Stripe solo con chiave di prova e fuori da NODE_ENV=production; sulla VPS non vale mai', () => {
+  const nomi = ['STRIPE_SECRET_KEY', 'STRIPE_PUBLISHABLE_KEY', 'PAGAMENTO_SIMULATO', 'NODE_ENV'];
+  const salvati = Object.fromEntries(nomi.map((n) => [n, process.env[n]]));
+  const imposta = (v) => nomi.forEach((n) => (v[n] === undefined ? delete process.env[n] : (process.env[n] = v[n])));
+  const avviso = () => stripePagamenti.controllaConfigurazione().find((a) => /PAGAMENTO_SIMULATO/.test(a));
+  try {
+    const prova = { STRIPE_SECRET_KEY: 'sk_test_x', STRIPE_PUBLISHABLE_KEY: 'pk_test_x' };
+
+    imposta(prova);
+    assert.equal(pagamenti.pagaConStripe(), true, 'senza la riga: Stripe');
+    assert.equal(avviso(), undefined);
+
+    imposta({ ...prova, PAGAMENTO_SIMULATO: '1' });
+    assert.equal(pagamenti.pagaConStripe(), false, 'PC di sviluppo: pagamento simulato');
+    assert.equal(stripePagamenti.pagaConStripe(), false);
+    assert.equal(pagamenti.stripeAttivo(), true, 'gli incassi e i rilasci dei pagamenti già fatti restano attivi');
+    assert.match(avviso(), /salta Stripe.*sulla VPS quella riga non deve esserci/);
+
+    imposta({ ...prova, PAGAMENTO_SIMULATO: '1', NODE_ENV: 'production' });
+    assert.equal(pagamenti.pagaConStripe(), true, 'NODE_ENV=production: ignorata');
+    assert.match(avviso(), /ignorata/);
+
+    imposta({ STRIPE_SECRET_KEY: 'sk_live_x', STRIPE_PUBLISHABLE_KEY: 'pk_live_x', PAGAMENTO_SIMULATO: '1' });
+    assert.equal(pagamenti.pagaConStripe(), true, 'chiave reale: ignorata');
+    assert.match(avviso(), /ignorata/);
+
+    for (const valore of ['0', 'false', '', 'no']) {
+      imposta({ ...prova, PAGAMENTO_SIMULATO: valore });
+      assert.equal(pagamenti.pagaConStripe(), true, 'PAGAMENTO_SIMULATO=' + valore);
+    }
+
+    // senza chiave Stripe non c'è niente da saltare: resta tutto simulato come prima
+    imposta({ PAGAMENTO_SIMULATO: '1' });
+    assert.equal(pagamenti.pagaConStripe(), false);
+    assert.equal(pagamenti.stripeAttivo(), false);
+  } finally {
+    imposta(salvati);
+  }
 });
