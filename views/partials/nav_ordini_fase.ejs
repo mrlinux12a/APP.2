@@ -18,9 +18,11 @@
 <% } else if (v.fase === 'consegna') { %>
   <span class="ico ico-stato">
     <span class="furgone"><%- iconaFurgone %></span>
-    <% if (v.minuti != null) { %><span class="badge-eta"><%= v.minuti %>′</span><% } %>
+    <% if (v.minuti != null && !v.inArrivo && v.minuti <= 99) { %><span class="badge-eta" data-eta-testo="{m}′" data-eta-nascondi><%= v.minuti %>′</span><% } %>
   </span>
-  <span class="etichetta"><%= v.minuti != null ? 'Arriva tra ' + v.minuti + ' min' : 'In consegna' %></span>
+  <%# Con l'orario d'arrivo i minuti scendono da soli (public/app.js, "Consegna in arrivo"): il contenitore [data-eta-sec] lo scrive il
+      chiamante (il link o il fotogramma). A 3 minuti o meno la scritta è solo "In arrivo". %>
+  <span class="etichetta"<%- v.minuti != null ? ' data-eta-testo="Arriva tra {t}"' : '' %>><%= v.minuti == null ? 'In consegna' : (v.inArrivo ? 'In arrivo' : 'Arriva tra ' + fmt.durataMinuti(v.minuti)) %></span>
 <% } else if (v.fase === 'scaduta') { %>
   <span class="ico ico-stato">
     <span class="scatola-spenta"><%- iconaOrdini %></span>

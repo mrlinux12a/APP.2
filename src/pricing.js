@@ -23,7 +23,18 @@ async function getIvaPct() {
   return getConfigNum('iva_pct', 22);
 }
 
+// Finestra di conferma delle richieste, in minuti (anche con la virgola: 0,5 = 30 secondi). Di norma sta nella tabella config
+// (`finestra_conferma_min`, 10). `FINESTRA_CONFERMA_SEC` nel .env di UN computer la accorcia (o allunga) solo per quell'istanza,
+// senza toccare il DB condiviso con la VPS e i banchi veri: richiesta esplicita del 16/10/2026, "per adesso" 30 secondi per
+// provare i timer. Per toglierla: via la riga dal .env e riavvio.
+const FINESTRA_SEC_ENV = parseFloat(process.env.FINESTRA_CONFERMA_SEC);
+const FINESTRA_FORZATA_MIN = Number.isFinite(FINESTRA_SEC_ENV) && FINESTRA_SEC_ENV > 0 ? FINESTRA_SEC_ENV / 60 : null;
+if (FINESTRA_FORZATA_MIN !== null) {
+  console.log(`[config] FINESTRA_CONFERMA_SEC=${FINESTRA_SEC_ENV}: la finestra di conferma è di ${FINESTRA_SEC_ENV} s (il valore del DB è ignorato).`);
+}
+
 async function getFinestraMinuti() {
+  if (FINESTRA_FORZATA_MIN !== null) return FINESTRA_FORZATA_MIN;
   return getConfigNum('finestra_conferma_min', 10);
 }
 

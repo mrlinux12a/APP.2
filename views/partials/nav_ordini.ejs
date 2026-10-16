@@ -12,6 +12,8 @@
   conScheda (?scheda=1, solo dalla home) segue anche la scheda di stato_home.ejs.
   Lo script in fondo muove i conti alla rovescia: ogni [data-countdown] e [data-arco] legge secondi e durata del contenitore
   [data-secondi] più vicino (la scheda della richiesta, la scheda della home, il fotogramma o il link), non di un conto unico.
+  Le consegne non passano da qui: il link o il fotogramma porta [data-eta-sec] (secondi all'arrivo) e i minuti, "In arrivo" (3 minuti o
+  meno) e le barre li muove il blocco "Consegna in arrivo" di public/app.js, ogni secondo.
 %>
 <%
   const attivoNav = typeof attivo !== 'undefined' ? attivo : '';
@@ -27,7 +29,7 @@
     // 07:42 rimasti. Arriva tra 18 minuti."
     const frase = function (v) {
       if (v.fase === 'richiesta') return 'In attesa, ' + fmt.mmss(v.secondi) + ' rimasti';
-      if (v.fase === 'consegna') return v.minuti != null ? 'Arriva tra ' + v.minuti + ' minuti' : 'In consegna';
+      if (v.fase === 'consegna') return v.minuti == null ? 'In consegna' : (v.inArrivo ? 'In arrivo' : 'Arriva tra ' + fmt.durataMinuti(v.minuti));
       return 'Nessuna risposta';
     };
     const etichettaAria = 'Stato ordini: ' + voci.length + ' attivi. ' + voci.map(frase).join('. ') + '.';
@@ -36,7 +38,7 @@
 <a href="<%= voci[0].href %>" class="nav-ordini multi fase-<%= voci[0].fase %> <%= attivoNav === 'ordini' ? 'attivo' : '' %>" data-fase="<%= voci[0].fase %>" data-fasi="<%= fasiPresenti.join(',') %>" data-attivo="<%= attivoNav %>" data-firma="<%= so.firma || '' %>" aria-label="<%= etichettaAria %>">
   <span class="fotogrammi" aria-hidden="true">
     <% voci.forEach(function (v, i) { %>
-      <span class="fotogramma fase-<%= v.fase %><%= i === 0 ? ' attivo' : '' %>" data-voce="<%= v.voce %>" data-href="<%= v.href %>"<% if (v.fase === 'richiesta') { %> data-secondi="<%= v.secondi %>" data-durata="<%= v.durata %>"<% } %>>
+      <span class="fotogramma fase-<%= v.fase %><%= i === 0 ? ' attivo' : '' %>" data-voce="<%= v.voce %>" data-href="<%= v.href %>"<% if (v.fase === 'richiesta') { %> data-secondi="<%= v.secondi %>" data-durata="<%= v.durata %>"<% } else if (v.fase === 'consegna' && v.etaSec != null) { %> data-eta-sec="<%= v.etaSec %>"<% } %>>
         <%- include('nav_ordini_fase', { v: v, CIRC: CIRC }) %>
       </span>
     <% }); %>
@@ -48,7 +50,7 @@
   </span>
 </a>
 <% } else { %>
-<a href="<%= voci.length === 1 ? voci[0].href : '/ordini' %>" class="nav-ordini fase-<%= so.fase %> <%= attivoNav === 'ordini' ? 'attivo' : '' %>" data-fase="<%= so.fase %>" data-attivo="<%= attivoNav %>" data-firma="<%= so.firma || '' %>"<% if (so.fase === 'richiesta') { %> data-secondi="<%= so.secondi %>" data-durata="<%= so.durata %>"<% } %>>
+<a href="<%= voci.length === 1 ? voci[0].href : '/ordini' %>" class="nav-ordini fase-<%= so.fase %> <%= attivoNav === 'ordini' ? 'attivo' : '' %>" data-fase="<%= so.fase %>" data-attivo="<%= attivoNav %>" data-firma="<%= so.firma || '' %>"<% if (so.fase === 'richiesta') { %> data-secondi="<%= so.secondi %>" data-durata="<%= so.durata %>"<% } else if (so.fase === 'consegna' && so.etaSec != null) { %> data-eta-sec="<%= so.etaSec %>"<% } %>>
   <% if (so.fase === 'richiesta' || so.fase === 'consegna' || so.fase === 'scaduta') { %>
     <%- include('nav_ordini_fase', { v: so, CIRC: CIRC }) %>
   <% } else { %>

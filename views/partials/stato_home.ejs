@@ -40,14 +40,19 @@
     </div>
   </a>
 <% } else { %>
-  <% const nomeCorriere = v.corriere || ''; %>
-  <div class="stato-home stato-consegna">
+  <%
+    const nomeCorriere = v.corriere || '';
+    // Con l'orario d'arrivo minuti, "In arrivo" (3 min o meno) e barra li fa scendere da soli il browser, col suo orologio
+    // (public/app.js, "Consegna in arrivo"): ogni scheda ha il suo [data-eta-sec]. Senza orario: "In consegna" e barra a metà, ferme.
+    const conEta = v.minuti != null && v.etaSec != null;
+  %>
+  <div class="stato-home stato-consegna"<%- conEta ? ' data-eta-sec="' + v.etaSec + '"' + (v.durataSec ? ' data-eta-durata="' + v.durataSec + '"' : '') : '' %>>
    <a class="stato-corpo" href="<%= v.href %>">
     <div class="stato-riga">
       <span class="stato-furgone"><span class="furgone"><%- iconaFurgone %></span></span>
       <span class="stato-testi">
         <span class="stato-occhiello">Accettato · In consegna</span>
-        <span class="stato-titolo"><%= v.minuti != null ? 'Arriva tra ' + v.minuti + ' min' : 'In consegna' %></span>
+        <span class="stato-titolo"<%- conEta ? ' data-eta-testo="Arriva tra {t}"' : '' %>><%= v.minuti == null ? 'In consegna' : (v.inArrivo ? 'In arrivo' : 'Arriva tra ' + fmt.durataMinuti(v.minuti)) %></span>
         <% if (nomeCorriere) { %>
           <span class="stato-sub">
             <span class="stato-iniziale" aria-hidden="true"><%= Array.from(nomeCorriere)[0].toUpperCase() %></span>
@@ -57,9 +62,9 @@
       </span>
       <span class="stato-freccia" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span>
     </div>
-    <div class="stato-barra" aria-hidden="true"><span style="width: <%= Math.round((v.progresso != null ? v.progresso : 0.5) * 100) %>%"></span></div>
+    <div class="stato-barra" aria-hidden="true"><span<%- conEta && v.durataSec ? ' data-eta-barra' : '' %> style="width: <%= conEta && v.durataSec ? ((v.progresso != null ? v.progresso : 0.5) * 100).toFixed(1) : Math.round((v.progresso != null ? v.progresso : 0.5) * 100) %>%"></span></div>
    </a>
-    <%# La barra sta a metà ("In viaggio") finché non c'è l'evento che segna la consegna. "Consegnato" qui è solo
+    <%# La barra avanza col tempo fino all'arrivo previsto (a metà, "In viaggio", se non c'è l'orario). "Consegnato" qui è solo
         un'etichetta: non si può toccare dalla home. Il pulsante PROVVISORIO che chiude l'ordine (POST
         /ordini/:id/consegnato-prova) sta nella pagina dell'ordine, "Stato ordini". %>
     <div class="stato-tappe" aria-hidden="true">

@@ -55,9 +55,9 @@ const inAttesa = (id, secondi, nataFa = 60000) => ({
   id, stato: 'in_attesa', creato_il: fa(nataFa), scade_il: tra(secondi * 1000), order_id: null, secondi_rimasti: secondi,
 });
 // Una richiesta con ordine: in consegna (consegnato = false) o consegnato; `arrivoTraMin` = corriere_arrivo_il fra N minuti.
-function conOrdine(id, { consegnato = false, arrivoTraMin = null, nataFa = ORA, corriere = '' } = {}) {
+function conOrdine(id, { consegnato = false, arrivoTraMin = null, nataFa = ORA, corriere = '', consegnaOre = null } = {}) {
   ordiniDb[id + 1000] = {
-    id: id + 1000, stato: 'inviato', creato_il: fa(nataFa), consegnato_il: consegnato ? fa(MIN) : null,
+    id: id + 1000, stato: 'inviato', creato_il: fa(nataFa), consegnato_il: consegnato ? fa(MIN) : null, consegna_ore: consegnaOre,
     corriere_arrivo_il: arrivoTraMin === null ? null : new Date(Date.now() + arrivoTraMin * MIN), corriere_risposto_il: null, corriere_nome: corriere,
   };
   return { id, stato: 'ordinata', creato_il: fa(nataFa), scade_il: fa(nataFa - 10 * MIN), order_id: id + 1000, secondi_rimasti: -1 };
@@ -280,9 +280,13 @@ test('icona: `voci` elenca tutte le attività nell\'ordine dell\'alternanza, i c
   assert.equal(icona.voci[0].secondi, 120);
   assert.ok(icona.voci[0].durata > 0);
   assert.ok(icona.voci[2].minuti >= 24 && icona.voci[2].minuti <= 25);
-  assert.deepEqual(Object.keys(icona.voci[2]).sort(), ['corriere', 'fase', 'href', 'id', 'minuti', 'progresso', 'richiestaId', 'tipo', 'voce']);
+  assert.deepEqual(Object.keys(icona.voci[2]).sort(), ['corriere', 'durataSec', 'etaSec', 'fase', 'href', 'id', 'inArrivo', 'minuti', 'progresso', 'richiestaId', 'tipo', 'voce']);
   assert.equal(icona.voci[2].corriere, 'Luca');
-  assert.equal(icona.voci[2].progresso, 0.5);
+  // la barra della home non è più ferma a metà: ordine nato 1 ora fa, arrivo fra 25 minuti -> 60 su 85 minuti trascorsi
+  assert.ok(Math.abs(icona.voci[2].progresso - 60 / 85) < 0.01, 'progresso = tempo trascorso sul totale: ' + icona.voci[2].progresso);
+  assert.ok(Math.abs(icona.voci[2].etaSec - 25 * 60) <= 2);
+  assert.ok(Math.abs(icona.voci[2].durataSec - 85 * 60) <= 2);
+  assert.equal(icona.voci[2].inArrivo, false);
   assert.deepEqual(Object.keys(icona.voci[0]).sort(), ['durata', 'fase', 'href', 'id', 'richiestaId', 'secondi', 'tipo', 'voce']);
   assert.equal(icona.voci[2].href, '/ordini/1060');
   assert.equal(icona.voci[2].voce, 'ordine-1060');
@@ -318,4 +322,123 @@ test('anello: una richiesta rinviata (creata ore fa, finestra ripartita adesso) 
   assert.equal(icona.voci[0].durata, 600);
   const [voce] = await flusso.vociStriscia(1);
   assert.equal(voce.durata, 600);
+});
+
+// ---------------- "In arrivo" a 3 minuti o meno, minuti e barra che scendono col tempo ----------------
+
+test('voce di consegna: secondi all\'arrivo, durata e "In arrivo" a 3 minuti o meno (anche a orario passato)', async () => {
+  prepara(() => [
+    conOrdine(1, { arrivoTraMin: 10 }),
+    conOrdine(2, { arrivoTraMin: 3 }),
+    conOrdine(3, { arrivoTraMin: 0.5 }),
+    conOrdine(4, { arrivoTraMin: -2 }), // l'orario è passato, l'ordine non è ancora segnato consegnato
+    conOrdine(5, { arrivoTraMin: null }),
+  ]);
+  const voci = await flusso.vociStriscia(1);
+  const per = (id) => voci.find((v) => v.id === 1000 + id);
+  assert.equal(per(1).inArrivo, false);
+  assert.equal(per(2).inArrivo, true, 'a 3 minuti precisi è già "In arrivo"');
+  assert.equal(per(3).inArrivo, true);
+  assert.equal(per(4).inArrivo, true);
+  assert.ok(per(4).etaSec < 0, 'i secondi possono essere negativi');
+  assert.equal(per(4).minuti, 1, 'i minuti non scendono sotto 1');
+  assert.ok(Math.abs(per(1).etaSec - 600) <= 2);
+  // l'ordine è nato un'ora fa: durata = 1 h + il tempo che manca
+  assert.ok(Math.abs(per(1).durataSec - 70 * 60) <= 2);
+  // senza orario del corriere: niente conto, resta "In consegna" e la barra a metà
+  assert.equal(per(5).minuti, null);
+  assert.equal(per(5).etaSec, null);
+  assert.equal(per(5).inArrivo, false);
+  assert.equal(per(5).progresso, 0.5);
+  // la barra della home avanza col tempo (ora 60 min trascorsi su 70) e non esce da 0..1 se l'orario è passato
+  assert.ok(Math.abs(per(1).progresso - 60 / 70) < 0.01);
+  assert.equal(per(4).progresso, 1);
+});
+
+test('format.inArrivo: la soglia è di 3 minuti', () => {
+  const format = require('../src/format');
+  assert.equal(format.SOGLIA_IN_ARRIVO_SEC, 180);
+  assert.equal(format.inArrivo(181), false);
+  assert.equal(format.inArrivo(180), true);
+  assert.equal(format.inArrivo(0), true);
+  assert.equal(format.inArrivo(-30), true);
+  assert.equal(format.inArrivo(null), false);
+  assert.equal(format.inArrivo(undefined), false);
+});
+
+// Le schede e l'icona si disegnano dai partial: si provano con le voci come le costruisce il flusso.
+test('schede e icona: "In arrivo" e basta a 3 minuti o meno, altrimenti i minuti; ogni contenitore porta i suoi secondi', async () => {
+  const ejs = require('ejs');
+  const format = require('../src/format');
+  const viste = path.join(__dirname, '..', 'views', 'partials');
+  const icone = { iconaOrdini: '', iconaFurgone: '' };
+  prepara(() => [conOrdine(1, { arrivoTraMin: 12, corriere: 'Luca' }), conOrdine(2, { arrivoTraMin: 2, corriere: 'Anna' }), conOrdine(3, { arrivoTraMin: null })]);
+  const voci = await flusso.vociStriscia(1);
+  const lontana = voci.find((v) => v.id === 1001);
+  const vicina = voci.find((v) => v.id === 1002);
+  const senza = voci.find((v) => v.id === 1003);
+
+  // icona (nav_ordini_fase): etichetta e badge
+  const fase = (v) => ejs.renderFile(path.join(viste, 'nav_ordini_fase.ejs'), { v, CIRC: 65.97, fmt: format, ...icone });
+  let h = await fase(lontana);
+  assert.match(h, /<span class="etichetta" data-eta-testo="Arriva tra \{t\}">Arriva tra 12 min<\/span>/);
+  assert.match(h, /<span class="badge-eta" data-eta-testo="\{m\}′" data-eta-nascondi>12′<\/span>/);
+  h = await fase(vicina);
+  assert.match(h, /<span class="etichetta" data-eta-testo="Arriva tra \{t\}">In arrivo<\/span>/);
+  assert.doesNotMatch(h, /Arriva tra \d/);
+  assert.doesNotMatch(h, /badge-eta/, 'a 3 minuti o meno solo "In arrivo", senza il numero dei minuti');
+  h = await fase(senza);
+  assert.match(h, /<span class="etichetta">In consegna<\/span>/);
+  assert.doesNotMatch(h, /data-eta/);
+
+  // scheda della home: una per ordine, ognuna col suo [data-eta-sec], titolo e barra
+  const home = await ejs.renderFile(path.join(viste, 'stato_home.ejs'), { statoOrdini: { voci }, fmt: format, ...icone });
+  const schede = home.split('<div class="stato-home stato-consegna"').slice(1);
+  assert.equal(schede.length, 3);
+  const scheda = (id) => schede.find((s) => s.includes('/ordini/' + id));
+  assert.match(scheda(1001), /^ data-eta-sec="\d+" data-eta-durata="\d+">/);
+  assert.match(scheda(1001), /<span class="stato-titolo" data-eta-testo="Arriva tra \{t\}">Arriva tra 12 min<\/span>/);
+  assert.match(scheda(1001), /<span data-eta-barra style="width: \d+\.\d%">/);
+  assert.match(scheda(1002), /<span class="stato-titolo" data-eta-testo="Arriva tra \{t\}">In arrivo<\/span>/);
+  assert.match(scheda(1003), /^>/, 'senza orario nessun conto');
+  assert.match(scheda(1003), /<span class="stato-titolo">In consegna<\/span>/);
+  assert.match(scheda(1003), /<span style="width: 50%"><\/span>/);
+
+  // striscia (più ordini): "tra N min" scende da solo, "In arrivo" a 3 minuti o meno
+  const striscia = await ejs.renderFile(path.join(viste, 'striscia_ordini.ejs'), { striscia: { voci: voci.map((v) => ({ ...v, breve: 'Tubo' })), attiva: voci[0].voce, firma: 'x' }, fmt: format, ...icone });
+  assert.match(striscia, /data-voce="ordine-1001" data-eta-sec="\d+"/);
+  assert.match(striscia, /<span class="str-valore" data-eta-testo="tra \{t\}">tra 12 min<\/span>/);
+  assert.match(striscia, /<span class="str-valore" data-eta-testo="tra \{t\}">In arrivo<\/span>/);
+  assert.match(striscia, /<span class="str-valore">In consegna<\/span>/);
+});
+
+test('senza il corriere l\'arrivo è la stima del banco (consegna_ore): "Arriva tra 5 h 57", "In arrivo" solo negli ultimi 3 minuti', async () => {
+  const ejs = require('ejs');
+  const format = require('../src/format');
+  const viste = path.join(__dirname, '..', 'views', 'partials');
+  const fase = (v) => ejs.renderFile(path.join(viste, 'nav_ordini_fase.ejs'), { v, CIRC: 65.97, fmt: format, iconaOrdini: '', iconaFurgone: '' });
+
+  // ordine di 6 ore nato 3 minuti fa: mancano 5 h 57, NON "In arrivo"
+  prepara(() => [conOrdine(1, { consegnaOre: 6, nataFa: 3 * MIN })]);
+  let [v] = await flusso.vociStriscia(1);
+  assert.equal(v.minuti, 357);
+  assert.equal(v.inArrivo, false);
+  assert.ok(Math.abs(v.durataSec - 6 * 3600) <= 2);
+  let h = await fase(v);
+  assert.match(h, /data-eta-testo="Arriva tra \{t\}">Arriva tra 5 h 57<\/span>/);
+  assert.doesNotMatch(h, /badge-eta/, 'oltre i 99 minuti il badge non c\'è');
+
+  // nato 5 h 58 fa: mancano 2 minuti
+  prepara(() => [conOrdine(2, { consegnaOre: 6, nataFa: 6 * ORA - 2 * MIN })]);
+  [v] = await flusso.vociStriscia(1);
+  assert.equal(v.inArrivo, true);
+  assert.match(await fase(v), />In arrivo<\/span>/);
+
+  // il corriere, se c'è, vince sulla stima; senza né l'uno né l'altra resta "In consegna"
+  prepara(() => [conOrdine(3, { consegnaOre: 6, arrivoTraMin: 20, nataFa: 3 * MIN })]);
+  [v] = await flusso.vociStriscia(1);
+  assert.ok(v.minuti >= 19 && v.minuti <= 20);
+  prepara(() => [conOrdine(4, { consegnaOre: null, nataFa: 3 * MIN })]);
+  [v] = await flusso.vociStriscia(1);
+  assert.equal(v.minuti, null);
 });

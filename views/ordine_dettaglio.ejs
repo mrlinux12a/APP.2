@@ -36,8 +36,9 @@
       <% if (inConsegna) { %>
         <%
           // Anello e barra "In consegna": l'anello parte pieno quando l'ordine nasce (conferma del banco) e si
-          // svuota fino a zero all'ora d'arrivo; la barra si riempie in proporzione al tempo trascorso. Lo muove
-          // lo script "Ordine in consegna" di app.js dai due numeri sul riquadro ([data-durata], [data-rimanente]).
+          // svuota fino a zero all'ora d'arrivo; la barra si riempie in proporzione al tempo trascorso. Li muove
+          // lo script "Consegna in arrivo" di app.js, ogni secondo e in modo lineare, dai due numeri sul riquadro
+          // ([data-eta-sec] = secondi all'arrivo, [data-eta-durata] = durata totale).
           // creato_il è un TIMESTAMP UTC senza fuso (istanteUtc lo rimette a posto); corriere_arrivo_il è già un
           // istante vero. Senza orario d'arrivo (né corriere né ore stimate) l'anello resta pieno e fermo.
           const creatoIl = fmt.istanteUtc(ordine.creato_il);
@@ -50,9 +51,12 @@
           const CIRC_CONSEGNA = 402.12; // 2 * PI * 64
           const offsetConsegna = (CIRC_CONSEGNA * (1 - frazioneRimasta)).toFixed(2);
           const percTrascorsa = durataSec ? ((1 - frazioneRimasta) * 100).toFixed(1) : 50;
-          const titoloConsegna = ordine.corriere_arrivo_il
+          // Titolo = tempo stimato; a 3 minuti o meno dall'arrivo (o a orario passato) solo "In arrivo". Con l'orario d'arrivo il titolo
+          // normale sta anche in data-eta-testo: lo script torna a scriverlo o passa a "In arrivo" da solo, senza ricaricare.
+          const titoloNormale = ordine.corriere_arrivo_il
             ? 'Arriva entro le ' + fmt.oraRoma(ordine.corriere_arrivo_il)
             : (ordine.consegna_ore ? 'Arriva entro ' + fmt.tempoConsegna(ordine.consegna_ore) : 'Tempi di consegna da confermare');
+          const titoloConsegna = arrivoIl && fmt.inArrivo(rimanenteSec) ? 'In arrivo' : titoloNormale;
           // Chi porta la merce: il corriere se c'è, altrimenti il banco (consegna con il suo mezzo).
           const portatoDa = (ordine.corriere_nome || '').trim() || (distributore ? distributore.nome : '');
           const spunta = '<span class="att-spunta" aria-hidden="true"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>';
@@ -64,15 +68,15 @@
         %>
 
         <%# 1. Stato: anello che si svuota, passaggi %>
-        <div class="card att-card att-timer att-verde" data-viaggio data-durata="<%= durataSec %>" data-rimanente="<%= rimanenteSec %>">
+        <div class="card att-card att-timer att-verde"<% if (arrivoIl) { %> data-eta-sec="<%= rimanenteSec %>"<% if (durataSec) { %> data-eta-durata="<%= durataSec %>"<% } } %>>
           <div class="att-anello">
             <svg viewBox="0 0 148 148" aria-hidden="true">
               <circle class="traccia" cx="74" cy="74" r="64"/>
-              <circle class="avanzamento" data-viaggio-arco data-circ="<%= CIRC_CONSEGNA %>" cx="74" cy="74" r="64" style="stroke-dashoffset: <%= offsetConsegna %>"/>
+              <circle class="avanzamento"<%- arrivoIl && durataSec ? ' data-eta-arco' : '' %> data-circ="<%= CIRC_CONSEGNA %>" cx="74" cy="74" r="64" style="stroke-dashoffset: <%= offsetConsegna %>"/>
             </svg>
             <span class="att-furgone" aria-hidden="true"><span><%- iconaFurgone %></span></span>
           </div>
-          <h2 class="att-titolo<%= portatoDa ? '' : ' att-titolo-solo' %>"><span class="att-punto" aria-hidden="true"></span><%= titoloConsegna %></h2>
+          <h2 class="att-titolo<%= portatoDa ? '' : ' att-titolo-solo' %>"><span class="att-punto" aria-hidden="true"></span><% if (arrivoIl) { %><span data-eta-testo="<%= titoloNormale %>"><%= titoloConsegna %></span><% } else { %><%= titoloConsegna %><% } %></h2>
           <% if (portatoDa) { %><p class="att-sotto">Te lo porta <strong><%= portatoDa %></strong></p><% } %>
           <ol class="att-passi">
             <li class="att-passo att-fatto">
@@ -84,7 +88,7 @@
               <span class="att-etichetta"><%- spunta %>Confermata</span>
             </li>
             <li class="att-passo att-corrente" aria-current="step">
-              <span class="att-barretta"><span class="att-riempimento" data-viaggio-barra style="width: <%= percTrascorsa %>%"></span></span>
+              <span class="att-barretta"><span class="att-riempimento"<%- arrivoIl && durataSec ? ' data-eta-barra' : '' %> style="width: <%= percTrascorsa %>%"></span></span>
               <span class="att-etichetta">In consegna</span>
             </li>
           </ol>

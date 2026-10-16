@@ -1,5 +1,6 @@
 const { Pool } = require('pg');
 const { AsyncLocalStorage } = require('async_hooks');
+const { creaEsecutore, eErroreDiRete, ErroreDbNonRaggiungibile } = require('./resilienza');
 
 const DATABASE_URL = process.env.DATABASE_URL || 'postgres://minuteria:minuteria@localhost:5432/minuteria';
 
@@ -15,8 +16,10 @@ const pool = new Pool({
   idleTimeoutMillis: 5 * 60 * 1000,
   keepAlive: true,
   keepAliveInitialDelayMillis: 10 * 1000,
-  // Senza un limite una connessione che non si stabilisce lasciava la richiesta appesa.
-  connectionTimeoutMillis: 15 * 1000,
+  // Senza un limite una connessione che non si stabilisce lasciava la richiesta appesa. Con il pooler una connessione che
+  // funziona si apre in meno di un secondo (~400 ms da un PC): oltre 5 s non sta andando a buon fine (rete che blocca il
+  // traffico Postgres, come eduroam) e conviene fallire, riprovare e poi rispondere con un errore chiaro (vedi resilienza.js).
+  connectionTimeoutMillis: 5 * 1000,
   // Gli script (importazioni, seed) escono appena finiscono, senza aspettare i client fermi.
   allowExitOnIdle: true,
 });
@@ -39,9 +42,14 @@ pool.on('error', (err) => {
 // interlacciata con altre) resta isolata per tutta la sua catena di await.
 const contestoTransazione = new AsyncLocalStorage();
 
+// Fuori da una transazione le query passano da resilienza.js: riprova delle letture se la connessione cade e risposta
+// immediata (503) quando la rete verso il database è giù. Dentro una transazione si usa il suo client, senza riprove.
+const rete = creaEsecutore({ pool });
+const sulPool = { query: (testo, params) => rete.interroga(testo, params) };
+
 function esecutore() {
   const store = contestoTransazione.getStore();
-  return store ? store.client : pool;
+  return store ? store.client : sulPool;
 }
 
 // Tabelle senza colonna "id" (chiave primaria naturale): un INSERT su queste tabelle
@@ -177,8 +185,10 @@ let inited = false;
 async function ensureInit() {
   if (inited) return;
   try {
-    await pool.query('SELECT 1 FROM config LIMIT 1');
+    await sulPool.query('SELECT 1 FROM config LIMIT 1');
   } catch (e) {
+    // Rete giù: non c'entra lo schema. Non si segna come controllato: si rifà alla prossima chiamata.
+    if (eErroreDiRete(e)) throw e;
     console.error(
       'Schema Postgres non trovato o incompleto. Applicalo una volta con: node scripts/apply_schema_pg.js',
       e.message
@@ -195,7 +205,8 @@ function transaction(fn) {
     // resterebbe in attesa di una connessione mai rilasciata.
     if (contestoTransazione.getStore()) return fn(...args);
 
-    const client = await pool.connect();
+    const client = await rete.collega(); // la connessione si riprova (nessuna query è ancora partita); la transazione no
+    let rotto = null;
     try {
       await client.query('BEGIN');
       const result = await contestoTransazione.run({ client }, () => fn(...args));
@@ -203,9 +214,15 @@ function transaction(fn) {
       return result;
     } catch (e) {
       try { await client.query('ROLLBACK'); } catch {}
+      // Connessione caduta a metà: il server annulla da sé la transazione non confermata. Il client va buttato, non rimesso
+      // nel pool, e a chi ha chiamato arriva lo stesso errore "database non raggiungibile" delle query fuori transazione.
+      if (eErroreDiRete(e)) {
+        rotto = e;
+        throw e.dbNonRaggiungibile ? e : new ErroreDbNonRaggiungibile(e);
+      }
       throw e;
     } finally {
-      client.release();
+      client.release(rotto || undefined);
     }
   };
 }
@@ -215,8 +232,26 @@ function transaction(fn) {
 // Si chiama dal server, non dagli script: a loro non serve.
 const CONNESSIONI_CALDE = 3;
 function mantieniCalde() {
+  // Una riga di log quando il database smette di rispondere e una quando torna: senza, il log si riempie di "Connection
+  // terminated" uno per richiesta e non si capisce che è la rete (o il database) il problema, non il codice.
+  let raggiungibile = null;
   const scalda = () =>
-    Promise.all(Array.from({ length: CONNESSIONI_CALDE }, () => pool.query('SELECT 1'))).catch(() => {});
+    Promise.all(Array.from({ length: CONNESSIONI_CALDE }, () => sulPool.query('SELECT 1')))
+      .then(() => {
+        if (raggiungibile === false) console.log('[db] di nuovo raggiungibile.');
+        raggiungibile = true;
+      })
+      .catch((err) => {
+        if (raggiungibile !== false) {
+          console.error(
+            '[db] database NON raggiungibile da questa rete (' + (err.cause ? err.cause.message : err.message) + ').\n' +
+              '     Su una rete universitaria o aziendale (eduroam) il traffico Postgres verso il pooler Supabase viene spesso bloccato:\n' +
+              '     il TCP si apre ma il server non risponde. Non è un errore dell\'app: usa l\'hotspot del telefono o una VPN.\n' +
+              '     Per vedere a che punto si ferma: node scripts/diagnosi_rete_db.js'
+          );
+        }
+        raggiungibile = false;
+      });
   scalda();
   setInterval(scalda, 60 * 1000).unref();
 }

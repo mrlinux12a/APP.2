@@ -199,4 +199,12 @@ function durataFinestraSec(creato, scade, finestraMin) {
   return diff > 0 && diff <= finestra ? diff : finestra;
 }
 
-module.exports = { toDate, istanteUtc, dataOra, dataSola, oraSola, oraRoma, dataOraRoma, dataSolaRoma, dataBreveRoma, dataCortaRoma, dataEstesaRoma, oraSolaRoma, giornoRoma, durataMinuti, daMinuti, tempoTrascorso, meseRoma, tempoConsegna, mmss, durataFinestraSec };
+// Un ordine in consegna a 3 minuti o meno dall'arrivo "è in arrivo": al posto di "Arriva entro le HH:MM" / "Arriva tra N min" si scrive
+// "In arrivo" (richiesta esplicita). `secondi` = secondi che mancano all'arrivo (anche negativi: l'orario è passato e l'ordine non è ancora
+// segnato consegnato). La stessa soglia c'è in public/app.js (IN_ARRIVO_SEC, blocco "Consegna in arrivo"): vanno tenute uguali.
+const SOGLIA_IN_ARRIVO_SEC = 3 * 60;
+function inArrivo(secondi) {
+  return Number.isFinite(secondi) && secondi <= SOGLIA_IN_ARRIVO_SEC;
+}
+
+module.exports = { SOGLIA_IN_ARRIVO_SEC, inArrivo, toDate, istanteUtc, dataOra, dataSola, oraSola, oraRoma, dataOraRoma, dataSolaRoma, dataBreveRoma, dataCortaRoma, dataEstesaRoma, oraSolaRoma, giornoRoma, durataMinuti, daMinuti, tempoTrascorso, meseRoma, tempoConsegna, mmss, durataFinestraSec };

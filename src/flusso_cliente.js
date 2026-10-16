@@ -727,7 +727,7 @@ async function richiesteAttiveClienteLeggere(recenti) {
   const ordiniPerId = new Map();
   if (idOrdini.length) {
     const ordini = await db
-      .prepare(`SELECT id, stato, consegnato_il, creato_il, corriere_arrivo_il, corriere_risposto_il, corriere_nome FROM orders WHERE id IN (${idOrdini.map(() => '?').join(',')})`)
+      .prepare(`SELECT id, stato, consegnato_il, creato_il, corriere_arrivo_il, corriere_risposto_il, corriere_nome, consegna_ore FROM orders WHERE id IN (${idOrdini.map(() => '?').join(',')})`)
       .all(...idOrdini);
     for (const o of ordini) ordiniPerId.set(Number(o.id), o);
   }
@@ -840,14 +840,29 @@ function costruisciVoce(fase, card, finestra) {
   const r = card.richiesta;
   if (fase === 'consegna') {
     // corriere_arrivo_il è TIMESTAMPTZ (un istante vero), a differenza degli altri orari dello schema.
-    const arrivo = format.toDate(card.ordine.corriere_arrivo_il);
+    const creato = format.istanteUtc(card.ordine.creato_il); // TIMESTAMP UTC senza fuso: istanteUtc lo rimette a posto
+    // Senza il corriere l'arrivo è la stima del banco (`consegna_ore` dalla nascita dell'ordine): la stessa regola della pagina dell'ordine
+    // ("Arriva entro 6 ore"). Prima la card e l'icona dicevano solo "In consegna".
+    const ore = Number(card.ordine.consegna_ore);
+    const arrivo = card.ordine.corriere_arrivo_il
+      ? format.toDate(card.ordine.corriere_arrivo_il)
+      : (creato && ore > 0 ? new Date(creato.getTime() + ore * 3600 * 1000) : null);
+    const msAllArrivo = arrivo ? arrivo.getTime() - Date.now() : null;
+    const etaSec = arrivo ? Math.round(msAllArrivo / 1000) : null;
+    const durataSec = arrivo && creato ? Math.max(1, Math.round((arrivo.getTime() - creato.getTime()) / 1000)) : null;
     return {
       fase, tipo: 'ordine', id: card.ordine.id, richiestaId: r.id, href: '/ordini/' + card.ordine.id, voce: 'ordine-' + card.ordine.id,
-      minuti: arrivo ? Math.max(1, Math.ceil((arrivo.getTime() - Date.now()) / 60000)) : null,
+      minuti: arrivo ? Math.max(1, Math.ceil(msAllArrivo / 60000)) : null,
+      // Secondi all'arrivo (anche negativi) e durata dalla nascita dell'ordine: dal disegno in poi il browser fa scendere minuti, barra
+      // e "In arrivo" con il suo orologio (public/app.js, "Consegna in arrivo"); `inArrivo` è lo stesso controllo già fatto qui, per il
+      // primo disegno. Senza orario del corriere: niente di tutto questo, resta "In consegna".
+      etaSec,
+      durataSec,
+      inArrivo: arrivo ? format.inArrivo(etaSec) : false,
       corriere: String(card.ordine.corriere_nome || '').trim(),
-      // Barra della home: ferma a metà ("In viaggio") finché non ci sarà l'evento che segna la consegna vera (ancora da
-      // collegare): solo allora arriva a 1 ("Consegnato").
-      progresso: PROGRESSO_IN_VIAGGIO,
+      // Barra della home: avanza in modo lineare col tempo (dalla nascita dell'ordine all'arrivo). Senza orario del corriere resta
+      // ferma a metà ("In viaggio"): solo con l'evento che segna la consegna vera (ancora da collegare) arriverebbe a 1 ("Consegnato").
+      progresso: durataSec ? Math.min(1, Math.max(0, 1 - etaSec / durataSec)) : PROGRESSO_IN_VIAGGIO,
     };
   }
   const voce = { fase, tipo: 'richiesta', id: r.id, richiestaId: r.id, href: '/richieste/' + r.id, voce: 'richiesta-' + r.id };
@@ -908,10 +923,12 @@ async function vociStriscia(clienteId, { segnaLette = false, breve = true } = {}
 // secondi mentre una richiesta è in attesa.
 //   { fase: 'nessuna', voci: [], firma }
 //   { fase: 'richiesta', secondi, durata, voci, firma }   -> conto alla rovescia della finestra (10 min)
-//   { fase: 'consegna', ordineId, minuti, corriere, progresso, voci, firma } -> minuti all'arrivo (null se non scritto),
-//                                                nome del corriere ('' se manca), avanzamento 0-1 per la home
+//   { fase: 'consegna', ordineId, minuti, etaSec, durataSec, inArrivo, corriere, progresso, voci, firma } -> minuti all'arrivo (null se
+//                                                non scritto), secondi all'arrivo e durata totale, "In arrivo" (3 min o meno), nome del
+//                                                corriere ('' se manca), avanzamento 0-1 per la home
 //   { fase: 'scaduta', voci, firma }          -> nessun banco ha accettato in tempo (e non è successo altro dopo)
-// voci: [{ fase, tipo, id, richiestaId, href, voce, secondi?, durata?, minuti?, corriere?, progresso? }] (la `breve` la aggiunge solo la striscia).
+// voci: [{ fase, tipo, id, richiestaId, href, voce, secondi?, durata?, minuti?, etaSec?, durataSec?, inArrivo?, corriere?, progresso? }]
+// (la `breve` la aggiunge solo la striscia).
 async function statoIconaOrdini(clienteId) {
   const { attive, scaduta, voci, finestra } = await leggiVoci(clienteId);
   const firma = firmaVoci(voci);
@@ -928,6 +945,9 @@ async function statoIconaOrdini(clienteId) {
       fase: 'consegna',
       ordineId: v.id,
       minuti: v.minuti,
+      etaSec: v.etaSec,
+      durataSec: v.durataSec,
+      inArrivo: v.inArrivo,
       corriere: v.corriere,
       progresso: v.progresso,
       voci,

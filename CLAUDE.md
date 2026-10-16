@@ -17,6 +17,18 @@ già scritto lì.
 - `.env` locale punta al **Supabase di produzione condiviso**, nessun DB di test — girare in
   locale scrive sul DB vero, e il server locale esegue anche il timer delle scadenze (30 s) come
   la VPS: fermarlo quando non serve.
+- **Rete che blocca il database (eduroam, 16/10/2026)**: dalla Wi-Fi dell'università il TCP verso il pooler Supabase si apre (in 50 ms: risponde un
+  firewall di mezzo) ma la richiesta SSL di Postgres non riceve mai risposta, su tutti gli IP e su 5432 e 6543 (provato: 0 connessioni su 10).
+  **Non si risolve dal codice**: serve l'hotspot del telefono, una VPN o un tunnel SSH. `node scripts/diagnosi_rete_db.js` dice a che fase si
+  ferma. Il codice però non deve appendersi né riempire il log: `db/postgres/resilienza.js` (provato in `test/resilienza.test.js`, pool finto)
+  riprova la **connessione** (nessuna query è partita: sicuro anche per le scritture) e le **letture** + le istruzioni su `session` se la
+  connessione cade a metà, ma **mai una scrittura persa a metà** (potrebbe essere arrivata: si duplicherebbe un ordine o un pagamento) né
+  dentro una transazione; dopo 3 fallimenti di rete di fila un interruttore risponde subito per 5 s. A chi chiama arriva
+  `ErroreDbNonRaggiungibile` (status 503, `dbNonRaggiungibile`), che `src/http.js` mostra come "Servizio non raggiungibile" (pagina o JSON) con
+  una riga di log. `connectionTimeoutMillis` è 5 s (era 15): una connessione sana si apre in <1 s. Il timeout di attesa nel pool pieno
+  ("timeout exceeded when trying to connect") non conta per l'interruttore. `mantieniCalde` scrive una riga quando il DB smette di
+  rispondere e una quando torna. Una query nuova con una scrittura "furba" dentro un `SELECT` sarebbe riprovata: `eLettura` guarda le parole
+  INSERT/UPDATE/DELETE/... nel testo, quindi niente scritture dentro un `WITH ... SELECT` che non le dichiari.
 - **Dal telefono sulla stessa rete Wi-Fi** (15/10/2026): il server ascolta di default solo su `127.0.0.1` (così sulla VPS,
   dietro il proxy); col `HOST=0.0.0.0` nel `.env` **locale** (non in git) ascolta su tutte le schede e all'avvio stampa gli
   indirizzi (`http://192.168.x.x:3000`). Il firewall di Windows ha già le regole per `node.exe` (Public e Private). Se non si
@@ -33,6 +45,11 @@ già scritto lì.
   fino in fondo e lanciarlo da solo (è così che si è applicato "Ditte e filiali"): lo fa
   `node scripts/applica_blocco_schema.js "<commento d'inizio>" [--applica]` (a secco senza il flag).
 - Mai `pool.on('connect', async ...)`: causa query concorrenti sullo stesso client.
+- **Finestra di conferma delle richieste = 30 s sul PC, "per adesso"** (richiesta esplicita del 16/10/2026): `FINESTRA_CONFERMA_SEC=30` nel `.env`
+  **locale** (non in git) fa leggere a `pricing.getFinestraMinuti` 0,5 minuti invece di `config.finestra_conferma_min` (DB condiviso con la VPS: 10 min,
+  **non toccato**, i banchi veri di Borea hanno sempre i loro 10 minuti). Vale solo per l'istanza che ha la riga; all'avvio scrive `[config] FINESTRA_CONFERMA_SEC=...`.
+  Per toglierla: via la riga e riavvio. `test/server.test.js` la svuota prima di caricare `server.js`. I testi che dicono "N minuti" arrotondano
+  (0,5 → "1 min", `Math.round`): con 30 s sono imprecisi, non toccati. Un corriere su WhatsApp avrebbe 30 s per rispondere (la finestra è la stessa).
 
 ## Ditte, filiali, dipendenti (solo Borea, dal 30/09/2026)
 
@@ -281,15 +298,17 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   `att-*` della verifica disponibilità, modificatore `.att-verde`): vale per il cliente con ordine **non
   consegnato** e non "ritiro"; consegnato, ritiro, banco e agente hanno ancora il markup vecchio. L'anello
   parte pieno alla nascita dell'ordine e si svuota fino all'arrivo (`corriere_arrivo_il`, o `creato_il` +
-  `consegna_ore`); la barra "In consegna" si riempie all'inverso. Lo muove l'ultimo blocco di `app.js` dai
-  numeri su `[data-viaggio]` (`data-durata`, `data-rimanente`, calcolati nella vista), ogni 30 s. **Non
+  `consegna_ore`); la barra "In consegna" si riempie all'inverso. Li muove il blocco "Consegna in arrivo" di
+  `app.js` (vedi "Conti alla rovescia della consegna" sotto), **ogni secondo e in modo lineare** (prima ogni 30 s,
+  a scatti). **Non
   rinominarlo `[data-consegna]`**: è la scheda "Consegna in cantiere" del carrello e il suo blocco in `app.js`
   va in errore, fermando tutto lo script, se non trova i suoi pulsanti. `creato_il`, `pagato_il` e le altre
   colonne `TIMESTAMP` sono ora UTC senza fuso e pg le legge come ora locale (2 h di scarto a Roma, nessuna su
   una VPS in UTC): per confrontarle con `Date.now()` o `corriere_arrivo_il` si usa `fmt.istanteUtc`, per
   mostrarle in ora italiana `fmt.dataOraRoma` (`fmt.dataOra` stampa l'ora UTC così com'è). Titolo = tempo
-  stimato reale ("Arriva entro 6 ore", o "entro le HH:MM" col corriere); "Te lo porta" = `corriere_nome`, se
-  vuoto il nome del banco.
+  stimato reale ("Arriva entro 6 ore", o "Arriva entro le HH:MM" col corriere) **finché mancano più di 3 minuti**:
+  da lì, o a orario passato, solo **"In arrivo"** (richiesta esplicita del 16/10/2026; vedi sotto); "Te lo porta" =
+  `corriere_nome`, se vuoto il nome del banco.
 - **Ordine consegnato** (`views/ordine_dettaglio.ejs`, ramo `consegnato` = cliente + `consegnato_il`, richiesta esplicita
   del 14/10/2026; stesse classi `att-*`, in verde, **senza animazioni**; chiude `.app-consegnato` con 96px in fondo): scheda
   di stato (cerchio 120px con spunta in cerchio pieno 76px, "Consegnato", `fmt.dataEstesaRoma(consegnato_il)` = "Mercoledì 14
@@ -309,8 +328,10 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   `format.toDate` non era esportata). `/nav/stato-ordini` rende solo il link (con `?scheda=1`, dalla home,
   anche la scheda di `partials/stato_home.ejs`), per il polling dello script inline (15 s in attesa, 60 s
   in consegna). **Un solo timer** per icona e scheda: muove ogni `[data-countdown]` e `[data-arco]`
-  (con `data-circ`) della pagina. La barra "in consegna" sta **ferma a metà** (`PROGRESSO_IN_VIAGGIO`
-  in `flusso_cliente.js`) e arriverà a "Consegnato" solo con l'evento di consegna, **ancora da collegare**.
+  (con `data-circ`) della pagina. La barra "in consegna" della scheda della home **avanza col tempo** (dalla
+  nascita dell'ordine all'arrivo previsto, `progresso` della voce) e arriverà davvero a "Consegnato" solo con
+  l'evento di consegna, **ancora da collegare**; senza orario del corriere resta **ferma a metà**
+  (`PROGRESSO_IN_VIAGGIO` in `flusso_cliente.js`).
   Nel frattempo c'è un pulsante **provvisorio** "Ordine consegnato" (`POST /ordini/:id/consegnato-prova` →
   `flusso.segnaConsegnatoProva`, scrive `consegnato_il` per qualunque stato dell'ordine, quindi la scheda
   sparisce): sta **solo nella pagina dell'ordine** (`ordine_dettaglio.ejs`, "Stato ordini"; con l'ordine
@@ -585,6 +606,27 @@ meno di 24 h), **3** consegnato (`consegnato_il`): la 3 **non è più attiva**, 
   fissa la prima volta che lo si vede (WeakMap): un contenitore che non viene sostituito non deve ripartire a ogni `avvia()`.
 - **Durata dell'anello = la finestra, non `scade_il - creato_il`** (`format.durataFinestraSec`, anche in `richiesta_attesa.ejs`): "Rinvia" riapre la
   stessa riga con `scade_il` ricalcolato e `creato_il` di prima (es. la richiesta 188: durata 7586 s), e l'anello partiva quasi vuoto.
+- **Conti alla rovescia della consegna** (richiesta esplicita del 16/10/2026: "tutti i timer devono scendere in modo lineare, anche le
+  barre", i minuti devono scendere ogni minuto, a 3 minuti "In arrivo"). Prima "Arriva tra N min" lo scriveva solo il server: nella striscia
+  con 2+ ordini restava **fisso** (la striscia non si aggiorna col polling dell'icona), in home e icona cambiava solo a ogni polling, l'anello
+  e la barra della pagina dell'ordine si muovevano ogni 30 s (a scatti) e la barra della home era ferma al 50%. Ora **un solo blocco in `app.js`,
+  "Consegna in arrivo"**, ogni secondo, col suo orologio: un contenitore `[data-eta-sec]` (secondi all'arrivo al momento del disegno, calcolati
+  dal server: l'ora del PC non c'entra; `[data-eta-durata]` = secondi dalla nascita dell'ordine all'arrivo) e dentro `[data-eta-testo]` (testo con
+  `{m}` = minuti, `ceil`, mai meno di 1), `[data-eta-barra]` (si riempie), `[data-eta-arco]` (si svuota). I contenitori sono: la card della home
+  (`stato_home.ejs`), la scheda della striscia (`striscia_ordini.ejs`), il link o il fotogramma dell'icona (`nav_ordini.ejs`), il riquadro della
+  pagina dell'ordine (`ordine_dettaglio.ejs`). Il server disegna già il testo giusto (`voce.inArrivo`, `voce.etaSec`, `voce.durataSec`, da
+  `costruisciVoce`); il polling dell'icona che rimpiazza i nodi li fa ripartire dal suo numero nuovo. Senza `corriere_arrivo_il` (voce con
+  `minuti` null) non c'è niente da far scendere: "In consegna" e barra al 50%. **L'arrivo è `corriere_arrivo_il` e, se manca, `creato_il` +
+  `consegna_ore`** (la stima del banco, come nella pagina dell'ordine: `costruisciVoce` e la SELECT di `richiesteAttiveClienteLeggere` ora leggono
+  `consegna_ore`; prima card e icona dicevano "In consegna" per gli ordini senza corriere). Il testo lungo è `{t}` = `durataMinuti` ("8 min", "5 h 57":
+  `format.durataMinuti` sul server, `Minuteria.durataMinuti` nel browser), `{m}` = minuti puri (solo il badge, che sopra i 99 non c'è). Le transizioni CSS di anelli e barre sono tutte `1s linear`
+  (`.stato-barra span` era `0.6s ease`).
+  - **"In arrivo" a 3 minuti o meno, e basta** (niente "Arriva tra", "Arriva entro le HH:MM" né il badge dei minuti dell'icona, `[data-eta-nascondi]`):
+    soglia `format.SOGLIA_IN_ARRIVO_SEC` = 180 s (`format.inArrivo`), **uguale a `IN_ARRIVO_SEC` in `app.js`**; vale anche a orario passato con l'ordine
+    non ancora consegnato. Scritte: icona e card della home "In arrivo", striscia "In arrivo" (invece di "tra N min"), titolo dell'ordine "In arrivo".
+    **L'app Expo e `api_v1.js` (`tempo_testo`: "Consegna prevista entro le…") non seguono ancora.**
+  - Prove: `test/stato_ordini.test.js` (voci, soglia, disegno dei partial con `ejs.renderFile`). Il blocco JS non gira in `node --test`: per provarlo
+    una pagina usa-e-getta con i partial veri + `style.css` + `app.js` su un server locale (ETA a 190 s: dopo 10 s passa a "In arrivo"), senza login né DB.
 - Prova sul DB vero: richieste/ordini inseriti con SQL sul **banco AFIS (id 1, disattivato)** per un cliente usa-e-getta, poi
   cancellati per id. **Non creare richieste vere** (`creaRichiesta` le manda a tutti i banchi attivi, cioè a Borea).
 

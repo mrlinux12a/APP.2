@@ -1655,32 +1655,76 @@ window.addEventListener('pageshow', function (e) {
   });
 })();
 
-/* Ordine in consegna (views/ordine_dettaglio.ejs): l'anello si svuota e la barra "In consegna" si riempie man
-   mano che passa il tempo fino all'arrivo previsto. Il riquadro [data-viaggio] porta la durata totale e i secondi
-   rimasti al momento del disegno (calcolati sul server, quindi l'ora del PC non c'entra); da lì conta l'orologio
-   del browser. Un aggiornamento ogni 30 secondi basta: l'anello copre ore. Senza orario d'arrivo (durata 0)
-   resta com'è stato disegnato. Non chiamarlo [data-consegna]: è già la scheda "Consegna in cantiere" del carrello,
-   e il suo blocco in alto in questo file va in errore (e ferma tutto lo script) se non trova i suoi pulsanti. */
+/* Consegna in arrivo: minuti, "In arrivo", barra e anello di un ordine in consegna scendono (o salgono, per la barra) col tempo,
+   in modo lineare, con l'orologio del browser. Prima il testo "Arriva tra N min" lo scriveva solo il server (fermo finché non
+   arrivava un aggiornamento: nella striscia con più ordini restava fisso per sempre), l'anello e la barra dell'ordine si muovevano
+   a scatti ogni 30 secondi e quella della home era ferma a metà.
+   Un contenitore [data-eta-sec] porta i secondi che mancano all'arrivo al momento del disegno (calcolati sul server, quindi l'ora
+   del PC non c'entra; possono essere negativi) e, se c'è, [data-eta-durata] = secondi dalla nascita dell'ordine all'arrivo. Dentro:
+     [data-eta-testo]  testo con {m} = minuti che mancano (mai meno di 1) o {t} = la stessa durata scritta come sulla home del banco
+                       ("8 min", "5 h 57"); a 3 minuti o meno diventa solo "In arrivo", mai prima. Senza segnaposto
+                       (il titolo dell'ordine) fuori dai 3 minuti torna lo stesso testo normale. Con anche [data-eta-nascondi]
+                       (il badge dei minuti dell'icona, "N′") a 3 minuti o meno non si scrive "In arrivo" ma sparisce, perché
+                       accanto a "In arrivo" un numero di minuti direbbe un'altra cosa.
+     [data-eta-barra]  larghezza = tempo trascorso sul totale (si riempie); serve la durata.
+     [data-eta-arco]   anello che si svuota (stroke-dashoffset su data-circ); serve la durata.
+   Un colpo al secondo, con le transizioni CSS da 1 s lineari: il movimento è continuo. La fine di ogni contenitore si fissa la
+   prima volta che lo si vede, quindi un contenitore rimpiazzato dall'aggiornamento dell'icona riparte dal suo numero nuovo e uno
+   che resta non si sposta. IN_ARRIVO_SEC è la stessa soglia di format.SOGLIA_IN_ARRIVO_SEC sul server. Non usare [data-consegna]:
+   è già la scheda "Consegna in cantiere" del carrello, e il suo blocco in alto in questo file va in errore (e ferma tutto lo
+   script) se non trova i suoi pulsanti. */
 (function () {
   'use strict';
-  const riquadro = document.querySelector('[data-viaggio]');
-  if (!riquadro) return;
-  const durata = Number(riquadro.getAttribute('data-durata')) || 0;
-  if (!durata) return;
-  const arco = riquadro.querySelector('[data-viaggio-arco]');
-  const barra = riquadro.querySelector('[data-viaggio-barra]');
-  const circ = arco ? Number(arco.getAttribute('data-circ')) || 402.12 : 0;
-  const fine = Date.now() + (Number(riquadro.getAttribute('data-rimanente')) || 0) * 1000;
+  const IN_ARRIVO_SEC = 180;
+  const fini = new WeakMap(); // contenitore [data-eta-sec] -> istante (ms) in cui si arriva
 
-  function aggiorna() {
-    // Quanto resta: 1 appena confermato, 0 all'arrivo previsto o dopo (anello vuoto, barra piena).
-    const rimasto = Math.min(1, Math.max(0, (fine - Date.now()) / 1000 / durata));
-    if (arco) arco.style.strokeDashoffset = (circ * (1 - rimasto)).toFixed(2);
-    if (barra) barra.style.width = ((1 - rimasto) * 100).toFixed(1) + '%';
+  // Secondi che mancano all'arrivo, con i decimali (anche negativi).
+  function restano(contenitore) {
+    let fine = fini.get(contenitore);
+    if (fine === undefined) {
+      fine = Date.now() + (Number(contenitore.getAttribute('data-eta-sec')) || 0) * 1000;
+      fini.set(contenitore, fine);
+    }
+    return (fine - Date.now()) / 1000;
+  }
+  // Quanto resta del viaggio, da 1 (appena nato l'ordine) a 0 (arrivo previsto o dopo); null se non c'è la durata.
+  function rimasto(contenitore) {
+    const durata = Number(contenitore.getAttribute('data-eta-durata')) || 0;
+    return durata ? Math.min(1, Math.max(0, restano(contenitore) / durata)) : null;
   }
 
-  setInterval(aggiorna, 30000);
-  // Un timer in una scheda nascosta viene rallentato: al ritorno si riallinea subito.
+  function aggiorna() {
+    if (document.hidden) return;
+    document.querySelectorAll('[data-eta-testo]').forEach(function (el) {
+      const c = el.closest('[data-eta-sec]');
+      if (!c) return;
+      const s = restano(c);
+      const inArrivo = s <= IN_ARRIVO_SEC;
+      const minuti = Math.max(1, Math.ceil(s / 60));
+      if (el.hasAttribute('data-eta-nascondi')) { // il badge dei minuti: a 3 minuti o meno sparisce, resta solo "In arrivo"; sopra i 99 non ci sta
+        el.style.display = inArrivo || minuti > 99 ? 'none' : '';
+        if (inArrivo || minuti > 99) return;
+      }
+      const testo = inArrivo
+        ? 'In arrivo'
+        : el.getAttribute('data-eta-testo').replace('{m}', minuti).replace('{t}', Minuteria.durataMinuti(minuti));
+      if (el.textContent !== testo) el.textContent = testo;
+    });
+    document.querySelectorAll('[data-eta-barra]').forEach(function (el) {
+      const c = el.closest('[data-eta-sec]');
+      const r = c ? rimasto(c) : null;
+      if (r !== null) el.style.width = ((1 - r) * 100).toFixed(1) + '%';
+    });
+    document.querySelectorAll('[data-eta-arco]').forEach(function (el) {
+      const c = el.closest('[data-eta-sec]');
+      const r = c ? rimasto(c) : null;
+      if (r !== null) el.style.strokeDashoffset = ((Number(el.getAttribute('data-circ')) || 402.12) * (1 - r)).toFixed(2);
+    });
+  }
+
+  aggiorna();
+  setInterval(aggiorna, 1000);
+  // Un timer in una scheda nascosta viene rallentato (e qui non si disegna): al ritorno si riallinea subito.
   document.addEventListener('visibilitychange', function () { if (!document.hidden) aggiorna(); });
   window.addEventListener('pageshow', function (e) { if (e.persisted) aggiorna(); });
 })();

@@ -73,7 +73,7 @@ class ErroreDbNonRaggiungibile extends Error {
 
 // Interruttore: dopo `soglia` fallimenti di rete di fila senza nessun successo in mezzo, per `pausaMs` si risponde subito con errore
 // invece di far aspettare ogni richiesta il suo timeout; poi si lascia passare un nuovo tentativo. Un successo azzera il conto.
-function creaInterruttore({ soglia = 2, pausaMs = 5000, adesso = Date.now } = {}) {
+function creaInterruttore({ soglia = 3, pausaMs = 5000, adesso = Date.now } = {}) {
   let falliti = 0;
   let apertoFinoA = 0;
   return {
@@ -90,8 +90,16 @@ function creaInterruttore({ soglia = 2, pausaMs = 5000, adesso = Date.now } = {}
   };
 }
 
+// L'attesa di un posto libero nel pool scade con lo stesso messaggio di una connessione che non si apre ("timeout exceeded when
+// trying to connect"): con il pool pieno di query lente non è la rete a essere giù, quindi quel timeout si riprova ma non conta per
+// l'interruttore (che altrimenti trasformerebbe un momento di carico in 5 secondi di errori). I guasti veri hanno altri messaggi:
+// "Connection terminated due to connection timeout", ECONNRESET, ENOTFOUND...
+function contaPerInterruttore(err) {
+  return !/timeout exceeded when trying to connect/i.test(String((err && err.message) || ''));
+}
+
 const ATTESA_RIPROVA_MS = 250;
-const TENTATIVI = 3;
+const TENTATIVI = 2;
 
 // Esegue una query sul pool (fuori da transazioni) con le regole sopra. `pool` ha `connect()` come pg.Pool; `attesa(ms)` si può
 // sostituire nelle prove.
@@ -104,7 +112,7 @@ function creaEsecutore({ pool, interruttore = creaInterruttore(), attesa = (ms) 
         return await pool.connect();
       } catch (err) {
         if (!eErroreDiRete(err)) throw err;
-        interruttore.fallito();
+        if (contaPerInterruttore(err)) interruttore.fallito();
         if (n >= tentativi || interruttore.aperto()) throw new ErroreDbNonRaggiungibile(err);
         await attesa(ATTESA_RIPROVA_MS * n);
       }
@@ -125,7 +133,7 @@ function creaEsecutore({ pool, interruttore = creaInterruttore(), attesa = (ms) 
         // Un client con la connessione caduta va buttato, non rimesso nel pool; un errore SQL normale no.
         client.release(rete ? err : undefined);
         if (!rete) throw err;
-        interruttore.fallito();
+        if (contaPerInterruttore(err)) interruttore.fallito();
         if (!sicura || n >= tentativi || interruttore.aperto()) throw new ErroreDbNonRaggiungibile(err);
         await attesa(ATTESA_RIPROVA_MS * n);
       }

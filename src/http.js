@@ -80,6 +80,8 @@ const MESSAGGI = {
   415: ['Formato non supportato', 'Il formato della richiesta non è supportato.'],
   429: ['Troppe richieste', 'Troppe richieste: riprova tra poco.'],
   500: ['Errore imprevisto', 'Si è verificato un problema imprevisto. Riprova tra poco.'],
+  // Il database non risponde (rete giù: db/postgres/resilienza.js): non è un errore del sito, e riprovare tra poco serve davvero.
+  503: ['Servizio non raggiungibile', 'Il servizio non riesce a collegarsi al database in questo momento. Riprova tra poco.'],
 };
 
 function messaggioPer(stato) {
@@ -156,7 +158,11 @@ function statoDaErrore(err) {
 // messaggio pulito, mai lo stack.
 function gestoreErrori(err, req, res, next) {
   const stato = statoDaErrore(err);
-  if (stato >= 500) console.error('Errore non gestito nella richiesta', req.method, req.originalUrl, ':', err);
+  if (stato >= 500) {
+    // Database irraggiungibile: una riga sola per richiesta (lo stack dice solo "Connection terminated" e il perché sta nel log di avvio).
+    if (err && err.dbNonRaggiungibile) console.error('Database non raggiungibile nella richiesta', req.method, req.originalUrl);
+    else console.error('Errore non gestito nella richiesta', req.method, req.originalUrl, ':', err);
+  }
   if (res.headersSent) return next(err);
   return rispondiErrore(req, res, stato);
 }

@@ -21,7 +21,7 @@
   <nav class="striscia-schede" aria-label="Ordini in corso" style="--n: <%= n %>">
     <% voci.forEach(function (v) { %>
       <% const attiva = v.voce === striscia.attiva; %>
-      <a class="str-scheda str-<%= v.fase %><%= attiva ? ' str-attiva' : '' %>" href="<%= v.href %>" data-voce="<%= v.voce %>"<%- attiva ? ' aria-current="page"' : '' %><% if (v.fase === 'richiesta') { %> data-secondi="<%= v.secondi %>" data-durata="<%= v.durata %>"<% } %>>
+      <a class="str-scheda str-<%= v.fase %><%= attiva ? ' str-attiva' : '' %>" href="<%= v.href %>" data-voce="<%= v.voce %>"<%- attiva ? ' aria-current="page"' : '' %><% if (v.fase === 'richiesta') { %> data-secondi="<%= v.secondi %>" data-durata="<%= v.durata %>"<% } else if (v.fase === 'consegna' && v.etaSec != null) { %> data-eta-sec="<%= v.etaSec %>"<% } %>>
         <span class="str-ico" aria-hidden="true">
           <% if (v.fase === 'richiesta') { %>
             <svg class="str-anello" viewBox="0 0 24 24">
@@ -36,9 +36,10 @@
             <span class="str-allarme">!</span>
           <% } %>
         </span>
-        <span class="str-valore"><%
+        <%# Consegna: i minuti scendono da soli (public/app.js, "Consegna in arrivo"); a 3 minuti o meno resta solo "In arrivo". %>
+        <span class="str-valore"<%- v.fase === 'consegna' && v.etaSec != null ? ' data-eta-testo="tra {t}"' : '' %>><%
           if (v.fase === 'richiesta') { %><span data-countdown><%= fmt.mmss(v.secondi) %></span><%
-          } else if (v.fase === 'consegna') { %><%= v.minuti != null ? 'tra ' + v.minuti + ' min' : 'In consegna' %><%
+          } else if (v.fase === 'consegna') { %><%= v.minuti == null ? 'In consegna' : (v.inArrivo ? 'In arrivo' : 'tra ' + fmt.durataMinuti(v.minuti)) %><%
           } else { %>Rinvia<% } %></span>
         <span class="str-breve"><%= v.breve %></span>
       </a>
