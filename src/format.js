@@ -133,6 +133,11 @@ function durataMinuti(min) {
   return min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`;
 }
 
+// "45′", "1h05": la stessa durata in forma breve, per il badge dell'icona "Stato ordini". Stessa regola nel blocco "Consegna in arrivo" di public/app.js.
+function durataBreve(min) {
+  return min < 60 ? `${min}′` : `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}`;
+}
+
 // "meno di 1 min", "3 min", "1 h 05": quanto tempo è passato da qualcosa che si è fatto ("Corriere avvisato · da 3 min").
 function daMinuti(secondi) {
   const min = Math.max(0, Math.floor((Number(secondi) || 0) / 60));
@@ -207,4 +212,4 @@ function inArrivo(secondi) {
   return Number.isFinite(secondi) && secondi <= SOGLIA_IN_ARRIVO_SEC;
 }
 
-module.exports = { SOGLIA_IN_ARRIVO_SEC, inArrivo, toDate, istanteUtc, dataOra, dataSola, oraSola, oraRoma, dataOraRoma, dataSolaRoma, dataBreveRoma, dataCortaRoma, dataEstesaRoma, oraSolaRoma, giornoRoma, durataMinuti, daMinuti, tempoTrascorso, meseRoma, tempoConsegna, mmss, durataFinestraSec };
+module.exports = { SOGLIA_IN_ARRIVO_SEC, inArrivo, toDate, istanteUtc, dataOra, dataSola, oraSola, oraRoma, dataOraRoma, dataSolaRoma, dataBreveRoma, dataCortaRoma, dataEstesaRoma, oraSolaRoma, giornoRoma, durataMinuti, durataBreve, daMinuti, tempoTrascorso, meseRoma, tempoConsegna, mmss, durataFinestraSec };

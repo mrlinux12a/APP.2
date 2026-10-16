@@ -55,7 +55,9 @@ function controllaConfigurazione() {
   const avvisi = [];
   if (pagamenti.simulatoRichiesto()) {
     avvisi.push(
-      pagamenti.pagamentoSimulatoForzato()
+      pagamenti.pagamentoSimulatoForzato() && pagamenti.simulatoForzatoInProduzione()
+        ? 'ATTENZIONE: PAGAMENTO_SIMULATO=1 + PAGAMENTO_SIMULATO_FORZA=1: "Paga e invia" salta Stripe ANCHE QUI (chiave reale / produzione) e i clienti ordinano senza pagare. Per spegnerlo togli una delle due righe e riavvia.'
+        : pagamenti.pagamentoSimulatoForzato()
         ? 'PAGAMENTO_SIMULATO=1: "Paga e invia" salta Stripe e usa il pagamento simulato. Va bene solo sul PC: sulla VPS quella riga non deve esserci.'
         : 'PAGAMENTO_SIMULATO=1 è ignorata (chiave reale o NODE_ENV=production): si paga con Stripe.'
     );

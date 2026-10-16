@@ -38,6 +38,8 @@ STRIPE_PUBLISHABLE_KEY=pk_...        #   senza resta simulato (la pubblicabile s
 STRIPE_WEBHOOK_SECRET=whsec_...
 PAGAMENTO_SIMULATO=1  # SOLO nel .env del PC, MAI sulla VPS: "Paga e invia" salta Stripe (pagamento simulato). Sulla VPS è ignorata
                       #   comunque con la chiave reale (sk_live_) o con NODE_ENV=production, ma la riga non ci deve stare
+PAGAMENTO_SIMULATO_FORZA=1  # SOLO se vuoi il bypass ANCHE sulla VPS (con PAGAMENTO_SIMULATO=1): salta Stripe pure con sk_live_ e produzione,
+                      #   quindi i clienti veri ordinano SENZA pagare. All'avvio il log scrive ATTENZIONE. Per spegnerlo: togli una riga e riavvia pm2
 APP_URL=https://tuodominio.it        # indirizzo pubblico del sito, per il ritorno da Stripe
 ```
 

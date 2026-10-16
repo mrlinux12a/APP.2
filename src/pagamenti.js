@@ -30,8 +30,16 @@ function stripeAttivo() {
 function simulatoRichiesto() {
   return /^(1|true|si|sì|yes)$/i.test(String(process.env.PAGAMENTO_SIMULATO || '').trim());
 }
+// Sulla VPS il bypass si accende solo di proposito (richiesta esplicita del 16/10/2026): servono nel .env DELLA VPS entrambe le righe,
+// PAGAMENTO_SIMULATO=1 e PAGAMENTO_SIMULATO_FORZA=1. Con la seconda le difese di sopra (chiave reale, NODE_ENV=production) non contano e
+// "Paga e invia" / "Rinvia richiesta" non passano più da Stripe: i clienti veri ordinano SENZA pagare. Per spegnerlo: via una delle due righe e riavvio.
+function simulatoForzatoInProduzione() {
+  return /^(1|true|si|sì|yes)$/i.test(String(process.env.PAGAMENTO_SIMULATO_FORZA || '').trim());
+}
 function pagamentoSimulatoForzato() {
-  return simulatoRichiesto() && modoStripe() !== 'live' && process.env.NODE_ENV !== 'production';
+  if (!simulatoRichiesto()) return false;
+  if (simulatoForzatoInProduzione()) return true;
+  return modoStripe() !== 'live' && process.env.NODE_ENV !== 'production';
 }
 // Una richiesta nuova si paga con Stripe (pagina di pagamento del sito)? Stripe acceso e nessun bypass locale.
 function pagaConStripe() {
@@ -125,6 +133,7 @@ module.exports = {
   modoStripe,
   simulatoRichiesto,
   pagamentoSimulatoForzato,
+  simulatoForzatoInProduzione,
   pagaConStripe,
   incasso,
   incassoSimulato,

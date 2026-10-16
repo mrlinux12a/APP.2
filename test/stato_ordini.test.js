@@ -283,7 +283,7 @@ test('icona: `voci` elenca tutte le attività nell\'ordine dell\'alternanza, i c
   assert.deepEqual(Object.keys(icona.voci[2]).sort(), ['corriere', 'durataSec', 'etaSec', 'fase', 'href', 'id', 'inArrivo', 'minuti', 'progresso', 'richiestaId', 'tipo', 'voce']);
   assert.equal(icona.voci[2].corriere, 'Luca');
   // la barra della home non è più ferma a metà: ordine nato 1 ora fa, arrivo fra 25 minuti -> 60 su 85 minuti trascorsi
-  assert.ok(Math.abs(icona.voci[2].progresso - (0.5 + 0.5 * 60 / 85)) < 0.01, 'progresso = da metà (In viaggio) a 1 col tempo trascorso: ' + icona.voci[2].progresso);
+  assert.ok(Math.abs(icona.voci[2].progresso - (0.5 + 0.44 * 60 / 85)) < 0.01, 'progresso = da metà (In viaggio) a 1 col tempo trascorso: ' + icona.voci[2].progresso);
   assert.ok(Math.abs(icona.voci[2].etaSec - 25 * 60) <= 2);
   assert.ok(Math.abs(icona.voci[2].durataSec - 85 * 60) <= 2);
   assert.equal(icona.voci[2].inArrivo, false);
@@ -351,8 +351,8 @@ test('voce di consegna: secondi all\'arrivo, durata e "In arrivo" a 3 minuti o m
   assert.equal(per(5).inArrivo, false);
   assert.equal(per(5).progresso, 0.5);
   // la barra della home avanza col tempo (ora 60 min trascorsi su 70) e non esce da 0..1 se l'orario è passato
-  assert.ok(Math.abs(per(1).progresso - (0.5 + 0.5 * 60 / 70)) < 0.01);
-  assert.equal(per(4).progresso, 1);
+  assert.ok(Math.abs(per(1).progresso - (0.5 + 0.44 * 60 / 70)) < 0.01);
+  assert.equal(per(4).progresso, 0.94, "a tempo finito un filo prima di Consegnato");
 });
 
 test('format.inArrivo: la soglia è di 3 minuti', () => {
@@ -382,7 +382,7 @@ test('schede e icona: "In arrivo" e basta a 3 minuti o meno, altrimenti i minuti
   const fase = (v) => ejs.renderFile(path.join(viste, 'nav_ordini_fase.ejs'), { v, CIRC: 65.97, fmt: format, ...icone });
   let h = await fase(lontana);
   assert.match(h, /<span class="etichetta" data-eta-testo="Arriva tra \{t\}">Arriva tra 12 min<\/span>/);
-  assert.match(h, /<span class="badge-eta" data-eta-testo="\{m\}′" data-eta-nascondi>12′<\/span>/);
+  assert.match(h, /<span class="badge-eta" data-eta-testo="\{c\}" data-eta-nascondi>12′<\/span>/);
   h = await fase(vicina);
   assert.match(h, /<span class="etichetta" data-eta-testo="Arriva tra \{t\}">In arrivo<\/span>/);
   assert.doesNotMatch(h, /Arriva tra \d/);
@@ -426,7 +426,7 @@ test('senza il corriere l\'arrivo è la stima del banco (consegna_ore): "Arriva 
   assert.ok(Math.abs(v.durataSec - 6 * 3600) <= 2);
   let h = await fase(v);
   assert.match(h, /data-eta-testo="Arriva tra \{t\}">Arriva tra 5 h 57<\/span>/);
-  assert.doesNotMatch(h, /badge-eta/, 'oltre i 99 minuti il badge non c\'è');
+  assert.match(h, /<span class="badge-eta" data-eta-testo="\{c\}" data-eta-nascondi>5h57<\/span>/, 'oltre l\'ora il badge dice ore e minuti, non 357′');
 
   // nato 5 h 58 fa: mancano 2 minuti
   prepara(() => [conOrdine(2, { consegnaOre: 6, nataFa: 6 * ORA - 2 * MIN })]);

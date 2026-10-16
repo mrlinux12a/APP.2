@@ -673,6 +673,7 @@ async function ultimoOrdineConsegnato(clienteId, massimo = 3) {
 // UNA sola attività: la prima in ordine di invio (la richiesta con id più basso). Una richiesta scaduta senza ordine
 // conta solo se è l'ultima cosa che il cliente ha fatto (vedi scadutaRecente).
 const PROGRESSO_IN_VIAGGIO = 0.5; // metà barra: "In viaggio"
+const PROGRESSO_ARRIVO = 0.94; // dove si ferma la barra a tempo finito: un filo prima di "Consegnato", che arriva solo con la consegna vera
 const TRE_ORE_MS = 3 * 60 * 60 * 1000;
 const VENTIQUATTRO_ORE_MS = 24 * 60 * 60 * 1000;
 const FASE_ATTESA = 1;
@@ -862,8 +863,8 @@ function costruisciVoce(fase, card, finestra) {
       corriere: String(card.ordine.corriere_nome || '').trim(),
       // Barra della home: avanza in modo lineare col tempo (da "In viaggio" a "Consegnato", dalla nascita dell’ordine all’arrivo). Senza orario del corriere resta
       // ferma a metà ("In viaggio"): solo con l'evento che segna la consegna vera (ancora da collegare) arriverebbe a 1 ("Consegnato").
-      // Parte da "In viaggio" (metà: il banco ha già accettato) e arriva a 1 ("Consegnato") all'orario d'arrivo.
-      progresso: durataSec ? PROGRESSO_IN_VIAGGIO + (1 - PROGRESSO_IN_VIAGGIO) * Math.min(1, Math.max(0, 1 - etaSec / durataSec)) : PROGRESSO_IN_VIAGGIO,
+      // Parte da "In viaggio" (metà: il banco ha già accettato) e a tempo finito si ferma a PROGRESSO_ARRIVO (un filo prima di "Consegnato").
+      progresso: durataSec ? PROGRESSO_IN_VIAGGIO + (PROGRESSO_ARRIVO - PROGRESSO_IN_VIAGGIO) * Math.min(1, Math.max(0, 1 - etaSec / durataSec)) : PROGRESSO_IN_VIAGGIO,
     };
   }
   const voce = { fase, tipo: 'richiesta', id: r.id, richiestaId: r.id, href: '/richieste/' + r.id, voce: 'richiesta-' + r.id };

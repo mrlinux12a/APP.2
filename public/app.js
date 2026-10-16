@@ -1661,14 +1661,14 @@ window.addEventListener('pageshow', function (e) {
    a scatti ogni 30 secondi e quella della home era ferma a metà.
    Un contenitore [data-eta-sec] porta i secondi che mancano all'arrivo al momento del disegno (calcolati sul server, quindi l'ora
    del PC non c'entra; possono essere negativi) e, se c'è, [data-eta-durata] = secondi dalla nascita dell'ordine all'arrivo. Dentro:
-     [data-eta-testo]  testo con {m} = minuti che mancano (mai meno di 1) o {t} = la stessa durata scritta come sulla home del banco
+     [data-eta-testo]  testo con {m} = minuti che mancano (mai meno di 1) o {t} = la stessa durata scritta come sulla home del banco, o {c} = quella stessa in forma breve per il badge ("45′", "5h57")
                        ("8 min", "5 h 57"); a 3 minuti o meno diventa solo "In arrivo", mai prima. Senza segnaposto
                        (il titolo dell'ordine) fuori dai 3 minuti torna lo stesso testo normale. Con anche [data-eta-nascondi]
                        (il badge dei minuti dell'icona, "N′") a 3 minuti o meno non si scrive "In arrivo" ma sparisce, perché
                        accanto a "In arrivo" un numero di minuti direbbe un'altra cosa.
      [data-eta-barra]  larghezza = tempo trascorso sul totale (si riempie); serve la durata. Con valore "da-meta" (la card della home,
-                       tappe Accettato · In viaggio · Consegnato) parte dal 50% e arriva al 100%.
-     [data-eta-arco]   anello che si svuota (stroke-dashoffset su data-circ); serve la durata.
+                       tappe Accettato · In viaggio · Consegnato) parte dal 50% e a tempo finito si ferma al 94% (un filo prima di Consegnato; stessa soglia di PROGRESSO_ARRIVO sul server).
+     [data-eta-arco]   anello che si svuota (stroke-dashoffset su data-circ); serve la durata. Negli ultimi 3 minuti si riempie (cronometro "In arrivo").
    Un colpo al secondo, con le transizioni CSS da 1 s lineari: il movimento è continuo. La fine di ogni contenitore si fissa la
    prima volta che lo si vede, quindi un contenitore rimpiazzato dall'aggiornamento dell'icona riparte dal suo numero nuovo e uno
    che resta non si sposta. IN_ARRIVO_SEC è la stessa soglia di format.SOGLIA_IN_ARRIVO_SEC sul server. Non usare [data-consegna]:
@@ -1702,25 +1702,31 @@ window.addEventListener('pageshow', function (e) {
       const s = restano(c);
       const inArrivo = s <= IN_ARRIVO_SEC;
       const minuti = Math.max(1, Math.ceil(s / 60));
-      if (el.hasAttribute('data-eta-nascondi')) { // il badge dei minuti: a 3 minuti o meno sparisce, resta solo "In arrivo"; sopra i 99 non ci sta
-        el.style.display = inArrivo || minuti > 99 ? 'none' : '';
-        if (inArrivo || minuti > 99) return;
+      if (el.hasAttribute('data-eta-nascondi')) { // il badge dei minuti: a 3 minuti o meno sparisce, resta solo "In arrivo"; 
+        el.style.display = inArrivo ? 'none' : '';
+        if (inArrivo) return;
       }
       const testo = inArrivo
         ? 'In arrivo'
-        : el.getAttribute('data-eta-testo').replace('{m}', minuti).replace('{t}', Minuteria.durataMinuti(minuti));
+        : el.getAttribute('data-eta-testo').replace('{m}', minuti).replace('{t}', Minuteria.durataMinuti(minuti))
+          .replace('{c}', minuti < 60 ? minuti + '′' : Math.floor(minuti / 60) + 'h' + String(minuti % 60).padStart(2, '0'));
       if (el.textContent !== testo) el.textContent = testo;
     });
     document.querySelectorAll('[data-eta-barra]').forEach(function (el) {
       const c = el.closest('[data-eta-sec]');
       const r = c ? rimasto(c) : null;
-      // data-eta-barra="da-meta": la barra della home parte da "In viaggio" (50%, il banco ha già accettato) e arriva al 100% all'arrivo.
-      if (r !== null) el.style.width = (el.getAttribute('data-eta-barra') === 'da-meta' ? 50 + (1 - r) * 50 : (1 - r) * 100).toFixed(1) + '%';
+      // data-eta-barra="da-meta": la barra della home parte da "In viaggio" (50%) e a tempo finito si ferma al 94%, mai a "Consegnato".
+      if (r !== null) el.style.width = (el.getAttribute('data-eta-barra') === 'da-meta' ? 50 + (1 - r) * 44 : (1 - r) * 100).toFixed(1) + '%';
     });
     document.querySelectorAll('[data-eta-arco]').forEach(function (el) {
       const c = el.closest('[data-eta-sec]');
       const r = c ? rimasto(c) : null;
-      if (r !== null) el.style.strokeDashoffset = ((Number(el.getAttribute('data-circ')) || 402.12) * (1 - r)).toFixed(2);
+      if (r === null) return;
+      const circ = Number(el.getAttribute('data-circ')) || 402.12;
+      const s = restano(c);
+      // Negli ultimi 3 minuti ("In arrivo") l'anello è un cronometro: riparte da vuoto e si riempie fino all'arrivo (da vuoto a vuoto
+      // non c'è salto: a 180 s dall'arrivo l'anello del viaggio è già quasi vuoto).
+      el.style.strokeDashoffset = (s <= IN_ARRIVO_SEC ? circ * Math.max(0, s) / IN_ARRIVO_SEC : circ * (1 - r)).toFixed(2);
     });
   }
 

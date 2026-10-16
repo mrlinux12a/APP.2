@@ -821,7 +821,7 @@ test('seconda carta dello stesso invio (due schede): la richiesta nasce una volt
 // ---------------- Bypass locale del pagamento ----------------
 
 test('PAGAMENTO_SIMULATO: salta Stripe solo con chiave di prova e fuori da NODE_ENV=production; sulla VPS non vale mai', () => {
-  const nomi = ['STRIPE_SECRET_KEY', 'STRIPE_PUBLISHABLE_KEY', 'PAGAMENTO_SIMULATO', 'NODE_ENV'];
+  const nomi = ['STRIPE_SECRET_KEY', 'STRIPE_PUBLISHABLE_KEY', 'PAGAMENTO_SIMULATO', 'PAGAMENTO_SIMULATO_FORZA', 'NODE_ENV'];
   const salvati = Object.fromEntries(nomi.map((n) => [n, process.env[n]]));
   const imposta = (v) => nomi.forEach((n) => (v[n] === undefined ? delete process.env[n] : (process.env[n] = v[n])));
   const avviso = () => stripePagamenti.controllaConfigurazione().find((a) => /PAGAMENTO_SIMULATO/.test(a));
@@ -845,6 +845,15 @@ test('PAGAMENTO_SIMULATO: salta Stripe solo con chiave di prova e fuori da NODE_
     imposta({ STRIPE_SECRET_KEY: 'sk_live_x', STRIPE_PUBLISHABLE_KEY: 'pk_live_x', PAGAMENTO_SIMULATO: '1' });
     assert.equal(pagamenti.pagaConStripe(), true, 'chiave reale: ignorata');
     assert.match(avviso(), /ignorata/);
+
+    // la VPS può accenderlo di proposito: servono PAGAMENTO_SIMULATO=1 E PAGAMENTO_SIMULATO_FORZA=1
+    imposta({ STRIPE_SECRET_KEY: 'sk_live_x', STRIPE_PUBLISHABLE_KEY: 'pk_live_x', NODE_ENV: 'production', PAGAMENTO_SIMULATO: '1', PAGAMENTO_SIMULATO_FORZA: '1' });
+    assert.equal(pagamenti.pagaConStripe(), false, 'con FORZA anche chiave reale e produzione saltano Stripe');
+    assert.equal(stripePagamenti.pagaConStripe(), false);
+    assert.equal(pagamenti.stripeAttivo(), true, 'incassi e rimborsi dei pagamenti già fatti restano attivi');
+    assert.match(avviso(), /ATTENZIONE.*senza pagare/);
+    imposta({ STRIPE_SECRET_KEY: 'sk_live_x', STRIPE_PUBLISHABLE_KEY: 'pk_live_x', NODE_ENV: 'production', PAGAMENTO_SIMULATO_FORZA: '1' });
+    assert.equal(pagamenti.pagaConStripe(), true, 'FORZA da sola non basta');
 
     for (const valore of ['0', 'false', '', 'no']) {
       imposta({ ...prova, PAGAMENTO_SIMULATO: valore });

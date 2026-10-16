@@ -445,7 +445,7 @@ Stripe (prima era Checkout ospitato: cambiato lo stesso giorno, su richiesta), *
   `NODE_ENV=production`; non guarda MAI l'indirizzo della richiesta (l'intestazione Host la scrive chi chiama: sarebbe un buco). Il
   bypass cambia solo COME si paga una richiesta nuova: rimborsi, rilasci e incassi di pagamenti Stripe già fatti (il `.env` locale ha il
   DB di produzione) funzionano uguale, quindi `stripeAttivo()` non cambia. All'avvio il log dice `[stripe] PAGAMENTO_SIMULATO=1...` (o
-  che è ignorata). Anche con il bypass la richiesta va ai banchi veri, come ogni prova locale. Per togliere il bypass: via la riga.
+  che è ignorata). Anche con il bypass la richiesta va ai banchi veri, come ogni prova locale. Per togliere il bypass: via la riga. **Sulla VPS si può accendere di proposito (richiesta esplicita del 16/10/2026)** con DUE righe nel suo `.env`: `PAGAMENTO_SIMULATO=1` e `PAGAMENTO_SIMULATO_FORZA=1` (la seconda annulla le difese di `sk_live_`/`NODE_ENV=production`; da sola non fa niente; log `ATTENZIONE` all'avvio): i clienti veri ordinano senza pagare. Per spegnerlo basta togliere una delle due e riavviare pm2.
 - **Nessuna chiamata a Stripe dentro una transazione.** `pagamenti.rimborsa` e `segnaDaIncassare` girano dentro le
   transazioni del flusso (chiusura finestra, creazione ordine, eliminazioni) e **scrivono solo sul DB** (`stato` di
   `stripe_pagamenti` → `da_incassare` / `da_rilasciare` / `da_rimborsare`); le esegue `stripePagamenti.elabora()`, 2 s dopo
@@ -627,6 +627,10 @@ meno di 24 h), **3** consegnato (`consegnato_il`): la 3 **non è più attiva**, 
     soglia `format.SOGLIA_IN_ARRIVO_SEC` = 180 s (`format.inArrivo`), **uguale a `IN_ARRIVO_SEC` in `app.js`**; vale anche a orario passato con l'ordine
     non ancora consegnato. Scritte: icona e card della home "In arrivo", striscia "In arrivo" (invece di "tra N min"), titolo dell'ordine "In arrivo".
     **L'app Expo e `api_v1.js` (`tempo_testo`: "Consegna prevista entro le…") non seguono ancora.**
+  - **Cronometro "In arrivo"** (16/10/2026): negli ultimi 3 minuti l'anello della pagina dell'ordine non si svuota più ma riparte da vuoto e si riempie fino
+    all'arrivo (`circ × secondi/180`; a 180 s l'anello del viaggio è già quasi vuoto, quindi non c'è salto); lo fanno sia la vista (primo disegno) sia `app.js`.
+    La barra della card in home, a tempo finito, **si ferma al 94%** (`PROGRESSO_ARRIVO`, in `app.js` il 44 di `50 + (1 - r) * 44`): "Consegnato" solo con la consegna vera.
+  - **Badge dell'icona** (`{c}`): "45′" sotto l'ora, "5h57" oltre (`format.durataBreve`, uguale in `app.js`); sparisce in "In arrivo".
   - Prove: `test/stato_ordini.test.js` (voci, soglia, disegno dei partial con `ejs.renderFile`). Il blocco JS non gira in `node --test`: per provarlo
     una pagina usa-e-getta con i partial veri + `style.css` + `app.js` su un server locale (ETA a 190 s: dopo 10 s passa a "In arrivo"), senza login né DB.
 - Prova sul DB vero: richieste/ordini inseriti con SQL sul **banco AFIS (id 1, disattivato)** per un cliente usa-e-getta, poi

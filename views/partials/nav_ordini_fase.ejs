@@ -18,7 +18,7 @@
 <% } else if (v.fase === 'consegna') { %>
   <span class="ico ico-stato">
     <span class="furgone"><%- iconaFurgone %></span>
-    <% if (v.minuti != null && !v.inArrivo && v.minuti <= 99) { %><span class="badge-eta" data-eta-testo="{m}′" data-eta-nascondi><%= v.minuti %>′</span><% } %>
+    <% if (v.minuti != null && !v.inArrivo) { %><span class="badge-eta" data-eta-testo="{c}" data-eta-nascondi><%= fmt.durataBreve(v.minuti) %></span><% } %>
   </span>
   <%# Con l'orario d'arrivo i minuti scendono da soli (public/app.js, "Consegna in arrivo"): il contenitore [data-eta-sec] lo scrive il
       chiamante (il link o il fotogramma). A 3 minuti o meno la scritta è solo "In arrivo". %>
