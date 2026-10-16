@@ -860,9 +860,10 @@ function costruisciVoce(fase, card, finestra) {
       durataSec,
       inArrivo: arrivo ? format.inArrivo(etaSec) : false,
       corriere: String(card.ordine.corriere_nome || '').trim(),
-      // Barra della home: avanza in modo lineare col tempo (dalla nascita dell'ordine all'arrivo). Senza orario del corriere resta
+      // Barra della home: avanza in modo lineare col tempo (da "In viaggio" a "Consegnato", dalla nascita dell’ordine all’arrivo). Senza orario del corriere resta
       // ferma a metà ("In viaggio"): solo con l'evento che segna la consegna vera (ancora da collegare) arriverebbe a 1 ("Consegnato").
-      progresso: durataSec ? Math.min(1, Math.max(0, 1 - etaSec / durataSec)) : PROGRESSO_IN_VIAGGIO,
+      // Parte da "In viaggio" (metà: il banco ha già accettato) e arriva a 1 ("Consegnato") all'orario d'arrivo.
+      progresso: durataSec ? PROGRESSO_IN_VIAGGIO + (1 - PROGRESSO_IN_VIAGGIO) * Math.min(1, Math.max(0, 1 - etaSec / durataSec)) : PROGRESSO_IN_VIAGGIO,
     };
   }
   const voce = { fase, tipo: 'richiesta', id: r.id, richiestaId: r.id, href: '/richieste/' + r.id, voce: 'richiesta-' + r.id };

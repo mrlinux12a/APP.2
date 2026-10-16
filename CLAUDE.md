@@ -620,7 +620,9 @@ meno di 24 h), **3** consegnato (`consegnato_il`): la 3 **non è più attiva**, 
   `consegna_ore`** (la stima del banco, come nella pagina dell'ordine: `costruisciVoce` e la SELECT di `richiesteAttiveClienteLeggere` ora leggono
   `consegna_ore`; prima card e icona dicevano "In consegna" per gli ordini senza corriere). Il testo lungo è `{t}` = `durataMinuti` ("8 min", "5 h 57":
   `format.durataMinuti` sul server, `Minuteria.durataMinuti` nel browser), `{m}` = minuti puri (solo il badge, che sopra i 99 non c'è). Le transizioni CSS di anelli e barre sono tutte `1s linear`
-  (`.stato-barra span` era `0.6s ease`).
+  (`.stato-barra span` era `0.6s ease`). **La barra della home parte da "In viaggio" (50%), non da "Accettato"**, e arriva al 100% ("Consegnato")
+  all'orario d'arrivo (`progresso` = 0,5 + 0,5 × tempo trascorso sul totale; `data-eta-barra="da-meta"`). La barretta "In consegna" della pagina
+  dell'ordine invece va da 0 a 100.
   - **"In arrivo" a 3 minuti o meno, e basta** (niente "Arriva tra", "Arriva entro le HH:MM" né il badge dei minuti dell'icona, `[data-eta-nascondi]`):
     soglia `format.SOGLIA_IN_ARRIVO_SEC` = 180 s (`format.inArrivo`), **uguale a `IN_ARRIVO_SEC` in `app.js`**; vale anche a orario passato con l'ordine
     non ancora consegnato. Scritte: icona e card della home "In arrivo", striscia "In arrivo" (invece di "tra N min"), titolo dell'ordine "In arrivo".

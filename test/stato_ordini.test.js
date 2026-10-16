@@ -283,7 +283,7 @@ test('icona: `voci` elenca tutte le attività nell\'ordine dell\'alternanza, i c
   assert.deepEqual(Object.keys(icona.voci[2]).sort(), ['corriere', 'durataSec', 'etaSec', 'fase', 'href', 'id', 'inArrivo', 'minuti', 'progresso', 'richiestaId', 'tipo', 'voce']);
   assert.equal(icona.voci[2].corriere, 'Luca');
   // la barra della home non è più ferma a metà: ordine nato 1 ora fa, arrivo fra 25 minuti -> 60 su 85 minuti trascorsi
-  assert.ok(Math.abs(icona.voci[2].progresso - 60 / 85) < 0.01, 'progresso = tempo trascorso sul totale: ' + icona.voci[2].progresso);
+  assert.ok(Math.abs(icona.voci[2].progresso - (0.5 + 0.5 * 60 / 85)) < 0.01, 'progresso = da metà (In viaggio) a 1 col tempo trascorso: ' + icona.voci[2].progresso);
   assert.ok(Math.abs(icona.voci[2].etaSec - 25 * 60) <= 2);
   assert.ok(Math.abs(icona.voci[2].durataSec - 85 * 60) <= 2);
   assert.equal(icona.voci[2].inArrivo, false);
@@ -351,7 +351,7 @@ test('voce di consegna: secondi all\'arrivo, durata e "In arrivo" a 3 minuti o m
   assert.equal(per(5).inArrivo, false);
   assert.equal(per(5).progresso, 0.5);
   // la barra della home avanza col tempo (ora 60 min trascorsi su 70) e non esce da 0..1 se l'orario è passato
-  assert.ok(Math.abs(per(1).progresso - 60 / 70) < 0.01);
+  assert.ok(Math.abs(per(1).progresso - (0.5 + 0.5 * 60 / 70)) < 0.01);
   assert.equal(per(4).progresso, 1);
 });
 
@@ -398,7 +398,7 @@ test('schede e icona: "In arrivo" e basta a 3 minuti o meno, altrimenti i minuti
   const scheda = (id) => schede.find((s) => s.includes('/ordini/' + id));
   assert.match(scheda(1001), /^ data-eta-sec="\d+" data-eta-durata="\d+">/);
   assert.match(scheda(1001), /<span class="stato-titolo" data-eta-testo="Arriva tra \{t\}">Arriva tra 12 min<\/span>/);
-  assert.match(scheda(1001), /<span data-eta-barra style="width: \d+\.\d%">/);
+  assert.match(scheda(1001), /<span data-eta-barra="da-meta" style="width: \d+\.\d%">/);
   assert.match(scheda(1002), /<span class="stato-titolo" data-eta-testo="Arriva tra \{t\}">In arrivo<\/span>/);
   assert.match(scheda(1003), /^>/, 'senza orario nessun conto');
   assert.match(scheda(1003), /<span class="stato-titolo">In consegna<\/span>/);

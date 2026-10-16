@@ -1666,7 +1666,8 @@ window.addEventListener('pageshow', function (e) {
                        (il titolo dell'ordine) fuori dai 3 minuti torna lo stesso testo normale. Con anche [data-eta-nascondi]
                        (il badge dei minuti dell'icona, "N′") a 3 minuti o meno non si scrive "In arrivo" ma sparisce, perché
                        accanto a "In arrivo" un numero di minuti direbbe un'altra cosa.
-     [data-eta-barra]  larghezza = tempo trascorso sul totale (si riempie); serve la durata.
+     [data-eta-barra]  larghezza = tempo trascorso sul totale (si riempie); serve la durata. Con valore "da-meta" (la card della home,
+                       tappe Accettato · In viaggio · Consegnato) parte dal 50% e arriva al 100%.
      [data-eta-arco]   anello che si svuota (stroke-dashoffset su data-circ); serve la durata.
    Un colpo al secondo, con le transizioni CSS da 1 s lineari: il movimento è continuo. La fine di ogni contenitore si fissa la
    prima volta che lo si vede, quindi un contenitore rimpiazzato dall'aggiornamento dell'icona riparte dal suo numero nuovo e uno
@@ -1713,7 +1714,8 @@ window.addEventListener('pageshow', function (e) {
     document.querySelectorAll('[data-eta-barra]').forEach(function (el) {
       const c = el.closest('[data-eta-sec]');
       const r = c ? rimasto(c) : null;
-      if (r !== null) el.style.width = ((1 - r) * 100).toFixed(1) + '%';
+      // data-eta-barra="da-meta": la barra della home parte da "In viaggio" (50%, il banco ha già accettato) e arriva al 100% all'arrivo.
+      if (r !== null) el.style.width = (el.getAttribute('data-eta-barra') === 'da-meta' ? 50 + (1 - r) * 50 : (1 - r) * 100).toFixed(1) + '%';
     });
     document.querySelectorAll('[data-eta-arco]').forEach(function (el) {
       const c = el.closest('[data-eta-sec]');

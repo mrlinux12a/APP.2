@@ -62,7 +62,7 @@
       </span>
       <span class="stato-freccia" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span>
     </div>
-    <div class="stato-barra" aria-hidden="true"><span<%- conEta && v.durataSec ? ' data-eta-barra' : '' %> style="width: <%= conEta && v.durataSec ? ((v.progresso != null ? v.progresso : 0.5) * 100).toFixed(1) : Math.round((v.progresso != null ? v.progresso : 0.5) * 100) %>%"></span></div>
+    <div class="stato-barra" aria-hidden="true"><span<%- conEta && v.durataSec ? ' data-eta-barra="da-meta"' : '' %> style="width: <%= conEta && v.durataSec ? ((v.progresso != null ? v.progresso : 0.5) * 100).toFixed(1) : Math.round((v.progresso != null ? v.progresso : 0.5) * 100) %>%"></span></div>
    </a>
     <%# La barra avanza col tempo fino all'arrivo previsto (a metà, "In viaggio", se non c'è l'orario). "Consegnato" qui è solo
         un'etichetta: non si può toccare dalla home. Il pulsante PROVVISORIO che chiude l'ordine (POST
