@@ -89,7 +89,7 @@ function conMembriDelGruppo(interna) {
 
 // Le colonne di servizio di conMembriDelGruppo non fanno parte del prodotto.
 function senzaColonneDiServizio(righe) {
-  return righe.map(({ _gruppo, _ord, _primo, ...resto }) => resto);
+  return righe.map(({ _gruppo, _ord, _primo, _pri, _rn, ...resto }) => resto);
 }
 
 async function raggruppaVarianti(righe) {
@@ -272,6 +272,7 @@ function correggiParolaChiave(termine) {
 // che vale solo durante la chiamata (vedi db/postgres/schema.sql).
 const SOGLIA_MINIMA_FUZZY = 4;
 const SOGLIA_FUZZY = 0.45;
+const SOGLIA_REFUSI = 0.55; // ricerca per refusi: solo le parole davvero simili (la 0.45 dell'indice è il minimo per essere candidate)
 
 // Una ricerca vera è di poche parole: oltre questi limiti il resto del testo si ignora.
 const LUNGHEZZA_MASSIMA_RICERCA = 200;
@@ -297,7 +298,107 @@ function frammentoDiametroMm(valoriMm) {
 //    ~220 ms. Resta come ripiego se le funzioni SQL non ci sono (schema non aggiornato).
 let ricercaVeloceAttiva = true;
 
+// Quanti risultati (schede, non righe) al massimo: la ricerca live, la pagina /cerca, quella di una categoria o di un marchio
+// usano lo stesso numero. Se i risultati sono di più, l'elenco porta `troncato = true` e la pagina lo dice.
+const LIMITE_RISULTATI = 100;
+// I refusi di battitura si tentano solo se la ricerca esatta trova pochissimo: è una correzione ("valvla" -> "valvola"), non un
+// allargamento. Prima si cercava sempre per somiglianza, e parole lunghe attiravano nomi senza alcun rapporto ("adattatore" trovava
+// "contatore", "alimentatore", "scambiatore": 336 risultati su 551 erano sbagliati, più di quelli di "adatt").
+const MINIMO_RISULTATI_SENZA_REFUSI = 10; // un refuso scritto uguale in 2-3 prodotti ("adatatore") non deve bastare a escludere la correzione
+const LIMITE_CANDIDATI_REFUSI = 300; // colonne di testo soltanto: trasferire 1500 righe costava più di un secondo, e ne servono 100
+
+// Il testo cercato diviso in parole (stesso taglio per la ricerca e per i refusi).
+function dividiTermini(query) {
+  return sostituisciFrazioniAParole(String(query || '').slice(0, LUNGHEZZA_MASSIMA_RICERCA).toLowerCase())
+    .replace(/(^|\s)(dn|ø)\s+(\d)/g, '$1$2$3') // "dn 50" e "ø 20" sono una misura sola, non due parole
+    .split(/\s+/)
+    .map((t) => t.trim())
+    // Un segno di punteggiatura da solo ("-", ".", "%") non è una parola: cercato alla lettera trovava mezzo catalogo.
+    .filter((t) => /[a-zà-ú0-9]/.test(t))
+    .slice(0, TERMINI_MASSIMI_RICERCA);
+}
+
+// I caratteri speciali di LIKE scritti da chi cerca valgono per sé: "%" e "_" non sono jolly ("%%" trovava tutto il catalogo, in 3 secondi).
+function escapeLike(testo) {
+  return String(testo).replace(/[\\%_]/g, '\\$&');
+}
+
+// Singolare e plurale ("valvola"/"valvole", "raccordo"/"raccordi", "adattatore"/"adattatori"): si cerca la radice, senza la vocale
+// finale, che cambia. Prima lo faceva per caso la somiglianza; senza, "valvole" non troverebbe le "valvola". Solo parole di sole
+// lettere, da 5 caratteri (con 4 la radice di 3 lettere, "tub", prenderebbe quasi tutto: "tubi" resta "tubi").
+function radiceParola(t) {
+  if (!/^[a-zà-ú]+$/.test(t)) return t;
+  if (t.length >= 6 && /[cg](ia|ie)$/.test(t)) return t.slice(0, -2); // "doccia"/"docce" -> "docc", "valigia"/"valige" -> "valig"
+  if (t.length >= 5 && /[aeio]$/.test(t)) return t.slice(0, -1);
+  return t;
+}
+
+// Le parole su cui ha senso cercare un refuso: solo lettere (un "dn50" sbagliato non è un refuso di "dn40"), da 4 caratteri, e non le parole
+// che hanno già un significato proprio (misure generiche, pollici).
+function terminiPerRefusi(query) {
+  return dividiTermini(query).filter(
+    (t) =>
+      t.length >= SOGLIA_MINIMA_FUZZY &&
+      /^[a-zà-ú'’.-]+$/.test(t) &&
+      !PAROLE_GENERICHE_MISURA[correggiParolaChiave(t)] &&
+      !EQUIVALENZE_POLLICI_MM[chiaveEquivalenza(t)]
+  );
+}
+
+// La riga ha, per ogni parola cercata, la parola stessa nel testo o una parola davvero vicina: al massimo 1 carattere sbagliato (2 dalle
+// 8 lettere in su), anche se la parola nel prodotto è più lunga perché chi scrive non ha finito ("valvl" -> "valvola").
+function corrispondeConRefusi(riga, termini) {
+  const testo = [riga.nome, riga.codice, riga.categoria, riga.ean, riga.macro_slug, riga.brand_slug]
+    .map((v) => String(v || ''))
+    .join(' ')
+    .toLowerCase();
+  const parole = testo.split(/[^a-zà-ú0-9]+/).filter((w) => w.length >= 3);
+  return termini.every((t) => {
+    if (testo.includes(radiceParola(t))) return true;
+    const k = t.length >= 8 ? 2 : 1;
+    return parole.some((w) => {
+      if (Math.abs(w.length - t.length) <= k && distanzaLevenshtein(t, w) <= k) return true;
+      return w.length > t.length + k && distanzaLevenshtein(t, w.slice(0, t.length)) <= k;
+    });
+  });
+}
+
+function conTroncato(righe, troncato) {
+  Object.defineProperty(righe, 'troncato', { value: !!troncato, enumerable: false });
+  return righe;
+}
+
 async function cercaProdotti(query, opzioni = {}) {
+  const limite = Number(opzioni.limite) > 0 ? Math.floor(Number(opzioni.limite)) : LIMITE_RISULTATI;
+  if (!dividiTermini(query).length) return conTroncato([], false); // niente di cercabile (vuoto, solo segni): non tutto il catalogo
+  const esatti = await cercaConModo(query, { ...opzioni, limite, refusi: false });
+  const daCorreggere = terminiPerRefusi(query);
+  if (!daCorreggere.length || esatti.length >= MINIMO_RISULTATI_SENZA_REFUSI) return esatti;
+
+  // Quasi niente di esatto: si prova a correggere i refusi. La somiglianza del DB dà molti candidati (anche sbagliati): si tengono solo
+  // quelli che hanno davvero una parola vicina a quella scritta.
+  // La ricerca con i refusi comprende anche tutto ciò che trova quella esatta (la somiglianza include la parte di parola), nello
+  // stesso ordine: si parte da lì invece di unire i due elenchi.
+  const larga = await cercaConModo(query, { ...opzioni, limite: LIMITE_CANDIDATI_REFUSI, refusi: true, soloRighe: true });
+  const buone = larga.filter((r) => corrispondeConRefusi(r, daCorreggere));
+  if (buone.length <= esatti.length) return esatti;
+  // Solo ora si leggono le righe intere, e solo di quelle tenute (nell'ordine in cui sono).
+  const tenute = buone.slice(0, limite);
+  const intere = await db
+    .prepare(
+      `SELECT p.*, m.nome AS macro_nome, b.nome AS brand_nome, b.colore AS brand_colore
+         FROM products p
+         LEFT JOIN macro_categorie m ON m.slug = p.macro_slug
+         LEFT JOIN brands b ON b.slug = p.brand_slug
+        WHERE p.id = ANY(?::int[])`
+    )
+    .all(tenute.map((r) => r.id));
+  const perId = new Map(intere.map((r) => [r.id, r]));
+  const righe = tenute.map((r) => perId.get(r.id)).filter(Boolean);
+  return conTroncato(await raggruppaVarianti(righe), buone.length > limite);
+}
+
+async function cercaConModo(query, opzioni) {
   if (ricercaVeloceAttiva) {
     try {
       return await eseguiRicerca(query, opzioni, true);
@@ -321,17 +422,13 @@ async function eseguiRicerca(
   query,
   {
     macroSlug = null, brandSlug = null, famiglia = null, sotto = null, misura = null,
-    materiale = null, diametro = null, limite = 100,
+    materiale = null, diametro = null, limite = LIMITE_RISULTATI, refusi = false, soloRighe = false,
   } = {},
   veloce = true
 ) {
   // Il testo cercato ha un tetto di lunghezza e di parole: ogni parola aggiunge condizioni e parametri alla
   // query, e un testo di migliaia di parole superava il limite di parametri di Postgres (errore 500).
-  const termini = sostituisciFrazioniAParole(String(query || '').slice(0, LUNGHEZZA_MASSIMA_RICERCA).toLowerCase())
-    .split(/\s+/)
-    .map((t) => t.trim())
-    .filter(Boolean)
-    .slice(0, TERMINI_MASSIMI_RICERCA);
+  const termini = dividiTermini(query);
 
   // I filtri espliciti arrivano dalla query string: se non sono testo (vecchi link, richieste a mano) si
   // ignorano invece di far fallire la ricerca con un TypeError.
@@ -366,7 +463,7 @@ async function eseguiRicerca(
   // Filtro esplicito per materiale, isolato dal testo digitato liberamente in "query".
   if (materiale) {
     where.push('LOWER(p.nome) LIKE ?');
-    params.push(`%${materiale.toLowerCase()}%`);
+    params.push(`%${escapeLike(materiale.toLowerCase())}%`);
   }
   // Filtro esplicito per diametro: accetta sia la forma mm ("20 mm") sia quella in
   // pollici ('3/4"'), isolato dal testo digitato liberamente in "query".
@@ -403,8 +500,21 @@ async function eseguiRicerca(
     const bloccoBase = `(LOWER(p.nome) LIKE ? OR LOWER(p.codice) LIKE ? OR LOWER(COALESCE(p.categoria, '')) LIKE ?
         OR LOWER(COALESCE(m.nome, '')) LIKE ? OR LOWER(COALESCE(b.nome, '')) LIKE ?
         OR LOWER(COALESCE(p.ean, '')) LIKE ?)`;
-    const like = `%${t}%`;
+    // Singolare/plurale: il termine intero si cerca come sempre in tutto il testo (nome, codice, categoria, marchio), la radice senza vocale
+    // finale solo nel NOME ("valvole" trova anche le "valvola", ma "rubinetto" non pesca tutta la categoria "Rubinetteria").
+    const radice = radiceParola(t);
+    const conRadice = radice !== t;
+    const cerca = radice; // per i candidati dell'indice si parte dalla radice (più larga); il filtro sotto stringe
+    const like = `%${escapeLike(t)}%`;
+    const likeRadice = `%${escapeLike(radice)}%`;
     const paramsBase = [like, like, like, like, like, like];
+
+    // "ø20" / "dn50" / "ø20mm": la misura intera, con un confine dopo il numero (prima "ø20" trovava anche "Ø200" e "Ø250").
+    const misuraSigla = t.match(/^(dn|ø)(\d{1,4})(?:mm)?$/);
+    if (misuraSigla) {
+      aggiungi('p.nome ~* ?', `${misuraSigla[1]}\\s?${misuraSigla[2]}(?!\\d)`);
+      continue;
+    }
 
     // Parola generica sulla misura ("diametro", "pollici"...): il catalogo non scrive mai
     // quella parola per esteso, quindi cercarla alla lettera non troverebbe nulla anche
@@ -426,45 +536,50 @@ async function eseguiRicerca(
     if (equivalenti) {
       if (veloce) aggiungi(`(${testoRicerca('p')} LIKE ? OR p.nome ~* ?)`, like, frammentoDiametroMm(equivalenti));
       else aggiungi(`(${bloccoBase} OR p.nome ~* ?)`, ...paramsBase, frammentoDiametroMm(equivalenti));
-    } else if (t.length >= SOGLIA_MINIMA_FUZZY) {
-      // Tollera i refusi di battitura (es. "valvla" invece di "valvola"): oltre al
+    } else if (refusi && t.length >= SOGLIA_MINIMA_FUZZY && /^[a-zà-ú'’.-]+$/.test(t)) {
+      // Solo nel secondo tentativo (vedi cercaProdotti), quando la ricerca esatta non ha trovato quasi nulla. Tollera i refusi di battitura (es. "valvla" invece di "valvola"): oltre al
       // confronto esatto di sempre, prova anche una corrispondenza per somiglianza
       // (pg_trgm) su una parola del nome. Solo dai 4 caratteri in su: sotto, la
       // somiglianza è troppo rumorosa (quasi tutto assomiglierebbe a quasi tutto).
       if (veloce) {
         candidati.push('SELECT ricerca_simili(?)');
-        paramsCandidati.push(t);
+        paramsCandidati.push(cerca);
+        // L'indice dà tutto ciò che supera 0.45 (migliaia di righe, per lo più sbagliate: trasferirle costava più di un secondo). I refusi
+        // veri stanno sopra 0.55 (misurato: "valvla" 0.57, "racordo" 0.70, "adatatore" 0.75): qui si scarta il resto.
+        aggiungi(`(${testoRicerca('p')} LIKE ? OR word_similarity(?, LOWER(p.nome)) >= ${SOGLIA_REFUSI})`, like, t);
       } else {
-        aggiungi(`(${bloccoBase} OR word_similarity(?, LOWER(p.nome)) > ${SOGLIA_FUZZY})`, ...paramsBase, t);
+        aggiungi(`(${bloccoBase} OR word_similarity(?, LOWER(p.nome)) > ${SOGLIA_FUZZY})`, ...paramsBase, cerca);
       }
-    } else if (veloce && t.length === 3) {
-      // 3 caratteri: il minimo che l'indice trigram sa cercare.
+    } else if (veloce && t.length >= 3) {
+      // 3 caratteri o più, senza refusi: l'indice trigram cerca la parte di parola.
       candidati.push('SELECT ricerca_esatti(?)');
-      paramsCandidati.push(t);
+      paramsCandidati.push(escapeLike(cerca));
+      // I candidati partono dalla radice (più larga): qui si stringe a "il termine intero ovunque, oppure la radice nel nome".
+      if (conRadice) aggiungi(`(${testoRicerca('p')} LIKE ? OR LOWER(p.nome) LIKE ?)`, like, likeRadice);
     } else if (veloce) {
       // 1-2 caratteri (es. "16", "3"): l'indice non li aiuta, si controllano le righe rimaste.
       aggiungi(`${testoRicerca('p')} LIKE ?`, like);
+    } else if (conRadice) {
+      aggiungi(`(${bloccoBase} OR LOWER(p.nome) LIKE ?)`, ...paramsBase, likeRadice);
     } else {
       aggiungi(bloccoBase, ...paramsBase);
     }
   }
 
   // Chi inizia con il testo digitato viene prima (cercando "valv" prima le "Valvola ...").
-  const primoTermine = termini[0] ? `${termini[0]}%` : null;
-  const ordinePrefisso = primoTermine
-    ? 'CASE WHEN LOWER(p.nome) LIKE ? THEN 0 WHEN LOWER(p.codice) LIKE ? THEN 1 ELSE 2 END,'
-    : '';
-  const paramsOrdine = primoTermine ? [primoTermine, primoTermine] : [];
+  const primoTermine = termini[0] ? `${escapeLike(termini[0])}%` : null;
+  const priorita = primoTermine
+    ? 'CASE WHEN LOWER(p.nome) LIKE ? THEN 0 WHEN LOWER(p.codice) LIKE ? THEN 1 ELSE 2 END'
+    : '0';
+  const paramsPriorita = primoTermine ? [primoTermine, primoTermine] : [];
 
-  const colonne = 'p.*, m.nome AS macro_nome, b.nome AS brand_nome, b.colore AS brand_colore';
+  // La ricerca e la finestra per gruppo lavorano su poche colonne (id, gruppo, categoria, nome, prezzo, priorità): le righe intere
+  // si leggono solo per i risultati finali. Sulle righe intere la stessa ricerca costava ~70 ms in più.
+  const colonne = `p.id, p.gruppo_id, p.categoria, p.nome, p.codice, p.ean, p.macro_slug, p.brand_slug, p.prezzo_listino, ${priorita} AS _pri`;
   const join = 'LEFT JOIN macro_categorie m ON m.slug = p.macro_slug LEFT JOIN brands b ON b.slug = p.brand_slug';
-  // In fondo prezzo e id: a parità di categoria e nome l'ordine era arbitrario (cambiava col piano
-  // di esecuzione), e da lì dipende quale variante fa da "default" nella scheda di un gruppo. Ora
-  // a parità di nome vince la più economica, poi l'id: stesso criterio del selettore delle misure.
-  const ordine = `ORDER BY ${ordinePrefisso} p.categoria, p.nome, p.prezzo_listino, p.id LIMIT ?`;
 
-  let sql;
-  let paramsQuery;
+  let interna;
+  let paramsInterna;
   if (veloce && candidati.length) {
     // Prima si restringe ai candidati dell'indice, poi si applicano i filtri (misure, parole
     // corte) alle sole righe rimaste: senza OFFSET 0 il planner fonde i due livelli e
@@ -472,18 +587,51 @@ async function eseguiRicerca(
     const sorgente = `(SELECT p.* FROM products p
                         WHERE ${where.join(' AND ')} AND p.id IN (${candidati.join(' INTERSECT ')})
                         OFFSET 0)`;
-    sql = `SELECT ${colonne} FROM ${sorgente} p ${join}
-            ${filtri.length ? 'WHERE ' + filtri.join(' AND ') : ''}
-            ${ordine}`;
-    paramsQuery = [...params, ...paramsCandidati, ...paramsFiltri, ...paramsOrdine, limite];
+    interna = `SELECT ${colonne} FROM ${sorgente} p ${join}
+                ${filtri.length ? 'WHERE ' + filtri.join(' AND ') : ''}`;
+    paramsInterna = [...paramsPriorita, ...params, ...paramsCandidati, ...paramsFiltri];
   } else {
-    sql = `SELECT ${colonne} FROM products p ${join}
-            WHERE ${[...where, ...filtri].join(' AND ')}
-            ${ordine}`;
-    paramsQuery = [...params, ...paramsFiltri, ...paramsOrdine, limite];
+    interna = `SELECT ${colonne} FROM products p ${join}
+                WHERE ${[...where, ...filtri].join(' AND ')}`;
+    paramsInterna = [...paramsPriorita, ...params, ...paramsFiltri];
   }
 
-  const righeGrezze = await db.prepare(conMembriDelGruppo(sql)).all(...paramsQuery);
+  // UNA riga per gruppo di varianti PRIMA del limite: prima il LIMIT contava le righe (le singole misure) e solo dopo
+  // raggruppaVarianti le riuniva in una scheda, quindi con un limite di 60 si vedevano da 23 a 54 schede a seconda della ricerca
+  // (cercando "adatt" 23, "adattatore" 50) e il resto veniva tagliato senza dirlo. Ora il limite conta le schede.
+  // La riga che rappresenta il gruppo è la prima nell'ordine sotto (stessa regola di prima). Si chiede una riga in più per sapere se
+  // l'elenco è stato tagliato. In fondo prezzo e id: a parità di categoria e nome l'ordine era arbitrario (cambiava col piano di
+  // esecuzione), e da lì dipende quale variante fa da "default" nella scheda di un gruppo: a parità di nome vince la più economica.
+  const ordine = 's._pri, s.categoria, s.nome, s.prezzo_listino, s.id';
+  const sql = `SELECT p.*, m.nome AS macro_nome, b.nome AS brand_nome, b.colore AS brand_colore
+                 FROM (SELECT u.id, u._pri, u.categoria, u.nome, u.prezzo_listino
+                         FROM (SELECT s.*, ROW_NUMBER() OVER (PARTITION BY COALESCE(s.gruppo_id, -s.id) ORDER BY ${ordine}) AS _rn
+                                 FROM (${interna}) s) u
+                        WHERE u._rn = 1
+                        ORDER BY u._pri, u.categoria, u.nome, u.prezzo_listino, u.id
+                        LIMIT ?) r
+                 JOIN products p ON p.id = r.id
+                 LEFT JOIN macro_categorie m ON m.slug = p.macro_slug
+                 LEFT JOIN brands b ON b.slug = p.brand_slug
+                ORDER BY r._pri, r.categoria, r.nome, r.prezzo_listino, r.id`;
+
+  // soloRighe: righe una per gruppo, senza le varianti: serve al ripiego dei refusi, che ne scarta la maggior parte e raggruppa solo
+  // quelle tenute (il JSON dei membri per 1500 gruppi costava più di tutto il resto).
+  if (soloRighe) {
+    return db
+      .prepare(
+        `SELECT u.id, u.nome, u.codice, u.categoria, u.ean, u.macro_slug, u.brand_slug
+           FROM (SELECT s.*, ROW_NUMBER() OVER (PARTITION BY COALESCE(s.gruppo_id, -s.id) ORDER BY ${ordine}) AS _rn
+                   FROM (${interna}) s) u
+          WHERE u._rn = 1
+          ORDER BY u._pri, u.categoria, u.nome, u.prezzo_listino, u.id
+          LIMIT ?`
+      )
+      .all(...paramsInterna, limite + 1);
+  }
+  const righeGrezze = await db.prepare(conMembriDelGruppo(sql)).all(...paramsInterna, limite + 1);
+  const schede = await raggruppaVarianti(righeGrezze);
+  return conTroncato(schede.slice(0, limite), schede.length > limite);
   return raggruppaVarianti(righeGrezze);
 }
 
@@ -613,8 +761,9 @@ const macroCategoria = conCache(60 * 1000, async function macroCategoria(slug) {
 // Il totale di un elenco cambia solo quando si importa il catalogo: si ricorda per 60 s (come
 // macroCategorie) e vale per tutte le pagine dello stesso elenco, che prima lo ricalcolavano
 // a ogni pagina scorsa.
+// Conta le SCHEDE, non i prodotti: una famiglia di misure (gruppo di varianti) è una scheda sola, come nell'elenco.
 const contaRighe = conCache(60 * 1000, async (where, params) => {
-  const row = await db.prepare(`SELECT COUNT(*) AS n FROM products p WHERE ${where}`).get(...params);
+  const row = await db.prepare(`SELECT COUNT(DISTINCT COALESCE(p.gruppo_id, -p.id)) AS n FROM products p WHERE ${where}`).get(...params);
   return row ? Number(row.n) : 0;
 });
 
@@ -622,13 +771,24 @@ async function paginato({ where, params, pagina = 1, perPagina = PER_PAGINA }) {
   const leggiPagina = (p) =>
     db
       .prepare(
+        // Una riga per gruppo di varianti PRIMA di LIMIT/OFFSET: prima una pagina erano 40 prodotti che raggruppaVarianti riuniva in
+        // meno schede (da 2 a 34 invece di 40 in "Raccorderia e valvole"), e la stessa famiglia, con le sue misure sparse fra più
+        // pagine, ricompariva in ognuna. Il gruppo sta dove sta il suo primo membro nell'ordine di sempre. La finestra lavora su
+        // quattro colonne (id, nome, prezzo, gruppo) e solo le righe della pagina si rileggono intere: sulle righe intere costava ~80 ms.
         conMembriDelGruppo(
           `SELECT p.*, b.nome AS brand_nome, b.colore AS brand_colore
-             FROM products p
+             FROM (SELECT t.id, t.nome, t.prezzo_listino
+                     FROM (SELECT p.id, p.nome, p.prezzo_listino,
+                                  ROW_NUMBER() OVER (PARTITION BY COALESCE(p.gruppo_id, -p.id)
+                                                     ORDER BY p.nome, p.prezzo_listino, p.id) AS _rn
+                             FROM products p
+                            WHERE ${where}) t
+                    WHERE t._rn = 1
+                    ORDER BY t.nome, t.prezzo_listino, t.id
+                    LIMIT ? OFFSET ?) pagina
+             JOIN products p ON p.id = pagina.id
              LEFT JOIN brands b ON b.slug = p.brand_slug
-            WHERE ${where}
-            ORDER BY p.nome, p.prezzo_listino, p.id
-            LIMIT ? OFFSET ?`
+            ORDER BY p.nome, p.prezzo_listino, p.id`
         )
       )
       .all(...params, perPagina, (p - 1) * perPagina);
@@ -775,4 +935,7 @@ module.exports = {
   famiglieDelMarchio,
   famigliaDelMarchio,
   prodottiDelMarchio,
+  LIMITE_RISULTATI,
+  // solo per le prove (test/ricerca.test.js)
+  _prova: { radiceParola, terminiPerRefusi, corrispondeConRefusi },
 };

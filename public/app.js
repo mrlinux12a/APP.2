@@ -258,10 +258,28 @@ const Minuteria = (function () {
   });
 
   // ---------- Carrello: modifica quantità e rimozione ----------
-  // Più tocchi ravvicinati su + e − fanno un solo salvataggio e un solo ricaricamento: prima
-  // ogni tocco ricaricava tutta la pagina (cinque tocchi, cinque ricaricamenti da mezzo
-  // secondo l'uno). Le quantità si mandano una alla volta: richieste in parallelo sulla stessa
-  // sessione si sovrascriverebbero a vicenda.
+  // Più tocchi ravvicinati su + e − fanno un solo salvataggio. Le quantità si mandano una alla volta: richieste in parallelo sulla
+  // stessa sessione si sovrascriverebbero a vicenda. Dopo il salvataggio la pagina NON si ricarica: /api/carrello/imposta restituisce
+  // già i totali (`riepilogo`: ogni voce in testo con le chiavi dei `[data-riep]`, e `totali_righe`), e `aggiornaCarrelloDa` riscrive
+  // le voci dei due riquadri "Cosa paghi e a chi", i totali di riga, l'avviso dell'ordine minimo, il pulsante e la barra. Senza quella
+  // risposta (errore, vecchia pagina) o togliendo una riga si ricarica come prima.
+  function aggiornaCarrelloDa(d) {
+    if (!d || !d.riepilogo || typeof d.riepilogo !== 'object') return false;
+    const r = d.riepilogo;
+    Object.keys(r).forEach(function (chiave) {
+      if (typeof r[chiave] !== 'string') return;
+      document.querySelectorAll('[data-riep="' + chiave + '"]').forEach(function (el) { el.textContent = r[chiave]; });
+    });
+    document.querySelectorAll('[data-riga-raee]').forEach(function (el) { el.hidden = !r.con_raee; });
+    document.querySelectorAll('[data-minimo-avviso]').forEach(function (el) { el.hidden = !!r.raggiunto; });
+    document.querySelectorAll('[data-btn-paga]').forEach(function (el) { el.disabled = !r.raggiunto; });
+    const righe = d.totali_righe || {};
+    Object.keys(righe).forEach(function (id) {
+      document.querySelectorAll('[data-totale-riga="' + id + '"]').forEach(function (el) { el.textContent = '€ ' + righe[id]; });
+    });
+    return true;
+  }
+
   const quantitaDaSalvare = {};
   let timerSalvataggioCarrello = null;
   function programmaSalvataggioCarrello(id, qty) {
@@ -270,6 +288,7 @@ const Minuteria = (function () {
     timerSalvataggioCarrello = setTimeout(function () {
       const voci = Object.keys(quantitaDaSalvare).map(function (k) { return { id: k, qty: quantitaDaSalvare[k] }; });
       Object.keys(quantitaDaSalvare).forEach(function (k) { delete quantitaDaSalvare[k]; });
+      let ultima = null; // l'ultima risposta: ha i totali con TUTTE le quantità salvate
       voci
         .reduce(function (catena, voce) {
           return catena.then(function () {
@@ -279,11 +298,14 @@ const Minuteria = (function () {
               body: JSON.stringify(voce),
             })
               .then(leggiJson)
-              .then(function (d) { if (d && typeof d.pezzi === 'number') aggiornaBadgeCarrello(d.pezzi); });
+              .then(function (d) {
+                if (d && typeof d.pezzi === 'number') aggiornaBadgeCarrello(d.pezzi);
+                ultima = d;
+              });
           });
         }, Promise.resolve())
-        .catch(function () { /* la pagina si ricarica comunque e mostra il carrello vero */ })
-        .then(function () { if (!invioCarrelloInCorso) window.location.reload(); });
+        .then(function () { return aggiornaCarrelloDa(ultima); }, function () { return false; })
+        .then(function (aggiornato) { if (!aggiornato && !invioCarrelloInCorso) window.location.reload(); });
     }, 400);
   }
 
@@ -319,8 +341,8 @@ const Minuteria = (function () {
       .catch(function () { window.location.reload(); });
   });
 
-  // Quantità scritta a mano: si salva quando il campo perde il fuoco e la pagina si ricarica
-  // per aggiornare totale e ordine minimo. Prima non si salvava mai (il pulsante "Aggiorna"
+  // Quantità scritta a mano: si salva quando il campo perde il fuoco e le voci si riscrivono da sole
+  // (totali e ordine minimo compresi). Prima non si salvava mai (il pulsante "Aggiorna"
   // a cui si affidava non esiste) e la richiesta partiva con la quantità vecchia.
   let invioCarrelloInCorso = false;
   document.addEventListener('change', function (e) {
@@ -334,7 +356,17 @@ const Minuteria = (function () {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: id, qty: qty }),
     })
-      .then(function () { if (!invioCarrelloInCorso) window.location.reload(); })
+      .then(leggiJson)
+      .then(function (d) {
+        if (d && typeof d.pezzi === 'number') aggiornaBadgeCarrello(d.pezzi);
+        // Zero toglie la riga: lì si ricarica. Altrimenti si riscrivono le voci (e il pulsante "−" dello stepper).
+        if (qty > 0 && aggiornaCarrelloDa(d)) {
+          const meno = document.querySelector('[data-stepper-carrello="' + id + '"] [data-passo-carrello="-1"]');
+          if (meno) meno.disabled = qty <= 1;
+          return;
+        }
+        if (!invioCarrelloInCorso) window.location.reload();
+      })
       .catch(function () { if (!invioCarrelloInCorso) window.location.reload(); });
   });
 
@@ -992,19 +1024,20 @@ const Minuteria = (function () {
           // focus subito dopo aver ridisegnato i risultati.
           const eraFocus = document.activeElement === campoRicerca;
           mostraPaginazione(false);
-          disegnaRisultati(dati.risultati || []);
+          disegnaRisultati(dati.risultati || [], !!dati.troncato);
           if (eraFocus) campoRicerca.focus();
         })
         .catch(function () { /* offline: resta l'ultimo elenco mostrato */ });
     }
 
-    function disegnaRisultati(risultati) {
+    function disegnaRisultati(risultati, troncato) {
       if (!risultati.length) {
         contenitore.innerHTML =
           '<div class="vuoto"><span class="emoji">🤷</span>Nessun prodotto trovato.</div>';
         return;
       }
-      contenitore.innerHTML = '<div class="' + classeElenco + '">' + risultati.map(costruisciRiga).join('') + '</div>';
+      contenitore.innerHTML = '<div class="' + classeElenco + '">' + risultati.map(costruisciRiga).join('') + '</div>' +
+        (troncato ? '<p class="nota nota-troncato" data-troncato>Mostrati i primi risultati: scrivi qualcosa in più per restringere la ricerca.</p>' : '');
       applicaScelte(contenitore); // un prodotto già scelto in una ricerca precedente riappare con la sua quantità
       if (!righeCompatte) risincronizzaCarrelloVisibile();
     }

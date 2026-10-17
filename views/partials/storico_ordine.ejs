@@ -1,0 +1,40 @@
+<%
+  // Una scheda ordine dello Storico (<details>: chiusa mostra riga ordine/totale e stato/primo articolo; aperta il materiale riga per riga).
+  // `o` viene da materialeOrdini; `aperto` = è il primo della pagina. "Riordina" è un form a parte (solo sui consegnati): dentro un
+  // <summary> o un <a> non sarebbe valido. Il servizio pagato in app è fuori dal totale dell'ordine.
+%>
+<details class="sm-ordine"<%= aperto ? ' open' : '' %>>
+  <summary>
+    <span class="sm-riga1">
+      <span class="sm-nome"><strong>Ordine #<%= o.id %></strong> <span class="sm-data"><%= o.data %></span></span>
+      <span class="sm-tot">€ <%= euro(o.totale) %></span>
+    </span>
+    <span class="sm-riga2">
+      <span class="st-stato st-<%= o.stato.tono %>"><%= o.stato.etichetta %></span>
+      <span class="sm-primo"><%= o.primo %></span>
+      <% if (o.altri) { %><span class="sm-altri">+<%= o.altri %></span><% } %>
+      <span class="sm-freccia" aria-hidden="true">▸</span>
+    </span>
+  </summary>
+  <div class="sm-dettaglio">
+    <% o.righe.forEach(function (r) { %>
+      <div class="sm-riga">
+        <span class="sm-qta"><%= r.quantita %>×</span>
+        <div class="sm-riga-corpo">
+          <div class="sm-riga-nome"><%= r.nome %></div>
+          <div class="sm-riga-sotto">€ <%= euro(r.cad) %> cad.</div>
+        </div>
+        <span class="sm-riga-totale">€ <%= euro(r.totale) %></span>
+      </div>
+    <% }); %>
+    <div class="sm-servizio"><span>Servizio pagato in app</span><span>€ <%= euro(o.servizio) %></span></div>
+    <div class="sm-azioni">
+      <% if (o.riordinaId) { %>
+        <form class="st-riordina" method="POST" action="/storico/<%= o.riordinaId %>/riordina">
+          <button type="submit" class="st-btn-riordina"><%- iconaRiprova %><span>Riordina</span></button>
+        </form>
+      <% } %>
+      <% if (o.href) { %><a class="sm-dettagli" href="<%= o.href %>">Dettagli ›</a><% } %>
+    </div>
+  </div>
+</details>

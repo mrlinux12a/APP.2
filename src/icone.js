@@ -286,6 +286,7 @@ const iconaOcchioBarrato = svg(
   '<path d="M9.9 5.8A9.6 9.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.9 3.7M6.3 7.4A16 16 0 0 0 2.5 12S6 18.5 12 18.5a9.4 9.4 0 0 0 4.1-.9"/>' +
   '<path d="M9.9 9.9a2.8 2.8 0 0 0 4.2 3.7"/><path d="M3.5 3.5l17 17"/>'
 );
+const iconaDownload = svg('<path d="M12 4v10"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/>');
 const iconaIndietro = svg('<path d="M14.5 5.5 8 12l6.5 6.5"/>');
 
 // Pagine clienti del banco: freccetta "avanti" (›) e link che apre un altro sito (↗).
@@ -295,6 +296,7 @@ const iconaEsterno = svg('<path d="M9 5.5H6.5A1.5 1.5 0 0 0 5 7v10.5A1.5 1.5 0 0
 module.exports = {
   ICONE_CATEGORIA: ICONE, // letto da scripts/genera_icone_app.js per l'app nativa
   iconaCategoria,
+  iconaDownload,
   iconaLente,
   iconaCatalogo,
   iconaCarrello,

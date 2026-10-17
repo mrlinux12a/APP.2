@@ -75,7 +75,7 @@
         <% } %>
 
         <% if (elenco.ricerca) { %>
-          <p class="sottotitolo"><strong><%= elenco.righe.length %></strong> risultati per «<%= q %>»</p>
+          <p class="sottotitolo"><strong><%= elenco.troncato ? 'Oltre ' : '' %><%= elenco.righe.length %></strong> risultati per «<%= q %>»</p>
         <% } %>
 
         <%# data-righe-compatte: app.js disegna qui le righe compatte (ricerca live, scroll infinito) e tiene
@@ -92,6 +92,7 @@
                 <%- include('partials/prodotto_riga', { p, carrello }) %>
               <% }); %>
             </div>
+            <% if (elenco.troncato) { %><p class="nota nota-troncato" data-troncato>Mostrati i primi risultati: scrivi qualcosa in più per restringere la ricerca.</p><% } %>
           <% } %>
         </div>
 

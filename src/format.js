@@ -212,4 +212,18 @@ function inArrivo(secondi) {
   return Number.isFinite(secondi) && secondi <= SOGLIA_IN_ARRIVO_SEC;
 }
 
-module.exports = { SOGLIA_IN_ARRIVO_SEC, inArrivo, toDate, istanteUtc, dataOra, dataSola, oraSola, oraRoma, dataOraRoma, dataSolaRoma, dataBreveRoma, dataCortaRoma, dataEstesaRoma, oraSolaRoma, giornoRoma, durataMinuti, durataBreve, daMinuti, tempoTrascorso, meseRoma, tempoConsegna, mmss, durataFinestraSec };
+// "15/10" (con l'anno se non è quello corrente: "15/10/2025"), in ora italiana, da una colonna TIMESTAMP senza fuso. "" se manca. `adesso` solo per le prove.
+function giornoMeseRoma(naive, adesso = new Date()) {
+  const istante = istanteUtc(naive);
+  if (!istante) return '';
+  const d = partiRoma(istante);
+  const gm = `${String(d.giorno).padStart(2, '0')}/${String(d.mese).padStart(2, '0')}`;
+  return d.anno === partiRoma(adesso).anno ? gm : `${gm}/${d.anno}`;
+}
+
+// "BOREA SRL" -> "BOREA": il nome di una ditta senza la forma giuridica in fondo (S.r.l., S.p.A., S.n.c., S.a.s.), per le etichette corte.
+function nomeCommerciale(nome) {
+  return String(nome || '').trim().replace(/\s+(s\.?\s?r\.?\s?l\.?s?|s\.?\s?p\.?\s?a\.?|s\.?\s?n\.?\s?c\.?|s\.?\s?a\.?\s?s\.?)$/i, '').trim();
+}
+
+module.exports = { giornoMeseRoma, nomeCommerciale, SOGLIA_IN_ARRIVO_SEC, inArrivo, toDate, istanteUtc, dataOra, dataSola, oraSola, oraRoma, dataOraRoma, dataSolaRoma, dataBreveRoma, dataCortaRoma, dataEstesaRoma, oraSolaRoma, giornoRoma, durataMinuti, durataBreve, daMinuti, tempoTrascorso, meseRoma, tempoConsegna, mmss, durataFinestraSec };

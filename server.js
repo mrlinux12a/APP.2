@@ -33,6 +33,7 @@ const { passwordValida } = require('./src/password');
 const pricing = require('./src/pricing');
 const format = require('./src/format');
 const icone = require('./src/icone');
+const materialeModulo = require('./src/materiale');
 const catalogo = require('./src/catalogo');
 const richieste = require('./src/richieste');
 const notifiche = require('./src/notifiche');
@@ -237,9 +238,8 @@ app.use(async (req, res, next) => {
   // Nessuna di queste dipende dal risultato di un'altra: prima giravano una dopo l'altra
   // (fino a una decina di query in sequenza, anche per un cliente senza nulla da mostrare),
   // sommando la latenza di ognuna invece di pagare solo quella della più lenta.
-  const [servizioPct, notificheNonLette, ordiniNonLetti, richiesteNonLette, geoStato, contatori, statoOrdini, profiloCliente, bancoTesta] =
+  const [notificheNonLette, ordiniNonLetti, richiesteNonLette, geoStato, contatori, statoOrdini, profiloCliente, bancoTesta] =
     await Promise.all([
-      pricing.getServizioPct(),
       utente ? notifiche.nonLette(utente.id) : Promise.resolve(0),
       utente && utente.ruolo === 'cliente' ? notifiche.nonLetteCategoria(utente.id, 'ordini') : Promise.resolve(0),
       utente && utente.ruolo === 'cliente' ? notifiche.nonLetteCategoria(utente.id, 'richieste') : Promise.resolve(0),
@@ -274,10 +274,11 @@ app.use(async (req, res, next) => {
         : Promise.resolve(null),
     ]);
 
-  // pricing.prezzoCliente legge il DB (async): i template EJS non possono fare "await"
-  // dentro <%= %>, quindi qui si legge la percentuale di servizio una volta per
-  // richiesta e si espone ai template una versione sincrona e pura per riga.
-  res.locals.prezzoCliente = (riga) => pricing.prezzoClienteConPct(riga, servizioPct);
+  // Il prezzo di un articolo che vede l'installatore (catalogo, categoria, ricerca, varianti, carrello) è il PREZZO DEL BANCO: listino meno lo
+  // sconto del banco, senza il 10% di servizio, che sta solo nella voce "Servizio" del riepilogo (vedi pricing.dividiTotale). Funzione pura
+  // (niente DB): i template EJS non possono fare "await". `totaleRigaBanco` è prezzo × quantità arrotondato come `subtotale` dell'ordine.
+  res.locals.prezzoBanco = (riga) => pricing.prezzoNetto(riga);
+  res.locals.totaleRigaBanco = (riga, quantita) => pricing.round2(pricing.prezzoNetto(riga) * quantita);
   // Gli ordini creati prima delle offerte per distributore non hanno l'IVA calcolata.
   res.locals.totaleOrdine = (o) => (o.totale_ivato > 0 ? o.totale_ivato : o.totale_finale);
   res.locals.notificheNonLette = notificheNonLette;
@@ -495,20 +496,27 @@ app.get('/home', requireRole('cliente'), async (req, res) => {
     catalogo.categorieHome(),
     catalogo.contaProdottiConFoto(),
   ]);
-  res.render('home', { titolo: 'Ordini Minuteria', inEvidenza, altre, prodottiConFotoConta });
+  res.render('home', { titolo: 'Ordini Minuteria', inEvidenza, altre, prodottiConFotoConta, carrello: getCarrello(req) });
 });
+
+// Una ricerca dentro una categoria o un marchio, nella forma dell'elenco delle pagine ({ righe, ricerca, troncato }).
+async function cercaComeElenco(q, ambito) {
+  const righe = await catalogo.cercaProdotti(q, ambito);
+  return { righe, ricerca: true, troncato: !!righe.troncato };
+}
 
 app.get('/cerca', requireRole('cliente'), async (req, res) => {
   const q = (req.query.q || '').trim();
   const diametro = req.query.diametro || null;
   const materiale = req.query.materiale || null;
-  const risultati = q ? await catalogo.cercaProdotti(q, { diametro, materiale, limite: 100 }) : [];
+  const risultati = q ? await catalogo.cercaProdotti(q, { diametro, materiale }) : [];
   res.render('cerca', {
     titolo: 'Cerca',
     q,
     diametro,
     materiale,
     risultati,
+    troncato: !!risultati.troncato,
     carrello: getCarrello(req),
   });
 });
@@ -525,11 +533,9 @@ app.get('/api/cerca', requireRole('cliente'), async (req, res) => {
     misura: req.query.misura || null,
     materiale: req.query.materiale || null,
     diametro: req.query.diametro || null,
-    limite: 60,
   };
   const risultati = q.length >= 2 ? await catalogo.cercaProdotti(q, ambito) : [];
-  const servizioPct = await pricing.getServizioPct();
-  res.json({ risultati: risultati.map((p) => prodottoJson(p, servizioPct)) });
+  res.json({ risultati: risultati.map((p) => prodottoJson(p)), troncato: !!risultati.troncato });
 });
 
 // Vetrina "Elementi con foto": trasversale alle categorie, cresce da sola man mano che i
@@ -545,9 +551,8 @@ app.get('/con-foto', requireRole('cliente'), async (req, res) => {
 
 app.get('/api/con-foto/prodotti', requireRole('cliente'), async (req, res) => {
   const elenco = await catalogo.prodottiConFoto({ pagina: req.query.pagina });
-  const servizioPct = await pricing.getServizioPct();
   res.json({
-    risultati: elenco.righe.map((p) => prodottoJson(p, servizioPct)),
+    risultati: elenco.righe.map((p) => prodottoJson(p)),
     pagina: elenco.pagina,
     pagine: elenco.pagine,
     totale: elenco.totale,
@@ -565,9 +570,8 @@ app.get('/api/categoria/:slug/prodotti', requireRole('cliente'), async (req, res
     marchio: req.query.marchio || null,
     pagina: req.query.pagina,
   });
-  const servizioPct = await pricing.getServizioPct();
   res.json({
-    risultati: elenco.righe.map((p) => prodottoJson(p, servizioPct)),
+    risultati: elenco.righe.map((p) => prodottoJson(p)),
     pagina: elenco.pagina,
     pagine: elenco.pagine,
     totale: elenco.totale,
@@ -590,10 +594,7 @@ app.get('/categoria/:slug', requireRole('cliente'), async (req, res) => {
 
   // Con una ricerca attiva l'elenco è quello dei risultati, senza paginazione.
   const elenco = q
-    ? {
-        righe: await catalogo.cercaProdotti(q, { macroSlug: macro.slug, sotto: sottoSlug, limite: 60 }),
-        ricerca: true,
-      }
+    ? await cercaComeElenco(q, { macroSlug: macro.slug, sotto: sottoSlug })
     : sottoSlug || sfogliaDiretto
     ? await catalogo.prodottiDellaCategoria(macro.slug, { sotto: sottoSlug, misura, marchio, pagina: req.query.p })
     : null;
@@ -664,10 +665,7 @@ app.get('/marchi/:slug', requireRole('cliente'), async (req, res) => {
   // Cercando dentro un marchio i risultati restano dentro quel marchio (e, se si sta
   // sfogliando una famiglia, dentro quella famiglia).
   const elenco = q
-    ? {
-        righe: await catalogo.cercaProdotti(q, { brandSlug: marca.slug, famiglia: codice, limite: 60 }),
-        ricerca: true,
-      }
+    ? await cercaComeElenco(q, { brandSlug: marca.slug, famiglia: codice })
     : codice
     ? await catalogo.prodottiDelMarchio(marca.slug, codice, req.query.p)
     : null;
@@ -682,7 +680,8 @@ app.get('/api/carrello', requireRole('cliente'), async (req, res) => {
   const carrello = getCarrello(req);
   const righe = await righeCarrello(req);
   const totali = await pricing.calcolaOrdine(righe);
-  res.json({ carrello, pezzi: contaCarrello(req), totale_finale: totali.totale_finale });
+  // `totale_finale` (nome storico) è la merce a prezzo del banco: lo stesso prezzo di catalogo e carrello; il 10% sta solo nel Servizio.
+  res.json({ carrello, pezzi: contaCarrello(req), totale_finale: totali.totale_netto });
 });
 
 app.post('/api/carrello/aggiungi', requireRole('cliente'), async (req, res) => {
@@ -735,8 +734,18 @@ app.post('/api/carrello/imposta', requireRole('cliente'), async (req, res) => {
   if (qty > 0 && !righe.some((r) => r.prodotto.id === id)) {
     return res.status(404).json({ ok: false, errore: 'Prodotto non trovato.' });
   }
-  const totali = await pricing.calcolaOrdine(righe);
-  res.json({ ok: true, carrello, pezzi: contaCarrello(req), totali, righe: righe.length });
+  // Gli stessi totali della pagina Carrello (flusso.riepilogoCarrello: con corriere e servizio): `riepilogo` ha le voci già in testo, con le
+  // chiavi dei `[data-riep]` della vista, e `totali_righe` il totale di ogni riga a prezzo del banco. public/app.js riscrive la pagina da qui.
+  const riepilogo = await flusso.riepilogoCarrello(righe);
+  res.json({
+    ok: true,
+    carrello,
+    pezzi: contaCarrello(req),
+    totali: riepilogo.totali,
+    righe: righe.length,
+    riepilogo: riepilogo.vista,
+    totali_righe: Object.fromEntries(righe.map((r) => [r.prodotto.id, pricing.euro(pricing.round2(pricing.prezzoNetto(r.prodotto) * r.quantita))])),
+  });
 });
 
 app.post('/carrello', requireRole('cliente'), async (req, res) => {
@@ -1037,8 +1046,22 @@ app.get('/ordini', requireRole('cliente'), async (req, res) => {
 
 // Storico unificato (tutto: in corso, scaduto, annullato, consegnato) — raggiungibile dal
 // menu account, non più dal tab "Stato ordini".
+// Storico ordini dell'installatore: il materiale ordinato, con i prezzi IVA inclusa, e quanto deve al banco (a BOREA). In app paga
+// solo il servizio e la consegna; il calcolo è di src/materiale.js, lo stesso che usa il banco (vedi quel file).
 app.get('/storico', requireRole('cliente'), async (req, res) => {
-  res.render('storico', { titolo: 'Storico ordini', ...(await flusso.storicoCliente(req.session.user.id)) });
+  const materiale = await materialeModulo.materialeOrdini({
+    clienteId: req.session.user.id, mese: req.query.mese, vista: req.query.vista,
+  });
+  res.render('storico', { titolo: 'Storico ordini', materiale });
+});
+
+// Lo stesso materiale in CSV (";" e BOM per Excel): solo gli ordini del cliente loggato.
+app.get('/storico/materiale.csv', requireRole('cliente'), async (req, res) => {
+  const materiale = await materialeModulo.materialeOrdini({ clienteId: req.session.user.id, mese: req.query.mese });
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="' + materialeModulo.nomeFileCsv(materiale) + '"');
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.send(materialeModulo.csvMateriale(materiale));
 });
 
 // "Riordina" (solo sulle schede "Consegnato"): rimette nel carrello gli stessi articoli dell'ordine, sommati a
@@ -1414,7 +1437,7 @@ app.get('/distributore/richieste/:id', requireRole('distributore'), async (req, 
   }
 
   // Letture indipendenti: partono insieme (col DB su un altro server ogni query in sequenza costa ~50 ms).
-  const [cliente, offerta, distributore, ordine, secondi, servizioPct, minutiRisposta, legameCliente] = await Promise.all([
+  const [cliente, offerta, distributore, ordine, secondi, minutiRisposta, legameCliente] = await Promise.all([
     db.prepare('SELECT * FROM users WHERE id = ?').get(richiesta.cliente_id),
     richieste.calcolaOfferta(richiesta.id, distributorId),
     db.prepare('SELECT * FROM distributors WHERE id = ?').get(distributorId),
@@ -1428,7 +1451,6 @@ app.get('/distributore/richieste/:id', requireRole('distributore'), async (req, 
           .get(richiesta.order_id)
       : null,
     richieste.secondiRimasti(richiesta),
-    pricing.getServizioPct(),
     pricing.getFinestraMinuti(),
     // La scheda del cliente si apre solo se il cliente ha indicato questo banco (altrimenti la pagina risponde 404).
     anagrafiche.legame(distributorId, richiesta.cliente_id),
@@ -1461,7 +1483,7 @@ app.get('/distributore/richieste/:id', requireRole('distributore'), async (req, 
     secondi,
     apribile,
     stato,
-    materiale: richiestaBanco.tabellaMateriale(offerta.righe, (riga) => pricing.prezzoClienteConPct(riga, servizioPct), {
+    materiale: richiestaBanco.tabellaMateriale(offerta.righe, (riga) => pricing.prezzoNetto(riga), {
       confermata: risposta.esito === 'confermato',
     }),
     // Timer: la finestra intera serve all'anello, la soglia al passaggio al rosso (data-* sulla scheda, public/app.js).
@@ -1545,6 +1567,23 @@ app.get('/distributore/clienti', requireRole('distributore'), async (req, res) =
   });
 });
 
+// Il materiale del cliente in CSV (stesso formato di quello dell'installatore, stessi numeri): solo per un cliente approvato di questo banco.
+app.get('/distributore/clienti/:id/materiale.csv', requireRole('distributore'), async (req, res) => {
+  const distributorId = req.session.user.distributor_id;
+  const cliente = await db.prepare(`SELECT * FROM users WHERE id = ? AND ruolo = 'cliente'`).get(req.params.id);
+  const rapporto = cliente ? await anagrafiche.legame(distributorId, cliente.id) : null;
+  if (!cliente || !rapporto || rapporto.stato !== 'approvato') {
+    return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Cliente non trovato.' });
+  }
+  const materiale = await materialeModulo.materialeOrdini({
+    clienteId: cliente.id, distributorId, mese: req.query.mese, hrefOrdine: () => null, conRichiesteSenzaOrdine: false, conRiordina: false,
+  });
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="' + materialeModulo.nomeFileCsv(materiale) + '"');
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.send(materialeModulo.csvMateriale(materiale));
+});
+
 app.get('/distributore/clienti/:id', requireRole('distributore'), async (req, res) => {
   const distributorId = req.session.user.distributor_id;
   const cliente = await db.prepare(`SELECT * FROM users WHERE id = ? AND ruolo = 'cliente'`).get(req.params.id);
@@ -1570,10 +1609,19 @@ app.get('/distributore/clienti/:id', requireRole('distributore'), async (req, re
     famigliePerMarchio[i].map((f) => ({ ...f, marchio: m.nome, marchio_slug: m.slug }))
   );
 
+  // Solo per i clienti approvati: il materiale ordinato a questo banco e quanto c'è da incassare (src/materiale.js, come lo Storico
+  // ordini dell'installatore). Il dettaglio dell'ordine non si linka da qui: aprirlo prende in carico un ordine inviato.
+  const materiale = rapporto.stato === 'approvato'
+    ? await materialeModulo.materialeOrdini({
+        clienteId: cliente.id, distributorId, mese: req.query.mese, hrefOrdine: () => null, conRichiesteSenzaOrdine: false, conRiordina: false,
+      })
+    : null;
+
   res.render('distributore_cliente', {
     titolo: cliente.ragione_sociale,
     cliente,
     rapporto,
+    materiale,
     tipi: anagrafiche.TIPI_SOGGETTO,
     indirizzoCliente: ddt.indirizzoCompleto(cliente),
     regole,

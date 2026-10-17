@@ -1,0 +1,104 @@
+<%
+  // La scheda "PAGAMENTI": la consegna in cantiere, che l'installatore paga in app, e il materiale, che paga a BOREA. MAI un "Totale" unico che li
+  // somma. Una sola scheda per la pagina dell'ordine (in consegna e consegnato), per la richiesta in attesa ("Verifica disponibilità") e per la
+  // richiesta chiusa senza conferma ("Nessuna risposta" / annullata): cambiano colori e testi, non c'è nessun calcolo qui. Gli importi sono quelli di
+  // pricing.importi (`importi`: importiOrdine o importiRichiesta), gli stessi del carrello, dello Storico e della pagina del cliente lato banco.
+  // Parametri:
+  //   importi          { app: {corriere, servizio, imponibile, iva, totale, conPagamento, pagatoIl, rimborsato, rimborsatoIl, metodo},
+  //                      banco: {merce, raee, imponibile, iva, totale}, servizioPct, ivaPct }
+  //   stato            'attesa' | 'ordine' | 'consegnato' | 'chiusa'
+  //   ditta            la ditta senza forma giuridica e senza filiale ("BOREA"); vuoto = più ditte o nessuna: si dice "il banco"
+  //   motivoChiusura   (solo 'chiusa') 'banco' (nessun banco ha confermato: il default) | 'corriere' (il banco sì, nessun corriere) | 'annullata'
+  //   rinvio           (solo 'chiusa') { consegna, materiale } con i prezzi di OGGI: cosa succederebbe rinviando; senza, niente nota
+  const app = importi.app;
+  const banco = importi.banco;
+  // "a BOREA" / "al banco" e "BOREA" / "il banco" (con più ditte o nessuna non c'è un nome solo).
+  const aChi = ditta ? 'a ' + ditta : 'al banco';
+  const nomeBanco = ditta || 'il banco';
+  const inAttesa = stato === 'attesa';
+  const chiusa = stato === 'chiusa';
+  const motivo = typeof motivoChiusura !== 'undefined' && motivoChiusura ? motivoChiusura : 'banco';
+  const notaRinvio = typeof rinvio !== 'undefined' ? rinvio : null;
+  const rimborsata = !!app.rimborsato;
+  // Chiusa e pagata ma non ancora rimborsata: il rimborso è in corso.
+  const inRimborso = chiusa && app.conPagamento && !rimborsata;
+  const dataPagamento = app.pagatoIl ? fmt.giornoMeseRoma(app.pagatoIl) : '';
+  const dataRimborso = app.rimborsatoIl ? fmt.giornoMeseRoma(app.rimborsatoIl) : '';
+  const suMetodo = ['stripe', 'simulato'].includes(app.metodo) ? 'sulla tua carta' : 'sul tuo metodo di pagamento';
+  const spuntaPag = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  // Freccia di ritorno nel cerchio verde: il rimborso della consegna.
+  const ritornoPag = '<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>';
+  let classeConsegna = 'pg-consegna';
+  if (inRimborso) classeConsegna = 'pg-rimborso-corso';
+  else if (rimborsata && !chiusa) classeConsegna = 'pg-consegna pg-rimborsata';
+  let classeMateriale = 'pg-materiale';
+  if (inAttesa) classeMateriale += ' pg-sospeso';
+  if (chiusa) classeMateriale += ' pg-nullo';
+  let subMateriale = 'Da pagare ' + aChi + ', in fattura';
+  if (inAttesa) subMateriale = 'Lo paghi ' + aChi + ' solo se conferma';
+  if (chiusa) {
+    subMateriale = 'Niente da pagare: ' + (motivo === 'annullata' ? 'hai annullato la richiesta'
+      : motivo === 'corriere' ? 'nessun corriere ha accettato la consegna'
+      : (ditta ? ditta + ' non ha confermato' : 'nessun banco ha confermato'));
+  }
+%>
+<div class="card att-card pg-card" data-pagamenti data-stato="<%= stato %>">
+  <h2 class="pg-titolo">Pagamenti</h2>
+
+  <div class="pg-riga <%= classeConsegna %>">
+    <span class="pg-ico" aria-hidden="true"><%- iconaFurgone %></span>
+    <div class="pg-testo">
+      <div class="pg-nome">Consegna in cantiere</div>
+      <% if (inRimborso) { %>
+        <div class="pg-sub">Rimborso in corso</div>
+      <% } else if (rimborsata) { %>
+        <div class="pg-sub"><% if (chiusa) { %><span class="pg-tondo"><%- ritornoPag %></span>Rimborsata<%= dataRimborso ? ' il ' + dataRimborso : '' %> <%= suMetodo %><% } else { %>Rimborsata<%= dataRimborso ? ' il ' + dataRimborso : '' %><% } %></div>
+      <% } else if (inAttesa) { %>
+        <div class="pg-sub"><span class="pg-spunta"><%- spuntaPag %></span>Pagata in app · rimborsata se nessuno accetta</div>
+      <% } else if (app.conPagamento) { %>
+        <div class="pg-sub"><span class="pg-spunta"><%- spuntaPag %></span>Pagata in app<%= dataPagamento ? ' il ' + dataPagamento : '' %></div>
+      <% } %>
+    </div>
+    <div class="pg-importo" data-importo-app>€ <%= euro(app.totale) %></div>
+  </div>
+
+  <div class="pg-riga <%= classeMateriale %>">
+    <span class="pg-ico" aria-hidden="true"><%- iconaNegozio %></span>
+    <div class="pg-testo">
+      <div class="pg-nome">Materiale</div>
+      <div class="pg-sub"><%= subMateriale %></div>
+    </div>
+    <div class="pg-importo" data-importo-banco>€ <%= euro(chiusa ? 0 : banco.totale) %></div>
+  </div>
+
+  <% if (chiusa) { %>
+    <% if (notaRinvio) { %>
+      <p class="pg-nota" data-nota-rinvio>Se rinvii la richiesta paghi di nuovo solo la consegna (€ <%= euro(notaRinvio.consegna) %>). Il materiale resta € <%= euro(notaRinvio.materiale) %>, da pagare <%= aChi %> se conferma.</p>
+    <% } %>
+  <% } else { %>
+    <%# Il dettaglio degli importi: chiuso, il testo cambia da aperto (CSS su [open]) e la freccia ruota. %>
+    <details class="pg-dettaglio">
+      <summary><span class="pg-apri">Vedi il dettaglio degli importi</span><span class="pg-chiudi">Nascondi il dettaglio</span><svg class="pg-freccia" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
+      <div class="pg-riquadri">
+        <section class="pg-piccolo pg-piccolo-verde" aria-label="Consegna pagata">
+          <h3>Consegna · pagata</h3>
+          <dl>
+            <div><dt><span class="pg-et">Corriere</span> <span class="pg-sp">· costo fisso</span></dt><dd>€ <%= euro(app.corriere) %></dd></div>
+            <div><dt><span class="pg-et">Servizio</span> <span class="pg-sp">· <%= importi.servizioPct %>% della merce</span></dt><dd>€ <%= euro(app.servizio) %></dd></div>
+            <div><dt><span class="pg-et">IVA <%= importi.ivaPct %>%</span> <span class="pg-sp">· su € <%= euro(app.imponibile) %></span></dt><dd>€ <%= euro(app.iva) %></dd></div>
+          </dl>
+        </section>
+        <section class="pg-piccolo pg-piccolo-grigio" aria-label="Materiale <%= inAttesa ? 'se ' + nomeBanco + ' conferma' : aChi %>">
+          <h3>Materiale · <%= inAttesa ? 'se ' + nomeBanco + ' conferma' : aChi %></h3>
+          <dl>
+            <div><dt><span class="pg-et">Merce</span> <span class="pg-sp">· prezzo del banco</span></dt><dd>€ <%= euro(banco.merce) %></dd></div>
+            <% if (banco.raee > 0) { %>
+              <div><dt><span class="pg-et">Contributo RAEE</span></dt><dd>€ <%= euro(banco.raee) %></dd></div>
+            <% } %>
+            <div><dt><span class="pg-et">IVA <%= importi.ivaPct %>%</span> <span class="pg-sp">· su € <%= euro(banco.imponibile) %></span></dt><dd>€ <%= euro(banco.iva) %></dd></div>
+          </dl>
+        </section>
+      </div>
+    </details>
+  <% } %>
+</div>

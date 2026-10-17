@@ -1,0 +1,9 @@
+<%
+  // La scheda "MATERIALE RICHIESTO" delle due pagine della richiesta (in attesa e chiusa): righe a PREZZO DEL BANCO, IVA esclusa, con "Cod. … · € cad."
+  // e il totale di riga, e in fondo "Merce · IVA esclusa · prezzi del banco". Le righe sono quelle di pricing.calcolaOrdine sulle righe della richiesta
+  // (`righePrezzi`, la stessa funzione del carrello); gli importi, `importi` (pricing.importi). Il resto (consegna, IVA, totali) sta in "Pagamenti".
+%>
+<div class="card att-card att-materiale">
+  <div class="att-occhiello">Materiale richiesto</div>
+  <%- include('ordine_righe', { righe: righePrezzi, importi, ordine: {}, etichetta: 'Merce · IVA esclusa · prezzi del banco' }) %>
+</div>

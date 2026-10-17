@@ -56,26 +56,25 @@ async function richiedeCliente(req, res, next) {
 // Formato prodotto dell'app: quello già usato dalla ricerca live del sito, più i valori
 // numerici del prezzo (servono all'app per il totale indicativo del carrello) e lo sconto
 // di ogni variante (per il prezzo di listino barrato).
-function prodottoApp(p, servizioPct) {
-  const base = prodottoJson(p, servizioPct);
+function prodottoApp(p) {
+  const base = prodottoJson(p);
   return {
     ...base,
     categoria: p.categoria || null,
-    prezzo_valore: pricing.prezzoClienteConPct(p, servizioPct),
+    prezzo_valore: pricing.prezzoNetto(p),
     varianti: base.varianti
       ? base.varianti.map((v, i) => ({
           ...v,
           sconto_base_pct: p.varianti[i].sconto_base_pct,
-          prezzo_valore: pricing.prezzoClienteConPct(p.varianti[i], servizioPct),
+          prezzo_valore: pricing.prezzoNetto(p.varianti[i]),
         }))
       : null,
   };
 }
 
 async function elencoJson(elenco) {
-  const servizioPct = await pricing.getServizioPct();
   return {
-    risultati: elenco.righe.map((p) => prodottoApp(p, servizioPct)),
+    risultati: elenco.righe.map((p) => prodottoApp(p)),
     pagina: elenco.pagina,
     pagine: elenco.pagine,
     totale: elenco.totale,
@@ -136,10 +135,8 @@ router.get('/cerca', richiedeCliente, async (req, res) => {
   const risultati = await catalogo.cercaProdotti(q, {
     macroSlug: req.query.macro || null,
     sotto: req.query.sotto || null,
-    limite: 60,
   });
-  const servizioPct = await pricing.getServizioPct();
-  res.json({ risultati: risultati.map((p) => prodottoApp(p, servizioPct)) });
+  res.json({ risultati: risultati.map((p) => prodottoApp(p)), troncato: !!risultati.troncato });
 });
 
 router.get('/categorie/:slug', richiedeCliente, async (req, res) => {
@@ -175,7 +172,7 @@ router.post('/carrello/riepilogo', richiedeCliente, async (req, res) => {
   const r = await flusso.riepilogoCarrello(righe);
   const presenti = new Set(righe.map((x) => x.prodotto.id));
   res.json({
-    merce: pricing.euro(r.totali.totale_finale),
+    merce: pricing.euro(r.totali.totale_netto), // a prezzo del banco: il 10% di servizio sta solo nella voce Servizio (`riepilogo`)
     raee: r.totali.contributo_raee > 0 ? pricing.euro(r.totali.contributo_raee) : null,
     spedizione: pricing.euro(r.spedizione),
     // Totale da pagare: l'installatore paga all'invio della richiesta (pagamento simulato).
@@ -183,6 +180,12 @@ router.post('/carrello/riepilogo', richiedeCliente, async (req, res) => {
     iva: pricing.euro(r.totali.iva),
     iva_pct: r.ivaPct,
     totale_ivato: pricing.euro(r.totali.totale_ivato),
+    // Quello che si paga in app (servizio + consegna, IVA inclusa) e quello che si paga dopo al banco (materiale, IVA inclusa).
+    // L'app mostra ancora `totale_ivato`: da allineare.
+    da_pagare_ora: pricing.euro(r.totali.da_pagare_app),
+    da_pagare_al_banco: pricing.euro(r.totali.materiale_banco),
+    // Le due parti con ogni voce già in testo (corriere, servizio, IVA / merce, RAEE, IVA), come le disegna il carrello del sito.
+    riepilogo: r.vista,
     // Destinazione di partenza: l'indirizzo di consegna abituale (il cliente può cambiarlo).
     indirizzo_consegna: req.utente.indirizzo_consegna || '',
     minimo: pricing.euro(r.minimo),

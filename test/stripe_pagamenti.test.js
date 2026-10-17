@@ -104,7 +104,7 @@ function esegui(sql, params, modo) {
     return modo === 'get' ? lista[0] || null : lista;
   }
 
-  if (/^UPDATE requests SET pagamento_stato = 'rimborsato' WHERE id = \? AND pagamento_stato = 'pagato'/.test(s)) {
+  if (/^UPDATE requests SET pagamento_stato = 'rimborsato'(?:, rimborsato_il = NOW\(\))? WHERE id = \? AND pagamento_stato = 'pagato'/.test(s)) {
     const r = richiesteDb.get(params[0]);
     if (r && r.pagamento_stato === 'pagato') { r.pagamento_stato = 'rimborsato'; return { changes: 1 }; }
     return { changes: 0 };
@@ -197,15 +197,19 @@ const carrello = [{ prodotto: { id: 1 }, quantita: 2 }, { prodotto: { id: 2 }, q
 let stripe;
 let richiesteCreate;
 let creaRichiesta;
+// Quanto si paga in app per una richiesta con i prezzi di OGGI (flusso.totaliRichiestaOggi): "Rinvia richiesta" addebita questo, non quello di prima.
+let consegnaDiOggi;
 function preparati() {
   righe.length = 0;
+  consegnaDiOggi = 66.9;
+  flusso.totaliRichiestaOggi = async () => ({ da_pagare_app: consegnaDiOggi });
   richiesteDb.clear();
   richiesteCreate = [];
   stripe = stripeFinto();
   stripePagamenti.impostaStripe(stripe);
   process.env.STRIPE_SECRET_KEY = 'sk_test_finta';
   process.env.STRIPE_PUBLISHABLE_KEY = 'pk_test_finta';
-  flusso.validaRichiesta = async () => ({ cliente, totali: { totale_ivato: 66.9 } });
+  flusso.validaRichiesta = async () => ({ cliente, totali: { totale_ivato: 66.9, da_pagare_app: 66.9 } });
   flusso.righeDaQuantita = async (voci) => voci.map((v) => ({ prodotto: { id: v.id }, quantita: v.quantita }));
   creaRichiesta = async (clienteId, righeCarrello, opzioni) => {
     const id = 100 + richiesteCreate.length;
@@ -253,6 +257,20 @@ test('avviaPagamento: PaymentIntent con carta solo autorizzata, importo del carr
   assert.equal(riga.destinazione, 'Via Puggia 22/3');
   assert.equal(riga.payment_intent_id, 'pi_test_1');
   assert.equal(richiesteCreate.length, 0, 'la richiesta non nasce prima del pagamento');
+});
+
+test('avviaPagamento: Stripe addebita SOLO "Paghi ora" (corriere + servizio + IVA = 20,07), non il materiale né la spesa complessiva', async () => {
+  preparati();
+  // i totali come li dà pricing.calcolaOrdine per 54,50 + 10,00 di merce: app.totale 20,07, materiale 78,69, spesa 98,76
+  flusso.validaRichiesta = async () => ({ cliente, totali: { totale_ivato: 98.76, da_pagare_app: 20.07, materiale_banco: 78.69 } });
+  const id = await stripePagamenti.avviaPagamento(cliente.id, carrello, { destinazione: 'Via Puggia 22/3' });
+  const [, p] = stripe.chiamate.find((c) => c[0] === 'create');
+  assert.equal(p.amount, 2007);
+  assert.equal(righe[id - 1].importo_cent, 2007);
+  // e con i numeri veri del calcolo: lo stesso valore che il carrello mostra come "Totale da pagare ora"
+  const pricing = require('../src/pricing');
+  const d = pricing.dividiTotale({ netto: 64.5, raee: 0, consegna: 10, servizioPct: 10, ivaPct: 22 });
+  assert.equal(Math.round(d.app.totale * 100), p.amount);
 });
 
 test('avviaPagamento: se Stripe non risponde la riga è "fallito" e il cliente vede un errore chiaro', async () => {
@@ -610,8 +628,9 @@ test('pagamento arrivato troppo tardi: niente richiesta, carta rilasciata', asyn
   assert.equal(stripe.intenti.get(intentoId).status, 'canceled');
 });
 
-test('Rinvia richiesta: si paga di nuovo e la STESSA richiesta si riapre con pagamento Stripe', async () => {
+test('Rinvia richiesta: si paga di nuovo la consegna di OGGI e la STESSA richiesta si riapre con pagamento Stripe', async () => {
   preparati();
+  consegnaDiOggi = 20.07; // la richiesta era stata pagata 66,90 (vecchio modello): rinviando si paga la consegna ricalcolata
   const chiusa = { id: 55, cliente_id: cliente.id, stato: 'nessuna_offerta', pagamento_importo: 66.9 };
   richiesteDb.set(55, { pagamento_stato: 'rimborsato', pagamento_importo: 66.9 });
   richieste.getRichiesta = async () => chiusa;
@@ -624,7 +643,8 @@ test('Rinvia richiesta: si paga di nuovo e la STESSA richiesta si riapre con pag
 
   const id = await stripePagamenti.avviaPagamentoReinvio(cliente.id, chiusa);
   const [, p] = stripe.chiamate.find((c) => c[0] === 'create');
-  assert.equal(p.amount, 6690);
+  assert.equal(p.amount, 2007);
+  assert.equal(righe[0].importo_cent, 2007);
   assert.equal(righe[0].tipo, 'reinvio');
   assert.equal(righe[0].request_id, 55);
 
@@ -637,7 +657,8 @@ test('Rinvia richiesta: si paga di nuovo e la STESSA richiesta si riapre con pag
   stripe.paga('pi_test_1');
   const esito = await stripePagamenti.esitoRitorno('pi_test_1', cliente.id);
   assert.deepEqual(esito, { esito: 'ok', requestId: 55, tipo: 'reinvio' });
-  assert.deepEqual(riaperture, [[55, { metodoPagamento: 'stripe' }]]);
+  // la richiesta torna a segnare come pagato quanto è stato autorizzato
+  assert.deepEqual(riaperture, [[55, { metodoPagamento: 'stripe', importo: 20.07 }]]);
   assert.equal(richiesteCreate.length, 0, 'nessuna richiesta nuova');
   assert.equal(righe[0].stato, 'autorizzato');
 });
@@ -647,7 +668,10 @@ test('Rinvia richiesta: non per quella di un altro, non se non è chiusa; con al
   const base = { id: 55, cliente_id: cliente.id, stato: 'nessuna_offerta', pagamento_importo: 66.9 };
   await assert.rejects(() => stripePagamenti.avviaPagamentoReinvio(cliente.id, { ...base, cliente_id: 8 }), /non si può più rinviare/);
   await assert.rejects(() => stripePagamenti.avviaPagamentoReinvio(cliente.id, { ...base, stato: 'in_attesa' }), /non si può più rinviare/);
-  await assert.rejects(() => stripePagamenti.avviaPagamentoReinvio(cliente.id, { ...base, pagamento_importo: null }), /nuova richiesta dal carrello/);
+  // niente da pagare (nessuna riga, consegna a zero): non si rinvia, si invia una richiesta nuova dal carrello
+  consegnaDiOggi = 0;
+  await assert.rejects(() => stripePagamenti.avviaPagamentoReinvio(cliente.id, base), /nuova richiesta dal carrello/);
+  consegnaDiOggi = 66.9;
   assert.equal(righe.length, 0);
   // Non c'è più il limite di una richiesta aperta alla volta: il pagamento parte anche con altre in attesa.
   await stripePagamenti.avviaPagamentoReinvio(cliente.id, base);

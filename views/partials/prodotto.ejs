@@ -4,7 +4,7 @@
           return { id: v.id, etichetta: v.etichetta, codice: v.codice, disponibilita: v.disponibilita,
                    disponibilita_testo: testoDisponibilita[v.disponibilita] || v.disponibilita,
                    raee: v.raee > 0 ? euro(v.raee) : null, sconto_base_pct: v.sconto_base_pct,
-                   listino: euro(v.prezzo_listino), prezzo: euro(prezzoCliente(v)) };
+                   listino: euro(v.prezzo_listino), prezzo: euro(prezzoBanco(v)) };
         })) %>'<% } %>>
   <div class="info">
     <div class="nome">
@@ -26,7 +26,7 @@
     <% } %>
     <div class="prezzo" data-riga-prezzo>
       <% if (p.sconto_base_pct > 0) { %><span class="barrato">€ <%= euro(p.prezzo_listino) %></span><% } %>
-      € <%= euro(prezzoCliente(p)) %> <span class="iva">+ IVA</span>
+      € <%= euro(prezzoBanco(p)) %> <span class="iva">+ IVA</span>
     </div>
   </div>
   <div class="prodotto-laterale">

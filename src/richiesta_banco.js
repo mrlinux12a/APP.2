@@ -37,8 +37,8 @@ function statoRichiestaBanco({ richiesta, risposta, apribile, ordineMio = false,
   return { chiave: 'scaduta', etichetta: 'Scaduta' };
 }
 
-// La tabella del materiale: quantità, articolo e codice, listino, prezzo per il cliente (con lo sconto del banco e il servizio, IVA
-// esclusa) e totale di riga, più il totale per il cliente (merce + contributo RAEE, IVA esclusa). Prima della risposta e se il banco
+// La tabella del materiale: quantità, articolo e codice, listino, prezzo per il cliente (dal 16/10/2026 il PREZZO DEL BANCO: listino meno lo
+// sconto del banco, IVA esclusa; il 10% di servizio non c'è più nei prezzi, lo paga il cliente alla piattaforma) e totale di riga, più il totale per il cliente (merce + contributo RAEE, IVA esclusa). Prima della risposta e se il banco
 // ha rifiutato si contano le quantità richieste; se ha confermato, quelle che ha confermato (le mancanti si vedono: `mancano`).
 // `prezzoClienteDi(riga)` è il prezzo unitario per il cliente.
 function tabellaMateriale(righe, prezzoClienteDi, { confermata = false } = {}) {

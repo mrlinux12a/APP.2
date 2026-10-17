@@ -1,0 +1,28 @@
+<%
+  // Il riquadro blu "Da pagare a {ditta}" dello Storico ordini. `g` = { nome, riepilogo: { totale, servizio, nOrdini } } di UNA ditta; `m` il
+  // materiale (src/materiale.js); `primo` = è il primo riquadro: solo lì stanno i chip del mese (uno per pagina, non uno per ditta).
+  // I numeri sono quelli di materialeOrdini, gli stessi del banco: totale = materiale a prezzo del banco IVA inclusa, servizio = quanto
+  // già pagato in app (fuori dal totale).
+%>
+<%
+  // Parametri facoltativi: `occhiello` (default "Da pagare a {ditta}": lato banco "Da incassare") ed `esporta` (indirizzo del CSV).
+  const testoOcchiello = typeof occhiello !== 'undefined' && occhiello ? occhiello : 'Da pagare a ' + g.nome;
+  const indirizzoCsv = typeof esporta !== 'undefined' && esporta ? esporta : '/storico/materiale.csv';
+%>
+<section class="sm-riquadro" aria-label="<%= testoOcchiello %>">
+  <% if (primo) { %>
+    <nav class="sm-mesi" aria-label="Mese">
+      <% m.mesi.forEach(function (x) { %>
+        <a class="sm-chip<%= m.mese === x.chiave ? ' attivo' : '' %>" href="<%= link({ mese: x.chiave }) %>"<%- m.mese === x.chiave ? ' aria-current="true"' : '' %>><%= x.titolo %></a>
+      <% }); %>
+      <a class="sm-chip<%= m.mese === 'tutto' ? ' attivo' : '' %>" href="<%= link({ mese: 'tutto' }) %>"<%- m.mese === 'tutto' ? ' aria-current="true"' : '' %>>Tutto</a>
+    </nav>
+  <% } %>
+  <div class="sm-occhiello"><%= testoOcchiello %></div>
+  <div class="sm-totale"><span class="sm-importo">€ <%= euro(g.riepilogo.totale) %></span><span class="sm-iva">IVA inclusa</span></div>
+  <div class="sm-sotto">Materiale di <%= g.riepilogo.nOrdini %> <%= g.riepilogo.nOrdini === 1 ? 'ordine' : 'ordini' %></div>
+  <div class="sm-fondo">
+    <span>Servizio già pagato in app: <strong>€ <%= euro(g.riepilogo.servizio) %></strong></span>
+    <a class="sm-esporta" href="<%= indirizzoCsv %>?mese=<%= encodeURIComponent(m.mese) %>"><%- iconaDownload %>Esporta</a>
+  </div>
+</section>

@@ -618,3 +618,31 @@ ALTER TABLE requests ADD COLUMN IF NOT EXISTS chiave_invio TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_requests_chiave_invio ON requests(cliente_id, chiave_invio) WHERE chiave_invio IS NOT NULL;
 ALTER TABLE stripe_pagamenti ADD COLUMN IF NOT EXISTS chiave_invio TEXT;
 CREATE INDEX IF NOT EXISTS idx_stripe_pagamenti_chiave ON stripe_pagamenti(cliente_id, chiave_invio) WHERE chiave_invio IS NOT NULL;
+
+-- Importi dell'ordine divisi (17/10/2026)
+-- In app l'installatore paga la "consegna in cantiere" (corriere fisso + servizio + IVA); il materiale (merce a prezzo del banco + RAEE + IVA) lo
+-- paga dopo a BOREA. L'ordine salva i valori già calcolati da pricing.calcolaOrdine, così la pagina dell'ordine, lo Storico e la pagina del
+-- cliente lato banco dicono gli stessi numeri (pricing.importiOrdine). Gli ordini nati prima restano a 0: importiOrdine li ricalcola dai valori
+-- vecchi (totale_netto, totale_finale, costo_consegna, contributo_raee). Il blocco si può rilanciare.
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS servizio DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS imponibile_app DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS iva_app DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS da_pagare_app DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS imponibile_banco DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS iva_banco DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS materiale_banco DOUBLE PRECISION NOT NULL DEFAULT 0;
+
+-- Importi della richiesta divisi (17/10/2026)
+-- Come per l'ordine: quando nasce la richiesta si salva quanto l'installatore paga ORA in app (consegna in cantiere: corriere fisso + servizio + IVA)
+-- e quanto pagherebbe DOPO a BOREA se un banco conferma (merce a prezzo del banco + RAEE + IVA), da pricing.calcolaOrdine. Le pagine della
+-- richiesta (in attesa, chiusa) li leggono con pricing.importiRichiesta; le richieste nate prima restano a 0 e si ricalcolano sulle righe.
+-- rimborsato_il: quando il pagamento e' tornato all'installatore ("Rimborsata il ..."). Il blocco si puo' rilanciare.
+ALTER TABLE requests ADD COLUMN IF NOT EXISTS corriere DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE requests ADD COLUMN IF NOT EXISTS servizio DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE requests ADD COLUMN IF NOT EXISTS iva_app DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE requests ADD COLUMN IF NOT EXISTS da_pagare_app DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE requests ADD COLUMN IF NOT EXISTS merce_banco DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE requests ADD COLUMN IF NOT EXISTS raee_banco DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE requests ADD COLUMN IF NOT EXISTS iva_banco DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE requests ADD COLUMN IF NOT EXISTS materiale_banco DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE requests ADD COLUMN IF NOT EXISTS rimborsato_il TIMESTAMP;

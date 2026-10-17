@@ -11,7 +11,7 @@
           return { id: v.id, etichetta: v.etichetta, codice: v.codice, disponibilita: v.disponibilita,
                    disponibilita_testo: testoDisponibilita[v.disponibilita] || v.disponibilita,
                    raee: v.raee > 0 ? euro(v.raee) : null, sconto_base_pct: v.sconto_base_pct,
-                   listino: euro(v.prezzo_listino), prezzo: euro(prezzoCliente(v)) };
+                   listino: euro(v.prezzo_listino), prezzo: euro(prezzoBanco(v)) };
         })) %>'<% } %>>
   <% if (p.foto_url) { %>
     <img class="prodotto-foto riga-foto" src="<%= p.foto_url %>" alt="" loading="lazy">
@@ -22,7 +22,7 @@
     <div class="riga-nome"><% if (p.brand_nome) { %><span class="marchio-tag" style="--marchio:<%= p.brand_colore %>"><%= p.brand_nome %></span> <% } %><%= p.nome %></div>
     <% if (p.varianti) { %><%- include('misura', { p }) %><% } %>
     <div class="riga-stato" data-riga-stato <%= p.disponibilita === 'disponibile' ? 'hidden' : '' %>><span class="badge badge-<%= p.disponibilita %>" data-riga-badge><%= testoDisponibilita[p.disponibilita] %></span></div>
-    <div class="riga-prezzo" data-riga-prezzo><% if (p.sconto_base_pct > 0) { %><span class="barrato">€ <%= euro(p.prezzo_listino) %></span><% } %><span class="importo">€ <%= euro(prezzoCliente(p)) %></span> <span class="iva">+ IVA</span><% if (p.raee > 0) { %><span class="raee">RAEE € <%= euro(p.raee) %></span><% } %></div>
+    <div class="riga-prezzo" data-riga-prezzo><% if (p.sconto_base_pct > 0) { %><span class="barrato">€ <%= euro(p.prezzo_listino) %></span><% } %><span class="importo">€ <%= euro(prezzoBanco(p)) %></span> <span class="iva">+ IVA</span><% if (p.raee > 0) { %><span class="raee">RAEE € <%= euro(p.raee) %></span><% } %></div>
   </div>
   <div class="riga-azioni" data-riga-azioni><% if (p.disponibilita !== 'non_disponibile') { %><div class="riga-stepper<%= qta > 0 ? ' attivo' : '' %>" data-riga-stepper="<%= p.id %>" role="group" aria-label="Quantità nel carrello"><button type="button" class="riga-passo" data-riga-passo="-1" aria-label="Togli uno" <%= qta > 0 ? '' : 'disabled' %>><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12"/></svg></button><span class="riga-qta" data-riga-qta="<%= p.id %>" aria-live="polite"><%= qta %></span><button type="button" class="riga-passo" data-riga-passo="1" aria-label="Aggiungi uno"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 6v12M6 12h12"/></svg></button></div><% } %></div>
 </div>

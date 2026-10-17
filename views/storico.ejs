@@ -1,3 +1,22 @@
+<%
+  // STORICO ORDINI dell'installatore (GET /storico, dati da src/materiale.js).
+  //
+  // CONTESTO: nell'app l'installatore paga SOLO il servizio (il 10% sopra il prezzo del banco) e la consegna, IVA inclusa. Il materiale lo
+  // paga dopo a BOREA. Questa pagina mostra quanto materiale ha ordinato e quanto deve a BOREA, mese per mese, con i prezzi IVA inclusa
+  // (prezzo del banco + RAEE, mai il prezzo con il servizio) e gli stessi numeri che il banco vede nella pagina del cliente: il calcolo è
+  // UNO (src/materiale.js, materialeOrdini). "Servizio già pagato in app" NON è dentro il totale: è l'importo realmente addebitato
+  // (requests.pagamento_importo), o, se non c'è o non torna, servizio + consegna calcolati sull'ordine (vedi il commento di materiale.js).
+  //
+  // Filtri nell'URL: ?mese=AAAA-MM|tutto (default il mese corrente, o il più recente con ordini) e ?vista=ordine|articolo.
+  const m = materiale;
+  const link = function (cambio) {
+    const q = Object.assign({ mese: m.mese, vista: m.vista }, cambio);
+    return '/storico?' + Object.keys(q).map(function (k) { return k + '=' + encodeURIComponent(q[k]); }).join('&');
+  };
+  const nessunOrdineMai = !m.mesi.length;
+  let primoAperto = true; // è aperto solo il primo ordine della pagina
+  const gruppi = m.gruppi.length ? m.gruppi : [{ nome: m.ditte[0] || 'BOREA', riepilogo: m.riepilogo, ordini: [], articoli: [] }];
+%>
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -8,21 +27,68 @@
     <%- include('partials/appbar', { titolo, intestazione: 'Storico ordini', indietro: '/home' }) %>
 
     <div class="contenuto">
-      <% if (!inCorso.length && !mesi.length) { %>
+      <% if (nessunOrdineMai) { %>
         <div class="vuoto">
           <span class="emoji"><%- iconaVuotoScatola %></span>
           Nessun ordine ancora.
         </div>
         <a class="btn btn-primary btn-blocco" href="/home">Vai al catalogo</a>
       <% } else { %>
-        <% if (inCorso.length) { %>
-          <h2 class="st-titolo">In corso</h2>
-          <% inCorso.forEach(function (v) { %><%- include('partials/storico_scheda', { v }) %><% }); %>
-        <% } %>
-        <% mesi.forEach(function (mese) { %>
-          <h2 class="st-titolo"><%= mese.titolo %></h2>
-          <% mese.voci.forEach(function (v) { %><%- include('partials/storico_scheda', { v }) %><% }); %>
+
+        <%# a) Da pagare: un riquadro per ditta (oggi sempre una, BOREA). Il selettore del mese sta nel primo. %>
+        <% gruppi.forEach(function (g, i) { %>
+          <%- include('partials/storico_riquadro', { m, g, primo: i === 0, link }) %>
         <% }); %>
+
+        <%# b) Per ordine | Per articolo %>
+        <nav class="sm-vista" aria-label="Vista">
+          <a class="<%= m.vista === 'ordine' ? 'attiva' : '' %>" href="<%= link({ vista: 'ordine' }) %>"<%- m.vista === 'ordine' ? ' aria-current="page"' : '' %>>Per ordine</a>
+          <a class="<%= m.vista === 'articolo' ? 'attiva' : '' %>" href="<%= link({ vista: 'articolo' }) %>"<%- m.vista === 'articolo' ? ' aria-current="page"' : '' %>>Per articolo</a>
+        </nav>
+
+        <% if (m.vuoto) { %>
+          <div class="vuoto"><span class="emoji"><%- iconaVuotoScatola %></span>Nessun ordine in questo mese.</div>
+        <% } else if (m.vista === 'ordine') { %>
+          <%# c) una scheda per ordine, con <details>: aperto solo il primo %>
+          <% m.gruppi.forEach(function (g) { %>
+            <% if (m.gruppi.length > 1) { %><h2 class="st-titolo"><%= g.nome %></h2><% } %>
+            <% g.ordini.forEach(function (o) { %>
+              <%- include('partials/storico_ordine', { o, aperto: primoAperto }) %>
+              <% primoAperto = false; %>
+            <% }); %>
+          <% }); %>
+          <% if (m.senzaOrdine.length) { %>
+            <h2 class="st-titolo">Senza ordine</h2>
+            <% m.senzaOrdine.forEach(function (r) { %>
+              <a class="sm-senza" href="<%= r.href %>">
+                <span class="st-stato st-<%= r.tono %>"><%= r.etichetta %></span>
+                <span class="sm-senza-testo">Richiesta #<%= r.id %> · <%= r.data %></span>
+                <span class="sm-senza-costo">Nessun costo</span>
+              </a>
+            <% }); %>
+          <% } %>
+        <% } else { %>
+          <%# d) per articolo: righe sommate, dal totale più alto %>
+          <% m.gruppi.forEach(function (g) { %>
+            <% if (m.gruppi.length > 1) { %><h2 class="st-titolo"><%= g.nome %></h2><% } %>
+            <div class="sm-articoli">
+              <% g.articoli.forEach(function (a) { %>
+                <div class="sm-art">
+                  <span class="sm-qta"><%= a.quantita %>×</span>
+                  <div class="sm-art-corpo">
+                    <div class="sm-art-nome"><%= a.nome %></div>
+                    <div class="sm-art-sotto">€ <%= euro(a.cad) %> cad. · ordini <%= a.ordini.map(function (id) { return '#' + id; }).join(', ') %></div>
+                  </div>
+                  <span class="sm-art-totale">€ <%= euro(a.totale) %></span>
+                </div>
+              <% }); %>
+              <div class="sm-art sm-art-somma">
+                <span class="sm-art-nome">Totale</span>
+                <span class="sm-art-totale">€ <%= euro(g.riepilogo.totale) %></span>
+              </div>
+            </div>
+          <% }); %>
+        <% } %>
       <% } %>
     </div>
   </div>

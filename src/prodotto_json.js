@@ -7,9 +7,9 @@ const TESTO_DISPONIBILITA = {
 };
 
 // Un prodotto di catalogo nel formato JSON usato dalla ricerca live, dallo scroll
-// infinito e dall'app: la percentuale di servizio si passa già calcolata (una volta per
-// richiesta).
-function prodottoJson(p, servizioPct) {
+// infinito e dall'app. Il `prezzo` è quello del BANCO (listino meno lo sconto del banco): lo stesso che si ritrova nel carrello e nella
+// fattura di BOREA; il 10% di servizio sta solo nel riepilogo del carrello (pricing.dividiTotale).
+function prodottoJson(p) {
   return {
     id: p.id,
     codice: p.codice,
@@ -23,7 +23,7 @@ function prodottoJson(p, servizioPct) {
     disponibilita_testo: TESTO_DISPONIBILITA[p.disponibilita] || p.disponibilita,
     sconto_base_pct: p.sconto_base_pct,
     listino: pricing.euro(p.prezzo_listino),
-    prezzo: pricing.euro(pricing.prezzoClienteConPct(p, servizioPct)),
+    prezzo: pricing.euro(pricing.prezzoNetto(p)), // prezzo del banco: il 10% di servizio sta solo nel riepilogo del carrello
     varianti_info: p.varianti ? p.varianti_info : null,
     varianti: p.varianti
       ? p.varianti.map((v) => ({
@@ -35,7 +35,7 @@ function prodottoJson(p, servizioPct) {
           raee: v.raee > 0 ? pricing.euro(v.raee) : null,
           sconto_base_pct: v.sconto_base_pct, // senza, cambiando misura su una riga da ricerca live il prezzo di listino non si barra
           listino: pricing.euro(v.prezzo_listino),
-          prezzo: pricing.euro(pricing.prezzoClienteConPct(v, servizioPct)),
+          prezzo: pricing.euro(pricing.prezzoNetto(v)),
         }))
       : null,
   };

@@ -48,21 +48,54 @@ async function righeDaQuantita(voci) {
   return prodotti.map((prodotto) => ({ prodotto, quantita: quantita.get(prodotto.id) }));
 }
 
-// Totali del carrello come li mostra la pagina Carrello del sito (merce, RAEE, spedizione, IVA,
-// totale da pagare, ordine minimo). `totali` include la spedizione: totale_ivato è quello che
-// l'installatore paga.
+// Le voci del riepilogo del carrello come TESTO già pronto (euro all'italiana, percentuali, conteggi): la pagina Carrello le disegna al
+// primo caricamento e le stesse chiavi viaggiano nella risposta di /api/carrello/imposta, così il ricalcolo dal vivo di public/app.js
+// riscrive ogni `[data-riep="<chiave>"]` senza fare un solo conto nel browser. `totali` viene da pricing.calcolaOrdine.
+function vistaRiepilogo(totali, { nArticoli, minimo }) {
+  const e = pricing.euro;
+  const { app, banco } = totali;
+  const mancaAlMinimo = pricing.round2(Math.max(0, minimo - totali.totale_netto));
+  return {
+    // Consegna in cantiere: la paghi ORA in app
+    app_corriere: e(app.corriere),
+    app_servizio: e(app.servizio),
+    app_imponibile: e(app.imponibile),
+    app_iva: e(app.iva),
+    app_totale: e(app.totale),
+    servizio_pct: String(totali.servizioPct),
+    iva_pct: String(totali.ivaPct),
+    // Materiale: lo paghi DOPO a BOREA
+    banco_merce: e(banco.merce),
+    banco_raee: e(banco.raee),
+    banco_imponibile: e(banco.imponibile),
+    banco_iva: e(banco.iva),
+    banco_totale: e(banco.totale),
+    articoli: nArticoli === 1 ? '1 articolo' : nArticoli + ' articoli',
+    con_raee: banco.raee > 0,
+    spesa: e(totali.totale_ivato),
+    // Ordine minimo, misurato sulla merce a prezzo del banco
+    raggiunto: totali.totale_netto >= minimo,
+    manca: e(mancaAlMinimo),
+  };
+}
+
+// Totali del carrello come li mostra la pagina Carrello del sito: la merce a prezzo del banco, la consegna e il servizio che si pagano
+// ORA in app (`totali.app`, `totali.da_pagare_app`) e il materiale che si paga DOPO a BOREA (`totali.banco`, `totali.materiale_banco`).
+// Vedi pricing.dividiTotale. L'ordine minimo si misura sulla merce a prezzo del banco (`totale_netto`), non sul prezzo col servizio.
 async function riepilogoCarrello(righe) {
   const spedizione = await pricing.getSpedizioneFissa();
   const totali = await pricing.calcolaOrdine(righe, { costoConsegna: spedizione });
   const minimo = await pricing.getOrdineMinimo();
+  const vista = vistaRiepilogo(totali, { nArticoli: righe.length, minimo });
   return {
     totali,
+    vista,
     minimo,
     spedizione,
-    ivaPct: await pricing.getIvaPct(),
-    // La soglia si misura sulla sola merce: la spedizione si somma dopo.
-    mancaAlMinimo: pricing.round2(Math.max(0, minimo - totali.totale_finale)),
-    raggiunto: totali.totale_finale >= minimo,
+    ivaPct: totali.ivaPct,
+    // La soglia si misura sulla merce a prezzo del banco: corriere e servizio si sommano dopo.
+    mancaAlMinimo: pricing.round2(Math.max(0, minimo - totali.totale_netto)),
+    raggiunto: totali.totale_netto >= minimo,
     minutiRisposta: await pricing.getFinestraMinuti(),
   };
 }
@@ -70,18 +103,18 @@ async function riepilogoCarrello(righe) {
 // I controlli prima di pagare e inviare: carrello non vuoto e ordine minimo. Non c'è più il limite di una sola
 // richiesta aperta alla volta: l'installatore può mandarne altre mentre una è in attesa o un ordine è in consegna
 // (le segue tutte "Stato ordini", vedi attivitaCliente).
-// Ritorna { cliente, totali } (totali.totale_ivato è quello che l'installatore paga) o lancia ErroreFlusso. Li
+// Ritorna { cliente, totali } (totali.da_pagare_app è quello che l'installatore paga in app) o lancia ErroreFlusso. Li
 // fa il flusso del sito prima di mandare il cliente a Stripe, e di nuovo `nuovaRichiesta` quando il pagamento è
 // autorizzato.
 async function validaRichiesta(clienteId, righe) {
-  // L'ordine minimo si misura sulla merce già maggiorata, spedizione esclusa.
+  // L'ordine minimo si misura sulla merce a prezzo del banco (`totale_netto`), senza servizio, consegna e IVA.
   const totali = await pricing.calcolaOrdine(righe, { costoConsegna: await pricing.getSpedizioneFissa() });
   const minimo = await pricing.getOrdineMinimo();
-  if (righe.length && totali.totale_finale < minimo) {
+  if (righe.length && totali.totale_netto < minimo) {
     throw new ErroreFlusso(
       'ordine_minimo',
       'Ordine minimo non raggiunto',
-      `L'ordine minimo è di € ${pricing.euro(minimo)} di merce (IVA esclusa). Ti mancano € ${pricing.euro(minimo - totali.totale_finale)}.`
+      `L'ordine minimo è di € ${pricing.euro(minimo)} di merce (IVA esclusa). Ti mancano € ${pricing.euro(minimo - totali.totale_netto)}.`
     );
   }
   if (!righe.length) {
@@ -111,8 +144,8 @@ function giaInviata(requestId, inCasoDiDuplicato) {
 
 // Paga e invia la richiesta ai distributori. Ritorna l'id creato. `destinazione` e `note` sono quelle
 // del carrello (la destinazione, se vuota, è l'indirizzo di consegna abituale del cliente): da qui
-// l'ordine nasce da solo, senza altre scelte. Il pagamento vale il totale IVA inclusa che il carrello ha
-// mostrato: simulato (vedi pagamenti.js) per l'app e senza Stripe; col sito e Stripe lo chiama
+// l'ordine nasce da solo, senza altre scelte. Il pagamento vale quanto il carrello ha mostrato come "Paghi ora"
+// (`totali.da_pagare_app`: servizio + consegna, IVA inclusa; il materiale si paga dopo al banco): simulato (vedi pagamenti.js) per l'app e senza Stripe; col sito e Stripe lo chiama
 // src/stripe_pagamenti.js a carta già autorizzata (`metodoPagamento: 'stripe'`, `importoPagato` = quanto
 // autorizzato, che resta quello scritto sulla richiesta anche se i prezzi si sono mossi nel frattempo).
 async function nuovaRichiesta(
@@ -137,9 +170,11 @@ async function nuovaRichiesta(
     const { requestId } = await richieste.creaRichiesta(cliente, righe, {
       destinazione: String(destinazione || '').trim().slice(0, 300) || cliente.indirizzo_consegna || ddt.indirizzoCompleto(cliente),
       note: String(note || '').trim().slice(0, 500),
-      importo: importoPagato === null ? totali.totale_ivato : importoPagato,
+      importo: importoPagato === null ? totali.da_pagare_app : importoPagato,
       metodoPagamento,
       chiaveInvio: chiave,
+      // Gli importi divisi (consegna pagata in app / materiale da pagare a BOREA) si salvano sulla richiesta, come sull'ordine.
+      totali,
     });
     return requestId;
   } catch (e) {
@@ -165,24 +200,45 @@ function senzaFiliale(distributore) {
 // anche come lette le notifiche di richieste/ordini: il cliente sta guardando proprio questa. Il
 // pagamento (pagamento_stato, pagamento_importo...) sta sulla riga `richiesta`.
 async function dettaglioRichiesta(richiesta) {
-  // Nessuna delle sei letture dipende da un'altra: partono insieme (ognuna è un giro di rete verso il DB, e questa pagina
+  // Nessuna delle letture dipende da un'altra: partono insieme (ognuna è un giro di rete verso il DB, e questa pagina
   // si apre a ogni passaggio fra gli ordini di "Stato ordini").
-  const [, , righe, risposte, secondi, minutiRisposta] = await Promise.all([
+  const [, , righe, risposte, secondi, minutiRisposta, spedizione] = await Promise.all([
     notifiche.segnaLetteCategoria(richiesta.cliente_id, 'richieste'),
     notifiche.segnaLetteCategoria(richiesta.cliente_id, 'ordini'),
     richieste.righeRichiesta(richiesta.id),
     richieste.risposteRichiesta(richiesta.id),
     richieste.secondiRimasti(richiesta),
     pricing.getFinestraMinuti(),
+    pricing.getSpedizioneFissa(),
   ]);
+  // Le righe a PREZZO DEL BANCO e gli importi di oggi, con la stessa funzione del carrello (calcolaOrdine): servono alle righe della
+  // scheda "Materiale richiesto", agli importi delle richieste nate prima delle colonne salvate e a "Se rinvii la richiesta paghi di nuovo...".
+  const oggi = await pricing.calcolaDaRigheDb(righe, { costoConsegna: spedizione });
+  const risposteDitta = richieste.raggruppaRisposteDitta(risposte);
+  // Il nome della ditta interpellata, senza forma giuridica e senza filiale ("BOREA"); con più ditte non c'è un nome solo e le viste
+  // dicono "il banco".
+  const ditte = Array.from(new Set(risposteDitta.map((r) => format.nomeCommerciale(r.distributore_nome)).filter(Boolean)));
   return {
     richiesta,
     righe,
     // Una ditta con più filiali è una voce sola.
-    risposte: richieste.raggruppaRisposteDitta(risposte),
+    risposte: risposteDitta,
     secondi,
     minutiRisposta,
+    // Consegna pagata in app e materiale da pagare a BOREA (stessa forma di dettaglioOrdine: la legge partials/pagamenti).
+    importi: pricing.importi({ richiesta, calcolato: oggi }),
+    righePrezzi: oggi.righe,
+    ditta: ditte.length === 1 ? ditte[0] : '',
+    // Cosa si pagherebbe rinviando una richiesta chiusa, con i prezzi di oggi: la consegna (si addebita di nuovo) e il materiale (resta da pagare
+    // a BOREA solo se conferma).
+    rinvio: { consegna: oggi.da_pagare_app, materiale: oggi.materiale_banco },
   };
+}
+
+// Quanto si paga in app per questa richiesta con i prezzi di oggi (pricing.calcolaOrdine sulle sue righe e la consegna fissa): lo usa
+// "Rinvia richiesta" con Stripe per l'importo da autorizzare.
+async function totaliRichiestaOggi(requestId) {
+  return pricing.calcolaDaRigheDb(await richieste.righeRichiesta(requestId), { costoConsegna: await pricing.getSpedizioneFissa() });
 }
 
 // Ritorna false se la richiesta non era più annullabile (es. l'ordine è nato un istante prima).
@@ -314,12 +370,16 @@ async function creaOrdineDaRisposta(richiesta, risposta) {
   const destinazione = (richiesta.destinazione || '').trim() || cliente.indirizzo_consegna || ddt.indirizzoCompleto(cliente);
   const { totali } = await richieste.calcolaOfferta(richiesta.id, distributorId);
 
+  // Insieme ai totali di sempre l'ordine salva le due parti già calcolate da calcolaOrdine (consegna pagata in app e materiale da pagare a
+  // BOREA): pricing.importiOrdine le rilegge, così pagina dell'ordine, Storico e pagina del banco dicono gli stessi numeri.
   const insertOrder = db.prepare(
     `INSERT INTO orders
        (cliente_id, stato, modalita, note, totale_netto, totale_finale,
         request_id, distributor_id, consegna_ore, partenza_ore, destinazione,
-        costo_consegna, contributo_raee, iva, totale_ivato)
-     VALUES (?, 'inviato', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        costo_consegna, contributo_raee, iva, totale_ivato,
+        servizio, imponibile_app, iva_app, da_pagare_app, imponibile_banco, iva_banco, materiale_banco)
+     VALUES (?, 'inviato', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+             ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertItem = db.prepare(
     `INSERT INTO order_items
@@ -354,15 +414,22 @@ async function creaOrdineDaRisposta(richiesta, risposta) {
       totali.costo_consegna,
       totali.contributo_raee,
       totali.iva,
-      totali.totale_ivato
+      totali.totale_ivato,
+      totali.servizio,
+      totali.app.imponibile,
+      totali.app.iva,
+      totali.da_pagare_app,
+      totali.banco.imponibile,
+      totali.banco.iva,
+      totali.materiale_banco
     );
     const orderId = Number(info.lastInsertRowid);
     for (const riga of totali.righe) await insertItem.run(orderId, riga.product_id, riga.codice_snapshot, riga.nome_snapshot, riga.quantita, riga.prezzo_listino_snapshot, riga.sconto_pct_snapshot, riga.prezzo_netto_unitario, riga.subtotale, riga.prezzo_unitario_cliente, riga.subtotale_cliente, riga.raee_unitario, riga.raee_riga);
     await db.prepare(`UPDATE requests SET order_id = ? WHERE id = ?`).run(orderId, richiesta.id);
-    // Con Stripe la carta, finora solo bloccata, si incassa (per il totale dell'ordine, se più basso di quanto
+    // Con Stripe la carta, finora solo bloccata, si incassa (per la parte da pagare in app dell'ordine, se più bassa di quanto
     // autorizzato). Qui si segna soltanto sul DB, nella stessa transazione dell'ordine: la chiamata a Stripe la
     // fa src/stripe_pagamenti.js subito dopo e, se non riesce, dal timer.
-    await pagamenti.segnaDaIncassare(richiesta.id, totali.totale_ivato);
+    await pagamenti.segnaDaIncassare(richiesta.id, totali.da_pagare_app);
     // Con il corriere il tempo di consegna è quello scritto nel gruppo ("preso 30"): conta da adesso,
     // cioè da quando l'ordine è confermato.
     if (risposta.corriere_stato === 'preso') {
@@ -436,31 +503,37 @@ richieste.impostaAssegnatore(creaOrdineDaRisposta);
 async function dettaglioOrdine(ordine) {
   // Le letture non dipendono una dall'altra (tutto parte da `ordine`, già letto): partono insieme, un solo giro di rete
   // invece di cinque in fila. Questa pagina si apre a ogni passaggio fra gli ordini di "Stato ordini".
-  const [righe, cliente, distributore, richiestaOrdine, ivaPct] = await Promise.all([
+  const [righe, cliente, distributore, richiestaOrdine, ivaConfig, servizioPct] = await Promise.all([
     db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(ordine.id),
     db.prepare('SELECT * FROM users WHERE id = ?').get(ordine.cliente_id),
     ordine.distributor_id ? db.prepare('SELECT * FROM distributors WHERE id = ?').get(ordine.distributor_id) : null,
     ordine.request_id
       ? db
-          .prepare('SELECT pagamento_stato, pagamento_metodo, pagamento_importo, pagato_il FROM requests WHERE id = ?')
+          .prepare('SELECT pagamento_stato, pagamento_metodo, pagamento_importo, pagato_il, rimborsato_il FROM requests WHERE id = ?')
           .get(ordine.request_id)
       : null,
     pricing.getIvaPct(),
+    pricing.getServizioPct(),
   ]);
+  // Il pagamento fatto all'invio della richiesta (null per gli ordini del vecchio flusso).
+  const pagamento =
+    richiestaOrdine && richiestaOrdine.pagamento_stato
+      ? {
+          stato: richiestaOrdine.pagamento_stato,
+          metodo: richiestaOrdine.pagamento_metodo,
+          importo: richiestaOrdine.pagamento_importo,
+          pagato_il: richiestaOrdine.pagato_il,
+          rimborsato_il: richiestaOrdine.rimborsato_il,
+        }
+      : null;
+  const ivaPct = pricing.ivaPctOrdine(ordine, ivaConfig);
   return {
     righe,
     cliente,
     distributore,
-    // Il pagamento fatto all'invio della richiesta (null per gli ordini del vecchio flusso).
-    pagamento:
-      richiestaOrdine && richiestaOrdine.pagamento_stato
-        ? {
-            stato: richiestaOrdine.pagamento_stato,
-            metodo: richiestaOrdine.pagamento_metodo,
-            importo: richiestaOrdine.pagamento_importo,
-            pagato_il: richiestaOrdine.pagato_il,
-          }
-        : null,
+    pagamento,
+    // Consegna pagata in app e materiale da pagare a BOREA, divisi come nel carrello (la stessa funzione dello Storico e del banco).
+    importi: pricing.importiOrdine(ordine, pagamento, ivaPct, servizioPct),
     annullabile: ordineAnnullabileDalCliente(ordine),
     ivaPct,
   };
@@ -551,64 +624,6 @@ async function richiesteClienteConStato(clienteId) {
     }
     return { richiesta: rAgg, righe: righePerRichiesta.get(Number(rAgg.id)) || [], ordine, step };
   });
-}
-
-// Una riga della pagina Storico (views/storico.ejs), da una card di richiesteClienteConStato.
-// `tono` sceglie icona e colori: consegna, attesa, consegnato, nessuna (nessuna risposta), annullata.
-// Le etichette sono sempre quelle di sotto: "Inviato", "In preparazione" e "Partito" sono tutti "In consegna".
-function voceStorico(c) {
-  const r = c.richiesta;
-  const o = c.ordine;
-  let tono;
-  let etichetta;
-  if (o && o.consegnato_il) [tono, etichetta] = ['consegnato', 'Consegnato'];
-  else if (r.stato === 'in_attesa') [tono, etichetta] = ['attesa', 'In attesa'];
-  else if (r.stato === 'ordinata') [tono, etichetta] = ['consegna', 'In consegna'];
-  else if (r.stato === 'nessuna_offerta') [tono, etichetta] = ['nessuna', 'Nessuna risposta'];
-  else [tono, etichetta] = ['annullata', r.stato === 'annullata' ? 'Annullata' : r.stato];
-
-  // Al centro: il banco dell'ordine. Una richiesta chiusa senza ordine non ne ha: lì conta il rimborso. Chi non
-  // aveva pagato (richiesta del vecchio flusso, pagamento_stato NULL) non ha niente da vedersi rimborsare.
-  let banco = '';
-  if (o) banco = o.distributore_nome || '';
-  else if (tono === 'nessuna' || tono === 'annullata') {
-    banco = r.pagamento_stato === 'rimborsato' ? 'Rimborsato' : r.pagamento_stato === 'pagato' ? 'Rimborso in corso' : '';
-  }
-
-  return {
-    href: c.step === 3 && o ? '/ordini/' + o.id : '/richieste/' + r.id,
-    tono,
-    etichetta,
-    data: format.dataBreveRoma(r.creato_il),
-    primo: c.righe[0] ? c.righe[0].quantita + '× ' + c.righe[0].nome : '',
-    altri: Math.max(0, c.righe.length - 1),
-    banco,
-    // A destra: il totale dell'ordine (la vista usa totaleOrdine(ordine)) o, senza ordine, quanto è stato pagato.
-    ordine: o,
-    pagato: Number(r.pagamento_importo) > 0 ? Number(r.pagamento_importo) : null,
-    // Il pulsante "Riordina" c'è solo sugli ordini consegnati.
-    riordinaId: o && o.consegnato_il ? o.id : null,
-  };
-}
-
-// Lo Storico dell'installatore: in cima "In corso" (richieste in attesa e ordini in consegna, con le stesse
-// regole di attivitaCorrente: un ordine mai segnato come consegnato non resta "in corso" per sempre), poi
-// tutto il resto raggruppato per mese di creazione, dal più recente. Le richieste arrivano già dalla più
-// recente (id decrescente).
-async function storicoCliente(clienteId) {
-  const inCorso = [];
-  const perMese = new Map();
-  for (const c of await richiesteClienteConStato(clienteId)) {
-    const voce = voceStorico(c);
-    if (c.step === 1 || eInConsegna(c)) {
-      inCorso.push(voce);
-      continue;
-    }
-    const { chiave, titolo } = format.meseRoma(c.richiesta.creato_il);
-    if (!perMese.has(chiave)) perMese.set(chiave, { titolo, voci: [] });
-    perMese.get(chiave).voci.push(voce);
-  }
-  return { inCorso, mesi: [...perMese.values()] };
 }
 
 // "Riordina": gli articoli di un ordine del cliente che si possono rimettere nel carrello, e quanti no
@@ -968,10 +983,12 @@ module.exports = {
   OrdineInLavorazione,
   righeDaQuantita,
   riepilogoCarrello,
+  vistaRiepilogo,
   validaRichiesta,
   nuovaRichiesta,
   chiaveInvioValida,
   dettaglioRichiesta,
+  totaliRichiestaOggi,
   annullaRichiesta,
   reinviaRichiesta,
   eliminaRichiesta,
@@ -982,7 +999,6 @@ module.exports = {
   eliminaOrdine,
   ordineAnnullabileDalCliente,
   richiesteClienteConStato,
-  storicoCliente,
   articoliDaRiordinare,
   ultimoOrdineConsegnato,
   attivitaCorrente,

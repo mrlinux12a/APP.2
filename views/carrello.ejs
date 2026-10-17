@@ -77,13 +77,14 @@
               <input type="hidden" name="modo" value="imposta">
               <input type="hidden" name="ritorno" value="/carrello">
               <% righe.forEach(function (r) { %>
-                <% const unitario = prezzoCliente(r.prodotto); %>
+                <%# Il prezzo della riga è quello del BANCO (il 10% sta solo nella voce "Servizio" del riepilogo): la somma delle righe è la "Merce". %>
+                <% const unitario = prezzoBanco(r.prodotto); %>
                 <div class="card carrello-articolo" data-riga="<%= r.prodotto.id %>">
                   <div class="art-nome">
                     <% if (r.prodotto.brand_slug) { %><span class="marchio-tag" style="--marchio:#1d4e89"><%= r.prodotto.brand_slug.toUpperCase() %></span><% } %>
                     <%= r.prodotto.nome %>
                   </div>
-                  <div class="art-prezzo">€ <%= euro(unitario) %> cad. · IVA esclusa</div>
+                  <div class="art-prezzo">€ <%= euro(unitario) %> cad. · IVA esclusa · prezzo del banco</div>
                   <div class="art-azioni">
                     <button type="button" class="btn-cestino" data-rimuovi="<%= r.prodotto.id %>" aria-label="Rimuovi dal carrello"><%- iconaCestino %></button>
                     <div class="stepper" data-stepper-carrello="<%= r.prodotto.id %>">
@@ -94,7 +95,7 @@
                              aria-label="Quantità <%= r.prodotto.nome %>">
                       <button type="button" data-passo-carrello="1" aria-label="Aggiungi">+</button>
                     </div>
-                    <span class="art-totale">€ <%= euro(unitario * r.quantita) %></span>
+                    <span class="art-totale" data-totale-riga="<%= r.prodotto.id %>">€ <%= euro(totaleRigaBanco(r.prodotto, r.quantita)) %></span>
                   </div>
                 </div>
               <% }); %>
@@ -104,12 +105,11 @@
           </div>
 
           <div class="carrello-riepilogo">
-            <% if (!raggiunto) { %>
-              <div class="avviso avviso-attenzione">
-                <strong>Ordine minimo € <%= euro(minimo) %></strong> di merce, IVA e spedizione escluse.
-                Ti mancano <strong>€ <%= euro(mancaAlMinimo) %></strong>.
-              </div>
-            <% } %>
+            <%# Ordine minimo sulla merce a prezzo del banco (IVA, servizio e consegna esclusi). Il blocco c'è sempre: il ricalcolo dal vivo lo mostra o lo nasconde. %>
+            <div class="avviso avviso-attenzione" data-minimo-avviso<%= raggiunto ? ' hidden' : '' %>>
+              <strong>Ordine minimo € <%= euro(minimo) %></strong> di merce, IVA e spedizione escluse.
+              Ti mancano <strong>€ <span data-riep="manca"><%= vista.manca %></span></strong>.
+            </div>
 
             <form method="POST" action="/richieste" id="form-invia" data-invia-carrello>
               <input type="hidden" name="modo" value="imposta">
@@ -146,30 +146,49 @@
                           placeholder="Es. orario preferito, riferimento cantiere..."></textarea>
               </details>
 
-              <%# Il riepilogo sta in fondo, subito prima del tasto che paga (ora nella barra fissa). %>
-              <div class="card riepilogo-card">
-                <div class="riepilogo-riga">
-                  <span class="voce">Merce (IVA esclusa)</span>
-                  <span>€ <%= euro(totali.totale_finale) %></span>
-                </div>
-                <% if (totali.contributo_raee > 0) { %>
-                  <div class="riepilogo-riga">
-                    <span class="voce">Contributo RAEE</span>
-                    <span>€ <%= euro(totali.contributo_raee) %></span>
+              <%# COSA PAGHI E A CHI: due riquadri. "Consegna in cantiere" si paga ORA in app (corriere fisso + servizio + IVA); "Materiale" si paga
+                  DOPO a BOREA (merce a prezzo del banco + RAEE + IVA). Ogni importo è già calcolato (pricing.dividiTotale) e scritto come testo
+                  in `vista`: i `[data-riep]` li riscrive public/app.js quando cambia una quantità, con le stesse chiavi. %>
+              <%
+                // Il nome del distributore di riferimento (già letto per il menu del profilo): "BOREA SRL" -> "BOREA". Senza nome: "al banco".
+                const nomeDitta = fmt.nomeCommerciale((typeof profiloCliente !== 'undefined' && profiloCliente && profiloCliente.distributore) || '');
+                const dopoA = nomeDitta ? 'a ' + nomeDitta : 'al banco';
+                const tiFattura = nomeDitta || 'il banco';
+              %>
+              <div class="card cp-card" data-cosa-paghi>
+                <h2 class="cp-titolo">Cosa paghi e a chi</h2>
+
+                <section class="cp-riquadro cp-ora" aria-labelledby="cp-ora-titolo">
+                  <div class="cp-testa">
+                    <span class="cp-ico" aria-hidden="true"><%- iconaFurgone %></span>
+                    <strong class="cp-nome" id="cp-ora-titolo">Consegna in cantiere</strong>
+                    <span class="cp-badge cp-badge-ora">Paghi ora</span>
                   </div>
-                <% } %>
-                <div class="riepilogo-riga">
-                  <span class="voce">Consegna in cantiere</span>
-                  <span>€ <%= euro(spedizione) %></span>
-                </div>
-                <div class="riepilogo-riga">
-                  <span class="voce">IVA <%= ivaPct %>%</span>
-                  <span>€ <%= euro(totali.iva) %></span>
-                </div>
-                <div class="riepilogo-riga forte">
-                  <span class="voce">Totale</span>
-                  <span>€ <%= euro(totali.totale_ivato) %></span>
-                </div>
+                  <p class="cp-sotto">Il nostro servizio: lo addebitiamo quando premi "Paga e invia richiesta".</p>
+                  <dl class="cp-righe">
+                    <div class="cp-riga"><dt><span class="cp-et">Corriere</span> <span class="cp-sp">· costo fisso</span></dt><dd>€ <span data-riep="app_corriere"><%= vista.app_corriere %></span></dd></div>
+                    <div class="cp-riga"><dt><span class="cp-et">Servizio</span> <span class="cp-sp">· <span data-riep="servizio_pct"><%= vista.servizio_pct %></span>% della merce (€ <span data-riep="banco_merce"><%= vista.banco_merce %></span>)</span></dt><dd>€ <span data-riep="app_servizio"><%= vista.app_servizio %></span></dd></div>
+                    <div class="cp-riga"><dt><span class="cp-et">IVA <span data-riep="iva_pct"><%= vista.iva_pct %></span>%</span> <span class="cp-sp">· su € <span data-riep="app_imponibile"><%= vista.app_imponibile %></span></span></dt><dd>€ <span data-riep="app_iva"><%= vista.app_iva %></span></dd></div>
+                  </dl>
+                  <div class="cp-totale"><span>Totale da pagare ora</span><strong>€ <span data-riep="app_totale"><%= vista.app_totale %></span></strong></div>
+                </section>
+
+                <section class="cp-riquadro cp-dopo" aria-labelledby="cp-dopo-titolo">
+                  <div class="cp-testa">
+                    <span class="cp-ico" aria-hidden="true"><%- iconaNegozio %></span>
+                    <strong class="cp-nome" id="cp-dopo-titolo">Materiale</strong>
+                    <span class="cp-badge cp-badge-dopo">Paghi dopo <%= dopoA %></span>
+                  </div>
+                  <p class="cp-sotto">Non lo paghi ora: te lo fattura <%= tiFattura %>.</p>
+                  <dl class="cp-righe">
+                    <div class="cp-riga"><dt><span class="cp-et">Merce</span> <span class="cp-sp">· prezzo del banco, <span data-riep="articoli"><%= vista.articoli %></span></span></dt><dd>€ <span data-riep="banco_merce"><%= vista.banco_merce %></span></dd></div>
+                    <div class="cp-riga" data-riga-raee<%= vista.con_raee ? '' : ' hidden' %>><dt><span class="cp-et">Contributo RAEE</span></dt><dd>€ <span data-riep="banco_raee"><%= vista.banco_raee %></span></dd></div>
+                    <div class="cp-riga"><dt><span class="cp-et">IVA <span data-riep="iva_pct"><%= vista.iva_pct %></span>%</span> <span class="cp-sp">· su € <span data-riep="banco_imponibile"><%= vista.banco_imponibile %></span></span></dt><dd>€ <span data-riep="banco_iva"><%= vista.banco_iva %></span></dd></div>
+                  </dl>
+                  <div class="cp-totale"><span>Totale materiale</span><strong>€ <span data-riep="banco_totale"><%= vista.banco_totale %></span></strong></div>
+                </section>
+
+                <div class="cp-spesa"><span>Spesa complessiva</span><span>€ <span data-riep="spesa"><%= vista.spesa %></span></span></div>
               </div>
             </form>
 
@@ -179,20 +198,20 @@
       </div>
 
       <%# Barra di pagamento fissa, sopra la navbar. Il pulsante invia il form "form-invia" (come il vecchio
-          "Paga … e invia la richiesta"); totale e importi si aggiornano con la pagina, che si ricarica a ogni
-          cambio di quantità. %>
+          "Paga … e invia la richiesta"); l'importo (come ogni voce del riepilogo) si riscrive da solo quando cambia una quantità
+          (public/app.js, blocco "Carrello"). %>
       <div class="barra-paga">
         <div class="barra-paga-interno">
           <div class="barra-paga-riga">
             <div class="bp-totale">
-              <span class="bp-label">Totale IVA inclusa</span>
-              <span class="bp-importo">€ <%= euro(totali.totale_ivato) %></span>
+              <span class="bp-label">Paghi ora · consegna</span>
+              <span class="bp-importo">€ <span data-riep="app_totale"><%= vista.app_totale %></span></span>
             </div>
-            <button class="btn-paga" type="submit" form="form-invia" <%= raggiunto ? '' : 'disabled' %>>Paga e invia richiesta</button>
+            <button class="btn-paga" type="submit" form="form-invia" data-btn-paga <%= raggiunto ? '' : 'disabled' %>>Paga e invia richiesta</button>
           </div>
           <p class="barra-paga-nota">
             <span class="scudo"><%- iconaScudo %></span>
-            <span>I banchi rispondono entro <%= Math.round(minutiRisposta) %> min · se nessuno accetta, rimborso</span>
+            <span>Se nessun banco accetta, ti rimborsiamo</span>
           </p>
         </div>
       </div>

@@ -80,7 +80,7 @@ function richiediElaborazione() {
 // il da farsi: carta ancora solo bloccata -> rilasciare il blocco; già incassata -> rimborsare.
 async function rimborsa(requestId) {
   const r = await db
-    .prepare(`UPDATE requests SET pagamento_stato = 'rimborsato' WHERE id = ? AND pagamento_stato = 'pagato'`)
+    .prepare(`UPDATE requests SET pagamento_stato = 'rimborsato', rimborsato_il = NOW() WHERE id = ? AND pagamento_stato = 'pagato'`)
     .run(requestId);
   if (r.changes > 0 && stripeAttivo()) {
     await db
@@ -113,16 +113,18 @@ async function segnaDaIncassare(requestId, totaleOrdine) {
   richiediElaborazione();
 }
 
-// "Rinvia richiesta": l'installatore ha già visto il totale e preme il tasto, quindi si paga di
-// nuovo lo stesso importo. Il simulato riesce da solo; con Stripe la richiesta arriva qui solo a pagamento
+// "Rinvia richiesta": l'installatore ha già visto cosa paga (la consegna, ricalcolata con i prezzi di oggi: vedi richieste.reinviaRichiesta)
+// e preme il tasto, quindi si paga di nuovo. `importo` è quanto si addebita ora (il pagamento autorizzato con Stripe, o il calcolo
+// col simulato): senza, resta quello di prima. Il simulato riesce da solo; con Stripe la richiesta arriva qui solo a pagamento
 // autorizzato (src/stripe_pagamenti.js), con metodo 'stripe'.
-async function incassaDiNuovo(requestId, { metodo = METODO_SIMULATO } = {}) {
+async function incassaDiNuovo(requestId, { metodo = METODO_SIMULATO, importo = null } = {}) {
   const r = await db
     .prepare(
-      `UPDATE requests SET pagamento_stato = 'pagato', pagamento_metodo = ?, pagato_il = NOW()
+      `UPDATE requests SET pagamento_stato = 'pagato', pagamento_metodo = ?, pagato_il = NOW(), rimborsato_il = NULL,
+                           pagamento_importo = COALESCE(?::float8, pagamento_importo)
         WHERE id = ? AND pagamento_stato = 'rimborsato'`
     )
-    .run(metodo, requestId);
+    .run(metodo, importo === null || importo === undefined ? null : importo, requestId);
   return r.changes > 0;
 }
 

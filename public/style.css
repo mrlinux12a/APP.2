@@ -2312,6 +2312,8 @@ html.misura-aperta { overflow: hidden; }
 /* Riepilogo costi */
 .riepilogo-card { padding: 8px 14px; margin-bottom: 0; }
 .carrello-riepilogo .riepilogo-riga.forte { font-size: 17px; font-weight: 700; }
+/* "Paghi ora in app" e "Materiale, da pagare al banco": sotto il totale, separati da una riga */
+.riepilogo-riga.riepilogo-diviso { margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--bordo); }
 
 /* "Svuota carrello": in fondo, centrato, link sottolineato in rosso scuro */
 .svuota-fondo {
@@ -3128,13 +3130,13 @@ html.misura-aperta { overflow: hidden; }
 .pp-esci, .pp-esci .pp-testo { color: #a33232; }
 .pp-esci .pp-icona { background: var(--rosso-chiaro); color: #a33232; }
 
-/* ---------- Storico ordini (views/storico.ejs, partials/storico_scheda.ejs) ---------- */
+/* ---------- Storico ordini (views/storico.ejs, partials/storico_riquadro.ejs, partials/storico_ordine.ejs) ---------- */
 
 /* Come .app-anagrafica: in fondo solo la navbar sospesa + un margine (circa 96px). */
 .app-storico { padding-bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + 24px); }
 
 .st-titolo {
-  margin: 8px 2px 10px;
+  margin: 14px 2px 10px;
   font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
   font-size: 14px;
   font-weight: 700;
@@ -3143,94 +3145,103 @@ html.misura-aperta { overflow: hidden; }
   color: #5c5b52;
 }
 
-.st-scheda {
-  background: var(--surface);
-  border: 1px solid var(--bordo);
-  border-radius: 16px;
-  margin-bottom: 10px;
+/* a) Riquadro "Da pagare a BOREA": blu, testo bianco */
+.sm-riquadro {
+  background: #245A8F; color: #fff; border-radius: 18px; padding: 14px 16px 16px; margin-bottom: 12px;
 }
-.st-link {
-  display: block;
-  padding: 12px 14px;
-  border-radius: 16px;
-  color: inherit;
-  text-decoration: none;
+/* chip del mese: scorrono in orizzontale, senza barra */
+.sm-mesi { display: flex; gap: 8px; overflow-x: auto; margin: 0 -16px 12px; padding: 0 16px; scrollbar-width: none; }
+.sm-mesi::-webkit-scrollbar { display: none; }
+.sm-chip {
+  flex: none; display: inline-flex; align-items: center; height: 34px; padding: 0 14px; border-radius: 17px; box-sizing: border-box;
+  border: 1.5px solid rgba(255, 255, 255, 0.45); color: #fff; font-size: 14px; font-weight: 700; text-decoration: none; white-space: nowrap;
 }
-.st-link:focus-visible { outline: 2px solid var(--blu); outline-offset: -2px; }
-
-.st-alto { display: flex; align-items: center; gap: 12px; }
-.st-icona {
-  flex: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 22px; /* le icone di src/icone.js sono 1em */
-}
-.st-testi { flex: 1; min-width: 0; }
-.st-data { display: block; color: var(--grigio); font-size: 13px; line-height: 1.3; }
-.st-articoli {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  overflow: hidden;
-  margin-top: 2px;
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1.3;
-  overflow-wrap: anywhere;
-}
-.st-altri { color: var(--grigio); font-weight: 600; }
-
-.st-basso {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid #ece9e2;
-}
-.st-stato {
-  flex: none;
-  padding: 3px 9px;
-  border-radius: 10px;
-  font-size: 12.5px;
-  font-weight: 700;
-  line-height: 1.3;
-  white-space: nowrap;
-}
-.st-banco {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--grigio);
-  font-size: 13px;
-}
-.st-importo {
-  flex: none;
-  margin-left: auto;
+.sm-chip.attivo { background: #fff; border-color: #fff; color: #1A4468; }
+.sm-chip:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.sm-occhiello { font-size: 13px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; opacity: 0.85; }
+.sm-totale { display: flex; align-items: baseline; gap: 10px; margin-top: 4px; }
+.sm-importo {
   font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-  font-size: 15px;
-  font-weight: 700;
-  white-space: nowrap;
+  font-size: 34px; font-weight: 800; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
 }
+.sm-iva { font-size: 14px; opacity: 0.85; white-space: nowrap; }
+.sm-sotto { margin-top: 2px; font-size: 14px; opacity: 0.9; }
+.sm-fondo {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.22); font-size: 13.5px;
+}
+.sm-fondo strong { font-variant-numeric: tabular-nums; }
+.sm-esporta {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; flex: none; color: #fff; font-weight: 700; text-decoration: none;
+}
+.sm-esporta svg { font-size: 18px; }
+.sm-esporta:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
-/* Colori per stato: riquadro dell'icona (.st-icona) ed etichetta (.st-stato) */
-.st-icona.st-consegna, .st-icona.st-consegnato { background: var(--verde-chiaro); color: var(--verde); }
-.st-icona.st-attesa { background: var(--arancio-chiaro); color: var(--arancio); }
-.st-icona.st-nessuna { background: var(--rosso-chiaro); color: var(--rosso); }
-.st-icona.st-annullata { background: #ece9e2; color: var(--grigio); }
+/* b) selettore Per ordine | Per articolo */
+.sm-vista { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin-bottom: 14px; background: #E7E4DC; border-radius: 14px; }
+.sm-vista a {
+  display: flex; align-items: center; justify-content: center; height: 38px; border-radius: 11px; color: #5c5b52;
+  font-size: 14.5px; font-weight: 700; text-decoration: none;
+}
+.sm-vista a.attiva { background: #fff; color: var(--testo); box-shadow: 0 1px 3px rgba(35, 32, 25, 0.14); }
+.sm-vista a:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; }
+
+/* c) una scheda per ordine (details) */
+.sm-ordine { background: var(--surface); border: 1px solid var(--bordo); border-radius: 16px; margin-bottom: 10px; overflow: hidden; }
+.sm-ordine > summary { display: block; padding: 12px 14px; list-style: none; cursor: pointer; }
+.sm-ordine > summary::-webkit-details-marker { display: none; }
+.sm-ordine > summary:focus-visible { outline: 2px solid var(--blu); outline-offset: -2px; }
+.sm-riga1 { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.sm-nome { min-width: 0; font-size: 15.5px; }
+.sm-data { margin-left: 4px; color: var(--grigio); font-size: 13px; white-space: nowrap; }
+.sm-tot {
+  flex: none; font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+.sm-riga2 { display: flex; align-items: center; gap: 8px; margin-top: 8px; min-width: 0; }
+.sm-primo { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; color: #3f3e38; }
+.sm-altri { flex: none; color: var(--grigio); font-size: 13px; font-weight: 600; }
+.sm-freccia { flex: none; margin-left: auto; color: var(--grigio); font-size: 12px; transition: transform 0.15s; }
+.sm-ordine[open] .sm-freccia { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .sm-freccia { transition: none; } }
+
+.st-stato { flex: none; padding: 3px 9px; border-radius: 10px; font-size: 12.5px; font-weight: 700; line-height: 1.3; white-space: nowrap; }
 .st-stato.st-consegna, .st-stato.st-consegnato { background: var(--verde-chiaro); color: #1f5f2e; }
-.st-stato.st-attesa { background: var(--arancio-chiaro); color: #8a3c16; }
+.st-stato.st-attesa, .st-stato.st-preparazione { background: var(--arancio-chiaro); color: #8a3c16; }
 .st-stato.st-nessuna { background: var(--rosso-chiaro); color: #991b1b; }
 .st-stato.st-annullata { background: #ece9e2; color: #3f3e38; }
 
-.st-riordina { margin: 0; padding: 0 14px 12px; }
+.sm-dettaglio { background: #FAF9F6; border-top: 1px solid #ece9e2; padding: 4px 14px 12px; }
+.sm-riga { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid #ece9e2; }
+.sm-qta {
+  flex: none; min-width: 30px; padding: 2px 7px; box-sizing: border-box; border-radius: 8px; text-align: center;
+  background: var(--blu-chiaro); color: var(--blu-scuro); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.sm-riga-corpo, .sm-art-corpo { flex: 1; min-width: 0; }
+.sm-riga-nome, .sm-art-nome { font-size: 14.5px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.sm-riga-sotto, .sm-art-sotto { margin-top: 2px; color: var(--grigio); font-size: 12.5px; }
+.sm-riga-totale, .sm-art-totale { flex: none; font-size: 14.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sm-servizio { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0 2px; color: var(--grigio); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.sm-azioni { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
+.sm-dettagli { margin-left: auto; display: inline-flex; align-items: center; min-height: 44px; color: var(--blu); font-weight: 700; font-size: 14.5px; text-decoration: none; }
+.sm-dettagli:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+
+/* richieste senza ordine: schede basse, nessun costo */
+.sm-senza {
+  display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 10px 14px; margin-bottom: 8px; box-sizing: border-box;
+  background: #F7F6F2; border-radius: 12px; color: inherit; text-decoration: none;
+}
+.sm-senza-testo { flex: 1; min-width: 0; font-size: 13.5px; color: #3f3e38; }
+.sm-senza-costo { flex: none; color: var(--grigio); font-size: 13px; font-weight: 600; }
+.sm-senza:focus-visible { outline: 2px solid var(--blu); outline-offset: -2px; }
+
+/* d) per articolo */
+.sm-articoli { background: var(--surface); border: 1px solid var(--bordo); border-radius: 16px; padding: 2px 14px; margin-bottom: 10px; }
+.sm-art { display: flex; align-items: flex-start; gap: 10px; padding: 11px 0; border-bottom: 1px solid #ece9e2; }
+.sm-art-somma { align-items: center; justify-content: space-between; border-bottom: none; font-size: 15.5px; }
+.sm-art-somma .sm-art-totale { font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; font-size: 16px; font-weight: 800; }
+
+.st-riordina { margin: 0; }
 .st-btn-riordina {
   position: relative;
   display: inline-flex;
@@ -4741,3 +4752,127 @@ html.misura-aperta { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .con-striscia .app > .contenuto, .con-striscia .app > .contenuto.swipe-rimbalzo { transition: none; }
 }
+
+.cli-materiale { margin-top: 16px; }
+
+/* ---------- Carrello: "Cosa paghi e a chi" (views/carrello.ejs) ----------
+   Una card, due riquadri a 10px: "Consegna in cantiere" (la paghi ORA in app) e "Materiale" (lo paghi DOPO a BOREA). Gli importi sono
+   `[data-riep]`: li riscrive public/app.js quando cambia una quantità. */
+.cp-card { padding: 14px 14px 12px; margin-bottom: 0; }
+.cp-titolo { margin: 0 0 10px 2px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #5C5B52; }
+.cp-riquadro { border-radius: 14px; padding: 12px; }
+.cp-riquadro + .cp-riquadro { margin-top: 10px; }
+.cp-testa { display: flex; align-items: center; gap: 8px; }
+.cp-ico { flex: none; display: inline-flex; font-size: 20px; }
+.cp-nome { flex: 1; min-width: 0; font-size: 15px; font-weight: 700; }
+.cp-badge { flex: none; padding: 3px 8px; border-radius: 8px; font-size: 12px; font-weight: 800; line-height: 1.3; letter-spacing: 0.02em; text-transform: uppercase; white-space: nowrap; }
+.cp-sotto { margin: 6px 0 10px; font-size: 13px; line-height: 1.35; }
+.cp-righe { margin: 0; padding: 10px 0 2px; border-top: 1px solid var(--cp-linea); }
+.cp-riga { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 4px 0; font-variant-numeric: tabular-nums; }
+.cp-riga[hidden] { display: none; }
+.cp-riga dt { margin: 0; min-width: 0; font-size: 14px; }
+.cp-riga dd { margin: 0; flex: none; font-size: 14px; font-weight: 600; }
+.cp-et { font-weight: 600; }
+.cp-sp { font-size: 12.5px; font-weight: 400; }
+.cp-totale {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 8px; padding-top: 10px;
+  border-top: 1px solid var(--cp-linea); font-size: 15px; font-weight: 700;
+}
+.cp-totale strong {
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; font-size: 22px; font-weight: 800;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+/* A) la paghi ora: azzurro, bordo blu */
+.cp-ora { --cp-linea: #B9CDE2; background: #E3EDF7; border: 2px solid #245A8F; color: #1A4468; }
+.cp-ora .cp-sotto { opacity: 0.85; }
+.cp-ora .cp-sp { opacity: 0.75; }
+.cp-badge-ora { background: #245A8F; color: #fff; }
+
+/* B) la paghi dopo a BOREA: grigio caldo */
+.cp-dopo { --cp-linea: #E2DED3; background: #F7F6F2; border: 1px solid #E2DED3; color: #1C1917; }
+.cp-dopo .cp-sotto { color: #5C5B52; }
+.cp-dopo .cp-sp { color: #5C5B52; }
+.cp-badge-dopo { background: #E2DED3; color: #3F3E38; }
+
+/* C) spesa complessiva, piccola e grigia */
+.cp-spesa { display: flex; justify-content: space-between; gap: 12px; margin: 10px 4px 0; font-size: 13px; color: var(--grigio); font-variant-numeric: tabular-nums; }
+
+/* Barra in fondo: "Paghi ora · consegna" e l'importo */
+.bp-label { color: #1A4468; font-size: 12px; font-weight: 700; }
+.bp-importo { color: #1A4468; font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.avviso[hidden] { display: none; }
+
+/* ---------- Pagina dell'ordine: scheda "Pagamenti" (partials/ordine_pagamenti.ejs) e riga "Documenti" (partials/ordine_righe.ejs) ----------
+   La consegna in cantiere (già pagata in app) e il materiale (da pagare a BOREA), mai un totale unico. */
+.pg-card { padding: 14px; }
+.pg-titolo { margin: 0 0 10px 2px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #5C5B52; }
+.pg-riga { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; }
+.pg-riga + .pg-riga { margin-top: 10px; }
+.pg-ico {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; box-sizing: border-box;
+  border-radius: 9px; background: #fff; font-size: 20px;
+}
+.pg-testo { flex: 1; min-width: 0; }
+.pg-nome { font-size: 15px; font-weight: 700; line-height: 1.25; }
+.pg-sub { display: flex; align-items: center; gap: 5px; margin-top: 2px; font-size: 12.5px; line-height: 1.3; }
+.pg-spunta { display: inline-flex; color: var(--verde); }
+.pg-importo {
+  flex: none; font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; font-size: 18px; font-weight: 800;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.pg-consegna { background: #E3F3E6; color: #1F5F2E; }
+.pg-consegna .pg-ico { color: #1F5F2E; }
+.pg-rimborsata { background: #ECE9E2; color: #3F3E38; }
+.pg-rimborsata .pg-ico { color: #3F3E38; }
+.pg-materiale { background: #F7F6F2; border: 1px solid #E2DED3; color: #1C1917; }
+.pg-materiale .pg-sub { color: #5C5B52; }
+
+/* "Vedi il dettaglio degli importi ▾": chiuso di default; aperto diventa "Nascondi il dettaglio" e la freccia ruota */
+.pg-dettaglio { margin-top: 6px; }
+.pg-dettaglio > summary {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; list-style: none; cursor: pointer;
+  color: var(--blu); font-size: 14px; font-weight: 700;
+}
+.pg-dettaglio > summary::-webkit-details-marker { display: none; }
+.pg-dettaglio > summary:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; border-radius: 6px; }
+.pg-chiudi { display: none; }
+.pg-dettaglio[open] .pg-apri { display: none; }
+.pg-dettaglio[open] .pg-chiudi { display: inline; }
+.pg-freccia { flex: none; transition: transform 0.15s; }
+.pg-dettaglio[open] .pg-freccia { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .pg-freccia { transition: none; } }
+.pg-riquadri { display: grid; gap: 10px; margin-top: 2px; }
+.pg-piccolo { border: 1px solid #E2DED3; border-radius: 12px; padding: 10px 12px; }
+.pg-piccolo h3 { margin: 0 0 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.pg-piccolo dl { margin: 0; }
+.pg-piccolo dl > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 3px 0; font-variant-numeric: tabular-nums; }
+.pg-piccolo dt { margin: 0; min-width: 0; font-size: 13.5px; }
+.pg-piccolo dd { margin: 0; flex: none; font-size: 13.5px; font-weight: 600; }
+.pg-et { font-weight: 700; }
+.pg-sp { font-size: 12.5px; opacity: 0.72; }
+.pg-piccolo-verde { border-color: #CDE6D3; color: #1F5F2E; }
+.pg-piccolo-grigio { border-color: #E2DED3; color: #1C1917; }
+
+/* Riga "Documenti · DDT n° N ›" in fondo alla scheda del materiale */
+.att-documenti {
+  display: flex; align-items: center; gap: 10px; min-height: 44px; margin-top: 8px; padding-top: 8px; border-top: 1px solid #ece9e2;
+  color: var(--blu); font-size: 14px; font-weight: 700; text-decoration: none;
+}
+.att-doc-ico { display: inline-flex; font-size: 18px; }
+.att-doc-testo { flex: 1; min-width: 0; }
+.att-doc-freccia { flex: none; font-size: 20px; line-height: 1; }
+.att-documenti:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; border-radius: 6px; }
+
+/* ---------- Scheda "Pagamenti" delle pagine della richiesta (partials/pagamenti.ejs, stati 'attesa' e 'chiusa') ----------
+   Stessa scheda della pagina dell'ordine (blocco .pg-* qui sopra); cambiano i colori e i testi delle due righe. */
+/* Materiale IN SOSPESO (richiesta in attesa): bordo tratteggiato e importo grigio, non ancora una spesa certa */
+.pg-materiale.pg-sospeso { background: #fff; border: 1.5px dashed #CFC8B8; }
+.pg-materiale.pg-sospeso .pg-importo { color: #6B6A5F; }
+/* Richiesta chiusa senza conferma: consegna rimborsata (verde, come la riga pagata), rimborso ancora in corso, materiale "niente da pagare" */
+.pg-materiale.pg-nullo { background: #F7F6F2; border: 1px solid #E2DED3; color: #5C5B52; }
+.pg-materiale.pg-nullo .pg-importo { color: #8A887E; }
+.pg-rimborso-corso { background: #FBE6DA; color: #8A3A14; }
+.pg-rimborso-corso .pg-ico { color: #8A3A14; }
+.pg-tondo { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: #1F5F2E; color: #fff; }
+.pg-nota { margin: 12px 2px 2px; font-size: 13px; line-height: 1.4; color: #6B6A5F; }

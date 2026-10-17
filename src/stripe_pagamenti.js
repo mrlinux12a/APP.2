@@ -163,7 +163,7 @@ async function avviaPagamento(clienteId, righe, { destinazione = '', note = '', 
     chiaveInvio: chiave,
     cliente,
     tipo: 'richiesta',
-    importoCent: centesimi(totali.totale_ivato),
+    importoCent: centesimi(totali.da_pagare_app), // solo servizio + consegna: il materiale si paga dopo al banco
     voci: righe.map((r) => ({ id: r.prodotto.id, quantita: r.quantita })),
     destinazione: String(destinazione || '').trim().slice(0, 300),
     note: String(note || '').trim().slice(0, 500),
@@ -171,12 +171,13 @@ async function avviaPagamento(clienteId, righe, { destinazione = '', note = '', 
 }
 
 // "Rinvia richiesta": la richiesta è chiusa senza ordine e il blocco sulla carta è stato rilasciato, quindi si paga
-// di nuovo lo stesso importo. A pagamento autorizzato la STESSA richiesta si riapre (stesso id).
+// di nuovo la consegna (servizio + corriere + IVA), ricalcolata con i prezzi di oggi: è la cifra che la pagina "Nessuna risposta" mostra
+// in "Se rinvii la richiesta paghi di nuovo solo la consegna". A pagamento autorizzato la STESSA richiesta si riapre (stesso id).
 async function avviaPagamentoReinvio(clienteId, richiesta) {
   if (richiesta.cliente_id !== clienteId || richiesta.stato !== 'nessuna_offerta') {
     throw new ErroreFlusso('reinvio', 'Richiesta non rinviabile', 'Questa richiesta non si può più rinviare.');
   }
-  const importoCent = centesimi(richiesta.pagamento_importo);
+  const importoCent = centesimi((await flusso.totaliRichiestaOggi(richiesta.id)).da_pagare_app);
   if (!(importoCent > 0)) {
     throw new ErroreFlusso('reinvio', 'Richiesta non rinviabile', 'Per questa richiesta non posso ripetere il pagamento: invia una nuova richiesta dal carrello.');
   }
@@ -332,7 +333,8 @@ async function riapriRichiesta(riga) {
   if (!richiesta || richiesta.cliente_id !== riga.cliente_id || richiesta.stato !== 'nessuna_offerta') {
     throw new ErroreFlusso('reinvio', 'Richiesta non rinviabile', 'Questa richiesta non si può più rinviare.');
   }
-  const riaperta = await richieste.reinviaRichiesta(richiesta.id, { metodoPagamento: pagamenti.METODO_STRIPE });
+  // Il pagamento di questa riga è già autorizzato: quello è l'importo che la richiesta torna a segnare come pagato.
+  const riaperta = await richieste.reinviaRichiesta(richiesta.id, { metodoPagamento: pagamenti.METODO_STRIPE, importo: riga.importo_cent / 100 });
   if (!riaperta) throw new ErroreFlusso('reinvio', 'Richiesta non rinviabile', 'Questa richiesta non si può più rinviare.');
   return richiesta.id;
 }

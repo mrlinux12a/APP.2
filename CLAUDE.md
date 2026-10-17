@@ -104,7 +104,25 @@ Niente colonna "materiale", `misura` vuota: tutto estratto da `nome`.
 - Frazioni a parole ("un mezzo", "tre quarti"...) tradotte in cifra prima di cercare.
 - Parole generiche di misura ("diametro", "pollici"...) tradotte in un pattern sul nome, mai
   cercate alla lettera (il catalogo non le scrive mai per esteso).
-- Refusi tollerati (`word_similarity > 0.45`, da 4 caratteri) su nomi e parole-comando sopra.
+- **Refusi (rifatti il 16/10/2026)**: la ricerca è **prima esatta** (parte di parola, indice trigram); i refusi si tentano **solo se le schede esatte
+  sono meno di 10** (`MINIMO_RISULTATI_SENZA_REFUSI`), in un secondo passo: candidati dal DB con `word_similarity >= 0.55` (`SOGLIA_REFUSI`) e poi filtro in JS
+  (`corrispondeConRefusi`: per ogni parola, una parola del nome a distanza di Levenshtein ≤ 1, ≤ 2 dalle 8 lettere, anche se il nome è più lungo perché si sta
+  ancora scrivendo). Prima si cercava sempre per somiglianza 0.45 e le parole lunghe attiravano nomi senza rapporto: "adattatore" trovava "contatore",
+  "alimentatore", "scambiatore" (336 risultati su 551 sbagliati, più di "adatt": 248), "caldaia" trovava "turbina", "termostato" 452 nomi di troppo. Il DB **non ha
+  `fuzzystrmatch`** (niente `levenshtein` in SQL, e non si installa estensioni sul DB condiviso): per questo il controllo è in JS. Il ripiego costa ~0,7 s (solo
+  quando scatta); legge righe intere solo dei risultati tenuti. Numeri e sigle (`dn50`, `3/4`) non hanno refusi.
+- **Singolare/plurale** (`radiceParola`): da 5 lettere senza la vocale finale ("valvole" trova le "valvola", "raccordi"/"raccordo", "adattatori"/"adattatore",
+  "doccia"/"docce"). Il termine intero si cerca ovunque come prima, la **radice solo nel nome**: su tutto il testo "rubinetto" pescava l'intera categoria
+  "Rubinetteria" (744 in più). A 4 lettere niente radice ("tub" prenderebbe quasi tutto). Prima lo faceva per caso la somiglianza.
+- **Il limite conta le schede, non le righe** (`LIMITE_RISULTATI` = 100, uguale per ricerca live, `/cerca`, categoria, marchio): il `LIMIT` stava sulle righe e le varianti si
+  raggruppavano DOPO, quindi con 60 si vedevano da 23 a 54 schede a seconda della parola ("adatt" 23, "adattatore" 50) e il resto spariva senza avviso. Ora una riga per gruppo
+  (`ROW_NUMBER() OVER (PARTITION BY COALESCE(gruppo_id, -id))`) **prima** del `LIMIT` (si chiede limite+1: l'elenco porta `troncato` non enumerabile → `elenco.troncato`, JSON
+  `troncato`, nota "Mostrati i primi risultati" in pagina e nella ricerca live, "Oltre N risultati"). Finestra e ricerca lavorano su poche colonne e rileggono le righe intere solo
+  dei risultati (sulle righe intere +80 ms a pagina). Provato: "ada" 260 ≥ "adat" 236 ≥ "adatt" 211 ≥ "adattatore" 191, e ogni risultato di una parola lunga c'è anche in quella corta.
+- **Parole di ricerca** (`dividiTermini`): `%` e `_` valgono per sé (`escapeLike`; "%%" leggeva tutto il catalogo in 3 s), la sola punteggiatura non è una parola (niente query),
+  "dn 50"/"ø 20" si uniscono e `ø20`/`dn50`/`ø20mm` cercano la misura intera con confine (`ø\s?20(?!\d)`: prima "ø20" trovava "Ø200"). Prove: `test/ricerca.test.js`.
+- **Ancora lente** (non toccate, stesso costo di prima): ricerche in pollici (`3/4"`) con l'equivalenza in mm, che fanno una regex su tutti i nomi; e "diametro N" / "N mm"
+  come due parole separate (non una misura).
 - Marchio e categoria si cercano dallo **slug**, non dalla tabella `brands` (vuota).
 - **Niente chip di filtro cliccabili** (rimossi da /cerca e /categoria su richiesta esplicita,
   non riproporli): solo ricerca testuale libera.
@@ -129,7 +147,9 @@ di query in sequenza**, non la loro complessità. Mai query dentro un ciclo (N+1
   modalità transazione. `ricerca_testo` è nell'indice: se cambia, l'indice va ricreato. Per
   confrontare una versione nuova con la vecchia: `git show HEAD:src/catalogo.js` in un file
   temporaneo, insiemi e chiave (categoria+nome) d'ordine, non gli id.
-- **Elenchi** (`paginato`): conteggio (in cache) e pagina partono insieme. Le varianti dei gruppi
+- **Elenchi** (`paginato`): conteggio (in cache) e pagina partono insieme. **Dal 16/10/2026 si pagina per schede**: una riga per gruppo prima di `LIMIT/OFFSET`, totale = `COUNT(DISTINCT COALESCE(gruppo_id, -id))`
+  (prima 40 prodotti per pagina che si riunivano in da 2 a 34 schede, e la stessa famiglia sparsa su più pagine ricompariva in ognuna: "Raccorderia e valvole" 6079 prodotti → 2517
+  schede, 63 pagine da 40, nessuna ripetuta). Le varianti dei gruppi
   viaggiano nella stessa query, **una volta per gruppo** (`conMembriDelGruppo`, colonna `_gruppo`):
   ripetute su ogni riga costavano più della seconda query che sostituivano. Ordine dei pareggi
   `nome, prezzo_listino, id`: prima era arbitrario (con OFFSET le righe potevano ripetersi o
@@ -162,11 +182,17 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   solo "+ Aggiungi pezzi"), niente riga "Imponibile" e niente "2 × € … → €…": la scheda articolo ha prezzo
   `cad. · IVA esclusa`, cestino, stepper e totale riga. Ordine pagina: articoli → "Consegna in cantiere"
   (campo `destinazione` che si apre con "Cambia"; Invio nel campo vale "Fatto", non paga) → nota facoltativa
-  (`<details>`, campo `note`) → riepilogo → "Svuota carrello" (in fondo, link sottolineato, con conferma). Il
-  totale e **"Paga e invia richiesta"** stanno nella barra fissa `.barra-paga` sopra la navbar (il pulsante
+  (`<details>`, campo `note`) → riepilogo (dal 17/10/2026 la card "Cosa paghi e a chi": vedi "Pagamento") → "Svuota carrello" (in fondo, link sottolineato, con conferma). L'importo
+  "Paghi ora" e **"Paga e invia richiesta"** stanno nella barra fissa `.barra-paga` sopra la navbar (il pulsante
   invia `#form-invia` con l'attributo `form=`); `--altezza-barra-paga` in `style.css` è lo spazio da
   lasciare in fondo alla pagina: se la barra cambia altezza, aggiornarlo. L'app mobile non ha ancora seguito
   queste modifiche.
+- **Righe compatte ovunque (richiesta esplicita del 16/10/2026)**: ricerca (`/cerca` e ricerca live della home), "Elementi con foto" (`/con-foto`), marchio (elenco di una famiglia) e
+  categoria usano **tutte** `partials/prodotto_riga.ejs` (foto 56×56 a sinistra, stepper `− N +` che salva a ogni tocco, niente "Aggiungi", barra `.barra-vai` in basso);
+  `.app-categoria` dà lo spazio in fondo. Ogni pagina ha `#risultati[data-righe-compatte]` con `data-carrello`, `data-pezzi`, `data-icona-vuota` (la home li ha sull'elenco
+  delle categorie: la ricerca live ci disegna le righe con `rigaCompattaHtml`, e `/home` passa `carrello`). **La card classica `partials/prodotto.ejs` non è più usata da nessuna pagina**, e con lei
+  il blocco "scelte" qui sotto (`[data-passo]`, "Aggiungi (N)", sessionStorage) è codice rimasto in `app.js` ma senza pagine che lo usino: non reintrodurre card diverse, e se
+  si pulisce `app.js` si può togliere. Prova: test "ricerca, "Elementi con foto" e home: righe compatte..." in `test/server.test.js`.
 - **Quantità scelte e non ancora aggiunte** (card classica: ricerca, marchio, con-foto e ricerca live della home; richiesta esplicita del
   15/10/2026): il + scrive solo nel campo, "Aggiungi (N)" manda al carrello. Prima, cambiando pagina, i campi tornavano a 0. Ora stanno in
   `scelte` (`{ id: quantità }`, in `app.js`) e in **sessionStorage** (`minuteria.scelte.<id utente>`, dal `<meta name="utente">` di
@@ -260,37 +286,50 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   comunque, e la richiesta va a tutti i banchi attivi (vedi README); il banner di `/profilo` ("non inviare richieste")
   è quindi inesatto.
   `/profilo?benvenuto=1` non esiste più.
-- **Storico ordini** (`views/storico.ejs` + `partials/storico_scheda.ejs`, richiesta esplicita del 05/10/2026; classi
-  `st-*`): intestazione "Storico ordini". Sezione **"In corso"** (richieste in attesa + ordini in consegna entro 24 h:
-  stessa regola di `attivitaCorrente`, `eInConsegna` in `flusso_cliente.js`; non solo la più recente) e sotto un
-  gruppo per **mese di creazione** in ora italiana (`format.meseRoma`), dal più recente. Dati e raggruppamento
-  stanno in `flusso.storicoCliente` (la route è sottile); la scheda è `voceStorico`. Etichette fisse: In consegna
-  (anche per "inviato/in preparazione/partito"), In attesa, Consegnato, Nessuna risposta, Annullata. Al centro il
-  nome della **ditta** (mai la filiale; arriva con un JOIN nella stessa lettura degli ordini di
-  `richiesteClienteConStato`) o, senza ordine, "Rimborsato" / "Rimborso in corso" (niente se la richiesta è del
-  vecchio flusso, `pagamento_stato` NULL). A destra `totaleOrdine(ordine)` o l'importo pagato. Si vedono solo le
-  ultime 50 richieste. **Riordina** (solo schede "Consegnato"): form `POST /storico/:id/riordina` *fuori* dal
-  link della scheda; somma al carrello di sessione gli `order_items` dell'ordine (tetto `QUANTITA_MASSIMA`),
-  salta quelli disattivati, tolti dal catalogo o `non_disponibile` (`flusso.articoliDaRiordinare`) e passa il
-  numero dei saltati a `/carrello` in `req.session.avvisoCarrello` (avviso letto e cancellato al primo GET). Non è
-  nell'API dell'app. Il fondo pagina è 96px (`.app-storico`).
+- **Storico ordini = materiale e quanto si deve a BOREA** (`views/storico.ejs`, `partials/storico_riquadro.ejs`, `partials/storico_ordine.ejs`; richiesta
+  esplicita del 16/10/2026, sostituisce lo storico a schede del 05/10; classi `sm-*`, `st-stato`, `st-riordina`). **Dati e calcolo in `src/materiale.js`**
+  (`materialeOrdini`), lo stesso che usa la pagina del cliente lato banco (`GET /distributore/clienti/:id`, blocco "Da incassare" con gli STESSI componenti)
+  e i due CSV: banco e installatore non possono vedere cifre diverse (test "banco e installatore vedono le STESSE cifre"). Regole: prezzo cad. IVA inclusa
+  = `(prezzo_netto_unitario + raee_unitario) × (1 + iva)`, totale riga = `(subtotale + raee_riga) × (1 + iva)`, totale ordine = somma delle righe; **mai**
+  `prezzo_unitario_cliente`/`subtotale_cliente` nei totali del materiale (sono il prezzo col servizio, che si paga in app); tutto dai valori **salvati**
+  nell'ordine, IVA compresa (`iva / imponibile` dell'ordine, ripiego la config). **"Servizio pagato in app"** per ordine = l'importo realmente addebitato
+  (`requests.pagamento_importo`, con Stripe già aggiornato all'incassato) **se coerente** col calcolo `(Σ(subtotale_cliente − subtotale) + costo_consegna) × (1 + iva)`
+  (tolleranza 1 centesimo); altrimenti il calcolo (gli ordini di prima, pagati interi in app, e quelli senza importo salvato). È servizio **+ consegna** e non
+  entra mai nel totale del materiale. Filtri: `?mese=AAAA-MM|tutto` (default il mese corrente se ha attività, altrimenti il più recente; valori sbagliati tornano lì),
+  `?vista=ordine|articolo`; mesi in **ora italiana** (`format.meseRoma`). Compaiono **tutti** gli ordini (anche in preparazione/consegna: Consegnato / In consegna =
+  `evaso` / In preparazione = `inviato` e `in_evasione`), niente più "In corso" (le richieste in attesa stanno in Stato ordini), le richieste chiuse senza ordine
+  (nessuna risposta, annullate) come schede "Nessun costo". Un riquadro blu per **ditta** (oggi una, BOREA; mai la filiale; con più ditte i chip del mese stanno
+  nel primo). Per ordine: `<details>`, aperto solo il primo; "Riordina" (solo consegnati) è un form `POST /storico/:id/riordina` fuori dal `<summary>`,
+  "Dettagli ›" va a `/ordini/:id`. Per articolo: righe sommate per (codice, nome, prezzo cad.), dal totale più alto. **CSV** `GET /storico/materiale.csv?mese=` (e
+  `GET /distributore/clienti/:id/materiale.csv` per il banco, solo clienti approvati): `;`, BOM UTF-8, una riga per articolo, servizio sulla prima riga di ogni
+  ordine, totali in fondo, celle che cominciano per `= + - @` con un apice (nomi come "- Materiale di montaggio" esistono nel catalogo). **Lato banco** niente
+  Riordina né "Dettagli" (aprire il dettaglio di un ordine `inviato` lo prende in carico) né richieste senza ordine. Prove: `test/materiale.test.js` e i test
+  "storico: ..." di `test/server.test.js`. Il fondo pagina è 96px (`.app-storico`).
 - **Verifica disponibilità** (`views/richiesta_attesa.ejs`, richiesta esplicita del 04/10/2026, non rimettere
   paragrafi di spiegazione, "Hai pagato…", pulsante notifiche): timer con anello da 148px che si **svuota**,
-  tre passaggi (`<ol>`), una scheda per banco, scheda del materiale col "Pagato", "Annulla" come link. Anello e
+  tre passaggi (`<ol>`), una scheda per banco, scheda "Materiale richiesto" (`partials/richiesta_materiale.ejs`: righe a prezzo del banco con "Cod. … · € cad.", "Merce · IVA
+  esclusa · prezzi del banco"), scheda **"Pagamenti"** (`partials/pagamenti.ejs`, stato `attesa`: consegna verde "Pagata in app · rimborsata se nessuno accetta", materiale
+  IN SOSPESO, bordo tratteggiato e importo grigio, "Lo paghi a BOREA solo se conferma"; vedi "Importi della richiesta" nel Pagamento), "Annulla" come link. Anello e
   numero sono `[data-arco]`/`[data-countdown]` come l'icona della navbar: li muove **lo stesso timer** di
   `nav_ordini.ejs` (stessa durata `scade_il − creato_il`, stessa formula), per questo il numero non ha più
   `id="countdown"` e il vecchio `mostraTempo` di `app.js` non scrive più niente. Il polling di `app.js` riscrive
   testo e classe di `[data-distributore]` (`stato-badge stato-<esito>`): il puntino davanti all'etichetta è un
   `::before` di `#stato-distributori .stato-badge`, così resta; "In attesa" lì si chiama "Sta verificando" (anche
-  nel polling). "Elimina definitivamente" resta sotto "Annulla", non toccato.
+  nel polling). **Niente più "Elimina definitivamente"** (richiesta esplicita del 17/10/2026, non rimetterlo): in attesa si può solo annullare; la rotta di
+  eliminazione c'è ancora e si usa dalla pagina della richiesta chiusa. Non rimettere nemmeno la riga "Pagato" né "Richiesta del … · prezzi IVA esclusa".
 - **Richiesta scaduta** (`views/richiesta_chiusa.ejs`, richiesta esplicita del 05/10/2026; classi `att-*`,
-  modificatore `.att-rosso`): vale solo per `nessuna_offerta`; la richiesta **annullata** dall'installatore ha
-  ancora il markup vecchio. Niente animazioni. Anello vuoto, "00:00" grigio, pallino "!" a 45° sul bordo, titolo
+  modificatore `.att-rosso`): il layout nuovo vale solo per `nessuna_offerta`; la richiesta **annullata** dall'installatore ha ancora il markup
+  vecchio, ma con le stesse schede "Materiale richiesto" e "Pagamenti" (stato `chiusa`, `motivoChiusura: 'annullata'`, senza nota di rinvio). Niente animazioni. Anello vuoto, "00:00" grigio, pallino "!" a 45° sul bordo, titolo
   "Nessun banco ha confermato" (**"Nessun corriere ha confermato"** se un banco aveva accettato e nessun corriere ha preso la consegna in
   tempo, richiesta esplicita del 15/10/2026: `raggruppaRisposteDitta` porta `bancoConfermato` e la vista lo legge con `esito === 'scaduto'`;
   in quel caso il banco ha il chip verde "Disponibile", e la notifica di chiusura dice lo stesso, scelta da `esito.corrieriScaduti` in
   `chiudiFinestraRisposte`), rimborso in pillola verde ("€ X rimborsati"; se `pagamento_stato` è ancora
-  `pagato` "Rimborso in corso"; senza pagamento niente pillola), un banco per ditta con il suo stato reale.
+  `pagato` "Rimborso in corso"; senza pagamento niente pillola; l'importo è `importi.app.totale`), un banco per ditta con il suo stato reale. Sotto il titolo
+  "Il tempo per rispondere è scaduto." (non più "di N minuti": non dipende dalla finestra). Dopo il materiale la scheda **"Pagamenti"** (stato `chiusa`): consegna verde con
+  la freccia di ritorno "Rimborsata il gg/mm sulla tua carta" (o "sul tuo metodo di pagamento" se il metodo non è `stripe`/`simulato`), oppure arancio "Rimborso in corso";
+  materiale grigio "Niente da pagare: BOREA non ha confermato" / "nessun corriere ha accettato la consegna" / "hai annullato la richiesta", "€ 0,00"; **nessun dettaglio degli
+  importi**, al suo posto la nota "Se rinvii la richiesta paghi di nuovo solo la consegna (€ X). Il materiale resta € Y, da pagare a BOREA se conferma." con X e Y ricalcolati
+  OGGI (`dettaglioRichiesta` → `rinvio`). Niente più "Richiesta del …" in fondo al materiale.
   Il pulsante è "Rinvia richiesta" (una sola "i", niente "paghi di nuovo €"): l'azione e il pagamento sono
   quelli di prima. La data è `fmt.dataOraRoma(creato_il, ', ')`, in ora italiana. "Eliminare" è un link con la
   stessa conferma.
@@ -313,8 +352,9 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   del 14/10/2026; stesse classi `att-*`, in verde, **senza animazioni**; chiude `.app-consegnato` con 96px in fondo): scheda
   di stato (cerchio 120px con spunta in cerchio pieno 76px, "Consegnato", `fmt.dataEstesaRoma(consegnato_il)` = "Mercoledì 14
   ottobre alle 20:10", tre passaggi tutti `att-fatto`), pulsante blu "Riordina gli stessi pezzi" (stesso `POST /storico/:id/riordina`
-  dello storico), **una sola scheda** banco + materiale + costi ("Materiale da", "Ordine #N"), "Dettagli consegna e documenti"
-  (chiuso), nota sul prezzo. Non rimettere: il riquadro verde con l'etichetta "Consegnato" e il nome del banco, il titolo
+  dello storico), **una sola scheda** banco + materiale ("Materiale consegnato", "Ordine #N", righe a prezzo del banco) e la scheda "Pagamenti"
+  (consegna pagata in app / materiale da pagare a BOREA, mai un totale unico; dal 17/10/2026, vedi "Importi dell'ordine" nel Pagamento); pulsante
+  "Ho ricevuto il materiale". Non rimettere "Dettagli consegna e documenti" né la nota sul prezzo definitivo (tolti su richiesta esplicita). Non rimettere: il riquadro verde con l'etichetta "Consegnato" e il nome del banco, il titolo
   "Prodotti", "Costo di consegna" (ora "Consegna in cantiere") né il link "Annulla ordine". Banco, agente e il ritiro **non**
   consegnato hanno ancora il markup vecchio. **Annullamento**: `flusso.ordineAnnullabileDalCliente` è l'unica regola (pagina,
   `/ordini/:id/elimina`, `/richieste/:id/elimina`, API dell'app) e vuole `stato = 'inviato'` **e** `consegnato_il` vuoto: con la
@@ -399,7 +439,62 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   uno script che usa solo `src/richieste.js` non lo ha (anche `scripts/prova_whatsapp.js` lo importa).
   Destinazione e note stanno sulla richiesta (`requests.destinazione/note`, scritte dal carrello).
 - **Pagamento** (`src/pagamenti.js`): `requests.pagamento_stato` NULL = vecchio flusso,
-  `pagato`, `rimborsato`; importo = `totali.totale_ivato` del carrello (spedizione fissa inclusa).
+  `pagato`, `rimborsato`; importo = **`totali.da_pagare_app`** del carrello. **Regola dei prezzi (dal 17/10/2026; commento sopra `pricing.calcolaOrdine`, una sola
+  funzione pura `pricing.dividiTotale` la applica per carrello, addebito, ordine e Storico)**: in app l'installatore paga ORA = corriere fisso (`spedizione_fissa`, 10 €)
+  + servizio (`servizio_pct`, 10%, della merce **a prezzo del banco**, IVA esclusa, `round2(netto × pct/100)`: esattamente il 10%, non la somma di righe arrotondate)
+  + IVA su (corriere + servizio); e paga DOPO a BOREA = merce a prezzo del banco (+ RAEE) + IVA su quella somma. `calcolaOrdine` ritorna `app` e `banco` (voci già arrotondate:
+  corriere/servizio/imponibile/IVA/totale e merce/RAEE/imponibile/IVA/totale), `servizioPct`, `ivaPct`, `da_pagare_app` = `app.totale`, `materiale_banco` =
+  `banco.totale`, `totale_ivato` = app.totale + banco.totale ("spesa complessiva"; `imponibile` e `iva` sono somme delle due parti). Esempio fisso nei test: merce 54,50 + 10,00
+  → servizio 6,45; in app 10,00 + 6,45 + IVA 3,62 = **20,07**; materiale 64,50 + IVA 14,19 = **78,69**; spesa **98,76**. Lo usano `nuovaRichiesta` (importo), `avviaPagamento`
+  (Stripe: PaymentIntent) e `segnaDaIncassare` (incasso = `LEAST(autorizzato, da_pagare_app dell'ordine)`); i rimborsi restituiscono quello che è stato pagato, "Rinvia" addebita di nuovo la consegna
+  **ricalcolata con i prezzi di oggi** (dal 17/10/2026: vedi "Importi della richiesta").
+  **Le righe mostrano il PREZZO DEL BANCO** (`pricing.prezzoNetto`, locals `prezzoBanco`/`totaleRigaBanco`): catalogo, categoria, ricerca live, varianti
+  (`data-varianti`), carrello, `prodotto_json.js` e API dell'app (`prezzo`, `prezzo_valore`) dicono lo stesso prezzo, e la somma delle righe è la "Merce". Il 10% sta **solo**
+  nella voce Servizio. **Non toccati**: `order_items.prezzo_unitario_cliente`/`subtotale_cliente` e `orders.totale_finale` si scrivono come prima (col 10%), quindi **la pagina
+  dell'ordine del banco e dell'agente e la bolla (DDT) mostrano ancora il prezzo col 10%** (quella dell'**installatore** è già divisa: vedi "Importi dell'ordine"): da allineare. **Ordine minimo** (config `ordine_minimo`, 33) misurato su `totale_netto`
+  (merce a prezzo del banco; `validaRichiesta` e `riepilogoCarrello`). **Banco**: la tabella del materiale nel dettaglio richiesta usa `prezzoNetto` (prima prezzo col servizio).
+  **Carrello web**: card "Cosa paghi e a chi" (`views/carrello.ejs`, classi `cp-*`): riquadro azzurro "Consegna in cantiere" (PAGHI ORA: Corriere, Servizio, IVA, Totale da pagare ora) e
+  riquadro "Materiale" (PAGHI DOPO A {ditta}, nome da `profiloCliente.distributore` senza forma giuridica, `fmt.nomeCommerciale`; Merce, RAEE solo se > 0, IVA, Totale materiale), sotto
+  "Spesa complessiva"; barra "Paghi ora · consegna". Ogni importo è un `[data-riep="chiave"]` scritto da `flusso.vistaRiepilogo` (testo già pronto: la vista non fa conti) e
+  **il ricalcolo dal vivo** (`aggiornaCarrelloDa` in `app.js`) lo riscrive dalla risposta di `POST /api/carrello/imposta` (`riepilogo`, `totali_righe`) **senza ricaricare**
+  (± e quantità scritta; togliere una riga ricarica come prima), compreso l'avviso dell'ordine minimo (`[data-minimo-avviso]`, sempre nella pagina e `hidden` se raggiunto), la riga
+  RAEE e il pulsante. Prove: `test/pricing.test.js` e i test "carrello: ..." di `test/server.test.js`. **Non seguono ancora**: l'app Expo (l'API dà `riepilogo`,
+  `da_pagare_ora`, `da_pagare_al_banco`, ma l'app mostra ancora `totale_ivato`).
+  **Importi dell'ordine, divisi uguale dappertutto (17/10/2026)**: alla nascita dell'ordine `flusso_cliente` salva in `orders` `servizio`, `imponibile_app`, `iva_app`,
+  `da_pagare_app`, `imponibile_banco`, `iva_banco`, `materiale_banco` (DOUBLE PRECISION NOT NULL DEFAULT 0; blocco "Importi dell'ordine divisi" in fondo a `schema.sql`,
+  **applicato al DB condiviso il 17/10/2026**; i 41 ordini di prima restano a 0). **Una sola funzione**, `pricing.importiOrdine(ordine, pagamento, ivaPct, servizioPct)` →
+  `{ app: {corriere, servizio, imponibile, iva, totale, pagatoIl, rimborsato, metodo}, banco: {merce, raee, imponibile, iva, totale}, servizioPct, ivaPct }`, usata da pagina
+  dell'ordine (`flusso.dettaglioOrdine` → `importi`), `src/materiale.js` (Storico, CSV, pagina del cliente lato banco) e pagine della richiesta: colonne salvate se ci sono
+  (`da_pagare_app` o `materiale_banco` > 0), altrimenti **ricalcolo** per gli ordini vecchi (merce = `totale_netto`, servizio = `totale_finale − totale_netto`, corriere =
+  `costo_consegna`, RAEE = `contributo_raee`, IVA con `pricing.ivaPctOrdine`: quella salvata nell'ordine, mai quella di oggi). Sugli ordini veri #124–#132 dà 20,07 / 78,69.
+  `app.totale` = `requests.pagamento_importo` (l'incassato, con Stripe) **solo se non supera il calcolo di più di un centesimo**: gli ordini di prima pagati INTERI in app
+  (98,76) mostrano il calcolo (20,07), non 98,76 (scelta mia: altrimenti "Consegna 98,76" accanto a "Materiale 78,69"). **Pagina dell'ordine dell'installatore**
+  (`ordine_dettaglio.ejs`, in consegna, consegnato e il ritiro del vecchio flusso; la parte alta con anello, "Te lo porta…" e barra non è cambiata): scheda "Materiale in
+  arrivo" / "Materiale consegnato" (`partials/ordine_righe.ejs`: righe `Cod. X · € cad.` a prezzo del banco + RAEE, "Merce · IVA esclusa", riga "Documenti · DDT n° N ›" solo se
+  c'è il DDT) e scheda "Pagamenti" (`partials/pagamenti.ejs`, UNA per ordine e richieste, classi `pg-*`, parametri `{ importi, stato: 'attesa'|'ordine'|'consegnato'|'chiusa', ditta }`:
+  riga verde "Consegna in cantiere · Pagata in app il gg/mm", riga grigia "Materiale · Da pagare a {ditta}, in fattura", `<details>` "Vedi il dettaglio degli importi" con i due
+  riquadri; ordine rimborsato → riga grigia "Rimborsata il gg/mm" se c'è `rimborsato_il`). **Mai un "Totale" unico** né Consegna/IVA/Totale sotto le righe. **Tolti su richiesta esplicita**: la sezione chiusa "Dettagli consegna e
+  pagamento/documenti" (resta solo il DDT: **destinazione e note della richiesta non si vedono più** nella pagina dell'ordine) e la nota "Prezzo definitivo, con eventuale sconto
+  aggiuntivo…". Il pulsante "Ordine consegnato" ora è "Ho ricevuto il materiale" (stessa azione). **Banco e agente vedono ancora il markup vecchio** (`subtotale_cliente`,
+  `totale_finale`, `totale_ivato`; commento sopra il loro ramo in `ordine_dettaglio.ejs`). Prove:
+  `test/pricing.test.js` (`importiOrdine`, `ivaPctOrdine`), `test/materiale.test.js` ("Storico e pagina del banco…"), test "ordine in consegna/consegnato/VECCHIO/rimborsato…"
+  e "richiesta in attesa/scaduta…" di `test/server.test.js`. **Sulla VPS**: `git pull`, lo schema (blocco sopra) PRIMA del riavvio di pm2: il nuovo `INSERT INTO orders`
+  scrive le colonne e fallisce se non ci sono.
+  **Importi della richiesta (17/10/2026)**: stessa divisione sulle pagine `GET /richieste/:id` (in attesa e chiusa). `flusso.nuovaRichiesta` passa i `totali` del carrello a
+  `richieste.creaRichiesta`, che li salva su `requests`: `corriere`, `servizio`, `iva_app`, `da_pagare_app`, `merce_banco`, `raee_banco`, `iva_banco`, `materiale_banco` (DOUBLE
+  PRECISION NOT NULL DEFAULT 0) più `rimborsato_il` (TIMESTAMP, scritta da `pagamenti.rimborsa`, azzerata da `incassaDiNuovo`); blocco "Importi della richiesta divisi" in fondo a
+  `schema.sql`, **applicato al DB condiviso il 17/10/2026**. `pricing.importi({ ordine | richiesta })` è il punto unico (`importiOrdine` / `importiRichiesta`): per le richieste
+  vecchie (colonne a 0) si ricalcola con `pricing.calcolaDaRigheDb` (calcolaOrdine sulle righe del DB, **stessa funzione del carrello**, consegna fissa di oggi);
+  **`app.totale` = `pagamento_importo` quando c'è, senza controllo di coerenza** (diversamente dall'ordine: un rimborso mostra quanto è tornato davvero), `pagatoIl` = `pagato_il`,
+  `rimborsatoIl` = `rimborsato_il` o, per una chiusa senza ordine (`nessuna_offerta`) rimborsata prima della colonna, `scade_il`; `conPagamento` dice se c'è un pagamento (le richieste del vecchio
+  flusso non hanno la scheda "Pagamenti"). `dettaglioRichiesta` passa alla vista `importi`, `righePrezzi` (le righe di calcolaOrdine, forma di `order_items`: la stessa
+  `partials/ordine_righe.ejs` dell'ordine), `ditta` (nome senza forma giuridica, vuoto con più ditte: "il banco") e `rinvio` ({ consegna, materiale } di oggi); `righe` resta quella
+  del DB (la usa anche l'API dell'app). Attenzione: un `include` EJS vede i locals della pagina, quindi la scheda "Pagamenti" va chiamata con `rinvio: null` dove non c'è la nota.
+  **"Rinvia richiesta" ora addebita la consegna ricalcolata con i prezzi di OGGI** (prima ripeteva `pagamento_importo`): `richieste.reinviaRichiesta` riscrive gli importi salvati e
+  `pagamento_importo` (con Stripe quello già autorizzato, `importo` passato da `riapriRichiesta`; `avviaPagamentoReinvio` autorizza `flusso.totaliRichiestaOggi`), così la nota
+  "Se rinvii la richiesta paghi di nuovo solo la consegna (€ X)" dice la verità. Le righe della scheda "Materiale richiesto" sono sempre a prezzi di oggi (`request_items` non salva
+  prezzi): se i prezzi cambiano dopo l'invio, "Merce" (salvata) può non tornare con la somma delle righe. Prove: `test/richieste_importi.test.js` (INSERT, rinvio, rimborso,
+  `importiRichiesta`) e i test "richiesta in attesa/scaduta/annullata…" di `test/server.test.js`.
   Rimborso quando la richiesta si chiude senza ordine (finestra scaduta, tutti rifiutano, annullo, ordine
   annullato); "Rinvia" lo riaddebita. `pagamento_metodo` è `simulato` (app nativa, o sito senza
   `STRIPE_SECRET_KEY`) o `stripe` (sito con la chiave: vedi "Pagamenti Stripe" sotto).

@@ -61,34 +61,18 @@
         <% }); %>
       </div>
 
-      <%# 3. Materiale richiesto e importo pagato %>
-      <div class="card att-card att-materiale">
-        <div class="att-occhiello">Materiale richiesto</div>
-        <ul class="att-righe">
-          <% righe.forEach(function (r) { %>
-            <li class="att-riga">
-              <span class="att-qta"><%= r.quantita %>×</span>
-              <div class="att-desc">
-                <div class="att-nome"><%= r.nome %></div>
-                <div class="att-cod">Cod. <%= r.codice %></div>
-              </div>
-            </li>
-          <% }); %>
-        </ul>
-        <% if (richiesta.pagamento_stato === 'pagato') { %>
-          <div class="att-pagato">
-            <span>Pagato</span>
-            <strong>€ <%= euro(richiesta.pagamento_importo) %></strong>
-          </div>
-        <% } %>
-      </div>
+      <%# 3. Materiale richiesto: righe a prezzo del banco, IVA esclusa, e "Merce · IVA esclusa · prezzi del banco" %>
+      <%- include('partials/richiesta_materiale', { righePrezzi, importi }) %>
 
-      <%# 4. Annulla %>
+      <%# 4. Pagamenti: in app si paga solo la consegna (corriere + servizio + IVA); il materiale lo si paga a BOREA solo se un banco conferma (in sospeso).
+          Stessa scheda della pagina dell'ordine e di "Nessuna risposta", con lo stato 'attesa'. Una richiesta del vecchio flusso (mai pagata) non l'ha. %>
+      <% if (importi.app.conPagamento) { %>
+        <%- include('partials/pagamenti', { importi, stato: 'attesa', ditta }) %>
+      <% } %>
+
+      <%# 5. Annulla. "Elimina definitivamente" non c'è più: mentre si aspetta il banco si annulla soltanto (l'eliminazione sta nella pagina della richiesta chiusa). %>
       <form method="POST" action="/richieste/<%= richiesta.id %>/annulla">
         <button class="att-annulla" type="submit">Annulla la richiesta</button>
-      </form>
-      <form method="POST" action="/richieste/<%= richiesta.id %>/elimina" onsubmit="return confirm('Eliminare definitivamente? Sparirà anche per i venditori.')">
-        <button class="btn btn-rosso btn-blocco" type="submit" style="margin-top:8px;">Elimina definitivamente</button>
       </form>
     </div>
   </div>

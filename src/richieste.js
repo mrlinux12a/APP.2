@@ -1,5 +1,5 @@
 const db = require('../db');
-const { calcolaOrdine, getFinestraMinuti, getSpedizioneFissa, round2 } = require('./pricing');
+const { calcolaOrdine, calcolaDaRigheDb, getFinestraMinuti, getSpedizioneFissa, round2 } = require('./pricing');
 const whatsapp = require('./whatsapp');
 const pagamenti = require('./pagamenti');
 
@@ -25,7 +25,7 @@ async function richiestaConChiave(clienteId, chiaveInvio) {
 async function righeRichiesta(requestId) {
   return db
     .prepare(
-      `SELECT ri.*, p.codice, p.nome, p.categoria
+      `SELECT ri.*, p.codice, p.nome, p.categoria, p.prezzo_listino, p.sconto_base_pct, p.raee
          FROM request_items ri
          JOIN products p ON p.id = ri.product_id
         WHERE ri.request_id = ?
@@ -146,11 +146,13 @@ async function distributoriCandidati(productIds, zona, clienteId = null) {
 // Crea la richiesta di disponibilita' e manda la notifica ai distributori della zona.
 // Da qui parte la finestra di 10 minuti entro cui devono rispondere.
 // `destinazione`, `note` e `importo` (totale IVA inclusa già pagato, vedi pagamenti.js) arrivano dal
-// carrello: da qui l'ordine nasce da solo, senza altre scelte dell'installatore.
+// carrello: da qui l'ordine nasce da solo, senza altre scelte dell'installatore. `totali` (pricing.calcolaOrdine del carrello, quelli
+// che ha già validato nuovaRichiesta) si salvano sulla richiesta: la consegna pagata in app e il materiale da pagare a BOREA
+// (vedi schema.sql, "Importi della richiesta divisi"). Senza, le colonne restano a 0 e le pagine ricalcolano dalle righe.
 async function creaRichiesta(
   cliente,
   righeCarrello,
-  { destinazione = null, note = '', importo = null, metodoPagamento = pagamenti.METODO_SIMULATO, chiaveInvio = null } = {}
+  { destinazione = null, note = '', importo = null, metodoPagamento = pagamenti.METODO_SIMULATO, chiaveInvio = null, totali = null } = {}
 ) {
   const productIds = righeCarrello.map((r) => r.prodotto.id);
   let candidati = await distributoriCandidati(productIds, cliente.zona, cliente.id);
@@ -194,8 +196,10 @@ async function creaRichiesta(
     const info = await db
       .prepare(
         `INSERT INTO requests (cliente_id, zona, stato, scade_il, destinazione, note,
-                               pagamento_stato, pagamento_metodo, pagamento_importo, pagato_il, chiave_invio)
-         VALUES (?, ?, ?, NOW() + (? * INTERVAL '1 minute'), ?, ?, ?, ?, ?, ${incasso ? 'NOW()' : 'NULL'}, ?)`
+                               pagamento_stato, pagamento_metodo, pagamento_importo, pagato_il, rimborsato_il, chiave_invio,
+                               corriere, servizio, iva_app, da_pagare_app, merce_banco, raee_banco, iva_banco, materiale_banco)
+         VALUES (?, ?, ?, NOW() + (? * INTERVAL '1 minute'), ?, ?, ?, ?, ?, ${incasso ? 'NOW()' : 'NULL'}, ${incasso && !candidati.length ? 'NOW()' : 'NULL'}, ?,
+                 ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         cliente.id,
@@ -207,7 +211,8 @@ async function creaRichiesta(
         incasso ? (candidati.length ? incasso.stato : 'rimborsato') : null,
         incasso ? incasso.metodo : null,
         incasso ? incasso.importo : null,
-        chiaveInvio
+        chiaveInvio,
+        ...colonneImporti(totali)
       );
     const requestId = Number(info.lastInsertRowid);
 
@@ -251,22 +256,36 @@ async function creaRichiesta(
   return { requestId, candidati };
 }
 
+// I valori da salvare sulla richiesta, nell'ordine delle colonne (corriere, servizio, iva_app, da_pagare_app, merce_banco, raee_banco, iva_banco,
+// materiale_banco), da pricing.calcolaOrdine. Senza `totali` tutto a 0: le pagine ricalcolano.
+function colonneImporti(totali) {
+  if (!totali || !totali.app || !totali.banco) return [0, 0, 0, 0, 0, 0, 0, 0];
+  return [
+    totali.app.corriere, totali.app.servizio, totali.app.iva, totali.app.totale,
+    totali.banco.merce, totali.banco.raee, totali.banco.iva, totali.banco.totale,
+  ];
+}
+
 // Nessuno ha confermato (o preso la consegna) entro la finestra: riapre la STESSA richiesta (stesso id)
 // con una finestra fresca, invece di crearne una nuova — resta un unico riferimento nel tempo, utile
 // per pagamenti o altro. Riparte verso gli stessi distributori già interpellati la prima volta. Il
-// pagamento, rimborsato alla chiusura, si addebita di nuovo (vedi pagamenti.incassaDiNuovo).
-async function reinviaRichiesta(requestId, { metodoPagamento = pagamenti.METODO_SIMULATO } = {}) {
+// pagamento, rimborsato alla chiusura, si addebita di nuovo (vedi pagamenti.incassaDiNuovo): la consegna è ricalcolata ADESSO con i
+// prezzi di oggi (è la cifra che la pagina "Nessuna risposta" mostra in "Se rinvii la richiesta paghi di nuovo..."), e con lei si
+// riscrivono gli importi salvati sulla richiesta. `importo`: con Stripe quello già autorizzato (src/stripe_pagamenti.js).
+async function reinviaRichiesta(requestId, { metodoPagamento = pagamenti.METODO_SIMULATO, importo = null } = {}) {
   const richiesta = await getRichiesta(requestId);
   if (!richiesta || richiesta.stato !== 'nessuna_offerta') return null;
   const minuti = await getFinestraMinuti();
+  const totali = await calcolaDaRigheDb(await righeRichiesta(requestId), { costoConsegna: await getSpedizioneFissa() });
 
   const fai = db.transaction(async () => {
     await db.prepare(
       `UPDATE requests
-          SET stato = 'in_attesa', scade_il = NOW() + (? * INTERVAL '1 minute')
+          SET stato = 'in_attesa', scade_il = NOW() + (? * INTERVAL '1 minute'),
+              corriere = ?, servizio = ?, iva_app = ?, da_pagare_app = ?, merce_banco = ?, raee_banco = ?, iva_banco = ?, materiale_banco = ?
         WHERE id = ?`
-    ).run(minuti, requestId);
-    await pagamenti.incassaDiNuovo(requestId, { metodo: metodoPagamento });
+    ).run(minuti, ...colonneImporti(totali), requestId);
+    await pagamenti.incassaDiNuovo(requestId, { metodo: metodoPagamento, importo: importo === null ? totali.da_pagare_app : importo });
 
     await db.prepare(
       `UPDATE request_responses

@@ -4,7 +4,7 @@
   <%- include('partials/app_head', { titolo }) %>
 </head>
 <body data-loggato="1">
-  <div class="app">
+  <div class="app<%= elenco ? ' app-categoria' : '' %>">
     <%- include('partials/appbar', {
           titolo,
           intestazione: marca.nome,
@@ -82,21 +82,25 @@
       <div class="contenuto" style="padding-top:0;">
         <p class="sottotitolo">
           <% if (elenco.ricerca) { %>
-            <strong><%= elenco.righe.length %></strong> risultati per «<%= q %>»<% if (famiglia) { %> in <%= famiglia.codice %><% } %>
+            <strong><%= elenco.troncato ? 'Oltre ' : '' %><%= elenco.righe.length %></strong> risultati per «<%= q %>»<% if (famiglia) { %> in <%= famiglia.codice %><% } %>
           <% } else { %>
             <strong><%= famiglia.nome %></strong> — <%= elenco.totale %> articoli
           <% } %>
         </p>
 
-        <div id="risultati">
+        <div id="risultati" data-righe-compatte
+             data-carrello="<%= JSON.stringify(carrello || {}) %>"
+             data-pezzi="<%= carrelloPezzi || 0 %>"
+             data-icona-vuota="<%= iconaOrdini %>">
           <% if (!elenco.righe.length) { %>
             <div class="vuoto"><span class="emoji"><%- iconaVuotoRicerca %></span>Nessun articolo trovato.</div>
           <% } else { %>
-            <div class="card card-fitta griglia-prodotti">
+            <div class="card card-fitta elenco-righe">
               <% elenco.righe.forEach(function (p) { %>
-                <%- include('partials/prodotto', { p, carrello }) %>
+                <%- include('partials/prodotto_riga', { p, carrello }) %>
               <% }); %>
             </div>
+            <% if (elenco.troncato) { %><p class="nota nota-troncato" data-troncato>Mostrati i primi risultati: scrivi qualcosa in più per restringere la ricerca.</p><% } %>
           <% } %>
         </div>
 
@@ -115,19 +119,12 @@
         </p>
       </div>
 
-      <div class="barra-carrello" data-barra-carrello <%= carrelloPezzi ? '' : 'hidden' %>>
-        <div class="interno">
-          <div class="barra-carrello-testo">
-            <span data-pendenti-wrap hidden><strong data-pendenti>0</strong> selezionati</span>
-            <span data-sep-pendenti hidden> · </span>
-            <span data-carrello-wrap <%= carrelloPezzi ? '' : 'hidden' %>><strong data-carrello-conta><%= carrelloPezzi %></strong> nel carrello</span>
-            <span data-carrello-vuoto <%= carrelloPezzi ? 'hidden' : '' %>>Nessun pezzo nel carrello</span>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <button class="btn btn-primary" type="button" data-aggiungi-tutti disabled>Aggiungi</button>
-            <a class="btn btn-chiaro" href="/carrello" data-vai-carrello <%= carrelloPezzi ? '' : 'hidden' %>>Vai al carrello</a>
-          </div>
-        </div>
+      <!-- Barra sopra la navbar: pezzi nel carrello e "Vai al carrello"; compare solo con almeno un pezzo -->
+      <div class="barra-vai" data-barra-vai <%= carrelloPezzi ? '' : 'hidden' %>>
+        <a class="barra-vai-link" href="/carrello">
+          <span class="bv-pezzi" data-barra-pezzi><%= carrelloPezzi || 0 %> <%= carrelloPezzi === 1 ? 'pezzo' : 'pezzi' %></span>
+          <span class="bv-pillola">Vai al carrello <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+        </a>
       </div>
     <% } %>
   </div>

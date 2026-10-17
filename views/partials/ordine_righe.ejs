@@ -1,0 +1,31 @@
+<%
+  // Le righe del materiale di un ordine, viste dall'installatore: PREZZO DEL BANCO (prezzo_netto_unitario + raee_unitario, totale di riga =
+  // subtotale + raee_riga), mai subtotale_cliente (quello col 10% di servizio, che si paga in app). In fondo "Merce · IVA esclusa" =
+  // merce + RAEE (banco.imponibile): la somma delle righe. Il resto degli importi (consegna, IVA, totali) sta nella scheda "Pagamenti"
+  // (partials/pagamenti). Parametri: `righe` (le order_items, o le righe di calcolaOrdine per una richiesta), `importi` (pricing.importi),
+  // `ordine` (per il DDT; {} per una richiesta), `etichetta` (facoltativa: il testo della riga "Merce · IVA esclusa").
+  const etichettaMerce = typeof etichetta !== 'undefined' && etichetta ? etichetta : 'Merce · IVA esclusa';
+%>
+<ul class="att-righe">
+  <% righe.forEach(function (r) { %>
+    <li class="att-riga">
+      <span class="att-qta"><%= r.quantita %>×</span>
+      <div class="att-desc">
+        <div class="att-nome"><%= r.nome_snapshot %></div>
+        <div class="att-cod">Cod. <%= r.codice_snapshot %> · € <%= euro(Number(r.prezzo_netto_unitario) + Number(r.raee_unitario || 0)) %> cad.</div>
+      </div>
+      <span class="att-prezzo-riga">€ <%= euro(Number(r.subtotale) + Number(r.raee_riga || 0)) %></span>
+    </li>
+  <% }); %>
+</ul>
+<dl class="att-riepilogo">
+  <div class="att-voce"><dt><%= etichettaMerce %></dt><dd>€ <%= euro(importi.banco.imponibile) %></dd></div>
+</dl>
+<%# Documenti: solo il DDT, e solo se esiste. %>
+<% if (ordine.ddt_numero) { %>
+  <a class="att-documenti" href="/ddt/<%= ordine.id %>">
+    <span class="att-doc-ico" aria-hidden="true"><%- iconaFiscale %></span>
+    <span class="att-doc-testo">Documenti · DDT n° <%= ordine.ddt_numero %></span>
+    <span class="att-doc-freccia" aria-hidden="true">›</span>
+  </a>
+<% } %>

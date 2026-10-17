@@ -19,7 +19,7 @@ const flusso = require('../src/flusso_cliente');
 
 pricing.getSpedizioneFissa = async () => 10;
 pricing.getOrdineMinimo = async () => 33;
-pricing.calcolaOrdine = async () => ({ totale_finale: 100, totale_ivato: 134.2 });
+pricing.calcolaOrdine = async () => ({ totale_finale: 100, totale_ivato: 134.2, da_pagare_app: 24.4 });
 
 const righe = [{ prodotto: { id: 1 }, quantita: 2 }];
 let create; // richieste "scritte": { id, chiaveInvio }
@@ -35,7 +35,7 @@ function prepara() {
     const k = opzioni.chiaveInvio ? cliente.id + ':' + opzioni.chiaveInvio : null;
     if (k && chiaviUsate.has(k)) throw Object.assign(new Error('duplicate key value violates unique constraint'), { code: '23505' });
     const id = 500 + create.length;
-    create.push({ id, chiaveInvio: opzioni.chiaveInvio });
+    create.push({ id, chiaveInvio: opzioni.chiaveInvio, importo: opzioni.importo, totali: opzioni.totali });
     if (k) chiaviUsate.set(k, id);
     return { requestId: id, candidati: [] };
   };
@@ -62,6 +62,13 @@ test('doppio clic (due invii insieme con la stessa chiave): parte una richiesta 
   assert.equal(create.length, 1, 'una richiesta sola');
   assert.equal(a, b);
   assert.equal(a, create[0].id);
+});
+
+test('la richiesta nasce con i totali del carrello: sono quelli che creaRichiesta salva (consegna pagata in app, materiale da pagare a BOREA)', async () => {
+  prepara();
+  await flusso.nuovaRichiesta(7, righe, { chiaveInvio: 'carrello-0009' });
+  assert.equal(create[0].totali.da_pagare_app, 24.4);
+  assert.equal(create[0].importo, 24.4, "l'importo pagato è quello dei totali");
 });
 
 test('ritorno con "indietro" sulla stessa pagina: l\'invio già partito riporta alla sua richiesta, anche a carrello vuoto', async () => {
@@ -115,4 +122,15 @@ test('col pagamento Stripe il secondo invio dello stesso carrello si respinge (l
   ]);
   assert.equal(create.length, 1);
   assert.deepEqual(esiti.map((e) => e.status).sort(), ['fulfilled', 'rejected']);
+});
+
+test('la richiesta si paga con quello che si paga in app (servizio + consegna), non con il totale del materiale', async () => {
+  prepara();
+  await flusso.nuovaRichiesta(7, righe, { chiaveInvio: 'carrello-0002' });
+  assert.equal(create.length, 1);
+  assert.equal(create[0].importo, 24.4, 'da_pagare_app: il materiale si paga dopo al banco');
+  assert.notEqual(create[0].importo, 134.2);
+  // con Stripe l'importo autorizzato è quello già scritto, anche se i prezzi si sono mossi
+  await flusso.nuovaRichiesta(7, righe, { chiaveInvio: 'carrello-0003', importoPagato: 25.1 });
+  assert.equal(create[1].importo, 25.1);
 });

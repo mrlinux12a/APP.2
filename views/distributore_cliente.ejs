@@ -153,6 +153,30 @@
             </div>
           </section>
         <% } %>
+
+        <%# Materiale ordinato da questo cliente a QUESTO banco e quanto c'è da incassare, mese per mese: gli stessi numeri dello Storico
+            ordini dell'installatore (src/materiale.js, un solo calcolo). Solo per i clienti approvati. %>
+        <% if (eApprovato && typeof materiale !== 'undefined' && materiale) { %>
+          <%
+            const linkMateriale = function (cambio) {
+              const q = Object.assign({ mese: materiale.mese }, cambio);
+              return '/distributore/clienti/' + cliente.id + '?' + Object.keys(q).map(function (k) { return k + '=' + encodeURIComponent(q[k]); }).join('&') + '#materiale';
+            };
+            const gruppoMateriale = materiale.gruppi[0] || { nome: materiale.ditte[0] || 'BOREA', riepilogo: materiale.riepilogo };
+          %>
+          <div class="cli-materiale" id="materiale">
+            <%- include('partials/storico_riquadro', {
+                  m: materiale, g: gruppoMateriale, primo: true, link: linkMateriale,
+                  occhiello: 'Da incassare', esporta: '/distributore/clienti/' + cliente.id + '/materiale.csv'
+                }) %>
+            <% if (materiale.vuoto) { %>
+              <p class="cli-nota">Nessun ordine in questo mese.</p>
+            <% } %>
+            <% materiale.gruppi.forEach(function (g) { g.ordini.forEach(function (o, i) { %>
+              <%- include('partials/storico_ordine', { o, aperto: false }) %>
+            <% }); }); %>
+          </div>
+        <% } %>
       </div>
 
       <%# ---------- Destra: la decisione (o, per chi è già approvato, codice, note e sconti) ---------- %>
