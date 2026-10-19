@@ -27,7 +27,7 @@ if (typeof db.mantieniCalde === 'function') db.mantieniCalde();
 })();
 
 const { requireLogin, requireRole } = require('./src/auth');
-const { leggiQuery, corpoSempreOggetto, rifiutaNulNelPercorso, percorsoInterno, ritornoBanco, conRitorno, salvaSessionePrimaDelRedirect, idNumerico, gestoreNonTrovato, gestoreErrori } = require('./src/http');
+const { leggiQuery, corpoSempreOggetto, rifiutaNulNelPercorso, percorsoInterno, ritornoBanco, conRitorno, salvaSessionePrimaDelRedirect, idNumerico, gestoreNonTrovato, gestoreErrori, vuoleJson } = require('./src/http');
 const { QUANTITA_MASSIMA, leggiId, leggiQuantita } = require('./src/input');
 const { passwordValida } = require('./src/password');
 const pricing = require('./src/pricing');
@@ -38,6 +38,7 @@ const ricevuteModulo = require('./src/ricevute');
 const catalogo = require('./src/catalogo');
 const richieste = require('./src/richieste');
 const notifiche = require('./src/notifiche');
+const bancoAvvisi = require('./src/banco_avvisi');
 const ddt = require('./src/ddt');
 const geo = require('./src/geo');
 const anagrafiche = require('./src/anagrafiche');
@@ -258,14 +259,14 @@ app.use(async (req, res, next) => {
   // Nessuna di queste dipende dal risultato di un'altra: prima giravano una dopo l'altra
   // (fino a una decina di query in sequenza, anche per un cliente senza nulla da mostrare),
   // sommando la latenza di ognuna invece di pagare solo quella della più lenta.
-  const [notificheNonLette, ordiniNonLetti, richiesteNonLette, geoStato, contatori, statoOrdini, profiloCliente, bancoTesta] =
+  const [notificheNonLette, ordiniNonLetti, richiesteNonLette, geoStato, letturaContatori, statoOrdini, profiloCliente, bancoTesta] =
     await Promise.all([
       utente ? notifiche.nonLette(utente.id) : Promise.resolve(0),
       utente && utente.ruolo === 'cliente' ? notifiche.nonLetteCategoria(utente.id, 'ordini') : Promise.resolve(0),
       utente && utente.ruolo === 'cliente' ? notifiche.nonLetteCategoria(utente.id, 'richieste') : Promise.resolve(0),
       utente ? geo.statoUtente(utente.id) : Promise.resolve({ consenso: false }),
       utente && utente.ruolo === 'distributore' && utente.distributor_id
-        ? contatoriBanco(utente.distributor_id)
+        ? letturaBanco(utente.distributor_id)
         : Promise.resolve(null),
       // Icona dinamica "Stato ordini" (partials/nav_ordini.ejs): solo per il cliente e solo per le
       // pagine, non per le API dell'app. Un errore qui non deve mai rompere la pagina, ma va scritto
@@ -313,7 +314,9 @@ app.use(async (req, res, next) => {
   res.locals.percorso = req.path; // la voce attiva dell'intestazione del banco si sceglie da qui
   res.locals.geo = geoStato;
   // I contatori del banco servono alla barra di navigazione di tutte le pagine distributore.
-  res.locals.contatori = contatori;
+  res.locals.contatori = letturaContatori ? letturaContatori.contatori : null;
+  // Quanto manca alla prima richiesta da confermare (null se non ce n'è): la striscia sotto l'intestazione del banco.
+  res.locals.primaScadeSec = letturaContatori ? letturaContatori.primaScadeSec : null;
   // Pagine e risposte dell'app sono dati di chi è collegato: il browser (o un proxy davanti alla
   // VPS) non deve riproporre una copia vecchia, altrimenti richieste e ordini nuovi non si vedono
   // finché non si forza il refresh. Con ETag il ricontrollo costa poco.
@@ -1303,9 +1306,19 @@ app.get('/notifiche', requireLogin, async (req, res) => {
   });
 });
 
-// Notifiche non ancora mostrate: app.js le trasforma in notifica push del browser.
+// Notifiche non ancora mostrate: app.js le trasforma in notifica push del browser e, per il banco, in avvisi a comparsa. Al banco ogni notifica porta
+// anche `tipo`, `request_id`, `order_id` e i dati del suo avviso (src/banco_avvisi.js: la richiesta con i secondi che mancano, il corriere...).
 app.get('/api/notifiche/push', requireLogin, async (req, res) => {
-  res.json({ notifiche: await notifiche.daMostrare(req.session.user.id) });
+  const utente = req.session.user;
+  const nuove = await notifiche.daMostrare(utente.id);
+  res.json({ notifiche: utente.ruolo === 'distributore' && utente.distributor_id ? await bancoAvvisi.arricchisciPush(utente.distributor_id, nuove) : nuove });
+});
+
+// Un avviso a comparsa del banco, aperto o chiuso, risulta letto (public/app.js, "Avvisi del banco"): il browser manda gli id delle notifiche e, perché un avviso
+// sopravvive alle ricariche della pagina (che ne perdono gli id), le richieste e gli ordini a cui si riferisce.
+app.post('/api/notifiche/lette', requireLogin, async (req, res) => {
+  await notifiche.segnaLettePerId(req.session.user.id, req.body.ids, { richieste: req.body.richieste, ordini: req.body.ordini });
+  res.json({ ok: true });
 });
 
 // ---------- Posizione ----------
@@ -1328,6 +1341,13 @@ function distanzaClienteBanco(cliente, distributore) {
 
 // Riepilogo dei numeri che il banco deve avere sotto gli occhi.
 async function contatoriBanco(distributorId) {
+  return (await letturaBanco(distributorId)).contatori;
+}
+
+// I contatori e, nella stessa lettura (nessuna query in più), quanto manca alla prima richiesta da confermare: la striscia arancio sotto
+// l'intestazione (partials/banco_avviso.ejs) lo scrive già al primo disegno, senza aspettare il browser. `primaScadeSec` NON sta nei contatori:
+// cambia a ogni secondo, e i contatori finiscono in data-versione (la pagina si ricarica se cambiano).
+async function letturaBanco(distributorId) {
   // Prima erano 5 query separate, una dopo l'altra (await in sequenza): eseguita ad ogni
   // singola pagina vista da un distributore, sommava 5 andate e ritorno verso il DB dove
   // ne bastava una per gli ordini (con FILTER) più altre due, tutte e tre in parallelo.
@@ -1342,7 +1362,8 @@ async function contatoriBanco(distributorId) {
     db.prepare(
       `SELECT COUNT(*) FILTER (WHERE rr.esito = 'in_attesa' AND r.scade_il > NOW()) AS n,
               COALESCE(MAX(r.id) FILTER (WHERE rr.esito = 'in_attesa' AND r.scade_il > NOW()), 0) AS ultima,
-              COUNT(*) FILTER (WHERE rr.corriere_stato = 'in_attesa') AS attesa_corriere
+              COUNT(*) FILTER (WHERE rr.corriere_stato = 'in_attesa') AS attesa_corriere,
+              MIN(EXTRACT(EPOCH FROM (r.scade_il - NOW()))::int) FILTER (WHERE rr.esito = 'in_attesa' AND r.scade_il > NOW()) AS prima_scade
          FROM request_responses rr JOIN requests r ON r.id = rr.request_id
         WHERE rr.distributor_id = ?
           AND ((rr.esito = 'in_attesa' AND r.scade_il > NOW()) OR rr.corriere_stato = 'in_attesa')`
@@ -1352,16 +1373,19 @@ async function contatoriBanco(distributorId) {
     ).get(distributorId),
   ]);
   return {
-    daRispondere: Number(daRispondereRow.n),
-    daPreparare: Number(ordini.da_preparare),
-    inPreparazione: Number(ordini.in_preparazione),
-    daApprovare: Number(daApprovareRow.n),
-    // Non si vedono in pagina: servono a /api/distributore/novita per accorgersi che qualcosa è
-    // cambiato anche quando i conteggi restano uguali (una richiesta scade e un'altra arriva, un
-    // corriere prende la consegna).
-    ultimaRichiesta: Number(daRispondereRow.ultima),
-    ultimoOrdine: Number(ordini.ultimo),
-    inAttesaCorriere: Number(daRispondereRow.attesa_corriere),
+    contatori: {
+      daRispondere: Number(daRispondereRow.n),
+      daPreparare: Number(ordini.da_preparare),
+      inPreparazione: Number(ordini.in_preparazione),
+      daApprovare: Number(daApprovareRow.n),
+      // Non si vedono in pagina: servono a /api/distributore/novita per accorgersi che qualcosa è
+      // cambiato anche quando i conteggi restano uguali (una richiesta scade e un'altra arriva, un
+      // corriere prende la consegna).
+      ultimaRichiesta: Number(daRispondereRow.ultima),
+      ultimoOrdine: Number(ordini.ultimo),
+      inAttesaCorriere: Number(daRispondereRow.attesa_corriere),
+    },
+    primaScadeSec: daRispondereRow.prima_scade === null || daRispondereRow.prima_scade === undefined ? null : Math.max(0, Number(daRispondereRow.prima_scade)),
   };
 }
 
@@ -1369,6 +1393,16 @@ async function contatoriBanco(distributorId) {
 // numeri che la pagina ha ricevuto, e il browser si ricarica solo se sono cambiati.
 app.get('/api/distributore/novita', requireRole('distributore'), (req, res) => {
   res.json(res.locals.contatori || {});
+});
+
+// I numeri della striscia arancio e del pallino su "Banco" (partials/banco_avviso.ejs, public/app.js "Avvisi del banco"): richieste da confermare e quanto manca
+// alla prima, più l'elenco di quelle ancora aperte (con cliente, pezzi e scadenza) per tenere allineati gli avvisi "Nuova richiesta". Il browser la chiede ogni 15 s e
+// subito quando arriva una notifica nuova.
+app.get('/distributore/stato-banco', requireRole('distributore'), async (req, res) => {
+  const distributorId = req.session.user.distributor_id;
+  res.set('Cache-Control', 'no-store');
+  if (!distributorId) return res.json({ daConfermare: 0, primaScadeSec: null, attesaCorriere: 0, daPreparare: 0, richieste: [] });
+  res.json(await bancoAvvisi.statoBanco(distributorId, res.locals.contatori || {}));
 });
 
 // Soglie dei tempi della home del banco. Passano alla pagina come data-soglia-* (views/distributore_richieste.ejs):
@@ -1646,6 +1680,9 @@ app.post('/distributore/richieste/:id/rispondi', requireRole('distributore'), as
     partenza_ore: 2,
     consegna_ore: 6,
   });
+
+  // "Conferma" dall'avviso a comparsa (public/app.js, "Avvisi del banco") risponde senza lasciare la pagina: chiede JSON e lo riceve, niente redirect.
+  if (vuoleJson(req)) return res.status(esitoRisposta.ok ? 200 : 409).json({ ok: !!esitoRisposta.ok, errore: esitoRisposta.ok ? null : esitoRisposta.errore });
 
   const base = '/distributore/richieste/' + req.params.id;
   if (!esitoRisposta.ok) return res.redirect(base + '?errore=' + encodeURIComponent(esitoRisposta.errore));

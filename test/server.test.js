@@ -239,7 +239,10 @@ function eseguiMaterialeProva(s, p) {
   return undefined;
 }
 
-const banco = { attivo: false, decisioni: [], sqlHome: { contatore: '', colonna: '' } };
+// daRispondere e primaScade: le richieste da confermare e quanto manca alla prima (il pallino su "Banco" e la striscia sotto l'intestazione).
+const banco = { attivo: false, decisioni: [], sqlHome: { contatore: '', colonna: '' }, daRispondere: 2, primaScade: 98 };
+// Avvisi del banco (src/banco_avvisi.js): le richieste ancora da confermare, le notifiche nuove con gli ordini a cui si riferiscono e gli id segnati letti.
+const avvisiBanco = { richieste: [], notifiche: [], ordini: [], ordiniDaPreparare: [{ id: 1280 }, { id: 1281 }], lette: [], viste: [] };
 
 // Clienti del banco (filiale 2): uno da verificare, due approvati (uno senza codice e senza ordini, uno con poche
 // informazioni) e uno rifiutato. `utentiClienti` sono le righe di users, `legamiClienti` quelle di client_distributors.
@@ -327,6 +330,11 @@ const righeOrdineBanco = {
 const scrittureBolla = [];
 
 function eseguiBanco(s, p, modo) {
+  if (/n_articoli/.test(s) && /FROM request_responses rr JOIN requests r ON r\.id = rr\.request_id JOIN users u/.test(s)) { avvisiBanco.viste.push({ s, p }); return avvisiBanco.richieste; }
+  if (/FROM notifications WHERE user_id = \? AND notificata = 0/.test(s)) return avvisiBanco.notifiche;
+  if (/^SELECT id FROM orders WHERE distributor_id = \? AND stato = 'inviato' AND consegnato_il IS NULL ORDER BY id$/.test(s)) return avvisiBanco.ordiniDaPreparare;
+  if (/o\.corriere_nome, o\.corriere_arrivo_il, u\.ragione_sociale AS cliente_nome/.test(s) && /o\.id = ANY/.test(s)) { avvisiBanco.viste.push({ s, p }); return avvisiBanco.ordini; }
+  if (/^UPDATE notifications SET letta = 1 WHERE user_id = \? AND letta = 0 AND \(id = ANY\(\?::int\[\]\) OR \(tipo = 'nuova_richiesta' AND request_id = ANY\(\?::int\[\]\)\) OR \(tipo = 'corriere_trovato' AND order_id = ANY\(\?::int\[\]\)\)\)$/.test(s)) { avvisiBanco.lette.push(p); return { changes: (p[1] || []).length }; }
   if (/^SELECT \* FROM orders WHERE id = \?/.test(s)) return ordiniDelBanco[p[0]] || null;
   if (/^SELECT \* FROM order_items WHERE order_id = \?/.test(s)) return righeOrdineBanco[p[0]] || [];
   // La bolla (ddt.emetti): anno, numerazione, e l'UPDATE dell'ordine con i dati del modulo
@@ -350,7 +358,7 @@ function eseguiBanco(s, p, modo) {
   if (/FROM users WHERE username/.test(s)) return p[0] === 'banco' ? utenteBanco : undefined;
   if (/^SELECT nome, filiale FROM distributors WHERE id = \?/.test(s)) return { nome: distributoreBanco.nome, filiale: distributoreBanco.filiale };
   if (/COUNT\(\*\) FILTER \(WHERE stato = 'inviato'[^)]*\) AS da_preparare/.test(s)) { banco.sqlHome.contatore = s; return { da_preparare: 2, in_preparazione: 0, ultimo: 1281 }; }
-  if (/COUNT\(\*\) FILTER \(WHERE rr\.esito = 'in_attesa'/.test(s)) return { n: 2, ultima: 12, attesa_corriere: 1 };
+  if (/COUNT\(\*\) FILTER \(WHERE rr\.esito = 'in_attesa'/.test(s)) return { n: banco.daRispondere, ultima: 12, attesa_corriere: 1, prima_scade: banco.daRispondere > 0 ? banco.primaScade : null };
   if (/FROM client_distributors WHERE distributor_id = \? AND stato = 'in_attesa'/.test(s)) return { n: 2 };
   if (/FROM client_distributors cd JOIN users u ON u\.id = cd\.cliente_id/.test(s)) return elencoClienti();
   if (/^SELECT \* FROM users WHERE id = \? AND ruolo = 'cliente'/.test(s)) return utentiClienti[p[0]] || null;
@@ -1983,6 +1991,36 @@ test('ordine pagato con Stripe: "Pagata il 15/10 · Visa •••• 4242", lin
   }
 });
 
+test('ordine appena nato (corriere accettato) con la capture ancora da fare: la scheda dice "Pagata", non "Bloccati sulla carta", e la ricevuta si apre già, anche se l\'ordine non è consegnato', async () => {
+  ordiniProva.attivo = true;
+  // riga 'da_incassare': l'ha segnata la transazione che ha creato l'ordine (importo già deciso); Stripe non ha ancora fatto la capture, quindi niente carta
+  stripeRighe.push({
+    id: 906, cliente_id: 1, tipo: 'richiesta', modo: 'test', stato: 'da_incassare', payment_intent_id: 'pi_prova_81', importo_cent: 2007, incasso_cent: 2007, request_id: 81,
+    carta_marca: null, carta_ultime4: null, receipt_url: null, incassato_il: null, aggiornato_il: pagatoIlProva,
+  });
+  try {
+    // l'ordine 74 è "inviato", non consegnato
+    const t = await (await chiedi('/ordini/74')).text();
+    assert.match(t, /data-pagamento="pagato"/);
+    assert.match(t, /<div class="pg-riga pg-consegna">[\s\S]*?<span class="pg-spunta">[\s\S]*?<\/span>Pagata il 15\/10<\/div>/);
+    assert.doesNotMatch(t, /Bloccati sulla carta|pg-bloccata|pg-sospeso|solo se BOREA conferma/);
+    assert.match(t, /<div class="pg-destra">\s*<div class="pg-importo" data-importo-app>€ 20,07<\/div>\s*<a class="pg-ricevuta" href="\/ordini\/74\/ricevuta\.pdf" target="_blank" rel="noopener">[\s\S]*?<\/svg>Ricevuta<\/a>/);
+    assert.match(t, /Lo paghi a BOREA con la sua fattura/);
+    // e la ricevuta in PDF si apre (senza la carta: arriva con la capture)
+    const r = await chiedi('/ordini/74/ricevuta.pdf');
+    assert.equal(r.status, 200);
+    assert.equal(r.headers.get('content-type'), 'application/pdf');
+    assert.equal(Buffer.from(await r.arrayBuffer()).subarray(0, 5).toString(), '%PDF-');
+    // una riga ancora solo 'autorizzata' (nessun incasso deciso: l'ordine lo porta a 'da_incassare' nella stessa transazione che lo crea) resta com'era
+    stripeRighe[stripeRighe.length - 1].stato = 'autorizzato';
+    const bloccata = await (await chiedi('/ordini/74')).text();
+    assert.match(bloccata, /data-pagamento="bloccato"/, 'autorizzato: nessun incasso deciso, resta com\'era');
+  } finally {
+    stripeRighe.pop();
+    ordiniProva.attivo = false;
+  }
+});
+
 test('il cliente non annulla MAI un ordine: nessun pulsante, e la rotta rifiuta (anche per un ordine "inviato" non consegnato) senza toccare niente', async () => {
   ordiniProva.attivo = true;
   try {
@@ -2279,10 +2317,20 @@ test('home del banco: bacheca a tre colonne, senza interruttore né riquadri con
     assert.match(t, /class="banco-filiale">Banco Genova Fegino</);
     assert.match(t, /class="banco-voce attiva" href="\/distributore" aria-current="page"/);
     assert.match(t, /href="\/distributore\/clienti">[\s\S]*?Clienti\s*<span class="banco-voce-pallino"[^>]*>2</);
-    assert.match(t, /class="banco-storico" href="\/distributore\/storico">Storico ordini</);
+    // "Storico ordini" è una scheda del menu, la terza dopo Clienti (richiesta esplicita del 19/10/2026), e non più un pulsante accanto al cerchio dell'utente
+    const menu = t.match(/<nav class="banco-menu"[^>]*>[\s\S]*?<\/nav>/)[0];
+    assert.deepEqual([...menu.matchAll(/<a class="banco-voce[^"]*" href="([^"]*)"/g)].map((m) => m[1]), ['/distributore', '/distributore/clienti', '/distributore/storico']);
+    assert.match(menu, /<a class="banco-voce" href="\/distributore\/storico">\s*<span class="banco-voce-ico"><svg[\s\S]*?<\/svg><\/span>Storico ordini\s*<\/a>\s*<\/nav>/);
+    const azioni = t.match(/<div class="banco-azioni">[\s\S]*?<\/header>/)[0];
+    assert.doesNotMatch(azioni, /Storico ordini|banco-storico/, 'vicino al cerchio dell\'utente non c\'è più');
+    assert.doesNotMatch(t, /banco-storico/);
     assert.doesNotMatch(t, /banco-campanella|Tutti gli ordini|Storico richieste|href="\/notifiche"/);
     assert.match(t, /<span class="avatar avatar-40"[^>]*>BG</); // iniziali di "Banco Genova Fegino"
     assert.match(t, /<nav class="navbar nav-solo-stretta">/); // da 900px in su il menu in basso non si mostra
+    // sotto i 900px il menu in basso ha le stesse tre voci: Home, Clienti, Storico
+    const basso = t.match(/<nav class="navbar nav-solo-stretta">[\s\S]*?<\/nav>/)[0];
+    assert.deepEqual([...basso.matchAll(/<a href="([^"]*)" class="/g)].map((m) => m[1]), ['/distributore', '/distributore/clienti', '/distributore/storico']);
+    assert.match(basso, /<a href="\/distributore\/storico" class="">\s*<span class="ico"><svg[\s\S]*?<\/svg><\/span>Storico\s*<\/a>/);
 
     // niente più interruttore, riquadri contatore né riga "filiale · zona"
     assert.doesNotMatch(t, /toggle-banco|Banco operativo|Ricezione attiva|In pausa|riquadri-conta|conta-box|zona Genova/);
@@ -2357,7 +2405,7 @@ test('banco: stessa intestazione e stessa tendina su ogni pagina, senza "Punti v
   cookie = '';
   banco.attivo = true;
   // intestazione e tendina così come stanno nella pagina (la voce attiva cambia da pagina a pagina)
-  const testa = (t) => t.match(/<header class="banco-testa">[\s\S]*?<\/header>/)[0];
+  const testa = (t) => t.match(/<header class="banco-testa"[^>]*>[\s\S]*?<\/header>/)[0];
   const tendina = (t) => t.match(/<div class="tendina" data-menu-tendina hidden>[\s\S]*?<\/form>\s*<\/div>/)[0];
   const senzaAttiva = (h) => h.replace(/ attiva"/g, '"').replace(/ aria-current="page"/g, '');
   try {
@@ -2375,7 +2423,7 @@ test('banco: stessa intestazione e stessa tendina su ogni pagina, senza "Punti v
       r = await chiedi(percorso);
       assert.equal(r.status, stato, percorso);
       pagine[nome] = await r.text();
-      assert.match(pagine[nome], /<header class="banco-testa">/, nome);
+      assert.match(pagine[nome], /<header class="banco-testa"[^>]*>/, nome);
       assert.doesNotMatch(pagine[nome], /<header class="appbar">/, nome + ': niente appbar vecchia');
     }
 
@@ -2387,10 +2435,13 @@ test('banco: stessa intestazione e stessa tendina su ogni pagina, senza "Punti v
     assert.match(testa(pagine.home), /class="banco-voce attiva" href="\/distributore"/);
     assert.match(testa(pagine.clienti), /class="banco-voce attiva" href="\/distributore\/clienti"/);
     // "Storico ordini" è accesa sullo storico e dentro un ordine (qui un ordine inesistente: la pagina d'errore ha la stessa barra)
-    assert.match(testa(pagine.storico), /class="banco-storico attiva" href="\/distributore\/storico" aria-current="page"/);
-    assert.match(testa(pagine.errore), /class="banco-storico attiva" href="\/distributore\/storico" aria-current="page"/);
-    assert.doesNotMatch(testa(pagine.home), /banco-storico attiva/);
-    assert.doesNotMatch(testa(pagine.notifiche), /banco-storico attiva/);
+    assert.match(testa(pagine.storico), /class="banco-voce attiva" href="\/distributore\/storico" aria-current="page"/);
+    assert.match(testa(pagine.errore), /class="banco-voce attiva" href="\/distributore\/storico" aria-current="page"/);
+    assert.doesNotMatch(testa(pagine.home), /class="banco-voce attiva" href="\/distributore\/storico"/);
+    assert.doesNotMatch(testa(pagine.notifiche), /class="banco-voce attiva" href="\/distributore\/storico"/);
+    // e nel menu in basso, la voce "Storico" è accesa sullo storico
+    assert.match(pagine.storico, /<a href="\/distributore\/storico" class="attivo">\s*<span class="ico">/);
+    assert.doesNotMatch(pagine.home, /<a href="\/distributore\/storico" class="attivo">/);
 
     // le pagine interne hanno sotto la barra la freccia e il loro titolo; la home no. "Clienti" è una scheda del
     // menu, non una pagina interna: ha il suo titolo con la ricerca e nessuna freccia indietro.
@@ -2403,10 +2454,9 @@ test('banco: stessa intestazione e stessa tendina su ogni pagina, senza "Punti v
     assert.match(pagine.notifiche, /<h1 class="banco-titolo-testo">Notifiche<\/h1>/);
     assert.match(pagine.errore, /<h1 class="banco-titolo-testo">Non trovato<\/h1>/);
 
-    // la tendina: niente "Punti vendita" né in pagina né come indirizzo
+    // la tendina: niente "Punti vendita" né in pagina né come indirizzo, e niente più "Storico ordini" (è una scheda del menu, in alto e in basso)
     const t = tendina(pagine.home);
-    assert.match(t, /<a class="voce-solo-piccola" href="\/distributore\/storico">Storico ordini<\/a>/);
-    assert.doesNotMatch(t, /Storico richieste|Tutti gli ordini/);
+    assert.doesNotMatch(t, /Storico|voce-solo-piccola|Tutti gli ordini/);
     assert.match(t, /class="voce-esci">Esci</);
     for (const nome of Object.keys(pagine)) assert.doesNotMatch(pagine[nome], /Punti vendita|\/punti-vendita/, nome);
 
@@ -2875,7 +2925,7 @@ test('banco: richiesta da confermare, a due colonne con timer, pulsanti, cliente
     const t = await r.text();
 
     // intestazione del banco (con "Banco" accesa), titolo con freccia, stato e quando è arrivata; niente appbar vecchia né riga titolo
-    assert.match(t, /<header class="banco-testa">/);
+    assert.match(t, /<header class="banco-testa"[^>]*>/);
     assert.match(t, /class="banco-voce attiva" href="\/distributore" aria-current="page"/);
     assert.doesNotMatch(t, /<header class="appbar">|banco-titolo/);
     assert.match(t, /<a class="ric-indietro" href="\/distributore"[^>]*>\s*<svg/);
@@ -3153,6 +3203,239 @@ test('banco: "Preparato" toglie l\'ordine dalla colonna (in preparazione, torna 
   }
 });
 
+// ---------- Avvisi del banco: pallino su "Banco", striscia sotto l'intestazione, stato-banco, notifiche nuove con i dati dell'avviso ----------
+
+test('banco: pallino arancio su "Banco" in ogni pagina, striscia arancio solo fuori dalla home (col tempo della prima richiesta), icone e voce "Suoni notifiche"', async () => {
+  cookie = '';
+  banco.attivo = true;
+  try {
+    assert.equal((await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }))).status, 302);
+    const pagina = async (percorso) => (await chiedi(percorso)).text();
+    const home = await pagina('/distributore');
+    const clienti = await pagina('/distributore/clienti');
+    const storico = await pagina('/distributore/storico');
+    const richiesta = await pagina('/distributore/richieste/177'); // anche una pagina della richiesta non è la home
+
+    // il pallino sta su "Banco" e c'è dappertutto, home compresa (lì le colonne mostrano già tutto, ma il numero resta sulla scheda)
+    for (const [nome, t] of Object.entries({ home, clienti, storico })) {
+      assert.match(t, /Banco\s*<span class="banco-voce-pallino banco-voce-pallino-ordini" data-banco-pallino aria-label="2 da confermare">2<\/span>/, nome);
+      assert.match(t, /<header class="banco-testa" data-banco-testa data-ditta="BOREA">/, nome + ': lo script riconosce la pagina del banco');
+      assert.match(t, /data-suoni-voce aria-pressed="true">Suoni notifiche: <span data-suoni-stato>sì<\/span><\/button>/, nome);
+      assert.match(t, /data-notifiche-sistema hidden>Attiva le notifiche del computer<\/button>/, nome);
+    }
+    // sulla home niente striscia e niente icone degli avvisi a comparsa
+    assert.doesNotMatch(home, /data-banco-avviso/);
+    assert.doesNotMatch(home, /data-banco-avvisi-icone/);
+    // fuori dalla home la striscia c'è, già col tempo scritto dal server (98 s = 01:38) e il pulsante "Vai al banco"
+    for (const [nome, t] of Object.entries({ clienti, storico })) {
+      assert.match(t, /<div class="banco-avviso" data-banco-avviso data-urgente-sec="120" role="status">/, nome);
+      assert.match(t, /<strong data-avviso-conta>2 richieste da confermare<\/strong><span aria-hidden="true"> · la prima scade tra <strong class="banco-avviso-tempo" data-avviso-tempo data-secondi="98">01:38<\/strong><\/span>/, nome);
+      assert.match(t, /<a class="banco-avviso-vai" href="\/distributore">Vai al banco /, nome);
+      for (const icona of ['furgone', 'esclamativo', 'spunta', 'occhio', 'chiudi']) assert.match(t, new RegExp('<span data-icona="' + icona + '"><svg'), nome + ': icona ' + icona);
+      // la striscia sta subito sotto l'intestazione
+      assert.ok(t.indexOf('</header>') < t.indexOf('data-banco-avviso'), nome);
+    }
+    assert.match(richiesta, /data-banco-avviso/);
+
+    // una richiesta sola: singolare; nessuna: pallino e striscia nascosti (ci sono nella pagina, lo script li accende quando arriva una richiesta)
+    banco.daRispondere = 1;
+    assert.match(await pagina('/distributore/clienti'), /<strong data-avviso-conta>1 richiesta da confermare<\/strong>/);
+    banco.daRispondere = 0;
+    const vuota = await pagina('/distributore/clienti');
+    assert.match(vuota, /data-banco-pallino aria-label="0 da confermare" hidden>0<\/span>/);
+    assert.match(vuota, /<div class="banco-avviso" data-banco-avviso data-urgente-sec="120" role="status" hidden>/);
+    assert.match(await pagina('/distributore'), /data-banco-pallino aria-label="0 da confermare" hidden>0<\/span>/);
+  } finally {
+    banco.daRispondere = 2;
+    banco.attivo = false;
+    await chiedi('/logout', { method: 'POST' });
+  }
+});
+
+test('banco: GET /distributore/stato-banco dà numeri, prima scadenza e richieste ancora da confermare (solo per il banco, in JSON)', async () => {
+  cookie = '';
+  banco.attivo = true;
+  try {
+    // senza accesso: 401 in JSON (non un redirect al login: il browser chiede ogni 15 secondi)
+    let r = await chiedi('/distributore/stato-banco', { headers: { accept: 'application/json' } });
+    assert.equal(r.status, 401);
+    // un installatore non ha il banco: 403
+    assert.equal((await chiedi('/login', form({ username: 'prova', password: 'password-di-prova' }))).status, 302);
+    r = await chiedi('/distributore/stato-banco', { headers: { accept: 'application/json' } });
+    assert.equal(r.status, 403);
+
+    cookie = '';
+    assert.equal((await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }))).status, 302);
+    avvisiBanco.richieste = [
+      { id: 12, cliente_nome: 'Bianchi Termoidraulica', secondi: 95, n_articoli: 1, n_pezzi: 1 },
+      { id: 11, cliente_nome: 'Rossi <b>Impianti</b> S.r.l.', secondi: 447, n_articoli: 2, n_pezzi: 3 },
+    ];
+    avvisiBanco.viste.length = 0;
+    r = await chiedi('/distributore/stato-banco', { headers: { accept: 'application/json' } });
+    assert.equal(r.status, 200);
+    assert.match(r.headers.get('content-type'), /json/);
+    assert.equal(r.headers.get('cache-control'), 'no-store');
+    const d = await r.json();
+    assert.equal(d.daConfermare, 2);
+    assert.equal(d.primaScadeSec, 95, 'la più vicina alla scadenza');
+    assert.equal(d.attesaCorriere, 1);
+    assert.equal(d.daPreparare, 2);
+    assert.deepEqual(d.ordini, [1280, 1281], 'gli ordini ancora da preparare: un avviso "Corriere trovato" sparisce quando il suo ordine è già partito');
+    assert.equal(d.richieste.length, 2);
+    assert.deepEqual(
+      { ...d.richieste[0], scadeAlle: undefined },
+      { id: 12, cliente: 'Bianchi Termoidraulica', articoli: 1, pezzi: 1, secondi: 95, finestraSec: 600, scadeAlle: undefined }
+    );
+    assert.match(d.richieste[0].scadeAlle, /^\d\d:\d\d$/);
+    assert.equal(d.richieste[1].cliente, 'Rossi <b>Impianti</b> S.r.l.', 'i nomi viaggiano come testo: è lo script a non farne mai HTML');
+    assert.deepEqual(avvisiBanco.viste[0].p, [2], 'solo le richieste della filiale dell\'utente');
+
+    // nessuna richiesta: null, non zero
+    avvisiBanco.richieste = [];
+    banco.daRispondere = 0;
+    const vuoto = await (await chiedi('/distributore/stato-banco', { headers: { accept: 'application/json' } })).json();
+    assert.deepEqual([vuoto.daConfermare, vuoto.primaScadeSec, vuoto.richieste], [0, null, []]);
+    assert.deepEqual(vuoto.ordini, [1280, 1281]);
+  } finally {
+    banco.daRispondere = 2;
+    avvisiBanco.richieste = [];
+    banco.attivo = false;
+    await chiedi('/logout', { method: 'POST' });
+  }
+});
+
+test('banco: /api/notifiche/push porta tipo, richiesta, ordine e i dati di ogni avviso; /api/notifiche/lette segna lette quelle dell\'utente', async () => {
+  cookie = '';
+  banco.attivo = true;
+  try {
+    assert.equal((await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }))).status, 302);
+    avvisiBanco.richieste = [{ id: 12, cliente_nome: 'Bianchi Termoidraulica', secondi: 95, n_articoli: 1, n_pezzi: 1 }];
+    avvisiBanco.ordini = [
+      { id: 1280, stato: 'inviato', consegnato_il: null, corriere_nome: 'Marco', corriere_arrivo_il: new Date(Date.UTC(2026, 9, 19, 7, 45)), cliente_nome: 'Rossi' },
+      { id: 1281, stato: 'evaso', consegnato_il: '2026-10-19 19:21:00', corriere_nome: '', corriere_arrivo_il: null, cliente_nome: 'Neri Impianti' },
+    ];
+    avvisiBanco.notifiche = [
+      { id: 901, titolo: 'Nuova richiesta di disponibilità', testo: 'x', link: '/distributore/richieste/12', tipo: 'nuova_richiesta', request_id: 12, order_id: null, eta_sec: 2 },
+      { id: 902, titolo: 'Nuovo ordine da preparare', testo: 'y', link: '/distributore/ordini/1280', tipo: 'corriere_trovato', request_id: 10, order_id: 1280, eta_sec: 3 },
+      { id: 903, titolo: 'Ordine #1281 consegnato', testo: 'z', link: '/distributore/ordini/1281', tipo: 'ordine_consegnato', request_id: null, order_id: 1281, eta_sec: 4 },
+      { id: 904, titolo: 'Altro', testo: 'w', link: null, tipo: null, request_id: null, order_id: null, eta_sec: 5 },
+    ];
+    let r = await chiedi('/api/notifiche/push', { headers: { accept: 'application/json' } });
+    assert.equal(r.status, 200);
+    const n = (await r.json()).notifiche;
+    assert.equal(n.length, 4);
+    assert.deepEqual([n[0].tipo, n[0].request_id, n[0].richiesta.id, n[0].richiesta.cliente, n[0].richiesta.finestraSec], ['nuova_richiesta', 12, 12, 'Bianchi Termoidraulica', 600]);
+    assert.deepEqual(n[1].ordine, { id: 1280, corriere: 'Marco', ritiroAlle: '09:45', daPreparare: true });
+    assert.equal(n[1].order_id, 1280);
+    assert.deepEqual(n[2].ordine, { id: 1281, cliente: 'Neri Impianti', alle: '21:21' });
+    assert.equal(n[3].tipo, null);
+    assert.equal(n[3].titolo, 'Altro');
+
+    // "lette": solo id interi positivi, passati alla UPDATE insieme all'utente (un id altrui non conta: la UPDATE ha user_id). Oltre agli id delle
+    // notifiche, la richiesta e l'ordine a cui si riferiscono: l'avviso sopravvive alle ricariche della pagina, che ne perdono gli id.
+    avvisiBanco.lette.length = 0;
+    r = await chiedi('/api/notifiche/lette', json({ ids: [901, 'x', -3, 903, 1.5], richieste: [12, 'y'], ordini: [1280] }));
+    assert.equal(r.status, 200);
+    assert.deepEqual(await r.json(), { ok: true });
+    assert.equal(avvisiBanco.lette.length, 1);
+    assert.deepEqual(avvisiBanco.lette[0].slice(1), [[901, 903], [12], [1280]]);
+    // solo la richiesta (avviso ricaricato, id perso)
+    avvisiBanco.lette.length = 0;
+    await chiedi('/api/notifiche/lette', json({ richieste: [12] }));
+    assert.deepEqual(avvisiBanco.lette[0].slice(1), [[], [12], []]);
+    // senza id validi non scrive niente
+    avvisiBanco.lette.length = 0;
+    assert.equal((await chiedi('/api/notifiche/lette', json({ ids: 'no' }))).status, 200);
+    assert.equal(avvisiBanco.lette.length, 0);
+    // senza accesso: 401
+    cookie = '';
+    assert.equal((await chiedi('/api/notifiche/lette', json({ ids: [901] }))).status, 401);
+  } finally {
+    avvisiBanco.notifiche = [];
+    avvisiBanco.ordini = [];
+    avvisiBanco.richieste = [];
+    banco.attivo = false;
+    await chiedi('/logout', { method: 'POST' });
+  }
+});
+
+test('banco: "Conferma" dall\'avviso a comparsa chiede JSON e non fa redirect; i form della home restano com\'erano', async () => {
+  cookie = '';
+  banco.attivo = true;
+  const richiesteModulo = require(path.join(radice, 'src/richieste'));
+  const originale = richiesteModulo.rispondi;
+  const chiamate = [];
+  let esito = { ok: true };
+  richiesteModulo.rispondi = async (id, distributorId, opzioni) => { chiamate.push({ id: String(id), distributorId, opzioni }); return esito; };
+  try {
+    assert.equal((await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }))).status, 302);
+
+    // dall'avviso: Accept JSON -> 200 con { ok: true }, risposta data al prezzo di richiesta
+    let r = await chiedi('/distributore/richieste/12/rispondi', { ...form({ azione: 'prezzo_richiesto' }), headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' } });
+    assert.equal(r.status, 200);
+    assert.deepEqual(await r.json(), { ok: true, errore: null });
+    assert.equal(chiamate.length, 1);
+    assert.equal(chiamate[0].id, '12');
+    assert.equal(chiamate[0].distributorId, 2);
+    assert.equal(chiamate[0].opzioni.prezzoRichiesto, true);
+    assert.equal(chiamate[0].opzioni.rifiuta, false);
+
+    // rifiutata (finestra chiusa, ha già risposto un collega): 409 con il motivo, che l'avviso mostra sotto i pulsanti
+    esito = { ok: false, errore: 'Hai già risposto a questa richiesta.' };
+    r = await chiedi('/distributore/richieste/12/rispondi', { ...form({ azione: 'prezzo_richiesto' }), headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' } });
+    assert.equal(r.status, 409);
+    assert.deepEqual(await r.json(), { ok: false, errore: 'Hai già risposto a questa richiesta.' });
+
+    // dai form della pagina (Accept html): redirect come prima: alla home con torna=home, altrimenti al dettaglio; con l'errore, al dettaglio
+    esito = { ok: true };
+    r = await chiedi('/distributore/richieste/12/rispondi', form({ azione: 'prezzo_richiesto', torna: 'home' }));
+    assert.equal(r.status, 302);
+    assert.equal(r.headers.get('location'), '/distributore');
+    r = await chiedi('/distributore/richieste/12/rispondi', form({ azione: 'prezzo_richiesto' }));
+    assert.equal(r.headers.get('location'), '/distributore/richieste/12');
+    esito = { ok: false, errore: 'Chiusa.' };
+    r = await chiedi('/distributore/richieste/12/rispondi', form({ azione: 'prezzo_richiesto', torna: 'home' }));
+    assert.equal(r.headers.get('location'), '/distributore/richieste/12?errore=Chiusa.');
+  } finally {
+    richiesteModulo.rispondi = originale;
+    banco.attivo = false;
+    await chiedi('/logout', { method: 'POST' });
+  }
+});
+
+test('avvisi del banco: lo script e gli stili ci sono, il suono è un MP3 leggero e gli avvisi non si stampano', async () => {
+  const fs = require('fs');
+  const js = fs.readFileSync(path.join(radice, 'public', 'app.js'), 'utf8');
+  const css = fs.readFileSync(path.join(radice, 'public', 'style.css'), 'utf8');
+  // il blocco c'è, parla con le due rotte e con quella delle notifiche lette
+  assert.match(js, /Avvisi del banco/);
+  for (const url of ['/distributore/stato-banco', '/api/notifiche/push', '/api/notifiche/lette', '/suoni/avviso.mp3']) assert.ok(js.includes("'" + url + "'"), url);
+  // i cinque tipi e le loro durate: 10 s (nessun corriere, scaduta) e 6 s (consegnato); niente "×" sulla nuova richiesta
+  for (const tipo of ['nuova_richiesta', 'corriere_trovato', 'nessun_corriere', 'richiesta_scaduta', 'ordine_consegnato']) {
+    assert.ok(js.includes("'" + tipo + "'"), tipo);
+    assert.match(css, new RegExp('\\.avv-' + tipo + ' \\{'), 'colori di ' + tipo);
+  }
+  assert.match(js, /tipo: 'nessun_corriere'[\s\S]*?durataMs: 10000/);
+  assert.match(js, /tipo: 'richiesta_scaduta'[\s\S]*?durataMs: 10000/);
+  assert.match(js, /tipo: 'ordine_consegnato'[\s\S]*?durataMs: 6000/);
+  assert.match(js, /tipo: 'nuova_richiesta'[\s\S]*?chiudibile: false/);
+  // il vecchio blocco delle notifiche del browser non gira sulle pagine del banco (le gestisce il nuovo)
+  assert.match(js, /!document\.querySelector\('\[data-banco-testa\]'\)/);
+  // stili: contenitore in basso a destra, tre visibili, strip a 48px, niente stampa, niente animazioni con "riduci movimento"
+  assert.match(css, /\.banco-avvisi \{[^}]*right: 24px;[^}]*bottom: 24px;[^}]*width: 400px;/);
+  assert.match(css, /\.banco-avviso \{[^}]*min-height: 48px;[^}]*background: #fbe6da;[^}]*border-bottom: 1px solid #f1c9b3;[^}]*color: #8a3a14;/);
+  assert.match(css, /@media print \{\s*\.banco-avviso, \.banco-avvisi \{ display: none !important; \}/);
+  assert.match(css, /prefers-reduced-motion: reduce\) \{\s*\.banco-voce-pallino-ordini, \.banco-avviso-punto, \.avv \{ animation: none; \}/);
+  // il suono: un MP3 vero (ID3 o frame sync) e sotto i 30 KB
+  const mp3 = fs.readFileSync(path.join(radice, 'public', 'suoni', 'avviso.mp3'));
+  assert.ok(mp3.length > 1000 && mp3.length < 30 * 1024, 'dimensione ' + mp3.length);
+  assert.ok(mp3.slice(0, 3).toString() === 'ID3' || (mp3[0] === 0xff && (mp3[1] & 0xe0) === 0xe0), 'intestazione MP3');
+  // e il server lo serve
+  const r = await fetch(base + '/suoni/avviso.mp3');
+  assert.equal(r.status, 200);
+  assert.match(r.headers.get('content-type'), /audio\/mpeg/);
+});
+
 test('banco: la freccia di ordine e richiesta riporta alla pagina da cui si arriva (Storico, scheda cliente, richiesta), mai fuori dal sito', async () => {
   cookie = '';
   banco.attivo = true;
@@ -3246,8 +3529,8 @@ test('banco: pagina dell\'ordine a due colonne: materiale a prezzo del banco, co
     assert.equal(scrittureOrdini.length, 0, 'aprire la pagina non scrive niente: l\'ordine resta "Da preparare" finché non si preme Preparato o si emette la bolla');
 
     // ----- testata: freccia, titolo, stato (da preparare: blu, col pallino che pulsa), cliente e quando è arrivato -----
-    assert.match(t, /<header class="banco-testa">/);
-    assert.match(t, /class="banco-storico attiva" href="\/distributore\/storico" aria-current="page"/, '"Storico ordini" resta accesa');
+    assert.match(t, /<header class="banco-testa"[^>]*>/);
+    assert.match(t, /class="banco-voce attiva" href="\/distributore\/storico" aria-current="page"/, '"Storico ordini" resta accesa');
     assert.match(t, /<a class="ric-indietro" href="\/distributore"/);
     assert.match(t, /<h1 class="ric-titolo">Ordine #1295<\/h1>\s*<span class="ric-stato ric-st-da_preparare"><span class="ric-punto pulse" aria-hidden="true"><\/span>Da preparare<\/span>\s*<span class="ord-cliente-nome">Prova S\.r\.l\.<\/span>/);
     assert.match(t, /<span class="ric-ricevuta">Ricevuto oggi alle \d\d:\d\d · da richiesta #177<\/span>/);

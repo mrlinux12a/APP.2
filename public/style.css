@@ -740,7 +740,7 @@ th { color: var(--grigio); font-weight: 600; }
 /* ---------- Home del banco: bacheca a 3 colonne (views/distributore_richieste.ejs) ---------- */
 
 /* Intestazione (views/partials/banco_testa.ejs): è la stessa su TUTTE le pagine del banco, non solo sulla home.
-   Barra bianca da 64px con ditta e filiale, menu a schede, "Storico ordini" e cerchio con le iniziali (niente campanella).
+   Barra bianca da 64px con ditta e filiale, menu a schede (Banco, Clienti, Storico ordini) e cerchio con le iniziali (niente campanella).
    Da 900px in su il menu sospeso in basso (nav_distributore, .nav-solo-stretta) non si mostra, su nessuna pagina del
    banco: il menu sta qui. Sotto, il menu in basso resta e le schede qui spariscono. */
 .banco-testa {
@@ -797,18 +797,6 @@ th { color: var(--grigio); font-weight: 600; }
 }
 
 .banco-azioni { display: flex; align-items: center; gap: 4px; margin-left: auto; flex: none; }
-.banco-storico {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 0 12px;
-  color: var(--blu);
-  font-size: 16px;
-  font-weight: 600;
-  text-decoration: none;
-}
-.banco-storico:hover { text-decoration: underline; }
-.banco-storico.attiva { padding: 0 18px; border-radius: 22px; background: var(--blu-chiaro); color: var(--blu-scuro); font-weight: 700; text-decoration: none; }
 
 /* Riga col titolo della pagina, sotto l'intestazione, per le pagine interne del banco (clienti, richiesta, ordine,
    storico, notifiche...): freccia indietro e titolo. La home non l'ha. Allineata al contenuto (.contenuto: 14px). */
@@ -853,10 +841,9 @@ th { color: var(--grigio); font-weight: 600; }
   cursor: pointer;
 }
 .banco-avatar-btn .avatar { box-shadow: 0 0 0 3px var(--blu-chiaro); }
-.banco-avatar-btn:focus-visible, .banco-voce:focus-visible,
-.banco-storico:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; }
+.banco-avatar-btn:focus-visible, .banco-voce:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; }
 /* Le voci della tendina già presenti nella barra (o nel menu in basso) si mostrano solo dove la barra non le ha. */
-.menu-account .tendina .voce-solo-stretta, .menu-account .tendina .voce-solo-piccola { display: none; }
+.menu-account .tendina .voce-solo-stretta { display: none; }
 
 /* Corpo: tre colonne uguali che riempiono l'altezza rimasta; ogni colonna scorre per conto suo e ha la
    propria testata fissa. */
@@ -1163,11 +1150,6 @@ th { color: var(--grigio); font-weight: 600; }
   .bacheca { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; padding: 12px 12px calc(var(--barra-bassa) + 24px); }
   .colonna-lista { overflow: visible; }
 }
-@media (max-width: 639.98px) {
-  .banco-storico { display: none; }
-  .menu-account .tendina .voce-solo-piccola { display: block; }
-}
-
 /* ---------- Geolocalizzazione ---------- */
 
 .geo-box .btn { margin-top: 4px; }
@@ -5344,4 +5326,225 @@ html.misura-aperta { overflow: hidden; }
    altrimenti i segmenti si accavallano. */
 @media (max-width: 559.98px), (min-width: 900px) and (max-width: 1099.98px) {
   .ord-bolla-griglia, .ord-bolla-griglia + .ord-bolla-griglia { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---------- Avvisi del banco (partials/banco_avviso.ejs, public/app.js "Avvisi del banco") ---------- */
+
+/* Pallino sulla scheda "Banco": arancio, col numero di richieste da confermare, pulsa piano. Vale su tutte le pagine del banco, anche la home. */
+.banco-voce-pallino[hidden] { display: none; }
+.banco-voce-pallino-ordini { background: var(--arancio); animation: banco-pallino-pulsa 1.6s ease-in-out infinite; }
+@keyframes banco-pallino-pulsa {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(171, 77, 36, 0.45); }
+  60% { box-shadow: 0 0 0 7px rgba(171, 77, 36, 0); }
+}
+
+/* Striscia sotto l'intestazione: "2 richieste da confermare · la prima scade tra 01:38" e "Vai al banco ›". Non c'è sulla home. */
+.banco-avviso {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 6px max(24px, env(safe-area-inset-right, 0px)) 6px max(24px, env(safe-area-inset-left, 0px));
+  background: #fbe6da;
+  border-bottom: 1px solid #f1c9b3;
+  color: #8a3a14;
+}
+.banco-avviso[hidden] { display: none; }
+.banco-avviso-punto {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--arancio);
+  animation: banco-avviso-pulsa 1.6s ease-in-out infinite;
+}
+@keyframes banco-avviso-pulsa {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.7); }
+}
+.banco-avviso-testo { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 15px; line-height: 1.3; }
+.banco-avviso-tempo { font-variant-numeric: tabular-nums; }
+.banco-avviso.urgente .banco-avviso-tempo { color: var(--rosso); }
+.banco-avviso-vai {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 34px;
+  margin-left: auto;
+  padding: 0 16px;
+  border-radius: 17px;
+  background: var(--arancio);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.banco-avviso-vai::after { content: ""; position: absolute; inset: -6px 0; } /* area di tocco da 46px */
+.banco-avviso-vai:hover { background: #8a3a14; }
+.banco-avviso-vai:focus-visible { outline: 2px solid var(--arancio); outline-offset: 2px; }
+@media (max-width: 899.98px) {
+  .banco-avviso { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+}
+@media (max-width: 560px) {
+  .banco-avviso-testo { font-size: 14px; }
+  .banco-avviso-vai { padding: 0 12px; }
+}
+
+/* Notifiche a comparsa: in basso a destra, una sopra l'altra (la più nuova in basso), al massimo 3. Il contenitore non intercetta i tocchi, solo le schede. */
+.banco-avvisi {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 400px;
+  max-width: calc(100vw - 24px);
+  pointer-events: none;
+}
+.banco-avvisi > * { pointer-events: auto; }
+.banco-avvisi-altri {
+  align-self: flex-end;
+  padding: 4px 12px;
+  border-radius: 12px;
+  background: var(--testo);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+.banco-avvisi-altri[hidden] { display: none; }
+
+/* Colori di ogni tipo: --tipo (barra, tempo, pulsante pieno) e --tipo-chiaro (sfondo dell'icona). */
+.avv { --tipo: var(--grigio); --tipo-chiaro: #ece9e2; }
+.avv-nuova_richiesta { --tipo: #ab4d24; --tipo-chiaro: #fbe6da; }
+.avv-corriere_trovato { --tipo: #297c3c; --tipo-chiaro: #e3f3e6; }
+.avv-nessun_corriere { --tipo: #bd3a3a; --tipo-chiaro: #fbe4e2; }
+.avv-richiesta_scaduta { --tipo: #8a887e; --tipo-chiaro: #ece9e2; }
+.avv-ordine_consegnato { --tipo: #6b6a5f; --tipo-chiaro: #ece9e2; }
+
+.avv {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 16px 16px 16px 21px; /* 5px di barra + 16px */
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(28, 25, 23, 0.18);
+  overflow: hidden;
+  animation: avv-entra 0.35s ease-out;
+}
+.avv[hidden] { display: none; }
+.avv.senza-entrata { animation: none; }
+.avv::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 5px; background: var(--tipo); }
+.avv-link { cursor: pointer; }
+@keyframes avv-entra {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+
+.avv-figura {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  background: var(--tipo-chiaro);
+  color: var(--tipo);
+  font-size: 22px;
+}
+.avv-ico { display: inline-flex; }
+.avv-figura-anello { position: relative; border-radius: 50%; background: transparent; }
+.avv-figura-anello svg { display: block; width: 44px; height: 44px; }
+.avv-anello-traccia, .avv-anello-barra { fill: none; stroke-width: 4; }
+.avv-anello-traccia { stroke: var(--tipo-chiaro); }
+.avv-anello-barra { stroke: var(--tipo); stroke-linecap: round; transition: stroke-dashoffset 1s linear, stroke 0.3s; }
+.avv-anello-tempo {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--tipo);
+  font-size: 10.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.2px;
+}
+.avv.urgente .avv-anello-traccia { stroke: #fbe4e2; }
+.avv.urgente .avv-anello-barra { stroke: var(--rosso); }
+.avv.urgente .avv-anello-tempo { color: var(--rosso); }
+
+.avv-corpo { flex: 1 1 auto; min-width: 0; }
+.avv-titolo { margin: 0; padding-right: 30px; font-size: 15.5px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.avv-nuova_richiesta .avv-titolo { padding-right: 0; } /* senza "×" */
+.avv-testo { margin: 2px 0 0; color: #5c5b52; font-size: 13.5px; line-height: 1.35; overflow-wrap: anywhere; }
+.avv-errore { margin: 6px 0 0; color: var(--rosso); font-size: 13px; font-weight: 600; line-height: 1.3; }
+.avv-errore[hidden] { display: none; }
+.avv-azioni { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.avv-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  margin: 0;
+  padding: 0 18px;
+  border: 1px solid #cfcbc0;
+  border-radius: 19px;
+  background: #fff;
+  color: var(--testo);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+.avv-btn:hover { background: var(--sfondo); }
+.avv-btn:disabled { opacity: 0.6; cursor: default; }
+.avv-btn-arancio { border-color: var(--arancio); background: var(--arancio); color: #fff; }
+.avv-btn-arancio:hover { background: #8a3a14; border-color: #8a3a14; }
+.avv-btn-blu { border-color: var(--blu); background: var(--blu); color: #fff; }
+.avv-btn-blu:hover { background: var(--blu-scuro); border-color: var(--blu-scuro); }
+.avv-btn .avv-ico { font-size: 16px; }
+.avv-btn:focus-visible, .avv-chiudi:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+.avv-chiudi {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: #8a887e;
+  font-size: 16px;
+  cursor: pointer;
+}
+.avv-chiudi:hover { background: var(--sfondo); }
+
+@media (max-width: 899.98px) {
+  .banco-avvisi { bottom: calc(var(--barra-bassa) + 12px); } /* sopra il menu in basso del banco */
+}
+@media (max-width: 599.98px) {
+  .banco-avvisi { right: 12px; left: 12px; width: auto; max-width: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .banco-voce-pallino-ordini, .banco-avviso-punto, .avv { animation: none; }
+  .avv-anello-barra { transition: none; }
+}
+@media print {
+  .banco-avviso, .banco-avvisi { display: none !important; }
 }

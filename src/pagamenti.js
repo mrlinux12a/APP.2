@@ -181,8 +181,10 @@ function nomeMarca(marca) {
 // la pagina è quella di un ordine. Ritorna null per una richiesta del vecchio flusso (mai pagata), altrimenti
 //   { chiave: 'bloccato' | 'pagato' | 'annullato' | 'rimborsato', importo (euro), data (quando), carta ({ marca, ultime4, testo }|null),
 //     receiptUrl (ricevuta di Stripe), ricevuta (c'è una ricevuta di pagamento), ricevutaRimborso, prova (pagamento NON reale), metodo }
-//  · 'bloccato'  ← carta autorizzata o incasso da fare (richiesta in attesa);
-//  · 'pagato'    ← incassata (ordine nato);
+//  · 'bloccato'  ← carta autorizzata (richiesta in attesa, nessun ordine ancora);
+//  · 'pagato'    ← è nato l'ordine, cioè un banco ha confermato e (col modulo WhatsApp) un corriere ha preso la consegna: la carta è PAGATA per l'installatore
+//                  (richiesta esplicita del 19/10/2026), anche se Stripe non ha ancora fatto la capture (riga 'da_incassare': passano pochi secondi, e la
+//                  pagina dell'ordine non si ricarica da sola: la scheda diceva "Bloccati sulla carta" per un ordine già partito, e non aveva la ricevuta);
 //  · 'annullato' ← blocco rilasciato o scaduto, oppure richiesta chiusa/annullata senza incasso: niente addebito, niente rimborso;
 //  · 'rimborsato'← incassata e poi restituita (caso raro, lo gestisce l'assistenza).
 // Senza riga di Stripe (pagamento simulato dell'app e del PC, o richiesta di prima) si ricava lo stesso dalla richiesta. Anche il pagamento simulato (la
@@ -194,8 +196,12 @@ function calcolaStatoPagamento({ riga = null, richiesta = null, ordine = null } 
     let chiave = CHIAVE_DA_STATO_CARTA[riga.stato];
     // Richiesta chiusa senza ordine ma il blocco non risulta ancora rilasciato (un attimo prima del giro di Stripe): per chi guarda è annullato.
     if (chiave === 'bloccato' && chiusaSenzaOrdine) chiave = 'annullato';
+    // L'ordine è nato e la capture è solo da fare ('da_incassare': l'ha segnata la transazione che ha creato l'ordine, `incasso_cent` è già deciso): è pagato.
+    // La ricevuta c'è già (importo e data sono quelli dell'ordine); la marca della carta, e la ricevuta di Stripe, arrivano con la capture.
+    const incassoInCorso = riga.stato === 'da_incassare' && (!!ordine || (!!richiesta && !!richiesta.order_id));
+    if (incassoInCorso) chiave = 'pagato';
     const cent = Number(riga.incasso_cent) > 0 ? Number(riga.incasso_cent) : Number(riga.importo_cent);
-    const incassata = ['incassato', 'da_rimborsare', 'rimborsato'].includes(riga.stato) && !!riga.incasso_cent;
+    const incassata = (['incassato', 'da_rimborsare', 'rimborsato'].includes(riga.stato) && !!riga.incasso_cent) || incassoInCorso;
     return {
       chiave,
       importo: Number.isFinite(cent) ? cent / 100 : null,

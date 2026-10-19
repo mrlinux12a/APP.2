@@ -1179,7 +1179,8 @@ const Minuteria = (function () {
     });
   }
 
-  if ('Notification' in window && document.body.dataset.loggato === '1') {
+  // Sulle pagine del banco (intestazione [data-banco-testa]) le notifiche le gestisce il blocco "Avvisi del banco", in fondo a questo file.
+  if ('Notification' in window && document.body.dataset.loggato === '1' && !document.querySelector('[data-banco-testa]')) {
     setInterval(function () {
       if (Notification.permission !== 'granted') return;
       fetch('/api/notifiche/push')
@@ -2142,3 +2143,774 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
     navigator.serviceWorker.register('/sw.js').catch(function () { /* l'app funziona anche senza */ });
   });
 }
+
+/* Avvisi del banco (richiesta esplicita del 20/10/2026), su TUTTE le pagine con l'intestazione del banco (partials/banco_testa.ejs, [data-banco-testa]).
+   Servono quando nessuno sta guardando la home: lì le tre colonne mostrano già tutto. Tre livelli, più la scheda del browser e il suono:
+   1. pallino arancio col numero di richieste da confermare sulla scheda "Banco" (anche sulla home);
+   2. striscia arancio sotto l'intestazione (partials/banco_avviso.ejs): "2 richieste da confermare · la prima scade tra 01:38" (non sulla home);
+   3. notifiche a comparsa in basso a destra (non sulla home), al massimo 3 per volta, la più nuova in basso:
+        nuova_richiesta   anello col tempo che si svuota, "Conferma" (risponde senza lasciare la pagina) e "Ispeziona"; niente "×": resta finché
+                          qualcuno risponde o scade (allora diventa "Richiesta scaduta"); suono
+        corriere_trovato  "Ispeziona ordine"; resta finché si chiude o si apre l'ordine (anche cambiando pagina: sessionStorage); suono
+        nessun_corriere   si chiude da sola dopo 10 s
+        richiesta_scaduta si chiude da sola dopo 10 s
+        ordine_consegnato si chiude da sola dopo 6 s
+      Passando il mouse sopra, il conto alla rovescia di chiusura si ferma. Aperta o chiusa, la notifica risulta letta (POST /api/notifiche/lette).
+   4. scheda del browser: se ci sono richieste da confermare e la scheda non è in primo piano, il titolo alterna ogni 2 s con "(N) Nuova richiesta · ditta"
+      e la favicon prende un pallino arancio; la notifica di sistema (Notification) parte solo se la pagina è nascosta;
+   5. suono breve (public/suoni/avviso.mp3) per nuova richiesta e corriere trovato, sbloccato dal primo clic sulla pagina; "Suoni notifiche: sì/no" nel
+      menu dell'account (localStorage).
+   Dati: GET /distributore/stato-banco ogni 15 s (e subito quando arriva una notifica) per numeri, richieste ancora aperte e ordini da preparare; GET /api/notifiche/push ogni 5 s
+   per le notifiche nuove (src/banco_avvisi.js). Una richiesta che non c'è più nell'elenco (risposta di un collega, scaduta, annullata) fa sparire il suo avviso.
+   Questo blocco sostituisce, sulle pagine del banco, quello delle notifiche del browser qui sopra. */
+(function () {
+  'use strict';
+  const testa = document.querySelector('[data-banco-testa]');
+  if (!testa) return;
+
+  const { leggiJson, mostraNotifica } = Minuteria;
+  // La home del banco è /distributore (le colonne mostrano già tutto: lì niente striscia né avvisi a comparsa); è la stessa regola di partials/banco_testa.ejs.
+  const eHome = window.location.pathname.replace(/\/+$/, '') === '/distributore';
+  const ditta = testa.getAttribute('data-ditta') || '';
+  const titoloNormale = document.title;
+  const SOGLIA_URGENTE_SEC = 120; // come src/richiesta_banco.js: negli ultimi 2 minuti tempi e anelli diventano rossi
+  const PUSH_MS = 5000;
+  const STATO_MS = 15000;
+  const MASSIMO_VISIBILI = 3;
+  const NOTIFICA_VECCHIA_SEC = 600; // una notifica nata più di 10 minuti fa (si arriva dopo una lunga assenza) non si mostra più
+  const CHIAVE_SUONI = 'minuteria.banco.suoni';
+  const metaUtente = document.querySelector('meta[name="utente"]');
+  const CHIAVE_SALVATI = 'minuteria.banco.avvisi.' + (metaUtente ? metaUtente.content : '0');
+  const SALVATI_MAX_MS = 2 * 60 * 60 * 1000; // un avviso "Corriere trovato" salvato da più di 2 ore non si ripropone
+
+  // localStorage e sessionStorage possono lanciare (navigazione privata, dati bloccati): mai un errore per questo.
+  function leggi(storage, chiave) { try { return window[storage].getItem(chiave); } catch (e) { return null; } }
+  function scrivi(storage, chiave, valore) { try { window[storage].setItem(chiave, valore); } catch (e) { /* si va avanti senza */ } }
+
+  function plurale(n, uno, molti) { return n === 1 ? '1 ' + uno : n + ' ' + molti; }
+  function mmss(sec) { return String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0'); }
+  function richiestaUrl(id) { return '/distributore/richieste/' + id + '?torna=' + encodeURIComponent(window.location.pathname + window.location.search); }
+  function ordineUrl(id) { return '/distributore/ordini/' + id + '?torna=' + encodeURIComponent(window.location.pathname + window.location.search); }
+
+  // ---------- Suono ----------
+
+  let suoniAttivi = leggi('localStorage', CHIAVE_SUONI) !== 'no';
+  let audio = null;
+  function preparaAudio() {
+    if (audio) return audio;
+    try { audio = new Audio('/suoni/avviso.mp3'); audio.preload = 'auto'; } catch (e) { audio = null; }
+    return audio;
+  }
+  // Il browser blocca l'audio finché l'utente non ha interagito con la pagina: al primo clic (o tasto) si riproduce il suono in silenzio, così da lì in poi
+  // può partire da solo (Safari lo vuole nello stesso gesto).
+  function sbloccaAudio() {
+    document.removeEventListener('pointerdown', sbloccaAudio, true);
+    document.removeEventListener('keydown', sbloccaAudio, true);
+    const a = preparaAudio();
+    if (!a) return;
+    try {
+      a.muted = true;
+      const p = a.play();
+      const fine = function () { try { a.pause(); a.currentTime = 0; } catch (e) { /* niente */ } a.muted = false; };
+      if (p && typeof p.then === 'function') p.then(fine, function () { a.muted = false; }); else fine();
+    } catch (e) { /* niente suono */ }
+  }
+  document.addEventListener('pointerdown', sbloccaAudio, true);
+  document.addEventListener('keydown', sbloccaAudio, true);
+
+  function suono() {
+    if (!suoniAttivi) return;
+    const a = preparaAudio();
+    if (!a) return;
+    try {
+      a.currentTime = 0;
+      const p = a.play();
+      if (p && typeof p.catch === 'function') p.catch(function () { /* audio ancora bloccato: nessun clic su questa pagina */ });
+    } catch (e) { /* niente suono */ }
+  }
+
+  // "Suoni notifiche: sì/no" nel menu dell'account.
+  const voceSuoni = document.querySelector('[data-suoni-voce]');
+  function mostraVoceSuoni() {
+    if (!voceSuoni) return;
+    const stato = voceSuoni.querySelector('[data-suoni-stato]');
+    if (stato) stato.textContent = suoniAttivi ? 'sì' : 'no';
+    voceSuoni.setAttribute('aria-pressed', suoniAttivi ? 'true' : 'false');
+  }
+  mostraVoceSuoni();
+  if (voceSuoni) {
+    voceSuoni.addEventListener('click', function () {
+      suoniAttivi = !suoniAttivi;
+      scrivi('localStorage', CHIAVE_SUONI, suoniAttivi ? 'sì' : 'no');
+      mostraVoceSuoni();
+      if (suoniAttivi) suono(); // il clic sblocca l'audio: si sente subito com'è
+    });
+  }
+
+  // Le notifiche del computer: il permesso si chiede solo con un clic, la voce del menu c'è finché serve.
+  const voceSistema = document.querySelector('[data-notifiche-sistema]');
+  if (voceSistema && 'Notification' in window && Notification.permission === 'default') {
+    voceSistema.hidden = false;
+    voceSistema.addEventListener('click', function () {
+      Notification.requestPermission().then(function (permesso) {
+        if (permesso === 'default') return;
+        voceSistema.hidden = true;
+        if (permesso === 'granted') mostraNotifica('Notifiche attive', 'Ti avviseremo quando arrivano richieste e ordini.', null, 'minuteria-attive');
+      });
+    });
+  }
+
+  // ---------- Scheda del browser: titolo e favicon ----------
+
+  const pallino = document.querySelector('[data-banco-pallino]');
+  let daConfermare = pallino && !pallino.hidden ? parseInt(pallino.textContent, 10) || 0 : 0;
+  let titoloGiro = null;
+  let titoloAlternato = false;
+
+  function aggiornaTitolo() {
+    const lampeggia = daConfermare > 0 && document.hidden;
+    if (lampeggia && !titoloGiro) {
+      titoloAlternato = false;
+      const cambia = function () {
+        titoloAlternato = !titoloAlternato;
+        document.title = titoloAlternato ? '(' + daConfermare + ') Nuova richiesta' + (ditta ? ' · ' + ditta : '') : titoloNormale;
+      };
+      cambia();
+      titoloGiro = setInterval(cambia, 2000);
+    } else if (!lampeggia && titoloGiro) {
+      clearInterval(titoloGiro);
+      titoloGiro = null;
+      document.title = titoloNormale;
+    }
+  }
+
+  // Favicon: l'icona di sempre con un pallino arancio in alto a destra, disegnata su un canvas, finché ci sono richieste da confermare.
+  const linkIcona = document.querySelector('link[rel~="icon"]');
+  const iconaOriginale = linkIcona ? linkIcona.getAttribute('href') : null;
+  let iconaImmagine = null;
+  let iconaPronta = false;
+  let iconaCon = null; // l'ultimo stato scritto (true = col pallino), per non rifare il disegno a vuoto
+  function scriviFavicon(href) {
+    const vecchio = document.querySelector('link[rel~="icon"]');
+    const nuovo = document.createElement('link');
+    nuovo.rel = 'icon';
+    nuovo.type = 'image/png';
+    nuovo.href = href;
+    if (vecchio && vecchio.parentNode) vecchio.parentNode.replaceChild(nuovo, vecchio); else document.head.appendChild(nuovo);
+  }
+  function aggiornaFavicon() {
+    if (!iconaOriginale) return;
+    const con = daConfermare > 0;
+    if (iconaCon === con) return;
+    if (!con) {
+      iconaCon = con;
+      scriviFavicon(iconaOriginale);
+      return;
+    }
+    const disegna = function () {
+      try {
+        const lato = 64;
+        const canvas = document.createElement('canvas');
+        canvas.width = lato;
+        canvas.height = lato;
+        const c = canvas.getContext('2d');
+        c.drawImage(iconaImmagine, 0, 0, lato, lato);
+        c.beginPath();
+        c.arc(lato - 16, 16, 14, 0, Math.PI * 2);
+        c.fillStyle = '#ab4d24';
+        c.fill();
+        c.lineWidth = 4;
+        c.strokeStyle = '#ffffff';
+        c.stroke();
+        iconaCon = true;
+        scriviFavicon(canvas.toDataURL('image/png'));
+      } catch (e) { /* l'icona resta quella di prima */ }
+    };
+    if (iconaPronta) { disegna(); return; }
+    if (iconaImmagine) return; // già in caricamento: ci si ritorna a caricamento finito
+    iconaImmagine = new Image();
+    iconaImmagine.onload = function () {
+      iconaPronta = true;
+      if (daConfermare > 0) disegna();
+    };
+    iconaImmagine.src = iconaOriginale;
+  }
+  document.addEventListener('visibilitychange', function () {
+    aggiornaTitolo();
+    if (!document.hidden) { aggiornaStato(); daiPush(); }
+  });
+
+  // ---------- Pallino su "Banco" e striscia ----------
+
+  const striscia = document.querySelector('[data-banco-avviso]');
+  const stripConta = striscia ? striscia.querySelector('[data-avviso-conta]') : null;
+  const stripTempo = striscia ? striscia.querySelector('[data-avviso-tempo]') : null;
+  const sogliaStriscia = striscia ? parseInt(striscia.getAttribute('data-urgente-sec'), 10) || SOGLIA_URGENTE_SEC : SOGLIA_URGENTE_SEC;
+  let stripFine = striscia && stripTempo ? Date.now() + (parseInt(stripTempo.getAttribute('data-secondi'), 10) || 0) * 1000 : 0;
+  let stripZeroChiesto = false;
+
+  function mostraNumeri(n, primaScadeSec) {
+    daConfermare = n;
+    if (pallino) {
+      pallino.textContent = String(n);
+      pallino.setAttribute('aria-label', n + ' da confermare');
+      pallino.hidden = n <= 0;
+    }
+    if (striscia) {
+      const testo = n === 1 ? '1 richiesta da confermare' : n + ' richieste da confermare';
+      if (stripConta && stripConta.textContent !== testo) stripConta.textContent = testo;
+      if (typeof primaScadeSec === 'number') { stripFine = Date.now() + primaScadeSec * 1000; stripZeroChiesto = false; }
+      striscia.hidden = n <= 0;
+      tickStriscia();
+    }
+    aggiornaTitolo();
+    aggiornaFavicon();
+  }
+
+  function tickStriscia() {
+    if (!striscia || striscia.hidden || !stripTempo) return;
+    const sec = Math.max(0, Math.ceil((stripFine - Date.now()) / 1000));
+    const testo = mmss(sec);
+    if (stripTempo.textContent !== testo) stripTempo.textContent = testo;
+    striscia.classList.toggle('urgente', sec <= sogliaStriscia);
+    // La prima è scaduta: fra poco il server avrà chiuso la richiesta, e la striscia passa alla prossima (o sparisce).
+    if (sec === 0 && !stripZeroChiesto) {
+      stripZeroChiesto = true;
+      setTimeout(aggiornaStato, 1500);
+    }
+  }
+
+  // ---------- Avvisi a comparsa ----------
+
+  const avvisi = []; // dal più vecchio (in alto) al più nuovo (in basso)
+  const confermate = new Set(); // richieste a cui ha risposto "Conferma" di questa pagina: non si ridisegnano se il server non se n'è ancora accorto
+  const scadute = new Set(); // richieste già trasformate in "Richiesta scaduta" su questa pagina
+  let contenitore = null;
+  let altri = null;
+  const modelloIcone = document.querySelector('template[data-banco-avvisi-icone]');
+
+  function icona(nome) {
+    const sorgente = modelloIcone ? modelloIcone.content.querySelector('[data-icona="' + nome + '"]') : null;
+    const span = document.createElement('span');
+    span.className = 'avv-ico';
+    span.setAttribute('aria-hidden', 'true');
+    if (sorgente) span.innerHTML = sorgente.innerHTML; // markup scritto dal server (src/icone.js), mai testo di un utente
+    return span;
+  }
+
+  function nodo(tag, classe, testo) {
+    const e = document.createElement(tag);
+    if (classe) e.className = classe;
+    if (testo !== undefined && testo !== null) e.textContent = testo;
+    return e;
+  }
+
+  // Aperta o chiusa, la notifica risulta letta. Un avviso sopravvive alle ricariche della pagina, che ne perdono gli id: per questo si manda anche la richiesta
+  // ("Nuova richiesta") o l'ordine ("Corriere trovato") a cui si riferisce, e il server segna lette le notifiche di quel tipo per quella richiesta o ordine.
+  function segnaLette(ids, richiesta, ordine) {
+    const validi = (ids || []).filter(function (n) { return Number.isInteger(n) && n > 0; });
+    if (!validi.length && !richiesta && !ordine) return;
+    // keepalive: la richiesta parte anche se, subito dopo, la pagina cambia (clic su "Ispeziona").
+    try {
+      fetch('/api/notifiche/lette', {
+        method: 'POST',
+        credentials: 'same-origin',
+        keepalive: true,
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ ids: validi, richieste: richiesta ? [richiesta] : [], ordini: ordine ? [ordine] : [] }),
+      }).catch(function () { /* resta da leggere: non è grave */ });
+    } catch (e) { /* idem */ }
+  }
+  function segnaLetto(a) {
+    const richiesta = a.tipo === 'nuova_richiesta' ? a.richiestaId : a.rif;
+    segnaLette(a.notifiche, richiesta, a.tipo === 'corriere_trovato' ? a.ordineId : null);
+  }
+
+  function salvaCorrieri() {
+    const elenco = avvisi
+      .filter(function (a) { return a.salva; })
+      .map(function (a) { return { chiave: a.chiave, ordineId: a.ordineId, notifiche: a.notifiche, titolo: a.titolo, testo: a.testo, salvatoIl: a.salvatoIl }; });
+    if (elenco.length) scrivi('sessionStorage', CHIAVE_SALVATI, JSON.stringify(elenco));
+    else try { window.sessionStorage.removeItem(CHIAVE_SALVATI); } catch (e) { /* niente */ }
+  }
+
+  function disegna() {
+    if (!contenitore) return;
+    const daMostrare = avvisi.slice(-MASSIMO_VISIBILI);
+    avvisi.forEach(function (a) {
+      const visibile = daMostrare.indexOf(a) !== -1;
+      if (visibile && !a.visibileDa) a.visibileDa = Date.now();
+      a.el.hidden = !visibile;
+    });
+    const nascosti = avvisi.length - daMostrare.length;
+    if (nascosti > 0) {
+      altri.textContent = '+' + nascosti + (nascosti === 1 ? ' altro avviso' : ' altri avvisi');
+      altri.hidden = false;
+    } else {
+      altri.hidden = true;
+    }
+  }
+
+  function rimuovi(a, segnaLetta) {
+    const i = avvisi.indexOf(a);
+    if (i === -1) return;
+    avvisi.splice(i, 1);
+    if (a.el.parentNode) a.el.parentNode.removeChild(a.el);
+    if (segnaLetta !== false) segnaLetto(a);
+    if (a.salva) salvaCorrieri();
+    disegna();
+  }
+
+  function trova(chiave) {
+    return avvisi.find(function (a) { return a.chiave === chiave; }) || null;
+  }
+
+  // Crea (o aggiorna, se la chiave c'è già) un avviso. def: { chiave, tipo, titolo, testo, link, notifiche, pulsanti, chiudibile, durataMs, anello, salva, ordineId,
+  // senzaAnimazione }. I testi sono sempre testo (textContent): il nome di un cliente lo scrive lui in registrazione.
+  function crea(def) {
+    if (!contenitore) return null;
+    const esistente = trova(def.chiave);
+    if (esistente) {
+      (def.notifiche || []).forEach(function (id) { if (esistente.notifiche.indexOf(id) === -1) esistente.notifiche.push(id); });
+      return esistente;
+    }
+    const a = {
+      chiave: def.chiave,
+      tipo: def.tipo,
+      titolo: def.titolo,
+      testo: def.testo,
+      link: def.link || null,
+      notifiche: (def.notifiche || []).slice(),
+      durataMs: def.durataMs || 0,
+      restanteMs: def.durataMs || 0,
+      sopra: false,
+      salva: !!def.salva,
+      salvatoIl: def.salvatoIl || Date.now(),
+      ordineId: def.ordineId || null,
+      richiestaId: def.richiestaId || null, // solo gli avvisi "Nuova richiesta": sono quelli che seguono l'elenco del server e hanno l'anello
+      rif: def.rif || null, // la richiesta a cui si riferisce un avviso "scaduta" o "nessun corriere" (per segnarne lette le notifiche)
+      visibileDa: 0,
+      creatoIl: def.creatoIl !== undefined ? def.creatoIl : Date.now(), // un avviso ripreso da un'altra pagina non è "appena nato": il server può già dire che è superato
+      anello: null,
+    };
+
+    const el = nodo('div', 'avv avv-' + def.tipo + (def.senzaAnimazione ? ' senza-entrata' : ''));
+    el.setAttribute('role', 'group');
+    el.setAttribute('data-avviso', def.chiave);
+    el.setAttribute('aria-label', def.titolo);
+
+    const figura = nodo('div', 'avv-figura');
+    if (def.anello) {
+      const NS = 'http://www.w3.org/2000/svg';
+      const R = 19;
+      const circ = 2 * Math.PI * R;
+      const svg = document.createElementNS(NS, 'svg');
+      svg.setAttribute('viewBox', '0 0 44 44');
+      svg.setAttribute('aria-hidden', 'true');
+      const traccia = document.createElementNS(NS, 'circle');
+      traccia.setAttribute('class', 'avv-anello-traccia');
+      const barra = document.createElementNS(NS, 'circle');
+      barra.setAttribute('class', 'avv-anello-barra');
+      [traccia, barra].forEach(function (c) { c.setAttribute('cx', '22'); c.setAttribute('cy', '22'); c.setAttribute('r', String(R)); });
+      barra.setAttribute('transform', 'rotate(-90 22 22)');
+      barra.setAttribute('stroke-dasharray', circ.toFixed(2));
+      svg.appendChild(traccia);
+      svg.appendChild(barra);
+      const tempo = nodo('span', 'avv-anello-tempo', '');
+      figura.classList.add('avv-figura-anello');
+      figura.appendChild(svg);
+      figura.appendChild(tempo);
+      a.anello = { barra: barra, tempo: tempo, circ: circ, fine: Date.now() + def.anello.secondi * 1000, finestra: Math.max(1, def.anello.finestra) };
+    } else {
+      figura.appendChild(icona(def.icona));
+    }
+    el.appendChild(figura);
+
+    const corpo = nodo('div', 'avv-corpo');
+    corpo.appendChild(nodo('p', 'avv-titolo', def.titolo));
+    corpo.appendChild(nodo('p', 'avv-testo', def.testo));
+    const errore = nodo('p', 'avv-errore', '');
+    errore.setAttribute('role', 'alert');
+    errore.hidden = true;
+    corpo.appendChild(errore);
+    a.errore = errore;
+    if (def.pulsanti && def.pulsanti.length) {
+      const azioni = nodo('div', 'avv-azioni');
+      def.pulsanti.forEach(function (p) {
+        const b = nodo(p.href ? 'a' : 'button', 'avv-btn ' + (p.pieno ? 'avv-btn-' + p.pieno : 'avv-btn-bordo'));
+        if (p.href) b.href = p.href; else b.type = 'button';
+        if (p.icona) b.appendChild(icona(p.icona));
+        const etichetta = nodo('span', '', p.testo);
+        b.appendChild(etichetta);
+        b.addEventListener('click', function () { if (p.azione) p.azione(a, b, etichetta); else uscendo(a); });
+        azioni.appendChild(b);
+      });
+      corpo.appendChild(azioni);
+    }
+    el.appendChild(corpo);
+
+    if (def.chiudibile) {
+      const x = nodo('button', 'avv-chiudi');
+      x.type = 'button';
+      x.setAttribute('aria-label', 'Chiudi');
+      x.appendChild(icona('chiudi'));
+      x.addEventListener('click', function (e) { e.stopPropagation(); rimuovi(a); });
+      el.appendChild(x);
+    }
+
+    // Un clic sull'avviso (non sui suoi pulsanti) porta al suo link.
+    if (a.link) {
+      el.classList.add('avv-link');
+      el.addEventListener('click', function (e) {
+        if (e.target.closest('a, button')) return;
+        apriLink(a);
+      });
+    }
+    // Passando il mouse (o con la tastiera dentro) il conto alla rovescia di chiusura si ferma.
+    el.addEventListener('mouseenter', function () { a.sopra = true; });
+    el.addEventListener('mouseleave', function () { a.sopra = false; });
+    el.addEventListener('focusin', function () { a.sopra = true; });
+    el.addEventListener('focusout', function () { a.sopra = false; });
+
+    a.el = el;
+    contenitore.appendChild(el);
+    avvisi.push(a);
+    if (a.salva) salvaCorrieri();
+    disegna();
+    tickAvvisi(0);
+    return a;
+  }
+
+  // Si lascia la pagina aprendo l'avviso (clic su un suo pulsante-link o sull'avviso): prima lo si segna letto (la richiesta parte anche se la pagina
+  // cambia subito) e lo si toglie dall'elenco di quelli salvati, così nella pagina dopo non ricompare.
+  function uscendo(a) {
+    segnaLetto(a);
+    a.notifiche = [];
+    const i = avvisi.indexOf(a);
+    if (i !== -1) { avvisi.splice(i, 1); if (a.salva) salvaCorrieri(); }
+  }
+  function apriLink(a) {
+    if (!a.link) return;
+    uscendo(a);
+    window.location.href = a.link;
+  }
+
+  // ---------- Le cinque schede ----------
+
+  function schedaRichiesta(r, notifiche, senzaAnimazione) {
+    return crea({
+      chiave: 'richiesta-' + r.id,
+      tipo: 'nuova_richiesta',
+      titolo: 'Nuova richiesta · ' + r.cliente,
+      testo: plurale(r.articoli, 'articolo', 'articoli') + ' · ' + plurale(r.pezzi, 'pezzo', 'pezzi') + ' · rispondi entro le ' + r.scadeAlle,
+      link: richiestaUrl(r.id),
+      richiestaId: r.id,
+      notifiche: notifiche,
+      chiudibile: false,
+      anello: { secondi: r.secondi, finestra: r.finestraSec },
+      senzaAnimazione: senzaAnimazione,
+      pulsanti: [
+        { testo: 'Conferma', pieno: 'arancio', azione: function (a, b, etichetta) { confermaDaAvviso(a, r.id, b, etichetta); } },
+        { testo: 'Ispeziona', icona: 'occhio', href: richiestaUrl(r.id) },
+      ],
+    });
+  }
+
+  function schedaOrdine(o, notifiche, senzaAnimazione, salvatoIl) {
+    const conCorriere = !!o.corriere;
+    return crea({
+      chiave: 'ordine-' + o.id,
+      tipo: 'corriere_trovato',
+      icona: 'furgone',
+      titolo: (conCorriere ? 'Corriere trovato' : 'Nuovo ordine') + ' · Ordine #' + o.id,
+      testo: conCorriere
+        ? o.corriere + (o.ritiroAlle ? ' ritira alle ' + o.ritiroAlle : ' ha preso la consegna') + ': prepara il materiale.'
+        : 'Ordine già pagato: prepara il materiale.',
+      link: ordineUrl(o.id),
+      ordineId: o.id,
+      notifiche: notifiche,
+      chiudibile: true,
+      salva: true,
+      salvatoIl: salvatoIl,
+      senzaAnimazione: senzaAnimazione,
+      pulsanti: [{ testo: 'Ispeziona ordine', icona: 'occhio', pieno: 'blu', href: ordineUrl(o.id) }],
+    });
+  }
+
+  function schedaScaduta(id, notifiche) {
+    scadute.add(id);
+    return crea({
+      chiave: 'scaduta-' + id,
+      tipo: 'richiesta_scaduta',
+      icona: 'esclamativo',
+      titolo: 'Richiesta #' + id + ' scaduta',
+      testo: 'Non hai risposto in tempo. Il cliente non paga nulla.',
+      link: richiestaUrl(id),
+      rif: id,
+      notifiche: notifiche,
+      chiudibile: true,
+      durataMs: 10000,
+    });
+  }
+
+  function schedaSenzaCorriere(id, notifiche) {
+    return crea({
+      chiave: 'senza-corriere-' + id,
+      tipo: 'nessun_corriere',
+      icona: 'esclamativo',
+      titolo: 'Nessun corriere · richiesta #' + id,
+      testo: 'Nessuno ha preso la consegna: non preparare. Il cliente è stato avvisato e non paga nulla.',
+      link: richiestaUrl(id),
+      rif: id,
+      notifiche: notifiche,
+      chiudibile: true,
+      durataMs: 10000,
+    });
+  }
+
+  function schedaConsegnato(o, notifiche) {
+    return crea({
+      chiave: 'consegnato-' + o.id,
+      tipo: 'ordine_consegnato',
+      icona: 'spunta',
+      titolo: 'Ordine #' + o.id + ' consegnato',
+      testo: (o.cliente || 'Il cliente') + ' ha confermato la consegna' + (o.alle ? ' alle ' + o.alle : '') + '.',
+      link: ordineUrl(o.id),
+      notifiche: notifiche,
+      chiudibile: true,
+      durataMs: 6000,
+    });
+  }
+
+  // "Conferma" dall'avviso: risponde al banco senza lasciare la pagina (la rotta, chiesta in JSON, non fa redirect).
+  function confermaDaAvviso(a, id, bottone, etichetta) {
+    bottone.disabled = true;
+    const prima = etichetta.textContent;
+    etichetta.textContent = 'Confermo…';
+    a.errore.hidden = true;
+    fetch('/distributore/richieste/' + id + '/rispondi', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+      body: 'azione=prezzo_richiesto',
+    })
+      .then(function (r) {
+        if (r.status === 401) { window.location.href = '/login'; throw Object.assign(new Error('sessione scaduta'), { sessioneScaduta: true }); }
+        return r.json().catch(function () { return null; });
+      })
+      .then(function (d) {
+        if (d && d.ok) {
+          confermate.add(id);
+          etichetta.textContent = 'Confermata';
+          segnaLetto(a);
+          a.notifiche = [];
+          setTimeout(function () { rimuovi(a, false); }, 1200);
+          // La conferma cambia i numeri (striscia, pallino) e, a modulo spento, fa nascere subito l'ordine: si chiede senza aspettare il giro.
+          aggiornaStato();
+          setTimeout(daiPush, 1200);
+          return;
+        }
+        bottone.disabled = false;
+        etichetta.textContent = prima;
+        a.errore.textContent = (d && d.errore) || 'Non sono riuscito a confermare. Riprova.';
+        a.errore.hidden = false;
+        // Se la richiesta non è più da confermare (la finestra è chiusa, ha risposto un collega) il prossimo aggiornamento tira via l'avviso.
+        aggiornaStato();
+      })
+      .catch(function (err) {
+        if (err && err.sessioneScaduta) return;
+        bottone.disabled = false;
+        etichetta.textContent = prima;
+        a.errore.textContent = 'Non sono riuscito a confermare: controlla la connessione e riprova.';
+        a.errore.hidden = false;
+      });
+  }
+
+  // ---------- Conti alla rovescia: anelli e chiusure automatiche ----------
+
+  let ultimoGiro = Date.now();
+  function tickAvvisi(passoMs) {
+    const adesso = Date.now();
+    avvisi.slice().forEach(function (a) {
+      if (a.anello) {
+        const sec = Math.max(0, Math.ceil((a.anello.fine - adesso) / 1000));
+        const testo = mmss(sec);
+        if (a.anello.tempo.textContent !== testo) a.anello.tempo.textContent = testo;
+        a.anello.barra.style.strokeDashoffset = (a.anello.circ * (1 - Math.min(1, sec / a.anello.finestra))).toFixed(2);
+        a.el.classList.toggle('urgente', sec <= SOGLIA_URGENTE_SEC);
+        // Scaduta: l'avviso si trasforma in "Richiesta scaduta" (il server la chiude entro pochi secondi e manda lo stesso avviso, che non si ripete).
+        if (sec === 0 && a.richiestaId) {
+          const id = a.richiestaId;
+          const notifiche = a.notifiche.slice();
+          a.notifiche = [];
+          rimuovi(a, false);
+          if (!confermate.has(id)) schedaScaduta(id, notifiche);
+          setTimeout(aggiornaStato, 1500);
+          return;
+        }
+      }
+      // Chiusura automatica: conta solo mentre l'avviso si vede e il mouse non ci sta sopra.
+      if (a.durataMs && a.visibileDa && !a.sopra && !a.el.hidden) {
+        a.restanteMs -= passoMs;
+        if (a.restanteMs <= 0) rimuovi(a);
+      }
+    });
+  }
+  setInterval(function () {
+    const adesso = Date.now();
+    const passo = Math.min(adesso - ultimoGiro, 2000); // dopo una pausa lunga (scheda in secondo piano) non si butta via tutto in un colpo
+    ultimoGiro = adesso;
+    tickStriscia();
+    tickAvvisi(passo);
+  }, 250);
+
+  // ---------- Dati dal server ----------
+
+  let statoInCorso = false;
+  let statoDaRifare = false;
+  let primoStato = true;
+
+  function aggiornaStato() {
+    // Chiesto mentre un altro giro è ancora per strada (la sua risposta può essere più vecchia di ciò che è successo): si rifà appena finisce.
+    if (statoInCorso) { statoDaRifare = true; return; }
+    statoInCorso = true;
+    fetch('/distributore/stato-banco', { cache: 'no-store', credentials: 'same-origin', headers: { Accept: 'application/json' } })
+      .then(leggiJson)
+      .then(function (d) {
+        if (!d || typeof d.daConfermare !== 'number') return;
+        mostraNumeri(d.daConfermare, d.primaScadeSec);
+        if (!eHome) riallinea(d.richieste || [], primoStato, d.ordini || []);
+        primoStato = false;
+      })
+      .catch(function () { /* riprova al giro dopo */ })
+      .then(function () {
+        statoInCorso = false;
+        if (statoDaRifare) { statoDaRifare = false; aggiornaStato(); }
+      });
+  }
+
+  // Gli avvisi "Nuova richiesta" seguono l'elenco del server: ne compare uno per ogni richiesta ancora da confermare (anche dopo un cambio di pagina) e
+  // sparisce quello di una richiesta che non c'è più. Se mancano pochi secondi alla scadenza si trasforma in "Richiesta scaduta".
+  function riallinea(richieste, senzaAnimazione, ordiniDaPreparare) {
+    // "Corriere trovato" resta finché si chiude o si apre l'ordine, ma se l'ordine è già partito (un collega l'ha preparato) o non c'è più, non c'è niente da preparare.
+    const daPreparare = new Set(ordiniDaPreparare);
+    avvisi.slice().forEach(function (a) {
+      if (a.tipo !== 'corriere_trovato' || !a.ordineId || daPreparare.has(a.ordineId) || Date.now() - a.creatoIl < 4000) return;
+      rimuovi(a);
+    });
+    const presenti = new Set(richieste.map(function (r) { return r.id; }));
+    avvisi.slice().forEach(function (a) {
+      if (!a.richiestaId || presenti.has(a.richiestaId)) return;
+      // La risposta può essere partita prima che la richiesta esistesse: un avviso nato da pochi secondi si lascia al giro dopo.
+      if (Date.now() - a.creatoIl < 4000) return;
+      const restano = a.anello ? (a.anello.fine - Date.now()) / 1000 : 0;
+      const id = a.richiestaId;
+      const notifiche = a.notifiche.slice();
+      a.notifiche = [];
+      rimuovi(a, false);
+      if (restano <= 5 && !confermate.has(id)) schedaScaduta(id, notifiche);
+      else segnaLette(notifiche, id, null);
+    });
+    richieste.forEach(function (r) {
+      if (r.secondi < 1 || confermate.has(r.id) || scadute.has(r.id)) return;
+      // Sulla pagina di quella stessa richiesta c'è già tutto (timer e "Conferma"): niente avviso.
+      if (window.location.pathname === '/distributore/richieste/' + r.id) return;
+      if (!trova('richiesta-' + r.id)) schedaRichiesta(r, [], senzaAnimazione);
+    });
+  }
+
+  let pushInCorso = false;
+  function daiPush() {
+    if (pushInCorso) return;
+    pushInCorso = true;
+    fetch('/api/notifiche/push', { cache: 'no-store', credentials: 'same-origin', headers: { Accept: 'application/json' } })
+      .then(leggiJson)
+      .then(function (d) {
+        const nuove = ((d && d.notifiche) || []).filter(function (n) { return !(n.eta_sec > NOTIFICA_VECCHIA_SEC); });
+        if (!nuove.length) return;
+        let suonare = false;
+        let aggiornare = false;
+        nuove.forEach(function (n) {
+          // Notifica di sistema: solo se la pagina è nascosta (se si vede basta l'avviso a comparsa, per non avvisare due volte).
+          if (document.hidden && 'Notification' in window && Notification.permission === 'granted') mostraNotifica(n.titolo, n.testo, n.link, 'minuteria-' + n.id);
+          const sullaPagina = n.link && window.location.pathname === n.link.split('?')[0];
+          switch (n.tipo) {
+            case 'nuova_richiesta':
+              if (!n.richiesta) break; // già risposta o scaduta: niente da fare
+              aggiornare = true;
+              suonare = true;
+              if (!eHome && !sullaPagina) schedaRichiesta(n.richiesta, [n.id], false);
+              else if (sullaPagina) segnaLette([n.id], n.request_id, null); // sulla pagina di quella richiesta c'è già tutto: letta
+              break;
+            case 'corriere_trovato':
+              if (!n.ordine || !n.ordine.daPreparare) break;
+              aggiornare = true;
+              suonare = true;
+              if (!eHome && !sullaPagina) schedaOrdine(n.ordine, [n.id], false);
+              else if (sullaPagina) segnaLette([n.id], null, n.ordine.id);
+              break;
+            case 'nessun_corriere':
+              aggiornare = true;
+              if (!eHome && n.request_id) { schedaSenzaCorriere(n.request_id, [n.id]); const r = trova('richiesta-' + n.request_id); if (r) rimuovi(r, false); }
+              break;
+            case 'richiesta_scaduta':
+              aggiornare = true;
+              if (eHome || !n.request_id) break;
+              if (scadute.has(n.request_id)) segnaLette([n.id]); // già mostrata allo scadere del conto alla rovescia: non si ripete
+              else {
+                const r = trova('richiesta-' + n.request_id);
+                if (r) rimuovi(r, false);
+                schedaScaduta(n.request_id, [n.id]);
+              }
+              break;
+            case 'ordine_consegnato':
+              aggiornare = true;
+              if (!eHome && n.ordine && !sullaPagina) schedaConsegnato(n.ordine, [n.id]);
+              break;
+            default:
+              break;
+          }
+        });
+        if (suonare) suono();
+        if (aggiornare) aggiornaStato();
+      })
+      .catch(function () { /* nessuna notifica questo giro */ })
+      .then(function () { pushInCorso = false; });
+  }
+
+  // ---------- Avvio ----------
+
+  if (!eHome) {
+    contenitore = nodo('div', 'banco-avvisi');
+    contenitore.setAttribute('aria-live', 'polite');
+    contenitore.setAttribute('aria-atomic', 'false');
+    altri = nodo('div', 'banco-avvisi-altri');
+    altri.hidden = true;
+    contenitore.appendChild(altri);
+    document.body.appendChild(contenitore);
+
+    // "Corriere trovato" salvati (restano finché non si chiudono o si apre l'ordine, anche cambiando pagina).
+    try {
+      const salvati = JSON.parse(leggi('sessionStorage', CHIAVE_SALVATI) || '[]');
+      salvati.forEach(function (s) {
+        if (!s || !s.ordineId || Date.now() - s.salvatoIl > SALVATI_MAX_MS) return;
+        if (window.location.pathname === '/distributore/ordini/' + s.ordineId) { segnaLette(s.notifiche, null, s.ordineId); return; }
+        const a = crea({
+          chiave: s.chiave, tipo: 'corriere_trovato', icona: 'furgone', titolo: s.titolo, testo: s.testo, link: ordineUrl(s.ordineId), ordineId: s.ordineId,
+          notifiche: s.notifiche || [], chiudibile: true, salva: true, salvatoIl: s.salvatoIl, senzaAnimazione: true, creatoIl: 0,
+          pulsanti: [{ testo: 'Ispeziona ordine', icona: 'occhio', pieno: 'blu', href: ordineUrl(s.ordineId) }],
+        });
+      });
+      salvaCorrieri();
+    } catch (e) { /* elenco rovinato: si riparte da zero */ }
+  }
+
+  mostraNumeri(daConfermare, null);
+  aggiornaStato();
+  setTimeout(daiPush, 800);
+  setInterval(aggiornaStato, STATO_MS);
+  setInterval(daiPush, PUSH_MS);
+  window.addEventListener('online', function () { aggiornaStato(); daiPush(); });
+  // Tornando con "indietro" il browser può rimostrare la pagina com'era: gli avvisi vanno rifatti da capo.
+  window.addEventListener('pageshow', function (e) { if (e.persisted) window.location.reload(); });
+})();

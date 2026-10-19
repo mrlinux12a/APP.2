@@ -37,11 +37,13 @@ const CATEGORIE = {
   generale: { nome: 'Altro', icona: icone.iconaNotifiche, sottostati: {} },
 };
 
-async function notifica(userId, { titolo, testo, link = null, categoria = 'generale', sottostato = '', order_id = null }) {
+// `tipo` e `request_id` servono agli avvisi a comparsa del banco (public/app.js, "Avvisi del banco"): il browser sa così di che genere è la
+// notifica e a quale richiesta si riferisce. Senza `tipo` la notifica è una notifica e basta, com'era.
+async function notifica(userId, { titolo, testo, link = null, categoria = 'generale', sottostato = '', order_id = null, tipo = null, request_id = null }) {
   await db.prepare(
-    `INSERT INTO notifications (user_id, titolo, testo, link, categoria, sottostato, order_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(userId, titolo, testo, link, CATEGORIE[categoria] ? categoria : 'generale', sottostato, order_id);
+    `INSERT INTO notifications (user_id, titolo, testo, link, categoria, sottostato, order_id, tipo, request_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(userId, titolo, testo, link, CATEGORIE[categoria] ? categoria : 'generale', sottostato, order_id, tipo, request_id);
   // Se l'utente ha l'app Android installata, la notifica arriva anche sul telefono (src/push.js). Senza aspettare e senza mai far fallire
   // chi ha generato la notifica: un guasto di Expo o della rete finisce nel log e basta.
   // (Fuori da un'eventuale transazione in corso: il lavoro differito non deve ereditarne la connessione, vedi db.fuoriDallaTransazione.)
@@ -123,14 +125,15 @@ async function nonLette(userId) {
 async function daMostrare(userId) {
   const righe = await db
     .prepare(
-      `SELECT id, titolo, testo, link FROM notifications
+      `SELECT id, titolo, testo, link, tipo, request_id, order_id, EXTRACT(EPOCH FROM (NOW() - creato_il))::int AS eta_sec FROM notifications
         WHERE user_id = ? AND notificata = 0 ORDER BY id`
     )
     .all(userId);
   if (righe.length) {
+    // Solo quelle appena lette: una notifica nata fra la SELECT e questa UPDATE resta da mostrare al giro dopo.
     await db.prepare(
-      `UPDATE notifications SET notificata = 1 WHERE user_id = ? AND notificata = 0`
-    ).run(userId);
+      `UPDATE notifications SET notificata = 1 WHERE user_id = ? AND notificata = 0 AND id = ANY(?::int[])`
+    ).run(userId, righe.map((r) => r.id));
   }
   return righe;
 }
@@ -150,6 +153,25 @@ async function nonLetteCategoria(userId, categoria) {
   return row ? Number(row.n) : 0;
 }
 
+// Gli avvisi a comparsa del banco (aperti o chiusi) risultano letti. Si segnano per id e, perché un avviso sopravvive alle ricariche della pagina (che perdono gli id
+// delle notifiche da cui è nato), anche per richiesta ("Nuova richiesta") e per ordine ("Corriere trovato"). Solo quelle dell'utente: un id altrui non conta.
+const idValido = (n) => Number.isInteger(n) && n > 0 && n < 2147483647;
+async function segnaLettePerId(userId, ids, { richieste = [], ordini = [] } = {}) {
+  const lista = (v) => (Array.isArray(v) ? v : []).map(Number).filter(idValido).slice(0, 50);
+  const perId = lista(ids);
+  const perRichiesta = lista(richieste);
+  const perOrdine = lista(ordini);
+  if (!perId.length && !perRichiesta.length && !perOrdine.length) return 0;
+  const info = await db.prepare(
+    `UPDATE notifications SET letta = 1
+      WHERE user_id = ? AND letta = 0
+        AND (id = ANY(?::int[])
+             OR (tipo = 'nuova_richiesta' AND request_id = ANY(?::int[]))
+             OR (tipo = 'corriere_trovato' AND order_id = ANY(?::int[])))`
+  ).run(userId, perId, perRichiesta, perOrdine);
+  return info.changes;
+}
+
 module.exports = {
   CATEGORIE,
   notifica,
@@ -163,5 +185,6 @@ module.exports = {
   nonLetteCategoria,
   daMostrare,
   segnaLette,
+  segnaLettePerId,
   segnaLetteCategoria,
 };

@@ -10,5 +10,8 @@
       <span class="ico"><%- iconaClienti %></span>Clienti
       <% if (contatori && contatori.daApprovare > 0) { %><span class="pallino"><%= contatori.daApprovare %></span><% } %>
     </a>
+    <a href="/distributore/storico" class="<%= attivo === 'storico' ? 'attivo' : '' %>">
+      <span class="ico"><%- iconaOrdini %></span>Storico
+    </a>
   </div>
 </nav>

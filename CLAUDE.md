@@ -583,7 +583,11 @@ Stripe (prima era Checkout ospitato: cambiato lo stesso giorno, su richiesta), *
 Le regole stanno in cima a `src/pagamenti.js` (commento). Dove questa sezione contraddice frasi più vecchie qui sopra, vale questa.
 - **La carta all'invio è solo AUTORIZZATA**; si incassa quando nasce l'ordine (un banco conferma e, con WhatsApp, un corriere prende la consegna). Nessun banco / annullo in fase 1 →
   il blocco si rilascia (cancel del PaymentIntent, stato `rilasciato`): nessun addebito, **nessun rimborso**, nessuna ricevuta (la ricevuta c'è anche per i pagamenti di prova: vedi `statoPagamento`).
-- **`pagamenti.statoPagamento(richiesta|ordine)`** (e `rigaPagamento`, `calcolaStatoPagamento` puro) dà alle viste UNA chiave: `bloccato` (autorizzato, da_incassare), `pagato` (incassato),
+- **Con l'ordine nato la carta è PAGATA, subito** (richiesta esplicita del 19/10/2026): quando il corriere accetta (o, a WhatsApp spento, il banco conferma) nasce l'ordine e la stessa transazione porta la riga di Stripe a `da_incassare`; la capture la fa `elabora()` pochi secondi dopo (e la pagina dell'ordine non si
+  ricarica da sola), quindi per qualche secondo, o a lungo se la capture tarda, la scheda "Pagamenti" diceva ancora "Bloccati sulla carta · addebitati solo se BOREA conferma" e non aveva la ricevuta. Ora `calcolaStatoPagamento` dà `pagato` a una riga `da_incassare` **con un ordine** (`ordine` o `richiesta.order_id`), con importo
+  `incasso_cent`, data = nascita dell'ordine (`aggiornato_il`) e **`ricevuta: true`** (il PDF c'è da subito, senza la carta: marca e ultime 4 cifre, e il link alla ricevuta di Stripe, arrivano con la capture; il numero R-… assegnato prima resta lo stesso). Senza ordine resta `bloccato`, e `autorizzato` non cambia. Anche lo Storico
+  dell'installatore (`materialeOrdini`) legge `da_incassare` fra le righe "con ricevuta": un ordine in consegna ha "Ricevuta" e "Dettagli ›" senza aspettare la consegna, e "Ricevute del mese" lo include. Se la capture fallisce per sempre (`da_verificare`) la riga esce da `STATI_CARTA` e si ricade sulla richiesta: `pagato` senza ricevuta (pagamento `stripe` senza riga).
+- **`pagamenti.statoPagamento(richiesta|ordine)`** (e `rigaPagamento`, `calcolaStatoPagamento` puro) dà alle viste UNA chiave: `bloccato` (autorizzato, o da_incassare **senza** ordine), `pagato` (incassato, o da_incassare con l'ordine nato),
   `annullato` (da_rilasciare, rilasciato, scaduto, **o richiesta annullata/senza risposta senza incasso anche se Stripe non ha ancora rilasciato**), `rimborsato` (da_rimborsare, rimborsato:
   raro, lo fa l'assistenza dal Dashboard). Prende l'ultima riga di `stripe_pagamenti` fra quelle che raccontano il destino della carta (con "Rinvia" ce ne sono due). **Senza riga di Stripe**
   (pagamento simulato dell'app / del PC, o richiesta di prima) lo stato si ricava dalla richiesta. **La ricevuta c'è anche per i pagamenti NON reali** (richiesta esplicita del 19/10/2026, al posto della
@@ -641,9 +645,10 @@ Attesa corriere → Da preparare, senza numeri d'ordine delle fasi. Convenzioni 
   `POST /api/distributore/stato` non esiste più.
 - **Intestazione e tendina dell'utente sono UNA sola per tutto il banco** (richiesta esplicita del 14/10/2026,
   non farne un'altra): `partials/banco_testa.ejs` = ditta e filiale (`res.locals.bancoTesta`, in cache 60 s dal
-  middleware di `server.js`), schede Banco/Clienti, "Storico ordini" e cerchio con le iniziali della
-  **filiale** ("Banco Genova Fegino" → BG) che apre la tendina `.menu-account` (Esci; Clienti e Storico ordini
-  compaiono lì solo dove la barra non li mostra). **Niente campanella delle notifiche** (tolta su richiesta esplicita
+  middleware di `server.js`), schede **Banco / Clienti / Storico ordini** (dal 19/10/2026 "Storico ordini" è una scheda del menu come le altre, la terza dopo Clienti, con l'icona `iconaOrdini`:
+  prima era un pulsante accanto al cerchio dell'utente, `.banco-storico`, **non rimetterlo**) e cerchio con le iniziali della
+  **filiale** ("Banco Genova Fegino" → BG) che apre la tendina `.menu-account` (Esci; Clienti compare lì solo sotto i 900px, dove le schede della barra spariscono; **non c'è più "Storico ordini"
+  nella tendina**: sotto i 900px sta nel menu in basso, che ha tre voci, Home / Clienti / Storico: `nav_distributore` con `attivo: 'storico'` nello Storico e nella pagina dell'ordine). **Niente campanella delle notifiche** (tolta su richiesta esplicita
   del 14/10/2026, non rimetterla: `/notifiche` esiste ancora ma il banco non ha un link per arrivarci). La home la include; **tutte le altre pagine del
   distributore passano da `partials/appbar.ejs`, che per `ruolo = distributore` delega qui** (anche `/notifiche` e la
   pagina `errore`): un `appbar` nuovo in una vista del banco funziona da solo. Sotto la barra le pagine interne hanno
@@ -893,7 +898,7 @@ nota "Flusso del banco: …" in fondo.
   finché un campo con `data-non-ricaricare` (la ricerca) ha testo non ancora inviato (`value !== defaultValue`), anche senza fuoco. Si ricarica
   solo quando i contatori della home cambiano: una consegna (`consegnato_il`) non li cambia, quindi non fa ricaricare lo storico da sola.
 - **Sotto i 900px**: ricerca a tutta larghezza, schede che scorrono di lato senza barra, la tabella diventa una lista di card (quattro righe, senza la
-  città). Da 640px in giù il pulsante "Storico ordini" della barra sparisce e resta la voce nella tendina; il menu in basso è sempre Home e Clienti.
+  città). "Storico ordini" è una scheda del menu in alto (da 900px) e una voce del menu in basso (sotto i 900px: Home / Clienti / Storico), non più un pulsante vicino al cerchio né una voce della tendina.
 - **La freccia indietro di ordine e richiesta torna da dove si è arrivati** (richiesta esplicita del 19/10/2026; prima era fissa su `/distributore`, la home): chi porta a
   `/distributore/ordini/:id` o `/distributore/richieste/:id` aggiunge `?torna=<pagina di partenza, codificata>` con `conRitorno` (`src/http.js`, in `app.locals` per le viste): la riga dello Storico
   "Da preparare" (con i filtri e la pagina: `link({})`; il "Vedi ordine #N ›" della scheda cliente non c'è più). Le due pagine leggono `ritornoBanco(req.query.torna)`: **vale solo una pagina del
@@ -967,6 +972,40 @@ con cui sono state disegnate e chiedono ogni 5 s `/api/distributore/novita` (gli
 ultima richiesta/ordine e corrieri in attesa): se cambiano si ricaricano, anche se la scheda era in
 secondo piano (aspettano di tornare visibili o che finisca la digitazione). Prima era una ricarica a
 tempo che saltava le schede nascoste. Le risposte hanno `Cache-Control: private, no-cache`.
+
+## Avvisi del banco fuori dalla home (20/10/2026)
+
+Richiesta esplicita (mockup in `docs/mockup/notifiche-banco-pagina.png` e `notifiche-banco-tipi.png`): quando il banco non guarda la home, tre livelli + scheda del browser + suono. **Sulla
+home NON ci sono la striscia né gli avvisi a comparsa** (le colonne mostrano già tutto); il pallino su "Banco", il titolo, la favicon, il suono e la notifica di sistema valgono anche lì.
+Codice: `src/banco_avvisi.js` (dati), `views/partials/banco_avviso.ejs` (striscia + icone) e `banco_testa.ejs` (pallino, voci del menu), blocco "Avvisi del banco" in fondo a `public/app.js`,
+blocco "Avvisi del banco" in fondo a `public/style.css`, `public/suoni/avviso.mp3` (5 KB, generato: due note). Prove: `test/banco_avvisi.test.js` e cinque test "banco: ..."/"avvisi del banco: ..." in `test/server.test.js`.
+- **Schema** (blocco "Notifiche del banco: tipo e richiesta (20/10/2026)" in fondo a `schema.sql` e `schema.pg.sql`): `notifications.tipo TEXT` e `notifications.request_id INTEGER`, nullable, senza chiave esterna.
+  **Applicato al DB condiviso il 20/10/2026** (prova a secco e poi `--applica`): `notifiche.notifica()` scrive le due colonne a ogni notifica, quindi il codice nuovo NON gira su un DB senza il blocco (anche sulla VPS: schema prima del riavvio).
+- **Tipi** (`notifica(..., { tipo, request_id })`): `nuova_richiesta` (`richieste.creaRichiesta` e `reinviaRichiesta`), `corriere_trovato` (`flusso.creaOrdineDaRisposta`, è la notifica "Nuovo ordine da preparare", con `order_id`),
+  `nessun_corriere` e `richiesta_scaduta` (**solo** `richieste.chiudiFinestraRisposte`, con `UPDATE ... RETURNING distributor_id`: la prima va al banco che aveva confermato aspettando un corriere, la seconda a chi non ha risposto; chi
+  aveva già rifiutato o era stato chiuso perché una filiale sorella ha confermato non riceve niente), `ordine_consegnato` (`flusso.scriviConsegna`, chiamata da `segnaConsegnato` e `segnaConsegnatoProva`: UPDATE con
+  `consegnato_il IS NULL`, un solo avviso anche con due conferme). Una richiesta annullata dal cliente o una persa a favore di un'altra ditta NON hanno un avviso loro: l'avviso "Nuova richiesta" sparisce da solo.
+  Gli avvisi sono best effort: un guasto lì finisce nel log e non fa fallire la chiusura o la consegna.
+- **`GET /distributore/stato-banco`** (JSON, `no-store`): `{ daConfermare, primaScadeSec, attesaCorriere, daPreparare, richieste: [{ id, cliente, articoli, pezzi, secondi, finestraSec, scadeAlle }], ordini: [id da preparare] }`.
+  I conteggi sono i `contatori` che il middleware di `server.js` ha già letto (nessuna query in più); le richieste sono una query sola (`richiesteInAttesa`), gli ordini un'altra, in parallelo. `primaScadeSec` per il primo disegno della
+  striscia arriva da `letturaBanco` (stessa query dei contatori) in `res.locals.primaScadeSec`: **non va nei contatori**, che finiscono in `data-versione` e farebbero ricaricare la pagina a ogni secondo.
+- **`GET /api/notifiche/push`**: per il banco ogni notifica porta anche `tipo`, `request_id`, `order_id`, `eta_sec` e i dati dell'avviso (`arricchisciPush`: `richiesta` { cliente, articoli, pezzi, secondi, scadeAlle } o `null` se non è più da
+  confermare; `ordine` { corriere, ritiroAlle, daPreparare } o { cliente, alle }). `daMostrare` marca `notificata` solo gli id letti (prima tutte quelle dell'utente: una nata fra SELECT e UPDATE si perdeva). Per gli altri ruoli cambia solo
+  che ci sono colonne in più. **`POST /api/notifiche/lette`** `{ ids, richieste, ordini }`: "aperta o chiusa, la notifica risulta letta"; si manda anche la richiesta/l'ordine perché l'avviso sopravvive alle ricariche della pagina (che ne perdono gli id).
+- **"Conferma" dall'avviso**: `POST /distributore/richieste/:id/rispondi` con `Accept: application/json` risponde `{ ok, errore }` (200, o 409 col motivo) invece del redirect; i form della home e del dettaglio (Accept html) restano com'erano.
+- **Come ragiona lo script** (`[data-banco-testa]` sull'`<header>`, che deve restare uguale su tutte le pagine: un test lo confronta, quindi la home si riconosce dal percorso, non da un attributo): polling dello stato ogni 15 s e delle
+  notifiche ogni 5 s (e subito dopo una conferma, o quando ne arriva una nuova); il blocco vecchio delle notifiche del browser non gira più sulle pagine del banco (resta per cliente e agente). Gli avvisi "Nuova richiesta" seguono
+  l'**elenco del server**: ne compare uno per ogni richiesta ancora da confermare anche dopo un cambio di pagina o una ricarica (le pagine del banco si ricaricano da sole quando cambiano i contatori), sparisce quello di una richiesta che
+  non c'è più (risposta di un collega: provato; scaduta; annullata) e allo scadere del conto alla rovescia (o con ≤ 5 s alla scomparsa) diventa "Richiesta scaduta", che l'avviso del server non ripete (`scadute`). "Corriere trovato" resta finché si
+  chiude o si apre l'ordine, anche cambiando pagina (**sessionStorage** `minuteria.banco.avvisi.<id utente>`, massimo 2 ore) e sparisce se l'ordine non è più "da preparare" (`ordini` di stato-banco). Gli avvisi da 6 e 10 s si perdono se la
+  pagina si ricarica prima. Si mostrano al massimo 3 (i più nuovi; gli altri restano vivi, con una pastiglia "+N altri avvisi"). Una notifica nata da più di 10 minuti (`eta_sec`, dopo una lunga assenza) non si mostra più. Sulla pagina della
+  richiesta (o dell'ordine) a cui si riferisce l'avviso non compare (c'è già tutto) e la notifica si segna letta. Tutti i testi degli avvisi sono `textContent` (il nome del cliente lo scrive lui in registrazione).
+- **Scelte mie da confermare**: senza il modulo WhatsApp (nessun corriere) l'avviso verde dice "Nuovo ordine · Ordine #N / Ordine già pagato: prepara il materiale." invece di "Corriere trovato" (sarebbe falso); gli avvisi si fermano sopra il
+  menu in basso sotto i 900px; la striscia non è sticky (la barra sì: si vede sempre il pallino); `Notification.requestPermission()` richiede un clic e nessuna pagina del banco aveva un pulsante: c'è la voce "Attiva le notifiche del computer" nel menu
+  dell'account (solo finché il permesso non è dato o negato). "Suoni notifiche: sì/no" è in `localStorage` (`minuteria.banco.suoni`). **Il suono parte solo dopo un clic su quella pagina** (regola del browser): ogni ricarica completa riparte da zero.
+- **Non provato / limiti**: la notifica di sistema (nel browser incorporato il permesso è negato: il percorso è `document.hidden` + `Notification.permission === 'granted'`), l'ascolto vero del suono (si vede solo la richiesta dell'MP3),
+  "riduci movimento" (solo il CSS, controllato da un test), Safari/iPhone. Provato nel browser incorporato su un Postgres locale usa-e-getta (`DROP DATABASE` fatto a fine prova): pallino, striscia (rossa sotto i 2 minuti), avviso con "Conferma" senza
+  lasciare la pagina (poi "Nuovo ordine"), scadenza, risposta di un collega, "Corriere trovato" che resta cambiando pagina, chiusura automatica a 10 s con pausa al passaggio del mouse, titolo che alterna e favicon col pallino, home senza avvisi, 375 px.
 
 ## Gruppo WhatsApp dei corrieri (`src/whatsapp.js`)
 
@@ -1079,6 +1118,7 @@ Panoramica e avvio in README. Qui solo ciò che non si deduce dal codice.
 
 Badge "Stato ordini" somma non lette di `ordini`+`richieste`. Ricalcolare **dopo** averle
 marcate lette se la route fa render diretto (non redirect), altrimenti resta il valore vecchio.
+Le notifiche del **banco** hanno anche `tipo` e `request_id` e diventano avvisi a comparsa: vedi "Avvisi del banco fuori dalla home".
 
 ## Audit web del 05/10/2026 (convenzioni nate da lì)
 

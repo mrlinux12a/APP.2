@@ -240,6 +240,8 @@ async function creaRichiesta(
       link: `/distributore/richieste/${requestId}`,
       categoria: 'richieste',
       sottostato: 'inviata',
+      tipo: 'nuova_richiesta',
+      request_id: requestId,
     });
   }
 
@@ -314,6 +316,8 @@ async function reinviaRichiesta(requestId, { metodoPagamento = pagamenti.METODO_
       link: `/distributore/richieste/${requestId}`,
       categoria: 'richieste',
       sottostato: 'inviata',
+      tipo: 'nuova_richiesta',
+      request_id: requestId,
     });
   }
 
@@ -414,18 +418,26 @@ async function chiudiFinestraRisposte(richiesta) {
     ).run(requestId);
     if (!chiusa.changes) return null;
 
-    await db.prepare(
+    // Quali banchi non hanno risposto in tempo (RETURNING: l'avviso "Richiesta scaduta" va a loro, vedi sotto).
+    const nonRisposto = await db.prepare(
       `UPDATE request_responses SET esito = 'scaduto', risposto_il = NOW()
-        WHERE request_id = ? AND esito = 'in_attesa'`
-    ).run(requestId);
+        WHERE request_id = ? AND esito = 'in_attesa'
+        RETURNING distributor_id`
+    ).all(requestId);
     // Il timer è finito e nessun corriere ha risposto: per l'installatore è come se il banco non
-    // avesse accettato.
-    const corrieri = await db.prepare(
+    // avesse accettato. Il banco che aveva confermato (e non deve più preparare) riceve l'avviso "Nessun corriere".
+    const senzaCorriere = await db.prepare(
       `UPDATE request_responses SET corriere_stato = 'scaduto'
-        WHERE request_id = ? AND corriere_stato = 'in_attesa'`
-    ).run(requestId);
+        WHERE request_id = ? AND corriere_stato = 'in_attesa'
+        RETURNING distributor_id`
+    ).all(requestId);
     const rimborsato = await pagamenti.rimborsa(requestId);
-    return { corrieriScaduti: corrieri.changes, rimborsato };
+    return {
+      corrieriScaduti: senzaCorriere.length,
+      rimborsato,
+      bancoNonRisposto: nonRisposto.map((r) => r.distributor_id),
+      bancoSenzaCorriere: senzaCorriere.map((r) => r.distributor_id),
+    };
   });
 
   const esito = await chiudi();
@@ -435,7 +447,7 @@ async function chiudiFinestraRisposte(richiesta) {
     await whatsapp.ritiraRichiesta(requestId).catch((err) => console.error('[richieste] WhatsApp, ritiro messaggio:', err.message));
   }
   const minuti = await getFinestraMinuti();
-  const { notifica } = require('./notifiche');
+  const { notifica, notificaDistributore } = require('./notifiche');
   // Un banco che aveva accettato e aspettava il corriere (corriere_stato 'in_attesa', ora 'scaduto') = nessun corriere ha preso la consegna.
   const senzaCorriere = esito.corrieriScaduti > 0;
   await notifica(richiesta.cliente_id, {
@@ -448,6 +460,30 @@ async function chiudiFinestraRisposte(richiesta) {
       ' Puoi ripetere la richiesta.',
     link: `/richieste/${requestId}`,
     categoria: 'richieste',
+  });
+  // Anche il banco lo viene a sapere (avvisi a comparsa, public/app.js "Avvisi del banco"): chi non ha risposto in tempo, e chi aveva
+  // confermato ma non ha trovato un corriere (non deve preparare niente). Un guasto qui non deve far fallire una richiesta già chiusa.
+  const avviso = (distributorIds, payload) =>
+    Promise.all(
+      [...new Set(distributorIds)].map((id) =>
+        notificaDistributore(id, payload).catch((err) => console.error(`[richieste] avviso al banco ${id} non inviato:`, err.message))
+      )
+    );
+  await avviso(esito.bancoSenzaCorriere, {
+    titolo: `Nessun corriere · richiesta #${requestId}`,
+    testo: 'Nessuno ha preso la consegna: non preparare. Il cliente è stato avvisato e non paga nulla.',
+    link: `/distributore/richieste/${requestId}`,
+    categoria: 'richieste',
+    tipo: 'nessun_corriere',
+    request_id: requestId,
+  });
+  await avviso(esito.bancoNonRisposto, {
+    titolo: `Richiesta #${requestId} scaduta`,
+    testo: 'Non hai risposto in tempo. Il cliente non paga nulla.',
+    link: `/distributore/richieste/${requestId}`,
+    categoria: 'richieste',
+    tipo: 'richiesta_scaduta',
+    request_id: requestId,
   });
   return true;
 }

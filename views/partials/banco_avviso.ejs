@@ -1,0 +1,26 @@
+<%
+  // Striscia arancio sotto l'intestazione del banco (richiesta esplicita del 20/10/2026), inclusa da partials/banco_testa.ejs su tutte le pagine
+  // del banco TRANNE la home: lì le tre colonne mostrano già tutto. C'è solo se ci sono richieste da confermare: "2 richieste da confermare · la prima
+  // scade tra 01:38", col tempo che scende ogni secondo (rosso negli ultimi 2 minuti) e "Vai al banco ›". Il disegno parte dai valori del server
+  // (daConfermare, primaScadeSec); lo script di public/app.js ("Avvisi del banco") la tiene aggiornata da /distributore/stato-banco: ogni 15 secondi e
+  // subito quando arriva una richiesta nuova, e la nasconde quando non ce ne sono più. Parametri: daConfermare, primaScadeSec.
+  const n = Number(daConfermare) || 0;
+  const sec = primaScadeSec === null || primaScadeSec === undefined ? 0 : Math.max(0, Math.floor(Number(primaScadeSec) || 0));
+%>
+<%# role="status": il lettore di schermo annuncia quando compare o cambia il numero. Il tempo, che cambia ogni secondo, è aria-hidden: non va letto di continuo. %>
+<div class="banco-avviso" data-banco-avviso data-urgente-sec="120" role="status"<%- n > 0 ? '' : ' hidden' %>>
+  <span class="banco-avviso-punto" aria-hidden="true"></span>
+  <p class="banco-avviso-testo">
+    <strong data-avviso-conta><%= n === 1 ? '1 richiesta da confermare' : n + ' richieste da confermare' %></strong><span aria-hidden="true"> · la prima scade tra <strong class="banco-avviso-tempo" data-avviso-tempo data-secondi="<%= sec %>"><%= fmt.mmss(sec) %></strong></span>
+  </p>
+  <a class="banco-avviso-vai" href="/distributore">Vai al banco <span aria-hidden="true">›</span></a>
+</div>
+
+<%# Le icone degli avvisi a comparsa, disegnate dal server (le stesse del resto del sito): lo script le copia nelle schede. %>
+<template data-banco-avvisi-icone>
+  <span data-icona="furgone"><%- iconaFurgone %></span>
+  <span data-icona="esclamativo"><%- iconaEsclamativo %></span>
+  <span data-icona="spunta"><%- iconaSpunta %></span>
+  <span data-icona="occhio"><%- iconaOcchio %></span>
+  <span data-icona="chiudi"><%- iconaChiudi %></span>
+</template>

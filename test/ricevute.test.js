@@ -144,11 +144,21 @@ test('datiRicevuta: NESSUNA ricevuta se il pagamento non è incassato (bloccato,
   scenario();
   assert.equal(await ricevute.datiRicevuta(999), null);
   assert.equal(await ricevute.datiRicevuta(97, { clienteId: 2 }), null);
-  // carta solo bloccata (richiesta in attesa) o con l'incasso da fare: la ricevuta nasce dopo l'incasso
-  for (const rigaStato of ['autorizzato', 'da_incassare']) {
-    scenario({ rigaStato });
-    assert.equal(await ricevute.datiRicevuta(97, { clienteId: 1 }), null, rigaStato);
-  }
+  // carta solo bloccata (autorizzata, nessun banco ha ancora confermato): niente ricevuta
+  scenario({ rigaStato: 'autorizzato' });
+  assert.equal(await ricevute.datiRicevuta(97, { clienteId: 1 }), null, 'autorizzato');
+  // con l'ordine già nato e la capture ancora da fare ('da_incassare': il corriere ha accettato, Stripe incassa fra pochi secondi) è già pagato, e la ricevuta
+  // si può aprire (19/10/2026): con l'importo dell'ordine e la data in cui è nato, senza la carta (arriva con la capture), e lo stesso numero dopo l'incasso
+  scenario({ rigaStato: 'da_incassare' });
+  stato.riga.carta_marca = null;
+  stato.riga.carta_ultime4 = null;
+  stato.riga.incassato_il = null;
+  const inCorso = await ricevute.datiRicevuta(97, { clienteId: 1 });
+  assert.ok(inCorso, 'da_incassare con l\'ordine nato');
+  assert.deepEqual([inCorso.numero, inCorso.importi.app.totale, inCorso.carta, inCorso.data], ['R-2026-000001', 20.07, null, incassoUtc]);
+  stato.riga.stato = 'incassato';
+  stato.riga.incasso_cent = 2007;
+  assert.equal((await ricevute.datiRicevuta(97, { clienteId: 1 })).numero, 'R-2026-000001', 'il numero assegnato prima dell\'incasso resta lo stesso');
   // blocco annullato: nessun addebito, nessuna ricevuta
   for (const rigaStato of ['da_rilasciare', 'rilasciato', 'scaduto']) {
     scenario({ rigaStato });

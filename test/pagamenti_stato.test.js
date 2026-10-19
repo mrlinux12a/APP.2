@@ -95,8 +95,32 @@ test('richiesta chiusa o annullata senza ordine: il blocco è "annullato" anche 
     assert.equal(s.chiave, 'annullato', chiusura);
     assert.equal(s.ricevuta, false);
   }
-  // ma con un ordine nato non è chiusa: resta bloccato finché la carta non è incassata
-  assert.equal(stato({ riga: riga({ stato: 'da_incassare' }), richiesta: richiesta({ stato: 'ordinata', order_id: 97 }) }).chiave, 'bloccato');
+  // ma con un ordine nato non è chiusa: per chi guarda la carta è PAGATA anche se Stripe non l'ha ancora incassata (riga 'da_incassare', 19/10/2026)
+  assert.equal(stato({ riga: riga({ stato: 'da_incassare' }), richiesta: richiesta({ stato: 'ordinata', order_id: 97 }) }).chiave, 'pagato');
+});
+
+test('con l\'ordine nato (corriere accettato) la carta è "pagata" anche con la capture ancora da fare: importo, data e ricevuta dell\'ordine', () => {
+  const adesso = new Date(2026, 9, 15, 19, 16);
+  const daIncassare = riga({ stato: 'da_incassare', incasso_cent: 1900, aggiornato_il: adesso });
+  // l'ordine si riconosce dalla richiesta (order_id) o dalla pagina dell'ordine (`ordine`)
+  for (const [nome, argomenti] of [
+    ['richiesta con order_id', { riga: daIncassare, richiesta: richiesta({ stato: 'ordinata', order_id: 97 }) }],
+    ['pagina dell\'ordine', { riga: daIncassare, richiesta: richiesta({ order_id: null }), ordine: { id: 97 } }],
+  ]) {
+    const s = stato(argomenti);
+    assert.equal(s.chiave, 'pagato', nome);
+    assert.equal(s.importo, 19, nome + ': l\'importo che verrà incassato (incasso_cent), non quello autorizzato');
+    assert.equal(s.data, adesso, nome + ': la data in cui è nato l\'ordine (l\'ultimo aggiornamento della riga)');
+    assert.equal(s.ricevuta, true, nome + ': la ricevuta si apre subito');
+    assert.deepEqual([s.ricevutaRimborso, s.carta, s.receiptUrl], [false, null, null], nome + ': la carta e la ricevuta di Stripe arrivano con la capture');
+  }
+  // senza l'ordine resta bloccato (nessun banco, o nessun corriere, ha ancora accettato), e anche 'autorizzato' con un ordine non cambia: l'ordine lo porta a
+  // 'da_incassare' la stessa transazione che lo crea
+  assert.deepEqual([stato({ riga: daIncassare, richiesta: richiesta() }).chiave, stato({ riga: daIncassare, richiesta: richiesta() }).ricevuta], ['bloccato', false]);
+  assert.equal(stato({ riga: riga({ stato: 'autorizzato' }), richiesta: richiesta({ stato: 'ordinata', order_id: 97 }) }).chiave, 'bloccato');
+  // una volta incassata: carta e data dell'incasso
+  const incassata = stato({ riga: riga({ stato: 'incassato', incasso_cent: 1900, incassato_il: incassoUtc, carta_marca: 'visa', carta_ultime4: '4242' }), richiesta: richiesta({ order_id: 97 }) });
+  assert.deepEqual([incassata.chiave, incassata.ricevuta, incassata.carta.testo, incassata.data], ['pagato', true, 'Visa •••• 4242', incassoUtc]);
 });
 
 test('senza riga di Stripe (pagamento simulato dell\'app e del PC, o richiesta di prima): lo stato si ricava dalla richiesta; con l\'ordine nato c\'è la ricevuta "di prova"', () => {

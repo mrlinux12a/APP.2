@@ -8,6 +8,7 @@ let ordini = [];
 let righe = [];
 let richieste = [];
 let righeRichieste = [];
+let richiesteConIncasso = []; // le richieste per cui stripe_pagamenti ha una riga con la ricevuta (la SQL la sceglie, qui si finge il risultato)
 const chiamate = [];
 const dbFinto = {
   prepare: (sql) => {
@@ -20,7 +21,7 @@ const dbFinto = {
         return ordini.filter((o) => o.cliente_id === p[0] && (filiale === null || o.distributor_id === filiale)).sort((a, b) => b.id - a.id); // ORDER BY o.id DESC
       }
       if (/FROM order_items WHERE order_id = ANY/.test(s)) return righe.filter((r) => p[0].includes(r.order_id));
-      if (/SELECT DISTINCT request_id FROM stripe_pagamenti/.test(s)) return [];
+      if (/SELECT DISTINCT request_id FROM stripe_pagamenti/.test(s)) return richiesteConIncasso.filter((id) => p[0].includes(id)).map((id) => ({ request_id: id }));
       // le righe delle richieste chiuse (una lettura sola, con la sotto-query delle stesse richieste) PRIMA della lettura delle richieste: la contiene
       if (/FROM request_items ri JOIN products p ON p\.id = ri\.product_id WHERE ri\.request_id IN \(/.test(s)) return righeRichieste;
       if (/FROM requests WHERE cliente_id = \? AND order_id IS NULL/.test(s)) return richieste;
@@ -56,7 +57,7 @@ function ordine(id, { cliente = 1, banco = 2, ditta = 'BOREA SRL', data = quando
     subtotale, subtotale_cliente: cliente_, raee_unitario: raee, raee_riga: raee * qta,
   });
 }
-const prova = (f) => async () => { ordini = []; righe = []; richieste = []; righeRichieste = []; chiamate.length = 0; await f(); };
+const prova = (f) => async () => { ordini = []; righe = []; richieste = []; righeRichieste = []; richiesteConIncasso = []; chiamate.length = 0; await f(); };
 
 test('importo che si paga in app: servizio (10%) + consegna, IVA inclusa; il materiale (prezzo del banco + RAEE) si paga dopo; le due parti fanno il totale', async () => {
   const prodotto = (id, listino, sconto, raee) => ({ prodotto: { id, codice: 'C' + id, nome: 'P' + id, prezzo_listino: listino, sconto_base_pct: sconto, raee }, quantita: 2 });
@@ -418,4 +419,17 @@ test('ricevuta: anche un pagamento simulato (sandbox) la ha; un pagamento senza 
   // lato banco: nessun link alle ricevute dell'installatore
   const lato = await materiale.materialeOrdini({ clienteId: 1, distributorId: 2, mese: 'tutto', hrefOrdine: () => null });
   assert.ok(lato.gruppi.flatMap((g) => g.ordini).every((o) => o.ricevuta === false));
+}));
+
+test('ricevuta con Stripe: anche l\'ordine appena nato con la capture ancora da fare (da_incassare) ha il link, non il blocco annullato né quello solo autorizzato', prova(async () => {
+  ordine(80, { metodo: 'stripe', statoPag: 'pagato' }); // capture da fare: la SQL lo include, la ricevuta c'è
+  ordine(81, { metodo: 'stripe', statoPag: 'pagato' }); // nessuna riga che racconti un incasso
+  richiesteConIncasso = [1080];
+  const m = await materiale.materialeOrdini({ clienteId: 1, mese: 'tutto' });
+  const ricevute = Object.fromEntries(m.gruppi.flatMap((g) => g.ordini).map((o) => [o.id, o.ricevuta]));
+  assert.deepEqual(ricevute, { 80: true, 81: false });
+  // la lettura sceglie le righe con la ricevuta: l'incasso fatto o poi rimborsato, e l'incasso da fare; mai autorizzato, rilasciato o scaduto
+  const sql = chiamate.find((c) => /SELECT DISTINCT request_id FROM stripe_pagamenti/.test(c.s)).s;
+  assert.match(sql, /incasso_cent > 0 AND stato IN \('da_incassare', 'incassato', 'da_rimborsare', 'rimborsato'\)/);
+  assert.doesNotMatch(sql, /autorizzato|rilasciato|scaduto/);
 }));

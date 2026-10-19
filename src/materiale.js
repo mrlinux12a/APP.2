@@ -148,8 +148,9 @@ async function materialeOrdini({
   const richiesteConRicevuta = new Set();
   if (ordiniGrezzi.length) {
     const idRichieste = ordiniGrezzi.map((o) => o.request_id).filter(Boolean);
-    // Le righe e le ricevute non dipendono una dall'altra. Una ricevuta c'è solo per un pagamento vero e incassato (stripe_pagamenti: incassato, o poi
-    // rimborsato): niente per i blocchi annullati, né per i pagamenti simulati. Una lettura sola per tutti gli ordini, solo per l'installatore.
+    // Le righe e le ricevute non dipendono una dall'altra. Una ricevuta c'è per un pagamento incassato (stripe_pagamenti: incassato, o poi rimborsato) e anche
+    // per quello con l'ordine già nato e la capture ancora da fare ('da_incassare': è l'ordine in consegna appena partito, già "pagato" per chi lo guarda: vedi
+    // pagamenti.calcolaStatoPagamento): niente per i blocchi annullati. Una lettura sola per tutti gli ordini, solo per l'installatore.
     const [righe, ricevute] = await Promise.all([
       db
         .prepare(
@@ -162,7 +163,7 @@ async function materialeOrdini({
         ? db
             .prepare(
               `SELECT DISTINCT request_id FROM stripe_pagamenti
-                WHERE request_id = ANY(?::int[]) AND incasso_cent > 0 AND stato IN ('incassato', 'da_rimborsare', 'rimborsato')`
+                WHERE request_id = ANY(?::int[]) AND incasso_cent > 0 AND stato IN ('da_incassare', 'incassato', 'da_rimborsare', 'rimborsato')`
             )
             .all(idRichieste)
         : [],

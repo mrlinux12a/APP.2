@@ -470,6 +470,9 @@ async function creaOrdineDaRisposta(richiesta, risposta) {
     categoria: 'ordini',
     sottostato: 'in_approvazione',
     order_id: orderId,
+    // Avviso a comparsa "Corriere trovato" (o, a modulo WhatsApp spento, "Nuovo ordine"): public/app.js, "Avvisi del banco".
+    tipo: 'corriere_trovato',
+    request_id: richiesta.id,
   });
 
   // La richiesta confermata non resta una richiesta: diventa un ordine, e la notifica del cliente lo
@@ -548,7 +551,29 @@ async function dettaglioOrdine(ordine) {
 // valorizza solo consegnato_il, che è quanto basta per mostrare "Consegnato".
 async function segnaConsegnato(ordine) {
   if (ordine.stato === 'evaso' && !ordine.consegnato_il) {
-    await db.prepare('UPDATE orders SET consegnato_il = NOW() WHERE id = ?').run(ordine.id);
+    await scriviConsegna(ordine);
+  }
+}
+
+// Scrive la consegna (solo se ancora non c'è: due conferme insieme non avvisano il banco due volte) e avvisa il banco. Un guasto dell'avviso
+// non deve far fallire la conferma del cliente: finisce nel log.
+async function scriviConsegna(ordine) {
+  const info = await db.prepare('UPDATE orders SET consegnato_il = NOW() WHERE id = ? AND consegnato_il IS NULL').run(ordine.id);
+  if (!info.changes || !ordine.distributor_id) return;
+  try {
+    const cliente = await db.prepare('SELECT ragione_sociale FROM users WHERE id = ?').get(ordine.cliente_id);
+    await notifiche.notificaDistributore(ordine.distributor_id, {
+      titolo: `Ordine #${ordine.id} consegnato`,
+      testo: `${cliente ? cliente.ragione_sociale : 'Il cliente'} ha confermato la consegna alle ${format.oraRoma(new Date())}.`,
+      link: '/distributore/ordini/' + ordine.id,
+      categoria: 'ordini',
+      sottostato: 'consegnato',
+      order_id: ordine.id,
+      tipo: 'ordine_consegnato',
+      request_id: ordine.request_id || null,
+    });
+  } catch (err) {
+    console.error(`[ordini] avviso di consegna dell'ordine ${ordine.id} al banco non inviato:`, err.message);
   }
 }
 
@@ -557,7 +582,7 @@ async function segnaConsegnato(ordine) {
 // consegna la segnerà un evento vero (corriere, GPS...): da collegare, poi questa funzione va tolta.
 async function segnaConsegnatoProva(ordine) {
   if (!ordine.consegnato_il) {
-    await db.prepare('UPDATE orders SET consegnato_il = NOW() WHERE id = ?').run(ordine.id);
+    await scriviConsegna(ordine);
   }
 }
 

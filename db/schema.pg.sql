@@ -694,3 +694,11 @@ ALTER TABLE order_items ADD COLUMN IF NOT EXISTS preso_il TIMESTAMP;
 -- legge le risposte solo lei, cosi' la VPS e un server locale accesi insieme non mandano messaggi doppi ne' rispondono due volte al corriere.
 -- NULL = riga di prima, o creata da un server non ancora aggiornato (la trattano solo le istanze senza un nome scritto nel .env). Il blocco si puo' rilanciare.
 ALTER TABLE whatsapp_messaggi ADD COLUMN IF NOT EXISTS istanza TEXT;
+
+-- Notifiche del banco: tipo e richiesta (20/10/2026)
+-- Le notifiche al banco compaiono anche come avvisi a comparsa in basso a destra (public/app.js, "Avvisi del banco"): il browser deve sapere di che
+-- genere e' ognuna (nuova_richiesta, corriere_trovato, nessun_corriere, richiesta_scaduta, ordine_consegnato) e a quale richiesta si riferisce.
+-- `tipo` NULL = notifica di prima o di un genere senza avviso a comparsa. `request_id` senza chiave esterna: non deve bloccare la cancellazione di una
+-- richiesta. Il blocco si puo' rilanciare.
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS tipo TEXT;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS request_id INTEGER;
