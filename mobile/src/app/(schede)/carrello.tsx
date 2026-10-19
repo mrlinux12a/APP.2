@@ -8,9 +8,11 @@ import { chiamaApi, ErroreApi, urlFoto } from '@/api';
 import { carrello, useRigheCarrello, type RigaCarrello } from '@/carrello';
 import { chiedi, informa } from '@/componenti/dialoghi';
 import { stileRigaCard } from '@/componenti/rigaCard';
+import { completaInvio, type RispostaInvio } from '@/pagamento';
+import { useSessione } from '@/sessione';
 import { Stepper } from '@/componenti/Stepper';
 import { Vuoto } from '@/componenti/Stato';
-import { Avviso, Bottone, Card, Forte, Nota, RigaInfo, RigaRiepilogo, SezioneTitolo } from '@/componenti/ui';
+import { Avviso, Bottone, Card, Forte, RigaInfo, RigaRiepilogo, SezioneTitolo } from '@/componenti/ui';
 import { useRiepilogoCarrello } from '@/dati';
 import { FONT, useTema } from '@/tema';
 
@@ -54,6 +56,7 @@ function nuovaChiave() {
 
 export default function Carrello() {
   const { c } = useTema();
+  const { utente } = useSessione();
   const clientDati = useQueryClient();
   const righe = useRigheCarrello();
   const voci = useMemo(() => righe.map((r) => ({ id: r.id, quantita: r.quantita })), [righe]);
@@ -95,18 +98,21 @@ export default function Carrello() {
     )
   );
 
-  // "Paga e invia la richiesta": si paga (per ora simulato), la richiesta parte verso tutti i distributori
-  // attivi e si passa a "Stato ordini", che mostra l'attesa. L'ordine nasce da solo quando il corriere
-  // prende la consegna: l'installatore non sceglie né conferma altro.
+  // "Paga e invia la richiesta": con la carta vera si apre il foglio di pagamento di Stripe (la carta viene solo BLOCCATA: si addebita la consegna solo
+  // quando un banco conferma), poi la richiesta parte verso il banco e si passa a "Stato ordini", che mostra l'attesa. Con il pagamento di prova parte subito.
+  // L'ordine nasce da solo quando il corriere prende la consegna: l'installatore non sceglie né conferma altro.
   const inviaRichiesta = async () => {
     if (inviando.current) return;
     inviando.current = true;
     setInvio(true);
     try {
-      await chiamaApi<{ id: number }>('/richieste', {
+      const risposta = await chiamaApi<RispostaInvio>('/richieste', {
         metodo: 'POST',
         corpo: { righe: carrello.voci(), destinazione: destinazione || '', note, chiave: chiaveInvio.current },
       });
+      const idRichiesta = await completaInvio(risposta, utente?.ragione_sociale);
+      // Foglio di pagamento chiuso senza pagare: non è partito niente, il carrello resta com'è.
+      if (idRichiesta === null) return;
       partita.current = true;
       // 'all': anche se la scheda è già stata vista e non è in primo piano, così non mostra i dati vecchi.
       await clientDati.invalidateQueries({ queryKey: ['stato-ordini'], refetchType: 'all' });
@@ -157,35 +163,42 @@ export default function Carrello() {
         ListFooterComponent={
           <View style={stili.piede}>
             <Bottone titolo="Svuota carrello" tipo="rosso" onPress={chiediSvuota} />
-            <Card>
-              {r ? (
-                <>
-                  <RigaRiepilogo voce="Merce (IVA esclusa)" valore={'€ ' + r.merce} />
-                  {r.raee ? <RigaRiepilogo voce="Contributo RAEE" valore={'€ ' + r.raee} /> : null}
-                  <RigaRiepilogo voce="Spedizione" valore={'€ ' + r.spedizione} />
-                  <RigaRiepilogo voce="Imponibile" valore={'€ ' + r.imponibile} />
-                  <RigaRiepilogo voce={`IVA ${r.iva_pct}%`} valore={'€ ' + r.iva} />
-                  <RigaRiepilogo voce="Totale da pagare" valore={'€ ' + r.totale_ivato} forte />
-                </>
-              ) : riepilogo.isError ? (
-                <Text style={[stili.meta, { color: c.rosso }]}>{riepilogo.error.message}</Text>
-              ) : (
-                <Text style={[stili.meta, { color: c.grigio }]}>Calcolo i totali…</Text>
-              )}
-            </Card>
+            {r ? (
+              <>
+                <SezioneTitolo>Cosa paghi e a chi</SezioneTitolo>
+                <Card stile={{ backgroundColor: c.accentoChiaro, borderColor: c.accentoChiaro }}>
+                  <Text style={[stili.cpEtichetta, { color: c.accento }]}>PAGHI ORA · CONSEGNA IN CANTIERE</Text>
+                  <RigaRiepilogo voce="Corriere" valore={'€ ' + r.riepilogo.app_corriere} />
+                  <RigaRiepilogo voce={`Servizio · ${r.riepilogo.servizio_pct}% della merce`} valore={'€ ' + r.riepilogo.app_servizio} />
+                  <RigaRiepilogo voce={`IVA ${r.riepilogo.iva_pct}%`} valore={'€ ' + r.riepilogo.app_iva} />
+                  <RigaRiepilogo voce="Totale da pagare ora" valore={'€ ' + r.riepilogo.app_totale} forte />
+                </Card>
+                <Card>
+                  <Text style={[stili.cpEtichetta, { color: c.grigio }]}>
+                    PAGHI DOPO {r.ditta ? 'A ' + r.ditta.toUpperCase() : 'AL BANCO'} · MATERIALE
+                  </Text>
+                  <RigaRiepilogo voce="Merce · prezzo del banco" valore={'€ ' + r.riepilogo.banco_merce} />
+                  {r.riepilogo.con_raee ? <RigaRiepilogo voce="Contributo RAEE" valore={'€ ' + r.riepilogo.banco_raee} /> : null}
+                  <RigaRiepilogo voce={`IVA ${r.riepilogo.iva_pct}%`} valore={'€ ' + r.riepilogo.banco_iva} />
+                  <RigaRiepilogo voce="Totale materiale" valore={'€ ' + r.riepilogo.banco_totale} forte />
+                </Card>
+                <Text style={[stili.spesa, { color: c.grigio }]}>
+                  Spesa complessiva <Text style={{ fontFamily: FONT.testoForte, color: c.testo }}>€ {r.riepilogo.spesa}</Text> · {r.riepilogo.articoli}
+                </Text>
+              </>
+            ) : riepilogo.isError ? (
+              <Text style={[stili.meta, { color: c.rosso }]}>{riepilogo.error.message}</Text>
+            ) : (
+              <Text style={[stili.meta, { color: c.grigio }]}>Calcolo i totali…</Text>
+            )}
             {r && !r.raggiunto ? (
               <Avviso tipo="attenzione">
                 <Forte>Ordine minimo € {r.minimo}</Forte> di merce, IVA e spedizione escluse. Ti mancano{' '}
                 <Forte>€ {r.manca_al_minimo}</Forte>.
               </Avviso>
-            ) : r ? (
-              <Nota>
-                Ordine minimo di € {r.minimo} raggiunto. La spedizione di € {r.spedizione} si aggiunge al totale e non conta
-                per la soglia. Il prezzo definitivo, con eventuale sconto aggiuntivo, è confermato in fattura.
-              </Nota>
             ) : null}
 
-            <SezioneTitolo>Dove consegniamo</SezioneTitolo>
+            <SezioneTitolo>Consegna in cantiere</SezioneTitolo>
             <Card>
               <Text style={[stili.etichetta, { color: c.testo }]}>Destinazione della merce</Text>
               <TextInput
@@ -195,12 +208,9 @@ export default function Carrello() {
                 placeholderTextColor={c.grigio}
                 style={campo}
               />
-              <Text style={[stili.aiuto, { color: c.grigio }]}>
-                È l'indirizzo che finisce sulla bolla / DDT insieme alla tua ragione sociale.
-              </Text>
             </Card>
 
-            <SezioneTitolo>Note per il distributore</SezioneTitolo>
+            <SezioneTitolo>Nota (facoltativa)</SezioneTitolo>
             <Card>
               <TextInput
                 value={note}
@@ -216,22 +226,26 @@ export default function Carrello() {
             <SezioneTitolo>Pagamento</SezioneTitolo>
             <Card fitta>
               <RigaInfo
-                etichetta={r ? `Paghi ora € ${r.totale_ivato}` : 'Paghi ora'}
-                dettaglio="Pagamento di prova: per ora non viene addebitato nulla. Se nessun banco o corriere conferma, il pagamento ti viene rimborsato."
+                etichetta={r ? `Paghi ora € ${r.da_pagare_ora}` : 'Paghi ora'}
+                dettaglio={
+                  r && r.pagamento_reale
+                    ? `Il blocco è sulla carta: la consegna viene addebitata solo se ${r.ditta || 'il banco'} conferma. Se nessuno conferma, non paghi niente. Il materiale lo paghi dopo ${r.ditta ? 'a ' + r.ditta : 'al banco'}.`
+                    : 'Pagamento di prova: non viene addebitato nulla. Il materiale lo paghi dopo al banco.'
+                }
                 ultima
               />
             </Card>
 
             <Bottone
-              titolo={r ? `Paga € ${r.totale_ivato} e invia la richiesta` : 'Paga e invia la richiesta'}
+              titolo={r ? `Paga € ${r.da_pagare_ora} e invia la richiesta` : 'Paga e invia la richiesta'}
               onPress={inviaRichiesta}
               disabilitato={!r || !r.raggiunto || riepilogo.isFetching || riepilogo.inAttesa}
               inCorso={invio}
             />
             {r ? (
               <Text style={[stili.notaCentro, { color: c.grigio }]}>
-                I distributori rispondono entro {r.minuti_risposta} minuti. Appena un corriere prende la consegna ti arriva la
-                conferma dell'ordine con il tempo stimato: non devi scegliere né confermare altro.
+                {r.ditta || 'Il banco'} risponde entro {r.minuti_risposta} minuti. Appena un corriere prende la consegna ti arriva la
+                conferma dell’ordine con il tempo stimato: non devi scegliere né confermare altro.
               </Text>
             ) : null}
             <Bottone titolo="Continua a scegliere" tipo="chiaro" onPress={() => router.navigate('/')} />
@@ -261,6 +275,7 @@ const stili = StyleSheet.create({
   piede: { padding: 14, gap: 12 },
   etichetta: { fontFamily: FONT.testoMedio, fontSize: 15, marginBottom: 6 },
   campo: { borderWidth: 1, borderRadius: 10, padding: 12, fontSize: 16, fontFamily: FONT.testo },
-  aiuto: { fontFamily: FONT.testo, fontSize: 13, marginTop: 8 },
+  cpEtichetta: { fontFamily: FONT.testoForte, fontSize: 12, letterSpacing: 0.4, marginBottom: 4 },
+  spesa: { fontFamily: FONT.testo, fontSize: 14, textAlign: 'center' },
   notaCentro: { fontFamily: FONT.testo, fontSize: 13, textAlign: 'center', marginTop: -4 },
 });

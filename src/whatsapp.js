@@ -1,4 +1,5 @@
 const path = require('path');
+const os = require('os');
 const db = require('../db');
 const consegna = require('./consegna');
 const format = require('./format');
@@ -19,13 +20,21 @@ const ddt = require('./ddt');
 // messaggi in uscita, risposte in ingresso e la connessione.
 //
 // Libreria non ufficiale (Baileys): si collega come dispositivo del numero scelto e scrive nel
-// gruppo. Il modulo è spento finché non c'è WHATSAPP_ATTIVO=1, che va messo in un solo posto
-// (la VPS): due istanze leggerebbero lo stesso gruppo e risponderebbero due volte. Un server locale,
-// che usa lo stesso DB di produzione, non deve né collegarsi né accodare messaggi: con il modulo
-// spento i banchi accettano come prima, senza corriere.
+// gruppo. Il modulo è spento finché non c'è WHATSAPP_ATTIVO=1 (0 o niente = spento: i banchi accettano
+// come prima, senza corriere). Si può accendere anche su un server locale, che usa lo stesso DB della
+// VPS, a due condizioni:
+//  - una SESSIONE PROPRIA (WHATSAPP_AUTH_DIR diversa, un secondo dispositivo collegato al numero): le
+//    stesse credenziali usate da due macchine insieme si scollegano a vicenda e rovinano le chiavi;
+//  - un'ISTANZA con un nome (WHATSAPP_ISTANZA, default il nome del computer): ogni messaggio in coda
+//    porta il nome dell'istanza che l'ha creato (whatsapp_messaggi.istanza) e lo invia, lo elimina e
+//    ne legge le risposte SOLO lei. Così con due istanze accese nello stesso gruppo non partono messaggi
+//    doppi né risposte doppie ("Preso!" due volte).
 //
 // Variabili d'ambiente:
-//   WHATSAPP_ATTIVO          1 per accenderlo
+//   WHATSAPP_ATTIVO          1 per accenderlo, 0 (o niente) per spegnerlo
+//   WHATSAPP_ISTANZA         nome di questa istanza (es. "locale"); se manca vale il nome del computer.
+//                            Con un nome scritto qui l'istanza tratta SOLO le righe che portano quel nome;
+//                            senza, tratta anche le righe senza nome (quelle di prima: vedi miaRiga)
 //   WHATSAPP_GRUPPO          id del gruppo (xxx@g.us) oppure il suo nome esatto
 //   WHATSAPP_NUMERO          facoltativo: numero con prefisso (393331234567) per collegarsi con
 //                            un codice al posto del QR
@@ -36,7 +45,38 @@ const MINUTI_MAX = 600; // oltre 10 ore non è un tempo di consegna: probabile e
 const TENTATIVI_MAX = 5;
 
 function attivo() {
-  return process.env.WHATSAPP_ATTIVO === '1';
+  return String(process.env.WHATSAPP_ATTIVO || '').trim() === '1';
+}
+
+// ---------- Istanza proprietaria dei messaggi ----------
+
+function istanzaConfigurata() {
+  return (process.env.WHATSAPP_ISTANZA || '').trim();
+}
+
+function nomeIstanza() {
+  return istanzaConfigurata() || os.hostname();
+}
+
+// Una riga di whatsapp_messaggi è di questa istanza se porta il suo nome. Le righe senza nome (create prima di questa regola, o da un
+// server non ancora aggiornato) le tratta solo chi NON ha un nome scritto nel .env: la VPS di produzione sì, un server locale con
+// WHATSAPP_ISTANZA no (altrimenti manderebbe i messaggi accodati dalla VPS).
+function miaRiga(riga) {
+  if (!riga) return false;
+  return riga.istanza ? riga.istanza === nomeIstanza() : !istanzaConfigurata();
+}
+
+// Le due condizioni di miaRiga per le query: [testo SQL, parametri].
+function condizioneMia() {
+  return ['(istanza = ? OR (istanza IS NULL AND ?::boolean))', [nomeIstanza(), !istanzaConfigurata()]];
+}
+
+// L'istanza a cui va un messaggio che riguarda una richiesta: quella del suo "nuova consegna", se c'è; altrimenti questa.
+async function istanzaDellaRichiesta(requestId) {
+  const riga = await db
+    .prepare(`SELECT istanza FROM whatsapp_messaggi WHERE request_id = ? AND tipo = 'ritiro_consegna' ORDER BY id DESC LIMIT 1`)
+    .get(requestId);
+  return (riga && riga.istanza) || nomeIstanza();
 }
 
 function parolaChiave() {
@@ -167,8 +207,8 @@ async function accodaRitiroConsegna(requestId, responseId) {
     consegnaA: await datiConsegna(richiesta.cliente_id),
   });
   const info = await db
-    .prepare(`INSERT INTO whatsapp_messaggi (request_id, response_id, tipo, testo) VALUES (?, ?, 'ritiro_consegna', ?)`)
-    .run(richiesta.id, risposta.id, testo);
+    .prepare(`INSERT INTO whatsapp_messaggi (request_id, response_id, tipo, testo, istanza) VALUES (?, ?, 'ritiro_consegna', ?, ?)`)
+    .run(richiesta.id, risposta.id, testo, nomeIstanza());
   svuotaCoda().catch((err) => console.error('WhatsApp, invio:', err.message));
   return Number(info.lastInsertRowid);
 }
@@ -193,8 +233,8 @@ async function ritiraRichiesta(requestId, { motivo = null, tranne = null } = {})
   if (motivo) {
     avvisati = await db
       .prepare(
-        `INSERT INTO whatsapp_messaggi (request_id, response_id, tipo, testo)
-         SELECT m.request_id, m.response_id, 'esito', ?
+        `INSERT INTO whatsapp_messaggi (request_id, response_id, tipo, testo, istanza)
+         SELECT m.request_id, m.response_id, 'esito', ?, m.istanza
            FROM whatsapp_messaggi m
           WHERE m.request_id = ? AND m.tipo = 'ritiro_consegna' AND m.preso_il IS NOT NULL
             AND m.stato = 'inviato'
@@ -212,8 +252,8 @@ async function ritiraRichiesta(requestId, { motivo = null, tranne = null } = {})
 
 async function accodaEsito(requestId, responseId, testo) {
   await db
-    .prepare(`INSERT INTO whatsapp_messaggi (request_id, response_id, tipo, testo) VALUES (?, ?, 'esito', ?)`)
-    .run(requestId, responseId, testo);
+    .prepare(`INSERT INTO whatsapp_messaggi (request_id, response_id, tipo, testo, istanza) VALUES (?, ?, 'esito', ?, ?)`)
+    .run(requestId, responseId, testo, await istanzaDellaRichiesta(requestId));
   svuotaCoda().catch((err) => console.error('WhatsApp, invio:', err.message));
 }
 
@@ -232,13 +272,15 @@ async function inviaMessaggiInCoda() {
   const gruppo = await gruppoId();
   if (!gruppo) return;
 
+  // Solo le righe di questa istanza: con la VPS e un server locale accesi insieme, ognuno manda i suoi messaggi (vedi miaRiga).
+  const [mia, paramMia] = condizioneMia();
   const daInviare = await db
     .prepare(
       `SELECT * FROM whatsapp_messaggi
-        WHERE stato = 'da_inviare' AND tentativi < ?
+        WHERE stato = 'da_inviare' AND tentativi < ? AND ${mia}
         ORDER BY id`
     )
-    .all(TENTATIVI_MAX);
+    .all(TENTATIVI_MAX, ...paramMia);
   for (const riga of daInviare) {
     try {
       const inviato = await sock.sendMessage(gruppo, { text: riga.testo });
@@ -266,10 +308,10 @@ async function inviaMessaggiInCoda() {
   const daEliminare = await db
     .prepare(
       `SELECT * FROM whatsapp_messaggi
-        WHERE stato = 'da_eliminare' AND wa_msg_id IS NOT NULL AND tentativi < ?
+        WHERE stato = 'da_eliminare' AND wa_msg_id IS NOT NULL AND tentativi < ? AND ${mia}
         ORDER BY id`
     )
-    .all(TENTATIVI_MAX);
+    .all(TENTATIVI_MAX, ...paramMia);
   for (const riga of daEliminare) {
     try {
       await sock.sendMessage(gruppo, { delete: { remoteJid: gruppo, fromMe: true, id: riga.wa_msg_id } });
@@ -365,6 +407,9 @@ async function gestisciMessaggio(msg) {
   }
   // Parola chiave senza una consegna a cui riferirla: probabilmente parla d'altro.
   if (!riga) return;
+  // Il messaggio l'ha mandato un'altra istanza (la VPS, o un server locale): la risposta la gestisce lei, che la riceve nello stesso gruppo.
+  // Senza questo controllo due istanze accese insieme risponderebbero entrambe al corriere ("Preso!" e poi "già presa").
+  if (!miaRiga(riga)) return;
 
   if (letta.minuti === null) {
     await rispondi(msg, `Non ho capito i minuti: scrivi per esempio «${parolaChiave()} 30».`);
@@ -503,6 +548,10 @@ async function collega() {
         console.error(`WhatsApp: sessione chiusa dal telefono. Cancella la cartella ${cartella} e riavvia per collegarlo di nuovo.`);
         return;
       }
+      if (codice === DisconnectReason.connectionReplaced) {
+        console.error('WhatsApp: questa sessione è stata aperta da un\'altra parte (440). Due server con le stesse credenziali si scollegano a vicenda: ' +
+          'dai a questo una sessione sua (WHATSAPP_AUTH_DIR diversa, da collegare con un QR) oppure spegni WhatsApp (WHATSAPP_ATTIVO=0) in uno dei due.');
+      }
       console.error(`WhatsApp scollegato (${codice || 'errore'}), riprovo fra ${Math.round(ritardoRiconnessione / 1000)} s.`);
       setTimeout(() => collega().catch((err) => console.error('WhatsApp, riconnessione:', err.message)), ritardoRiconnessione).unref();
       ritardoRiconnessione = Math.min(ritardoRiconnessione * 2, 5 * 60 * 1000);
@@ -526,6 +575,12 @@ async function collega() {
 // Lo chiama server.js all'avvio. Non fa nulla se il modulo è spento.
 function avvia() {
   if (!attivo()) return;
+  console.log(`WhatsApp acceso (istanza "${nomeIstanza()}", sessione in ${path.resolve(process.env.WHATSAPP_AUTH_DIR || 'whatsapp_auth')}).`);
+  // La finestra di conferma accorciata nel .env di un computer (prove dei timer) vale anche per il corriere: la richiesta scade e il messaggio sparisce dal gruppo.
+  const accorciata = parseFloat(process.env.FINESTRA_CONFERMA_SEC);
+  if (Number.isFinite(accorciata) && accorciata > 0) {
+    console.warn(`WhatsApp: FINESTRA_CONFERMA_SEC=${accorciata} è nel .env: il corriere ha al massimo ${accorciata} secondi per rispondere "${parolaChiave()} <minuti>" (togli la riga per avere la finestra vera).`);
+  }
   collega().catch((err) => console.error('WhatsApp, avvio:', err.message));
   // I messaggi rimasti in coda (collegamento caduto, riavvio) partono appena si può.
   setInterval(() => svuotaCoda().catch((err) => console.error('WhatsApp, invio:', err.message)), 60 * 1000).unref();
@@ -546,5 +601,5 @@ module.exports = {
   gestisciMessaggio,
   svuotaCoda,
   // Solo per le prove: mette un socket finto al posto di quello vero.
-  _prova: { impostaSocket(s, g) { sock = s; connesso = !!s; gruppo = g || null; } },
+  _prova: { impostaSocket(s, g) { sock = s; connesso = !!s; gruppo = g || null; }, nomeIstanza, miaRiga, condizioneMia, istanzaDellaRichiesta, inviaMessaggiInCoda },
 };

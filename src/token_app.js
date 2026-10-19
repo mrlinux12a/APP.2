@@ -71,4 +71,9 @@ async function revocaToken(token) {
     .run(hashToken(token));
 }
 
-module.exports = { creaToken, utenteDaToken, revocaToken };
+// Toglie dalla memoria i token di un utente (eliminazione dell'account, disattivazione): senza, un token già ricordato varrebbe ancora fino a un minuto.
+function dimenticaUtente(userId) {
+  for (const [hash, voce] of ricordati) if (voce.riga && Number(voce.riga.id) === Number(userId)) ricordati.delete(hash);
+}
+
+module.exports = { creaToken, utenteDaToken, revocaToken, dimenticaUtente };

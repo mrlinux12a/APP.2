@@ -6,6 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Platform } from 'react-native';
 
 import { chiamaApi, impostaToken, suAccessoScaduto, type Utente } from './api';
+import { dimenticaTokenPush, tokenPushSalvato } from './notifiche';
 
 const CHIAVE_TOKEN = 'token_accesso';
 // Nome e ragione sociale dell'ultimo accesso: servono solo a mostrare l'app senza aspettare la
@@ -35,7 +36,11 @@ type ValoreSessione = {
   pronta: boolean; // false finché non si sa se c'è un token salvato
   utente: Utente | null;
   entra: (username: string, password: string) => Promise<void>;
+  // Registra una nuova impresa (stessi campi del sito) ed entra subito. Con dei campi sbagliati lancia ErroreApi con `dati.errori`.
+  registra: (dati: Record<string, string>) => Promise<void>;
   esci: () => Promise<void>;
+  // Elimina l'account (serve la password) ed esce. Con qualcosa in corso il server rifiuta (409) e l'account resta com'era.
+  eliminaAccount: (password: string) => Promise<void>;
 };
 
 const ContestoSessione = createContext<ValoreSessione | null>(null);
@@ -102,14 +107,39 @@ export function SessioneProvider({ children }: { children: ReactNode }) {
     setUtente(utente);
   }, []);
 
+  const registra = useCallback(async (dati: Record<string, string>) => {
+    const { token, utente } = await chiamaApi<{ token: string; utente: Utente }>('/registrazione', {
+      metodo: 'POST',
+      corpo: { ...dati, dispositivo: Platform.OS },
+    });
+    generazione.current += 1;
+    impostaToken(token);
+    await Promise.all([archivio.scrivi(CHIAVE_TOKEN, token), archivio.scrivi(CHIAVE_UTENTE, JSON.stringify(utente))]);
+    setUtente(utente);
+  }, []);
+
   const esci = useCallback(async () => {
     try {
-      await chiamaApi('/logout', { metodo: 'POST' });
+      // Il telefono che esce non deve più ricevere le notifiche di questo utente.
+      await chiamaApi('/logout', { metodo: 'POST', corpo: { token_push: await tokenPushSalvato() } });
     } catch {}
+    await dimenticaTokenPush();
     await dimentica();
   }, [dimentica]);
 
-  const valore = useMemo(() => ({ pronta, utente, entra, esci }), [pronta, utente, entra, esci]);
+  const eliminaAccount = useCallback(
+    async (password: string) => {
+      await chiamaApi('/account', { metodo: 'DELETE', corpo: { password } });
+      await dimenticaTokenPush();
+      await dimentica();
+    },
+    [dimentica]
+  );
+
+  const valore = useMemo(
+    () => ({ pronta, utente, entra, registra, esci, eliminaAccount }),
+    [pronta, utente, entra, registra, esci, eliminaAccount]
+  );
   return <ContestoSessione.Provider value={valore}>{children}</ContestoSessione.Provider>;
 }
 

@@ -1,9 +1,9 @@
 <%
   // Una scheda ordine dello Storico (<details>: chiusa mostra riga ordine/totale e stato/primo articolo; aperta il materiale riga per riga).
-  // `o` viene da materialeOrdini; `aperto` = è il primo della pagina. "Riordina" è un form a parte (solo sui consegnati): dentro un
-  // <summary> o un <a> non sarebbe valido. Il servizio pagato in app è fuori dal totale dell'ordine.
+  // `o` viene da materialeOrdini. Sempre chiusa all'arrivo (richiesta esplicita del 18/10/2026: non riaprire il primo). "Riordina" è un
+  // form a parte (solo sui consegnati): dentro un <summary> o un <a> non sarebbe valido. Il servizio pagato in app è fuori dal totale.
 %>
-<details class="sm-ordine"<%= aperto ? ' open' : '' %>>
+<details class="sm-ordine">
   <summary>
     <span class="sm-riga1">
       <span class="sm-nome"><strong>Ordine #<%= o.id %></strong> <span class="sm-data"><%= o.data %></span></span>
@@ -27,14 +27,18 @@
         <span class="sm-riga-totale">€ <%= euro(r.totale) %></span>
       </div>
     <% }); %>
-    <div class="sm-servizio"><span>Servizio pagato in app</span><span>€ <%= euro(o.servizio) %></span></div>
+    <div class="sm-servizio"><span>Consegna pagata in app · corriere + <%= o.importi.servizioPct %>% + IVA</span><span>€ <%= euro(o.servizio) %></span></div>
     <div class="sm-azioni">
       <% if (o.riordinaId) { %>
         <form class="st-riordina" method="POST" action="/storico/<%= o.riordinaId %>/riordina">
           <button type="submit" class="st-btn-riordina"><%- iconaRiprova %><span>Riordina</span></button>
         </form>
       <% } %>
-      <% if (o.href) { %><a class="sm-dettagli" href="<%= o.href %>">Dettagli ›</a><% } %>
+      <%# "Ricevuta" (PDF) solo se il pagamento è vero e incassato (o.ricevuta); accanto a "Dettagli ›". %>
+      <span class="sm-destra">
+        <% if (o.ricevuta) { %><a class="sm-ricevuta" href="/ordini/<%= o.id %>/ricevuta.pdf" target="_blank" rel="noopener"><%- iconaScontrino %>Ricevuta</a><% } %>
+        <% if (o.href) { %><a class="sm-dettagli" href="<%= o.href %>">Dettagli ›</a><% } %>
+      </span>
     </div>
   </div>
 </details>

@@ -32,10 +32,9 @@
           </div>
           <h2 class="att-titolo"><%= senzaCorriere ? 'Nessun corriere ha confermato' : 'Nessun banco ha confermato' %></h2>
           <p class="att-sotto">Il tempo per rispondere è scaduto.</p>
-          <% if (richiesta.pagamento_stato === 'rimborsato') { %>
-            <div class="att-rimborso-riga"><span class="att-rimborso"><%- spunta %>€ <%= euro(importi.app.totale) %> rimborsati</span></div>
-          <% } else if (richiesta.pagamento_stato === 'pagato') { %>
-            <div class="att-rimborso-riga"><span class="att-rimborso att-rimborso-attesa">Rimborso in corso · € <%= euro(importi.app.totale) %></span></div>
+          <%# La carta era solo bloccata: il blocco si annulla, non c'è nessun rimborso da aspettare. %>
+          <% if (statoPag && statoPag.chiave === 'annullato') { %>
+            <div class="att-rimborso-riga"><span class="att-rimborso"><%- spunta %>Nessun addebito sulla carta</span></div>
           <% } %>
           <ol class="att-passi">
             <li class="att-passo att-fatto">
@@ -75,7 +74,7 @@
         <%# 4. Pagamenti: la consegna rimborsata (o il rimborso in corso) e il materiale "niente da pagare"; in fondo cosa succederebbe rinviando, con i prezzi di
             OGGI (`rinvio`, da flusso.dettaglioRichiesta). Una richiesta del vecchio flusso (mai pagata) non l'ha. %>
         <% if (importi.app.conPagamento) { %>
-          <%- include('partials/pagamenti', { importi, stato: 'chiusa', ditta, motivoChiusura: senzaCorriere ? 'corriere' : 'banco', rinvio }) %>
+          <%- include('partials/pagamenti', { importi, stato: 'chiusa', ditta, statoPag, motivoChiusura: senzaCorriere ? 'corriere' : 'banco', rinvio }) %>
         <% } %>
 
         <%# 5. Rinvia: stessa azione di prima. Il testo non dice più "paghi di nuovo": l'importo lo ha già visto nella scheda. %>
@@ -95,15 +94,15 @@
       <% if (richiesta.stato === 'annullata') { %>
         <div class="avviso avviso-attenzione">
           Hai annullato questa richiesta.
-          <% if (richiesta.pagamento_stato === 'rimborsato') { %>Il pagamento di € <%= euro(importi.app.totale) %> è stato rimborsato.<% } %>
+          <% if (statoPag && statoPag.chiave === 'annullato') { %>Nessun addebito sulla carta.<% } %>
         </div>
       <% } else { %>
         <div class="avviso avviso-attenzione">
           Nessun distributore ha confermato la consegna entro i <%= Math.round(minutiRisposta) %> minuti.
           La mancata risposta non vale come disponibilità: il materiale potrebbe esserci
           ma non essere reperibile al banco.
-          <% if (richiesta.pagamento_stato === 'rimborsato') { %>
-            <strong>Il pagamento di € <%= euro(importi.app.totale) %> è stato rimborsato.</strong>
+          <% if (statoPag && statoPag.chiave === 'annullato') { %>
+            <strong>Nessun addebito sulla carta.</strong>
           <% } %>
         </div>
       <% } %>
@@ -128,7 +127,7 @@
       <%# Materiale a prezzo del banco e Pagamenti: la stessa scheda di "Nessuna risposta" (qui la consegna è "Rimborsata" e il materiale "Niente da pagare"). %>
       <%- include('partials/richiesta_materiale', { righePrezzi, importi }) %>
       <% if (importi.app.conPagamento) { %>
-        <%- include('partials/pagamenti', { importi, stato: 'chiusa', ditta, motivoChiusura: richiesta.stato === 'annullata' ? 'annullata' : 'banco', rinvio: null }) %>
+        <%- include('partials/pagamenti', { importi, stato: 'chiusa', ditta, statoPag, motivoChiusura: richiesta.stato === 'annullata' ? 'annullata' : 'banco', rinvio: null }) %>
       <% } %>
 
       <a class="btn btn-primary btn-blocco" href="/home">Torna alla home</a>

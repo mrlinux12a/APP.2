@@ -256,6 +256,14 @@ function mantieniCalde() {
   setInterval(scalda, 60 * 1000).unref();
 }
 
+// Esegue `fn` FUORI da qualunque transazione in corso. Un timer o un'operazione "senza aspettare" avviata DENTRO una transazione eredita il suo client
+// (AsyncLocalStorage): quando poi gira, la transazione è chiusa e il client è già tornato nel pool, quindi le sue query andrebbero su una connessione
+// che nel frattempo può servire un'altra richiesta (avviso di pg "Calling client.query() when the client is already executing a query", e nel
+// caso peggiore scritture dentro la transazione di un altro). Chi avvia lavoro differito da dentro una transazione lo fa passare da qui.
+function fuoriDallaTransazione(fn) {
+  return contestoTransazione.exit(fn);
+}
+
 const db = {
   prepare,
   exec,
@@ -276,6 +284,7 @@ const db = {
     return prep.run(...p);
   },
   transaction,
+  fuoriDallaTransazione,
   pool,
   ensureInit,
   mantieniCalde,

@@ -202,7 +202,7 @@ function senzaFiliale(distributore) {
 async function dettaglioRichiesta(richiesta) {
   // Nessuna delle letture dipende da un'altra: partono insieme (ognuna è un giro di rete verso il DB, e questa pagina
   // si apre a ogni passaggio fra gli ordini di "Stato ordini").
-  const [, , righe, risposte, secondi, minutiRisposta, spedizione] = await Promise.all([
+  const [, , righe, risposte, secondi, minutiRisposta, spedizione, rigaPagamento] = await Promise.all([
     notifiche.segnaLetteCategoria(richiesta.cliente_id, 'richieste'),
     notifiche.segnaLetteCategoria(richiesta.cliente_id, 'ordini'),
     richieste.righeRichiesta(richiesta.id),
@@ -210,6 +210,7 @@ async function dettaglioRichiesta(richiesta) {
     richieste.secondiRimasti(richiesta),
     pricing.getFinestraMinuti(),
     pricing.getSpedizioneFissa(),
+    pagamenti.rigaPagamento(richiesta.id),
   ]);
   // Le righe a PREZZO DEL BANCO e gli importi di oggi, con la stessa funzione del carrello (calcolaOrdine): servono alle righe della
   // scheda "Materiale richiesto", agli importi delle richieste nate prima delle colonne salvate e a "Se rinvii la richiesta paghi di nuovo...".
@@ -227,6 +228,10 @@ async function dettaglioRichiesta(richiesta) {
     minutiRisposta,
     // Consegna pagata in app e materiale da pagare a BOREA (stessa forma di dettaglioOrdine: la legge partials/pagamenti).
     importi: pricing.importi({ richiesta, calcolato: oggi }),
+    // Cosa dice la carta: bloccata, pagata, annullata o rimborsata (pagamenti.calcolaStatoPagamento), per la scheda "Pagamenti" e la pillola.
+    statoPag: pagamenti.calcolaStatoPagamento({ riga: rigaPagamento, richiesta }),
+    // Si può ancora annullare? Solo in fase 1: richiesta in attesa e nessun banco ha accettato (vedi annullaRichiesta).
+    annullabile: richiesta.stato === 'in_attesa' && !risposteDitta.some((r) => r.bancoConfermato),
     righePrezzi: oggi.righe,
     ditta: ditte.length === 1 ? ditte[0] : '',
     // Cosa si pagherebbe rinviando una richiesta chiusa, con i prezzi di oggi: la consegna (si addebita di nuovo) e il materiale (resta da pagare
@@ -241,28 +246,42 @@ async function totaliRichiestaOggi(requestId) {
   return pricing.calcolaDaRigheDb(await richieste.righeRichiesta(requestId), { costoConsegna: await pricing.getSpedizioneFissa() });
 }
 
-// Ritorna false se la richiesta non era più annullabile (es. l'ordine è nato un istante prima).
+// Annullamento da parte del cliente: SOLO in fase 1, cioè richiesta in attesa E nessun banco ha ancora accettato (nessuna risposta
+// 'confermato', nemmeno se il corriere non ha ancora preso la consegna). Dopo, mai: né la richiesta né l'ordine (vedi le regole in
+// src/pagamenti.js). Il blocco sulla carta si RILASCIA (cancel del PaymentIntent, stato 'rilasciato'): non è un rimborso, non è mai passato
+// un euro. Ritorna false se la richiesta non era più annullabile (un banco ha confermato un istante prima, l'ordine è nato...).
 async function annullaRichiesta(requestId) {
-  // Condizione dentro la UPDATE: se l'ordine è nato un istante prima, l'annullamento non deve
-  // sovrascrivere 'ordinata' lasciando un ordine vivo su una richiesta che il cliente crede annullata.
-  const upd = await db
-    .prepare(`UPDATE requests SET stato = 'annullata' WHERE id = ? AND stato IN ('in_attesa', 'con_offerte', 'nessuna_offerta')`)
-    .run(requestId);
-  if (!upd.changes) return false;
-  // Il pagamento torna all'installatore (se era già stato rimborsato perché la richiesta era chiusa
-  // senza ordine, non succede niente).
-  await pagamenti.rimborsa(requestId);
-  // Chiude anche le risposte ancora "in attesa" dal lato banco: altrimenti la
-  // richiesta annullata dal cliente resta a intasare la dashboard dei distributori
-  // come se ci fosse ancora qualcosa da confermare.
-  await db.prepare(
-    `UPDATE request_responses SET esito = 'scaduto' WHERE request_id = ? AND esito = 'in_attesa'`
-  ).run(requestId);
-  await db.prepare(
-    `UPDATE request_responses SET corriere_stato = 'scaduto' WHERE request_id = ? AND corriere_stato = 'in_attesa'`
-  ).run(requestId);
-  // Nel gruppo WhatsApp il messaggio sparisce (o, se un corriere l'aveva già preso, gli si scrive
-  // che la richiesta è annullata).
+  const annullata = await db.transaction(async () => {
+    // Prima si blocca la riga della richiesta, come fa rispondi() quando un banco conferma: due operazioni insieme non si
+    // incrociano, chi arriva dopo trova lo stato già cambiato (e la UPDATE qui sotto, che è una istruzione nuova, vede anche la conferma
+    // appena registrata).
+    const attuale = await db.prepare('SELECT stato FROM requests WHERE id = ? FOR UPDATE').get(requestId);
+    if (!attuale) return false;
+    // La regola sta ANCHE dentro la UPDATE: se un banco ha confermato o l'ordine è nato un istante prima, l'annullamento non deve
+    // sovrascrivere 'ordinata' né cancellare una conferma già data.
+    const upd = await db
+      .prepare(
+        `UPDATE requests SET stato = 'annullata'
+          WHERE id = ? AND stato = 'in_attesa'
+            AND NOT EXISTS (SELECT 1 FROM request_responses rr WHERE rr.request_id = requests.id AND rr.esito = 'confermato')`
+      )
+      .run(requestId);
+    if (!upd.changes) return false;
+    // Il blocco sulla carta si rilascia (solo DB: lo esegue il giro di Stripe, vedi pagamenti.rimborsa).
+    await pagamenti.rimborsa(requestId);
+    // Chiude anche le risposte ancora "in attesa" dal lato banco: altrimenti la
+    // richiesta annullata dal cliente resta a intasare la dashboard dei distributori
+    // come se ci fosse ancora qualcosa da confermare.
+    await db.prepare(
+      `UPDATE request_responses SET esito = 'scaduto' WHERE request_id = ? AND esito = 'in_attesa'`
+    ).run(requestId);
+    await db.prepare(
+      `UPDATE request_responses SET corriere_stato = 'scaduto' WHERE request_id = ? AND corriere_stato = 'in_attesa'`
+    ).run(requestId);
+    return true;
+  })();
+  if (!annullata) return false;
+  // Nel gruppo WhatsApp il messaggio sparisce (la rete sta fuori dalla transazione).
   await whatsapp
     .ritiraRichiesta(requestId, { motivo: 'il cliente ha annullato la richiesta' })
     .catch((err) => console.error('WhatsApp, ritiro messaggio:', err.message));
@@ -279,63 +298,53 @@ async function reinviaRichiesta(richiesta) {
   return richiesta.id;
 }
 
-// Il cliente può togliere un ordine solo finché il banco non l'ha preso in carico: dopo, la
-// merce è in preparazione o partita e cancellarlo lo farebbe sparire anche al distributore.
-// Un ordine consegnato non si annulla mai: "Consegnato" non cambia `stato` (con la rotta provvisoria
-// /consegnato-prova un ordine può risultare consegnato restando 'inviato'), quindi si guarda anche consegnato_il.
-// Questa è l'unica regola: la usano la pagina dell'ordine, le rotte del sito (/ordini/:id/elimina e
-// /richieste/:id/elimina) e l'API dell'app.
-function ordineAnnullabileDalCliente(ordine) {
-  return ordine.stato === 'inviato' && !ordine.consegnato_il;
+// Il cliente NON annulla mai un ordine (richiesta esplicita del 18/10/2026): un ordine nasce quando un banco conferma e la carta è già stata
+// incassata, quindi l'unico annullamento possibile è quello della richiesta in fase 1 (annullaRichiesta). Per un problema si contatta l'assistenza.
+// Questa è l'unica regola: la usano la pagina dell'ordine, le rotte del sito (/ordini/:id/elimina e /richieste/:id/elimina) e l'API dell'app,
+// che quindi non mostrano nessun pulsante e rifiutano comunque la richiesta.
+function ordineAnnullabileDalCliente() {
+  return false;
 }
 
-// Lanciata quando l'ordine non si può più annullare. Non cambia niente nel DB. `messaggioCliente` è il testo da
-// mostrare (sito e app): diverso se l'ordine è già consegnato o se il banco l'ha solo preso in carico.
+const MESSAGGIO_ORDINE_NON_ANNULLABILE = "Il banco ha già confermato: l'ordine non si può più annullare. Per problemi contatta l'assistenza.";
+
+// Lanciata quando l'ordine non si può annullare (sempre, per il cliente). Non cambia niente nel DB. `messaggioCliente` è il testo da mostrare
+// (sito e app); `consegnato` dice solo se l'ordine è anche già consegnato.
 class OrdineInLavorazione extends Error {
-  constructor(ordine) {
+  // `richiestaId`: quando il rifiuto è per una richiesta senza ordine (un banco ha già confermato), `ordine.id` è null e la pagina torna alla richiesta.
+  constructor(ordine, { richiestaId = null } = {}) {
     const consegnato = !!ordine.consegnato_il;
-    super(consegnato ? 'ordine già consegnato' : 'ordine già preso in carico');
+    super('ordine non annullabile dal cliente');
     this.ordine = ordine;
+    this.richiestaId = richiestaId;
     this.consegnato = consegnato;
-    this.messaggioCliente = consegnato
-      ? 'Questo ordine è già stato consegnato e non si può più annullare.'
-      : 'Il distributore ha già preso in carico questo ordine: per annullarlo contattalo direttamente.';
+    this.messaggioCliente = MESSAGGIO_ORDINE_NON_ANNULLABILE;
   }
 }
 
-async function avvisaOrdineAnnullato(ordine) {
-  // Se un corriere aveva già preso la consegna, nel gruppo si scrive che non serve più.
-  await whatsapp.avvisaAnnulloOrdine(ordine).catch((err) => console.error('WhatsApp, annullo ordine:', err.message));
-  if (!ordine.distributor_id) return;
-  const cliente = await db.prepare('SELECT ragione_sociale FROM users WHERE id = ?').get(ordine.cliente_id);
-  await notifiche.notificaDistributore(ordine.distributor_id, {
-    titolo: 'Ordine annullato dal cliente',
-    testo: `${cliente ? cliente.ragione_sociale : 'Il cliente'} ha annullato l'ordine #${ordine.id} prima della presa in carico.`,
-    link: '/distributore',
-    categoria: 'ordini',
-  });
-}
-
-// Elimina richiesta (cliente) — globale: sparisce anche per tutti i distributori (da
-// confermare + storico). Lancia OrdineInLavorazione se l'ordine collegato è già preso in carico.
+// Elimina richiesta (cliente) — globale: sparisce anche per tutti i distributori (da confermare + storico). Vale la stessa regola dell'annullamento
+// (solo fase 1): si elimina una richiesta in attesa su cui nessun banco ha ancora confermato, o una già chiusa senza ordine (nessuna risposta,
+// annullata). Se è nato un ordine, o un banco ha già confermato, lancia OrdineInLavorazione e non tocca niente (nemmeno il pagamento).
 async function eliminaRichiesta(requestId) {
   const elimina = db.transaction(async () => {
-    // Righe bloccate fino alla fine: un ordine creato o preso in carico nel frattempo non
-    // può più essere cancellato "sotto" al distributore.
-    const attuale = await db.prepare('SELECT order_id FROM requests WHERE id = ? FOR UPDATE').get(requestId);
-    if (!attuale) return null;
-    // La riga della richiesta sparisce, ma il pagamento prima si restituisce: con un provider vero il
-    // rimborso va chiesto qui, prima della cancellazione.
-    await pagamenti.rimborsa(requestId);
-    let ordineEliminato = null;
+    // Righe bloccate fino alla fine: un banco che conferma o un ordine che nasce nel frattempo non può più essere cancellato "sotto" al distributore.
+    const attuale = await db.prepare('SELECT order_id, stato FROM requests WHERE id = ? FOR UPDATE').get(requestId);
+    if (!attuale) return;
+    // Un ordine esiste: il banco ha già confermato e la carta è stata incassata. Il cliente non lo annulla (e quindi nemmeno la richiesta).
     if (attuale.order_id) {
-      const ordine = await db.prepare('SELECT * FROM orders WHERE id = ? FOR UPDATE').get(attuale.order_id);
-      if (ordine && !ordineAnnullabileDalCliente(ordine)) throw new OrdineInLavorazione(ordine);
-      await db.prepare('UPDATE requests SET order_id = NULL WHERE id = ?').run(requestId);
-      await db.prepare('DELETE FROM order_items WHERE order_id = ?').run(attuale.order_id);
-      await db.prepare('DELETE FROM orders WHERE id = ?').run(attuale.order_id);
-      ordineEliminato = ordine;
+      const ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(attuale.order_id);
+      if (ordine) throw new OrdineInLavorazione(ordine);
     }
+    // Eliminare è un annullamento mascherato. Una richiesta in attesa su cui un banco ha già confermato (magari in attesa del corriere) non si
+    // può far sparire dal cliente; una già chiusa senza ordine sì.
+    if (attuale.stato === 'in_attesa') {
+      const confermata = await db
+        .prepare(`SELECT 1 AS x FROM request_responses WHERE request_id = ? AND esito = 'confermato' LIMIT 1`)
+        .get(requestId);
+      if (confermata) throw new OrdineInLavorazione({ id: null, consegnato_il: null }, { richiestaId: requestId });
+    }
+    // La riga della richiesta sparisce, ma il blocco sulla carta prima si rilascia (solo DB: lo esegue il giro di Stripe).
+    await pagamenti.rimborsa(requestId);
     await db.prepare(
       `DELETE FROM request_response_items
         WHERE response_id IN (SELECT id FROM request_responses WHERE request_id = ?)`
@@ -343,17 +352,11 @@ async function eliminaRichiesta(requestId) {
     await db.prepare('DELETE FROM request_responses WHERE request_id = ?').run(requestId);
     await db.prepare('DELETE FROM request_items WHERE request_id = ?').run(requestId);
     await db.prepare('DELETE FROM requests WHERE id = ?').run(requestId);
-    return ordineEliminato;
   });
-  const ordineEliminato = await elimina();
-  if (ordineEliminato) {
-    // I messaggi della richiesta erano già a posto quando è nato l'ordine: ora basta dire che è annullato.
-    await avvisaOrdineAnnullato(ordineEliminato);
-  } else {
-    await whatsapp
-      .ritiraRichiesta(requestId, { motivo: 'il cliente ha eliminato la richiesta' })
-      .catch((err) => console.error('WhatsApp, ritiro messaggio:', err.message));
-  }
+  await elimina();
+  await whatsapp
+    .ritiraRichiesta(requestId, { motivo: 'il cliente ha eliminato la richiesta' })
+    .catch((err) => console.error('WhatsApp, ritiro messaggio:', err.message));
 }
 
 // ---------- Ordine ----------
@@ -503,7 +506,7 @@ richieste.impostaAssegnatore(creaOrdineDaRisposta);
 async function dettaglioOrdine(ordine) {
   // Le letture non dipendono una dall'altra (tutto parte da `ordine`, già letto): partono insieme, un solo giro di rete
   // invece di cinque in fila. Questa pagina si apre a ogni passaggio fra gli ordini di "Stato ordini".
-  const [righe, cliente, distributore, richiestaOrdine, ivaConfig, servizioPct] = await Promise.all([
+  const [righe, cliente, distributore, richiestaOrdine, ivaConfig, servizioPct, rigaPagamento] = await Promise.all([
     db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(ordine.id),
     db.prepare('SELECT * FROM users WHERE id = ?').get(ordine.cliente_id),
     ordine.distributor_id ? db.prepare('SELECT * FROM distributors WHERE id = ?').get(ordine.distributor_id) : null,
@@ -514,6 +517,7 @@ async function dettaglioOrdine(ordine) {
       : null,
     pricing.getIvaPct(),
     pricing.getServizioPct(),
+    pagamenti.rigaPagamento(ordine.request_id),
   ]);
   // Il pagamento fatto all'invio della richiesta (null per gli ordini del vecchio flusso).
   const pagamento =
@@ -534,7 +538,8 @@ async function dettaglioOrdine(ordine) {
     pagamento,
     // Consegna pagata in app e materiale da pagare a BOREA, divisi come nel carrello (la stessa funzione dello Storico e del banco).
     importi: pricing.importiOrdine(ordine, pagamento, ivaPct, servizioPct),
-    annullabile: ordineAnnullabileDalCliente(ordine),
+    annullabile: ordineAnnullabileDalCliente(ordine), // sempre false: il cliente non annulla un ordine
+    statoPag: pagamenti.calcolaStatoPagamento({ riga: rigaPagamento, richiesta: richiestaOrdine, ordine }),
     ivaPct,
   };
 }
@@ -556,23 +561,12 @@ async function segnaConsegnatoProva(ordine) {
   }
 }
 
-// Elimina ordine (cliente) — globale. Lancia OrdineInLavorazione se già preso in carico.
+// Elimina ordine (cliente): il cliente NON annulla mai un ordine (vedi ordineAnnullabileDalCliente), quindi lancia sempre OrdineInLavorazione senza
+// toccare niente. C'è ancora perché sito e API la chiamano e rifiutano con lo stesso messaggio.
 async function eliminaOrdine(orderId) {
-  const elimina = db.transaction(async () => {
-    const attuale = await db.prepare('SELECT * FROM orders WHERE id = ? FOR UPDATE').get(orderId);
-    if (!attuale) return null;
-    if (!ordineAnnullabileDalCliente(attuale)) throw new OrdineInLavorazione(attuale);
-    if (attuale.request_id) {
-      await db.prepare('UPDATE requests SET order_id = NULL, stato = ? WHERE id = ?').run('annullata', attuale.request_id);
-      // L'ordine era già pagato: annullandolo il pagamento torna all'installatore.
-      await pagamenti.rimborsa(attuale.request_id);
-    }
-    await db.prepare('DELETE FROM order_items WHERE order_id = ?').run(attuale.id);
-    await db.prepare('DELETE FROM orders WHERE id = ?').run(attuale.id);
-    return attuale;
-  });
-  const eliminato = await elimina();
-  if (eliminato) await avvisaOrdineAnnullato(eliminato);
+  const ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+  if (!ordine) return;
+  throw new OrdineInLavorazione(ordine);
 }
 
 // ---------- Stato ordini e storico ----------

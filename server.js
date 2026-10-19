@@ -27,13 +27,14 @@ if (typeof db.mantieniCalde === 'function') db.mantieniCalde();
 })();
 
 const { requireLogin, requireRole } = require('./src/auth');
-const { leggiQuery, corpoSempreOggetto, salvaSessionePrimaDelRedirect, idNumerico, gestoreNonTrovato, gestoreErrori } = require('./src/http');
+const { leggiQuery, corpoSempreOggetto, rifiutaNulNelPercorso, percorsoInterno, ritornoBanco, conRitorno, salvaSessionePrimaDelRedirect, idNumerico, gestoreNonTrovato, gestoreErrori } = require('./src/http');
 const { QUANTITA_MASSIMA, leggiId, leggiQuantita } = require('./src/input');
 const { passwordValida } = require('./src/password');
 const pricing = require('./src/pricing');
 const format = require('./src/format');
 const icone = require('./src/icone');
 const materialeModulo = require('./src/materiale');
+const ricevuteModulo = require('./src/ricevute');
 const catalogo = require('./src/catalogo');
 const richieste = require('./src/richieste');
 const notifiche = require('./src/notifiche');
@@ -44,10 +45,13 @@ const { conCache } = require('./src/memo');
 const flusso = require('./src/flusso_cliente');
 const storicoBanco = require('./src/storico_banco');
 const richiestaBanco = require('./src/richiesta_banco');
+const ordineBanco = require('./src/ordine_banco');
 const stripePagamenti = require('./src/stripe_pagamenti');
+const pagamenti = require('./src/pagamenti');
+const testiLegali = require('./src/testi_legali');
 const { ArchivioSqlite } = require('./src/sessioni');
 const { TESTO_DISPONIBILITA, prodottoJson } = require('./src/prodotto_json');
-const { chiaveLogin, loginBloccato, registraTentativoFallito, azzeraTentativi } = require('./src/limite_login');
+const { accessoBloccato, registraAccessoFallito, accessoRiuscito, iscrizioneBloccata, registraIscrizione } = require('./src/limite_login');
 const apiV1 = require('./src/api_v1');
 const whatsapp = require('./src/whatsapp');
 
@@ -82,6 +86,8 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 // Dove stanno tutti gli installatori, per ora (vedi src/sede_installatori.js).
 app.locals.sede = require('./src/sede_installatori');
+// Le viste del banco che portano a un ordine o a una richiesta ci aggiungono `torna` (la pagina da cui si parte): vedi ritornoBanco.
+app.locals.conRitorno = conRitorno;
 // asset('/style.css') -> '/style.css?v=1759660000000': l'indirizzo di un file statico con la sua versione (data di
 // modifica). La data si rilegge al massimo ogni 5 secondi: una modifica in locale si vede quasi subito, senza
 // riavviare il server, e in produzione costa una lettura ogni tanto invece di una per pagina.
@@ -107,13 +113,26 @@ app.set('query parser', leggiQuery);
 // cosa il percorso non esiste (404) invece di far fallire la query e dare un 500.
 app.param('id', idNumerico);
 
-// Intestazioni di sicurezza leggere. Niente Content-Security-Policy: le pagine usano script e stili inline.
+// Un %00 nel percorso non è mai valido (Postgres lo rifiuta): 400 subito, prima di qualunque route.
+app.use(rifiutaNulNelPercorso);
+
+// Intestazioni di sicurezza. Una Content-Security-Policy completa (script-src) non è possibile: le pagine usano script e stili
+// inline. Quella qui sotto non tocca gli script ma chiude le strade che non servono: il sito non si incornicia in pagine altrui
+// (clickjacking, anche per i browser che ignorano X-Frame-Options), nessun <base> iniettato può cambiare dove puntano i
+// collegamenti relativi, nessun <object>/<embed>, e i moduli si inviano solo a questo sito (un modulo iniettato non può
+// portare i dati su un indirizzo esterno). HSTS solo quando la richiesta è davvero HTTPS (con `trust proxy` vale anche dietro
+// il proxy): su HTTP semplice il browser lo ignorerebbe e in locale non deve restare appiccicato a localhost.
 app.use((req, res, next) => {
   res.set({
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'SAMEORIGIN',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Content-Security-Policy': "frame-ancestors 'self'; base-uri 'self'; object-src 'none'; form-action 'self'",
+    // Il sito non usa fotocamera, microfono né posizione: niente script (nemmeno iniettato) può chiederli. `payment` resta com'è
+    // (Stripe lo usa per Apple Pay e Google Pay) e non si imposta Cross-Origin-Opener-Policy, che romperebbe le finestre di Google Pay e Link.
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
   });
+  if (req.secure) res.set('Strict-Transport-Security', 'max-age=15552000');
   next();
 });
 // Comprime HTML, JSON, CSS e JS (sotto 1 KB no): la ricerca in JSON passa da ~46 KB a pochi KB,
@@ -381,6 +400,10 @@ app.get('/login', async (req, res) => {
   res.render('login', { titolo: 'Accedi', errore: null, scheda: 'accedi' });
 });
 
+// Pagine pubbliche richieste da Google Play per l'app: informativa sulla privacy e come eliminare l'account (src/testi_legali.js). Senza accesso.
+app.get('/privacy', (req, res) => res.render('legale', { pagina: testiLegali.privacy() }));
+app.get('/elimina-account', (req, res) => res.render('legale', { pagina: testiLegali.eliminazione() }));
+
 // ---------- Registrazione cliente ----------
 
 // La pagina ha tre passi (uno script li mostra uno alla volta) ma è un unico modulo. Il distributore non si sceglie:
@@ -410,6 +433,17 @@ app.post('/registrati', async (req, res) => {
       passo: anagrafiche.primoPassoConErrori(errori),
     });
 
+  // La registrazione è aperta a tutti e ogni iscrizione costa un hash bcrypt e una riga di anagrafica approvata da sola:
+  // senza un limite per indirizzo un ciclo di richieste riempiva il database di clienti finti.
+  if (iscrizioneBloccata(req)) {
+    return res.status(429).render('errore', {
+      titolo: 'Troppe registrazioni',
+      messaggio: 'Da questo indirizzo sono state fatte troppe registrazioni. Riprova più tardi, o contattaci se sei un nuovo cliente.',
+      link: '/login',
+      linkTesto: 'Vai all’accesso',
+    });
+  }
+
   const errori = await anagrafiche.validaIscrizione(req.body);
   if (errori.length) return mostraErrori(errori);
 
@@ -421,6 +455,7 @@ app.post('/registrati', async (req, res) => {
     if (e && e.code === '23505') return mostraErrori([{ testo: 'Questo nome utente è già in uso.', campi: ['username'] }]);
     throw e;
   }
+  registraIscrizione(req);
   await avviaSessione(req, {
     id: cliente.id,
     ruolo: cliente.ruolo,
@@ -462,18 +497,17 @@ app.post('/login', async (req, res) => {
   // non deve far fallire l'accesso: il nome utente si confronta sempre già "ripulito".
   // Un nome utente reale è corto: il taglio evita chiavi enormi nel contatore dei tentativi.
   const username = String(req.body.username || '').trim().slice(0, 100);
-  const chiave = chiaveLogin(req, username);
 
-  if (loginBloccato(chiave)) {
+  if (accessoBloccato(req, username)) {
     return res.status(429).render('login', { errore: 'Troppi tentativi non riusciti. Riprova tra qualche minuto.' });
   }
 
   const user = await db.prepare('SELECT * FROM users WHERE username = ? AND attivo = 1').get(username);
   if (!(await passwordValida(req.body.password, user))) {
-    registraTentativoFallito(chiave);
+    registraAccessoFallito(req, username);
     return res.status(401).render('login', { errore: 'Credenziali non valide.' });
   }
-  azzeraTentativi(chiave);
+  accessoRiuscito(req, username);
   await avviaSessione(req, {
     id: user.id,
     ruolo: user.ruolo,
@@ -752,7 +786,8 @@ app.post('/carrello', requireRole('cliente'), async (req, res) => {
   aggiornaCarrelloDaForm(req, req.body.modo === 'imposta' ? 'imposta' : 'aggiungi');
   // "Procedi" non manda più la richiesta: porta al riepilogo, dove si conferma.
   if (req.body.azione === 'procedi') return res.redirect('/carrello');
-  return res.redirect(req.body.ritorno || '/carrello');
+  // `ritorno` lo scrive il browser: solo un percorso di questo sito vale (percorsoInterno), mai un indirizzo esterno.
+  return res.redirect(percorsoInterno(req.body.ritorno, '/carrello'));
 });
 
 // Riepilogo prima di procedere: articoli, quantità, prezzi, destinazione, note, totale da pagare.
@@ -942,9 +977,14 @@ app.get('/api/richieste/:id', requireRole('cliente'), async (req, res) => {
     order_id: richiesta.stato === 'ordinata' ? richiesta.order_id : null,
     secondi: await richieste.secondiRimasti(richiesta),
     risposte: risposte.map((r) => ({ nome: r.distributore_nome, esito: r.esito })),
+    // "Annulla la richiesta" sparisce appena un banco conferma (anche se il corriere non ha ancora risposto: per l'installatore la ditta
+    // risulta ancora "in attesa", ma l'annullamento non è più possibile).
+    annullabile: richiesta.stato === 'in_attesa' && !risposte.some((r) => r.bancoConfermato),
   });
 });
 
+// Annulla la richiesta: solo in fase 1 (in attesa e nessun banco ha ancora accettato, vedi flusso.annullaRichiesta). Se nel frattempo un banco
+// ha confermato, la richiesta resta com'è e si torna alla sua pagina.
 app.post('/richieste/:id/annulla', requireRole('cliente'), async (req, res) => {
   const richiesta = await richieste.getRichiesta(req.params.id);
   if (!richiesta || richiesta.cliente_id !== req.session.user.id) return res.redirect('/ordini');
@@ -983,13 +1023,15 @@ app.post('/richieste/:id/elimina', requireRole('cliente'), async (req, res) => {
   res.redirect('/home');
 });
 
-// `e` è un flusso.OrdineInLavorazione: ordine già consegnato o già preso in carico dal banco. Niente è stato modificato.
+// `e` è un flusso.OrdineInLavorazione: il cliente non annulla mai un ordine, e nemmeno una richiesta su cui un banco ha già confermato
+// (si annulla solo in fase 1). Niente è stato modificato.
 function rifiutaEliminazioneOrdine(res, e) {
+  const dellOrdine = !!(e.ordine && e.ordine.id);
   return res.status(400).render('errore', {
-    titolo: e.consegnato ? 'Ordine già consegnato' : 'Ordine già in lavorazione',
+    titolo: 'Annullamento non possibile',
     messaggio: e.messaggioCliente,
-    link: '/ordini/' + e.ordine.id,
-    linkTesto: "Torna all'ordine",
+    link: dellOrdine ? '/ordini/' + e.ordine.id : '/richieste/' + e.richiestaId,
+    linkTesto: dellOrdine ? "Torna all'ordine" : 'Torna alla richiesta',
   });
 }
 
@@ -1006,6 +1048,9 @@ app.post('/distributore/richieste/:id/elimina', requireRole('distributore'), asy
     const rm = await db.prepare('SELECT COUNT(*) n FROM request_responses WHERE request_id = ?').get(richiesta.id);
     const rimaste = rm ? Number(rm.n) : 0;
     if (rimaste === 0 && richiesta.stato !== 'ordinata') {
+      // La richiesta sparisce: la carta dell'installatore non deve restare bloccata (o addebitata) per qualcosa che non esiste più.
+      // Solo DB (lo esegue il giro di Stripe); no-op se la richiesta era già stata rimborsata o è del vecchio flusso.
+      await pagamenti.rimborsa(richiesta.id);
       await db.prepare('DELETE FROM request_items WHERE request_id = ?').run(richiesta.id);
       await db.prepare('DELETE FROM requests WHERE id = ?').run(richiesta.id);
     }
@@ -1062,6 +1107,54 @@ app.get('/storico/materiale.csv', requireRole('cliente'), async (req, res) => {
   res.setHeader('Content-Disposition', 'attachment; filename="' + materialeModulo.nomeFileCsv(materiale) + '"');
   res.setHeader('Cache-Control', 'private, no-store');
   res.send(materialeModulo.csvMateriale(materiale));
+});
+
+// ---------- Ricevute di pagamento in PDF (src/ricevute.js) ----------
+// Solo il cliente proprietario dell'ordine, e solo per un pagamento VERO e incassato (la carta si incassa quando nasce l'ordine): per un blocco annullato,
+// una richiesta in attesa o un pagamento simulato non c'è nessuna ricevuta. Il PDF si apre nel browser (inline).
+function inviaPdf(res, buffer, nomeFile) {
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', 'inline; filename="' + nomeFile + '"');
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.send(buffer);
+}
+
+async function ricevutaPdfDellOrdine(req, res, tipo) {
+  const dati = await ricevuteModulo.datiRicevuta(Number(req.params.id), { tipo, clienteId: req.session.user.id });
+  if (!dati) {
+    return res.status(404).render('errore', {
+      titolo: 'Ricevuta non disponibile',
+      messaggio: tipo === 'rimborso' ? "Per questo ordine non c'è una ricevuta di rimborso." : "Per questo ordine non c'è una ricevuta di pagamento.",
+      link: '/ordini/' + req.params.id,
+      linkTesto: "Torna all'ordine",
+    });
+  }
+  inviaPdf(res, await ricevuteModulo.pdfRicevute([dati], tipo === 'rimborso' ? 'Ricevuta di rimborso' : 'Ricevuta di pagamento'), ricevuteModulo.nomeFilePdf(dati));
+}
+app.get('/ordini/:id/ricevuta.pdf', requireRole('cliente'), (req, res) => ricevutaPdfDellOrdine(req, res, 'pagamento'));
+app.get('/ordini/:id/ricevuta-rimborso.pdf', requireRole('cliente'), (req, res) => ricevutaPdfDellOrdine(req, res, 'rimborso'));
+
+// "Ricevute del mese" dello Storico: un solo PDF con una pagina per ricevuta, per gli ordini del mese (?mese=AAAA-MM, o "tutto") che hanno un pagamento
+// incassato, dal più vecchio. Le stesse regole dello Storico per il mese: valore mancante o sbagliato = il mese corrente (o il più recente).
+app.get('/storico/ricevute.pdf', requireRole('cliente'), async (req, res) => {
+  const clienteId = req.session.user.id;
+  const materiale = await materialeModulo.materialeOrdini({ clienteId, mese: req.query.mese });
+  const idOrdini = materiale.gruppi.flatMap((g) => g.ordini).filter((o) => o.ricevuta).map((o) => o.id).sort((a, b) => a - b);
+  // Poche letture alla volta: ogni ricevuta ne fa alcune, e un mese può avere molti ordini.
+  const elenco = [];
+  for (let i = 0; i < idOrdini.length; i += 5) {
+    const dati = await Promise.all(idOrdini.slice(i, i + 5).map((id) => ricevuteModulo.datiRicevuta(id, { tipo: 'pagamento', clienteId })));
+    elenco.push(...dati.filter(Boolean));
+  }
+  if (!elenco.length) {
+    return res.status(404).render('errore', {
+      titolo: 'Nessuna ricevuta',
+      messaggio: 'In questo periodo non ci sono ricevute di pagamento.',
+      link: '/storico?mese=' + encodeURIComponent(materiale.mese),
+      linkTesto: 'Torna allo storico',
+    });
+  }
+  inviaPdf(res, await ricevuteModulo.pdfRicevute(elenco, 'Ricevute ' + materiale.mese), `ricevute-${materiale.mese}.pdf`);
 });
 
 // "Riordina" (solo sulle schede "Consegnato"): rimette nel carrello gli stessi articoli dell'ordine, sommati a
@@ -1166,11 +1259,22 @@ app.post('/distributore/ordini/:id/elimina', requireRole('distributore'), async 
     return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Ordine non trovato.' });
   }
   const elimina = db.transaction(async () => {
+    // L'ordine sparisce, ma l'installatore ha già pagato la consegna (con Stripe la carta è anche già stata incassata): il pagamento
+    // gli torna (solo DB; lo esegue il giro di Stripe). Senza questa riga spariva l'ordine e restava addebitato.
+    const rimborsato = ordine.request_id ? await pagamenti.rimborsa(ordine.request_id) : false;
     if (ordine.request_id) await db.prepare('UPDATE requests SET order_id = NULL, stato = ? WHERE id = ?').run('annullata', ordine.request_id);
     await db.prepare('DELETE FROM order_items WHERE order_id = ?').run(ordine.id);
     await db.prepare('DELETE FROM orders WHERE id = ?').run(ordine.id);
+    return rimborsato;
   });
-  await elimina();
+  const rimborsato = await elimina();
+  // L'installatore deve saperlo: altrimenti l'ordine sparisce dal suo "Stato ordini" senza una parola.
+  await notifiche.notifica(ordine.cliente_id, {
+    titolo: 'Ordine annullato dal banco',
+    testo: `Il banco ha annullato l'ordine #${ordine.id}.` + (rimborsato ? ' Il pagamento è stato rimborsato.' : ''),
+    link: '/ordini',
+    categoria: 'ordini',
+  }).catch((err) => console.error('[ordini] notifica di annullamento non inviata:', err.message));
   res.redirect('/distributore');
 });
 
@@ -1470,8 +1574,17 @@ app.get('/distributore/richieste/:id', requireRole('distributore'), async (req, 
   // "confermata alle 21:05" (ora italiana): solo se il banco ha confermato.
   const oraConferma = risposta.esito === 'confermato' && risposta.risposto_il ? format.oraSolaRoma(risposta.risposto_il) : null;
 
+  // La freccia riporta alla pagina da cui si è arrivati (`torna`: Storico, scheda cliente...), altrimenti alla home.
+  const daDove = ritornoBanco(req.query.torna, '');
+
   res.render('distributore_dettaglio', {
     titolo: 'Richiesta #' + richiesta.id,
+    // Non si chiama `indietro`: l'intestazione del banco (partials/banco_testa), inclusa dalla vista, ne disegnerebbe un'altra freccia.
+    paginaPrecedente: daDove || '/distributore',
+    // L'ordine collegato, solo finché è "Da preparare" (poi la sua pagina non c'è più): da lì la freccia riporta a questa richiesta, che a sua volta riporta a `daDove`.
+    linkOrdine: ordineDaPreparare
+      ? conRitorno('/distributore/ordini/' + ordine.id, conRitorno('/distributore/richieste/' + richiesta.id, daDove))
+      : null,
     minutiRisposta,
     richiesta,
     risposta,
@@ -1540,9 +1653,10 @@ app.post('/distributore/richieste/:id/rispondi', requireRole('distributore'), as
     prezzoRichiesto: req.body.azione === 'prezzo_richiesto',
     utenteId: req.session.user.id,
     // Tempi non più scelti dal banco: partenza/consegna stimata restano un default fisso
-    // finché non saranno calcolati dal corriere collegato via API.
-    partenza_ore: req.body.partenza_ore || 2,
-    consegna_ore: req.body.consegna_ore || 6,
+    // finché non saranno calcolati dal corriere collegato via API. Non si leggono dal corpo della richiesta: la pagina non li
+    // manda più, e un valore enorme scritto a mano finiva in una colonna intera ("out of range", 500).
+    partenza_ore: 2,
+    consegna_ore: 6,
   });
 
   const base = '/distributore/richieste/' + req.params.id;
@@ -1567,7 +1681,8 @@ app.get('/distributore/clienti', requireRole('distributore'), async (req, res) =
   });
 });
 
-// Il materiale del cliente in CSV (stesso formato di quello dell'installatore, stessi numeri): solo per un cliente approvato di questo banco.
+// Il materiale del cliente in CSV (stessi numeri della scheda "Materiale ordinato", ";" e BOM per Excel): solo per un cliente approvato
+// di questo banco.
 app.get('/distributore/clienti/:id/materiale.csv', requireRole('distributore'), async (req, res) => {
   const distributorId = req.session.user.distributor_id;
   const cliente = await db.prepare(`SELECT * FROM users WHERE id = ? AND ruolo = 'cliente'`).get(req.params.id);
@@ -1575,13 +1690,11 @@ app.get('/distributore/clienti/:id/materiale.csv', requireRole('distributore'), 
   if (!cliente || !rapporto || rapporto.stato !== 'approvato') {
     return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Cliente non trovato.' });
   }
-  const materiale = await materialeModulo.materialeOrdini({
-    clienteId: cliente.id, distributorId, mese: req.query.mese, hrefOrdine: () => null, conRichiesteSenzaOrdine: false, conRiordina: false,
-  });
+  const materiale = await materialeModulo.materialeCliente(distributorId, cliente.id, { mese: req.query.mese });
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', 'attachment; filename="' + materialeModulo.nomeFileCsv(materiale) + '"');
+  res.setHeader('Content-Disposition', 'attachment; filename="' + materialeModulo.nomeFileCsvCliente(cliente.ragione_sociale, materiale.mese) + '"');
   res.setHeader('Cache-Control', 'private, no-store');
-  res.send(materialeModulo.csvMateriale(materiale));
+  res.send(materialeModulo.csvMaterialeCliente(materiale));
 });
 
 app.get('/distributore/clienti/:id', requireRole('distributore'), async (req, res) => {
@@ -1597,23 +1710,13 @@ app.get('/distributore/clienti/:id', requireRole('distributore'), async (req, re
     });
   }
 
-  // Marchi e categorie si leggono una volta sola; le famiglie di tutti i marchi partono insieme (una per
-  // marchio, in parallelo) invece che una dopo l'altra.
-  const [regole, marchi, macro] = await Promise.all([
-    anagrafiche.regoleSconto(distributorId, cliente.id),
-    catalogo.marchi(),
-    catalogo.macroCategorie(),
-  ]);
-  const famigliePerMarchio = await Promise.all(marchi.map((m) => catalogo.famiglieDelMarchio(m.slug)));
-  const famiglie = marchi.flatMap((m, i) =>
-    famigliePerMarchio[i].map((f) => ({ ...f, marchio: m.nome, marchio_slug: m.slug }))
-  );
-
-  // Solo per i clienti approvati: il materiale ordinato a questo banco e quanto c'è da incassare (src/materiale.js, come lo Storico
-  // ordini dell'installatore). Il dettaglio dell'ordine non si linka da qui: aprirlo prende in carico un ordine inviato.
+  // Solo per i clienti approvati: TUTTI gli ordini fatti a questo banco, col materiale e i prezzi IVA inclusa (src/materiale.js,
+  // gli stessi numeri dello Storico dell'installatore). Il filtro del mese e la vista (per ordine / per articolo) stanno nell'URL.
   const materiale = rapporto.stato === 'approvato'
-    ? await materialeModulo.materialeOrdini({
-        clienteId: cliente.id, distributorId, mese: req.query.mese, hrefOrdine: () => null, conRichiesteSenzaOrdine: false, conRiordina: false,
+    ? await materialeModulo.materialeCliente(distributorId, cliente.id, {
+        mese: req.query.mese,
+        vista: req.query.vista,
+        ditta: res.locals.bancoTesta ? res.locals.bancoTesta.nome : '',
       })
     : null;
 
@@ -1624,11 +1727,6 @@ app.get('/distributore/clienti/:id', requireRole('distributore'), async (req, re
     materiale,
     tipi: anagrafiche.TIPI_SOGGETTO,
     indirizzoCliente: ddt.indirizzoCompleto(cliente),
-    regole,
-    marchi,
-    macro,
-    famiglie,
-    salvato: req.query.salvato === '1',
   });
 });
 
@@ -1692,9 +1790,9 @@ async function ordineDelBanco(req) {
   return ordine;
 }
 
-// Segna l'ordine come preso in carico dal banco (stato 'inviato' -> 'in_evasione') e avvisa
-// il cliente. Non c'è più un pulsante dedicato per questo passaggio: scatta da solo aprendo
-// il dettaglio dell'ordine, oppure con il tasto di rimozione sulla card in home.
+// Segna l'ordine come preparato dal banco (stato 'inviato' -> 'in_evasione': per il banco passa da "Da preparare" a "In consegna") e avvisa il
+// cliente. Scatta SOLO con "Preparato" (POST .../preparazione, dalla card in home e dal dettaglio della richiesta): dal 19/10/2026 aprire la pagina
+// dell'ordine non lo prende più in carico, perché è lì, mentre è ancora "Da preparare", che si spunta il materiale e si emette la bolla.
 async function prendiInCarico(ordine) {
   if (ordine.stato !== 'inviato') return ordine;
   await db.prepare(
@@ -1711,38 +1809,113 @@ async function prendiInCarico(ordine) {
   return { ...ordine, stato: 'in_evasione', in_evasione_il: new Date(), preso_in_carico_il: new Date() };
 }
 
+// La pagina dell'ordine vista dal banco (views/distributore_ordine.ejs, src/ordine_banco.js): materiale da preparare con la spunta "preso" (salvata sul
+// server), consegna, cliente, avanzamento e a destra il ritiro del corriere e la bolla. Aprirla NON cambia lo stato dell'ordine (vedi prendiInCarico).
+// C'è SOLO per un ordine "Da preparare" (richiesta esplicita del 19/10/2026): è lì che si spunta il materiale e si emette la bolla. Dopo "Preparato" o la
+// bolla l'ordine è "In consegna" (e poi "Consegnato") e la pagina non esiste più: chi ci arriva (un segnalibro, una notifica vecchia) va allo Storico.
 app.get('/distributore/ordini/:id', requireRole('distributore'), async (req, res) => {
-  let ordine = await ordineDelBanco(req);
+  const ordine = await ordineDelBanco(req);
   if (!ordine) {
     return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Ordine non trovato.' });
   }
-  ordine = await prendiInCarico(ordine);
+  if (ordine.stato !== 'inviato' || ordine.consegnato_il) return res.redirect('/distributore/storico');
 
-  const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(ordine.cliente_id);
-  const distributore = await db
-    .prepare('SELECT * FROM distributors WHERE id = ?')
-    .get(ordine.distributor_id);
-  const righe = await db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(ordine.id);
-  const risposta = ordine.request_id
-    ? await richieste.getRisposta(ordine.request_id, ordine.distributor_id)
-    : null;
-  const mancanti = ordine.request_id
+  const distributorId = req.session.user.distributor_id;
+  // Letture indipendenti: partono insieme (ogni query in sequenza costa un giro di rete). `secondi`: quanti ne mancano al corriere, calcolati dal DB.
+  const [cliente, distributore, righe, risposta, ivaConfig, arrivo, legameCliente] = await Promise.all([
+    db.prepare('SELECT * FROM users WHERE id = ?').get(ordine.cliente_id),
+    db.prepare('SELECT * FROM distributors WHERE id = ?').get(ordine.distributor_id),
+    db.prepare('SELECT * FROM order_items WHERE order_id = ? ORDER BY id').all(ordine.id),
+    ordine.request_id ? richieste.getRisposta(ordine.request_id, ordine.distributor_id) : null,
+    pricing.getIvaPct(),
+    ordine.corriere_arrivo_il
+      ? db.prepare('SELECT EXTRACT(EPOCH FROM (corriere_arrivo_il - NOW()))::int AS secondi FROM orders WHERE id = ?').get(ordine.id)
+      : null,
+    // "Apri scheda cliente" solo se il cliente ha indicato questo banco (altrimenti la pagina risponde 404).
+    anagrafiche.legame(distributorId, ordine.cliente_id),
+  ]);
+  // Le righe confermate a metà si leggono solo se il banco ha risposto con una copertura parziale (la UI di oggi non la produce più).
+  const mancanti = risposta && risposta.copertura === 'parziale'
     ? (await richieste.calcolaOfferta(ordine.request_id, ordine.distributor_id)).mancanti
     : [];
 
+  // Gli importi del banco, gli stessi del Materiale ordinato del cliente e dello Storico: merce, IVA (quella salvata nell'ordine) e totale.
+  const importi = pricing.importi({ ordine, pagamento: null, ivaPct: pricing.ivaPctOrdine(ordine, ivaConfig) });
+  const materiale = ordineBanco.righeMateriale(righe, mancanti);
+  const conCorriere = !!(ordine.corriere_arrivo_il || ordine.corriere_nome);
+  const destinazione = ordine.destinazione || cliente.indirizzo_consegna || ddt.indirizzoCompleto(cliente) || '';
+  const corriereNome = ordine.corriere_nome || (risposta && risposta.corriere_nome) || '';
+  const oraRitiro = ordine.corriere_arrivo_il ? format.oraRoma(ordine.corriere_arrivo_il) : '';
+
   res.render('distributore_ordine', {
     titolo: 'Ordine #' + ordine.id,
+    // La freccia riporta alla pagina da cui si è arrivati (`torna`: Storico, scheda cliente, richiesta), altrimenti alla home.
+    paginaPrecedente: ritornoBanco(req.query.torna),
     ordine,
     cliente,
-    distributore,
-    righe,
-    risposta,
-    mancanti,
-    indirizzoCliente: ddt.indirizzoCompleto(cliente),
+    ricevuto: richiestaBanco.quandoRicevuta(format.giornoRoma(ordine.creato_il), format.oraSolaRoma(ordine.creato_il)),
+    materiale,
+    banco: importi.banco,
+    ivaPct: importi.ivaPct,
+    conCorriere,
+    corriereNome,
+    // Il riquadro "Ritiro": c'è l'orario del corriere. I secondi si muovono nel browser (app.js, data-ric-arrivo).
+    ritiro: oraRitiro
+      ? {
+          secondi: Number(arrivo && arrivo.secondi) || 0,
+          ora: oraRitiro,
+          oraAccettato: ordine.corriere_risposto_il ? format.oraRoma(ordine.corriere_risposto_il) : '',
+          sogliaMin: BACHECA.arrivoVicinoMin,
+        }
+      : null,
+    passi: ordineBanco.passiOrdine({
+      oraConferma: format.oraSolaRoma((risposta && risposta.risposto_il) || ordine.creato_il),
+      corriere: conCorriere
+        ? { nome: corriereNome, ora: ordine.corriere_risposto_il ? format.oraRoma(ordine.corriere_risposto_il) : '' }
+        : null,
+      oraRitiro,
+    }),
+    destinazione,
+    indirizzo: ordineBanco.indirizzoDiviso(destinazione),
+    mappa: destinazione ? ordineBanco.linkMaps(destinazione) : '',
     distanza: distanzaClienteBanco(cliente, distributore),
-    ivaPct: await pricing.getIvaPct(),
+    descrizioneConsegna: ordineBanco.descrizioneConsegna({ modalita: ordine.modalita, conCorriere, corriereNome }),
+    sottotitoloCliente: ordineBanco.sottotitoloCliente(cliente),
+    schedaClienteAperta: !!legameCliente,
+    bolla: {
+      aspetti: ordineBanco.ASPETTI,
+      causali: ordineBanco.CAUSALI,
+      trasporto: ordineBanco.trasportoPredefinito({ conCorriere, modalita: ordine.modalita }),
+    },
     errore: req.query.errore || null,
   });
+});
+
+// La spunta "preso" di una riga del materiale (pagina dell'ordine). Si salva sul server, così chi è al banco con un altro telefono o computer vede lo
+// stesso stato. `preso` (true/false, nel corpo JSON o del modulo) la imposta o la toglie; senza, la inverte. Risponde in JSON, con quante righe
+// sono prese sul totale. Solo per il banco proprietario dell'ordine, e solo per una riga di quell'ordine.
+function leggiBooleano(valore) {
+  if (valore === true || valore === 1 || valore === '1' || valore === 'true' || valore === 'on') return true;
+  if (valore === false || valore === 0 || valore === '0' || valore === 'false') return false;
+  return null;
+}
+app.post('/distributore/ordini/:id/righe/:rigaId/preso', requireRole('distributore'), async (req, res) => {
+  const ordine = await ordineDelBanco(req);
+  const rigaId = leggiId(req.params.rigaId);
+  if (!ordine || !rigaId) return res.status(404).json({ ok: false, errore: 'Riga non trovata.' });
+  const voluto = leggiBooleano(req.body.preso);
+  const scrittura = voluto === null
+    ? 'UPDATE order_items SET preso_il = CASE WHEN preso_il IS NULL THEN NOW() ELSE NULL END WHERE id = ? AND order_id = ?'
+    : voluto
+      ? 'UPDATE order_items SET preso_il = COALESCE(preso_il, NOW()) WHERE id = ? AND order_id = ?'
+      : 'UPDATE order_items SET preso_il = NULL WHERE id = ? AND order_id = ?';
+  const esito = await db.prepare(scrittura).run(rigaId, ordine.id);
+  if (!esito || !esito.changes) return res.status(404).json({ ok: false, errore: 'Riga non trovata.' });
+  const [riga, conteggio] = await Promise.all([
+    db.prepare('SELECT preso_il FROM order_items WHERE id = ?').get(rigaId),
+    db.prepare('SELECT COUNT(*) AS totale, COUNT(preso_il) AS presi FROM order_items WHERE order_id = ?').get(ordine.id),
+  ]);
+  res.json({ ok: true, preso: !!(riga && riga.preso_il), presi: Number(conteggio.presi), totale: Number(conteggio.totale) });
 });
 
 // Usata dal tasto di rimozione sulla card "Ordini da preparare" in home: la fa sparire da
@@ -1758,6 +1931,17 @@ app.post('/distributore/ordini/:id/preparazione', requireRole('distributore'), a
 app.post('/distributore/ordini/:id/ddt', requireRole('distributore'), async (req, res) => {
   const ordine = await ordineDelBanco(req);
   if (!ordine) return res.redirect('/distributore/storico');
+
+  // La bolla si emette mentre l'ordine è "Da preparare": dopo "Preparato" è "In consegna" e non ha senso farla (la pagina dell'ordine non c'è più; qui si
+  // rifiuta anche un invio arrivato da una pagina rimasta aperta). Un secondo invio con la bolla già emessa passa: emetti() lo riconosce e non rinumera.
+  if (!ordine.ddt_numero && ordine.stato !== 'inviato') {
+    return res.status(409).render('errore', {
+      titolo: 'Bolla non emettibile',
+      messaggio: 'La bolla si emette quando l’ordine è ancora da preparare: ora è già in consegna.',
+      link: '/distributore/storico',
+      linkTesto: 'Torna allo Storico ordini',
+    });
+  }
 
   const { numero, nuovo } = await ddt.emetti(ordine, {
     colli: req.body.colli,

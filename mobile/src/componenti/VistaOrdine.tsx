@@ -1,27 +1,49 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { chiamaApi, ErroreApi } from '../api';
-import { useOrdine } from '../dati';
+import { chiamaApi, ErroreApi, type Ordine } from '../api';
+import { riordina } from '../carrello';
+import { useContoAllaRovescia, useOrdine } from '../dati';
 import { FONT, RAGGIO, useTema } from '../tema';
 import { chiedi, informa } from './dialoghi';
+import { Pagamenti } from './Pagamenti';
 import { Caricamento, Errore } from './Stato';
-import { Avviso, Bottone, Card, Forte, Nota, RigaArticolo, RigaInfo, RigaRiepilogo, SezioneTitolo } from './ui';
+import { Avviso, Bottone, Card, Forte, Nota, RigaArticolo, RigaInfo, SezioneTitolo } from './ui';
 
-// Un ordine del cliente, come la pagina /ordini/:id del sito (versione installatore).
-export function VistaOrdine({
-  id,
-  nuovo = false,
-  dopoEliminazione,
-  quandoChiusa,
-}: {
-  id: number;
-  nuovo?: boolean;
-  dopoEliminazione?: () => void;
-  // Chiamata appena il server conferma l'annullamento, prima di ricaricare i dati.
-  quandoChiusa?: () => void;
-}) {
+// Entro questa soglia l'ordine "è in arrivo" e non si scrivono più i minuti (la stessa del sito: format.SOGLIA_IN_ARRIVO_SEC).
+const IN_ARRIVO_SEC = 180;
+
+// La parte alta di un ordine in consegna: titolo con l'arrivo (che si aggiorna da solo), barra che si riempie fino all'arrivo, chi lo porta.
+function Consegna({ o, lettoIl }: { o: Ordine; lettoIl: number }) {
+  const { c } = useTema();
+  const restano = useContoAllaRovescia(o.eta_sec, lettoIl);
+  const inArrivo = restano !== null && restano <= IN_ARRIVO_SEC;
+  const durata = o.durata_sec || 0;
+  const frazione = restano !== null && durata > 0 ? Math.min(1, Math.max(0, 1 - restano / durata)) : 0.5;
+  const titolo = inArrivo ? 'In arrivo' : o.tempo_testo;
+  const chiPorta = o.corriere || o.ditta || (o.distributore ? o.distributore.nome : '');
+
+  return (
+    <View style={[stili.hero, { backgroundColor: c.verdeChiaro }]}>
+      <Text style={[stili.heroBadge, { backgroundColor: c.superficie, color: c.verde }]}>{o.stato_testo}</Text>
+      <Text style={[stili.heroTempo, { color: c.verde }]}>{titolo}</Text>
+      {chiPorta ? <Text style={[stili.heroSotto, { color: c.verde }]}>Te lo porta {chiPorta}</Text> : null}
+      <View style={[stili.barra, { backgroundColor: c.superficie }]}>
+        <View style={[stili.barraPiena, { backgroundColor: c.verde, width: `${Math.round(frazione * 100)}%` }]} />
+      </View>
+      <View style={stili.barraTesti}>
+        <Text style={[stili.barraTesto, { color: c.verde }]}>Confermato</Text>
+        <Text style={[stili.barraTesto, { color: c.verde }]}>In consegna</Text>
+        <Text style={[stili.barraTesto, { color: c.verde }]}>Consegnato</Text>
+      </View>
+    </View>
+  );
+}
+
+// Un ordine del cliente, come la pagina /ordini/:id del sito (versione installatore): in consegna o consegnato.
+export function VistaOrdine({ id, nuovo = false }: { id: number; nuovo?: boolean }) {
   const { c } = useTema();
   const clientDati = useQueryClient();
   const q = useOrdine(id);
@@ -31,24 +53,16 @@ export function VistaOrdine({
   if (q.isError) return <Errore messaggio={q.error.message} riprova={() => q.refetch()} />;
   const o = q.data;
 
-  // eliminato: l'ordine non esiste più, quindi non si rilegge (darebbe "Ordine non trovato") e si
-  // esce dalla schermata solo dopo aver aggiornato "Stato ordini": prima si tornava a una
-  // schermata che per un attimo mostrava ancora, in verde, l'ordine appena annullato.
-  const esegui = async (quale: string, fn: () => Promise<unknown>, eliminato = false) => {
+  const esegui = async (quale: string, fn: () => Promise<unknown>) => {
     setAzione(quale);
     try {
       await fn();
       await Promise.all([
-        eliminato
-          ? clientDati.cancelQueries({ queryKey: ['ordine', id] })
-          : clientDati.invalidateQueries({ queryKey: ['ordine', id] }),
-        // La richiesta dell'ordine tolto risulta annullata: una copia vecchia in cache la mostrerebbe ordinata.
-        eliminato ? clientDati.invalidateQueries({ queryKey: ['richiesta'] }) : null,
+        clientDati.invalidateQueries({ queryKey: ['ordine', id] }),
         // 'all': la scheda "Stato ordini" può essere sotto questa schermata, non in primo piano.
         clientDati.invalidateQueries({ queryKey: ['stato-ordini'], refetchType: 'all' }),
-        clientDati.invalidateQueries({ queryKey: ['storico'] }),
+        clientDati.invalidateQueries({ queryKey: ['materiale'] }),
       ]);
-      if (eliminato) dopoEliminazione?.();
     } catch (e) {
       informa('Operazione non riuscita', e instanceof ErroreApi ? e.message : 'Riprova tra poco.');
     } finally {
@@ -56,96 +70,90 @@ export function VistaOrdine({
     }
   };
 
+  const ripeti = async () => {
+    setAzione('riordina');
+    try {
+      const { aggiunti, saltati } = await riordina(id);
+      if (!aggiunti) {
+        informa('Riordina', 'Questi articoli non sono più disponibili.');
+        return;
+      }
+      if (saltati) informa('Riordina', saltati === 1 ? '1 articolo non è più disponibile.' : `${saltati} articoli non sono più disponibili.`);
+      router.navigate('/carrello');
+    } catch (e) {
+      informa('Riordina', e instanceof ErroreApi ? e.message : 'Riprova tra poco.');
+    } finally {
+      setAzione(null);
+    }
+  };
+
   const dettagli = [
-    o.distributore ? { etichetta: o.distributore.nome, dettaglio: o.distributore.filiale } : null,
-    { etichetta: o.modalita_testo, dettaglio: o.tempi_testo },
-    o.destinazione ? { etichetta: 'Destinazione merce', dettaglio: o.destinazione } : null,
-    o.pagamento
-      ? {
-          etichetta: `Pagamento: ${o.pagamento.stato_testo.toLowerCase()} € ${o.pagamento.importo}`,
-          dettaglio: `${o.pagamento.simulato ? 'Pagamento di prova, nessun addebito reale' : ''}${
-            o.pagamento.simulato && o.pagamento.pagato_il ? ' · ' : ''
-          }${o.pagamento.pagato_il ? 'il ' + o.pagamento.pagato_il : ''}`,
-        }
-      : null,
-    o.ddt ? { etichetta: 'Bolla / DDT n. ' + o.ddt.numero, dettaglio: 'Del ' + o.ddt.data } : null,
+    o.destinazione ? { etichetta: 'Consegna in cantiere', dettaglio: o.destinazione } : null,
     o.note ? { etichetta: 'Note', dettaglio: o.note } : null,
+    o.ddt ? { etichetta: 'Documenti · DDT n° ' + o.ddt.numero, dettaglio: 'Bolla del ' + o.ddt.data } : null,
   ].filter(Boolean) as { etichetta: string; dettaglio: string }[];
 
   return (
     <ScrollView style={{ backgroundColor: c.sfondo }} contentContainerStyle={stili.pagina}>
       {nuovo ? (
         <Avviso tipo="ok">
-          <Forte>Ordine confermato.</Forte> Il distributore prepara il materiale. {o.tempo_testo}.
+          <Forte>Ordine confermato.</Forte> {o.ditta ? o.ditta + ' prepara' : 'Il banco prepara'} il materiale. {o.tempo_testo}.
         </Avviso>
       ) : null}
 
-      <View style={[stili.hero, { backgroundColor: '#cdedd4' }]}>
-        <Text style={[stili.heroBadge, { backgroundColor: c.superficie, color: c.verde }]}>{o.stato_testo}</Text>
-        <Text style={[stili.heroTempo, { color: c.verde }]}>{o.tempo_testo}</Text>
-        {o.distributore ? (
-          <Text style={[stili.heroSotto, { color: c.verde }]}>
-            {o.distributore.nome}
-            {o.distributore.filiale ? ' · ' + o.distributore.filiale : ''}
-          </Text>
-        ) : null}
-      </View>
+      {o.consegnato ? (
+        <View style={[stili.hero, { backgroundColor: c.verdeChiaro }]}>
+          <Text style={[stili.heroBadge, { backgroundColor: c.superficie, color: c.verde }]}>Consegnato</Text>
+          <Text style={[stili.heroTempo, { color: c.verde }]}>{o.tempo_testo}</Text>
+          {o.ditta ? <Text style={[stili.heroSotto, { color: c.verde }]}>{o.ditta}</Text> : null}
+        </View>
+      ) : (
+        <Consegna o={o} lettoIl={q.dataUpdatedAt} />
+      )}
 
-      <SezioneTitolo>Prodotti</SezioneTitolo>
+      {o.consegnato ? <Bottone titolo="Riordina gli stessi pezzi" onPress={ripeti} inCorso={azione === 'riordina'} /> : null}
+
+      <SezioneTitolo>{o.consegnato ? 'Materiale consegnato' : 'Materiale in arrivo'}</SezioneTitolo>
       <Card>
+        <Text style={[stili.ordineNumero, { color: c.grigio }]}>
+          Ordine #{o.id}
+          {o.ditta ? ' · ' + o.ditta : ''}
+        </Text>
         {o.righe.map((r, i) => (
           <RigaArticolo
             key={i}
             quantita={r.quantita}
             nome={r.nome}
-            meta={'Cod. ' + r.codice}
+            meta={`Cod. ${r.codice} · € ${r.cad} cad.`}
             importo={r.subtotale}
             ultima={i === o.righe.length - 1}
           />
         ))}
       </Card>
-      <Card>
-        <RigaRiepilogo voce="Merce (IVA esclusa)" valore={'€ ' + o.totali.merce} />
-        {o.totali.raee ? <RigaRiepilogo voce="Contributo RAEE" valore={'€ ' + o.totali.raee} /> : null}
-        <RigaRiepilogo voce="Costo di consegna" valore={o.totali.consegna ? '€ ' + o.totali.consegna : 'inclusa'} />
-        <RigaRiepilogo voce={`IVA ${o.iva_pct}%`} valore={'€ ' + o.totali.iva} />
-        <RigaRiepilogo voce="Totale" valore={'€ ' + o.totali.totale} forte />
-      </Card>
+      <Nota>Merce · IVA esclusa: € {o.importi.materiale.imponibile}. I prezzi sono quelli del banco.</Nota>
 
-      <SezioneTitolo>Dettagli consegna e documenti</SezioneTitolo>
-      <Card fitta>
-        {dettagli.map((d, i) => (
-          <RigaInfo key={i} etichetta={d.etichetta} dettaglio={d.dettaglio} ultima={i === dettagli.length - 1} />
-        ))}
-      </Card>
-      <Nota>Prezzo definitivo, con eventuale sconto aggiuntivo, confermato in fattura come di consueto.</Nota>
+      <Pagamenti importi={o.importi} stato={o.stato_pagamento} fallback="ordine" ditta={o.ditta || null} ordineId={o.id} />
+
+      {dettagli.length ? (
+        <Card fitta>
+          {dettagli.map((d, i) => (
+            <RigaInfo key={i} etichetta={d.etichetta} dettaglio={d.dettaglio} ultima={i === dettagli.length - 1} />
+          ))}
+        </Card>
+      ) : null}
 
       {o.da_confermare_consegna ? (
         <Bottone
-          titolo="Ordine consegnato"
-          onPress={() => esegui('consegnato', () => chiamaApi(`/ordini/${id}/consegnato`, { metodo: 'POST' }))}
+          titolo="Ho ricevuto il materiale"
+          onPress={() =>
+            chiedi('Hai ricevuto il materiale?', 'L’ordine risulterà consegnato.', 'Sì, ricevuto', () =>
+              esegui('consegnato', () => chiamaApi(`/ordini/${id}/consegnato`, { metodo: 'POST' }))
+            )
+          }
           inCorso={azione === 'consegnato'}
         />
       ) : null}
-      {o.annullabile ? (
-        <Bottone
-          titolo="Annulla ordine"
-          tipo="discreto"
-          onPress={() =>
-            chiedi('Annullare questo ordine?', 'Il distributore verrà avvisato.', 'Annulla ordine', () =>
-              esegui(
-                'annulla',
-                async () => {
-                  await chiamaApi(`/ordini/${id}`, { metodo: 'DELETE' });
-                  quandoChiusa?.();
-                },
-                true
-              )
-            , true)
-          }
-          inCorso={azione === 'annulla'}
-        />
-      ) : null}
+      <Nota>Per problemi con l’ordine contatta l’assistenza: dopo la conferma del banco non si può più annullare.</Nota>
     </ScrollView>
   );
 }
@@ -163,6 +171,11 @@ const stili = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 8,
   },
-  heroTempo: { fontFamily: FONT.titolo, fontSize: 18 },
+  heroTempo: { fontFamily: FONT.titolo, fontSize: 20 },
   heroSotto: { fontFamily: FONT.testo, fontSize: 14, marginTop: 3 },
+  barra: { height: 8, borderRadius: 4, overflow: 'hidden', marginTop: 14 },
+  barraPiena: { height: 8, borderRadius: 4 },
+  barraTesti: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
+  barraTesto: { fontFamily: FONT.testoMedio, fontSize: 12 },
+  ordineNumero: { fontFamily: FONT.testoMedio, fontSize: 13, marginBottom: 4 },
 });

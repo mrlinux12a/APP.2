@@ -4,6 +4,7 @@
 //
 // Per ora l'app è solo per gli installatori (ruolo 'cliente'): il banco e l'agente
 // continuano a usare il sito.
+const crypto = require('crypto');
 const express = require('express');
 
 const db = require('../db');
@@ -14,8 +15,16 @@ const flusso = require('./flusso_cliente');
 const format = require('./format');
 const notifiche = require('./notifiche');
 const tokenApp = require('./token_app');
+const anagrafiche = require('./anagrafiche');
+const account = require('./account');
+const push = require('./push');
+const pagamentiModulo = require('./pagamenti');
+const stripePagamenti = require('./stripe_pagamenti');
+const materialeModulo = require('./materiale');
+const ricevuteModulo = require('./ricevute');
+const { azienda } = require('./azienda');
 const { prodottoJson } = require('./prodotto_json');
-const { chiaveLogin, loginBloccato, registraTentativoFallito, azzeraTentativi } = require('./limite_login');
+const { accessoBloccato, registraAccessoFallito, accessoRiuscito, iscrizioneBloccata, registraIscrizione } = require('./limite_login');
 const { passwordValida } = require('./password');
 const { idNumerico } = require('./http');
 
@@ -31,6 +40,8 @@ router.use((req, res, next) => {
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
   res.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  // Risposte di un utente collegato: né il telefono né un proxy ne tengono copia.
+  res.set('Cache-Control', 'private, no-store');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
@@ -85,21 +96,22 @@ function macroJson(m) {
   return { slug: m.slug, nome: m.nome, descrizione: m.descrizione, n_prodotti: Number(m.n_prodotti) || 0 };
 }
 
+const e2 = (n) => pricing.euro(n);
+
 // ---------- Accesso ----------
 
 router.post('/login', async (req, res) => {
   const username = String((req.body && req.body.username) || '').trim().slice(0, 100);
-  const chiave = chiaveLogin(req, username);
 
-  if (loginBloccato(chiave)) {
+  if (accessoBloccato(req, username)) {
     return res.status(429).json({ errore: 'Troppi tentativi non riusciti. Riprova tra qualche minuto.' });
   }
   const user = await db.prepare('SELECT * FROM users WHERE username = ? AND attivo = 1').get(username);
   if (!(await passwordValida(req.body && req.body.password, user))) {
-    registraTentativoFallito(chiave);
+    registraAccessoFallito(req, username);
     return res.status(401).json({ errore: 'Credenziali non valide.' });
   }
-  azzeraTentativi(chiave);
+  accessoRiuscito(req, username);
   if (user.ruolo !== 'cliente') {
     return res.status(403).json({ errore: "Per ora l'app è riservata agli installatori: accedi dal sito." });
   }
@@ -107,13 +119,107 @@ router.post('/login', async (req, res) => {
   res.json({ token, utente: utenteJson(user) });
 });
 
+// Registrazione dall'app: gli stessi controlli e la stessa iscrizione del sito (anagrafiche.validaIscrizione / iscriviCliente), poi si entra
+// subito, senza un secondo passaggio dal login. Con gli errori per campo (`errori`) l'app evidenzia i campi sbagliati.
+router.post('/registrazione', async (req, res) => {
+  if (iscrizioneBloccata(req)) {
+    return res.status(429).json({ errore: 'Da questo dispositivo sono state fatte troppe registrazioni. Riprova più tardi.' });
+  }
+  const dati = req.body || {};
+  const errori = await anagrafiche.validaIscrizione(dati);
+  if (errori.length) return res.status(400).json({ errore: errori[0].testo, errori });
+
+  let cliente;
+  try {
+    cliente = await anagrafiche.iscriviCliente(dati, await anagrafiche.distributoriPredefiniti());
+  } catch (e) {
+    // 23505 = nome utente (unico) preso da qualcun altro fra il controllo e l'inserimento.
+    if (e && e.code === '23505') {
+      const errore = { testo: 'Questo nome utente è già in uso.', campi: ['username'] };
+      return res.status(400).json({ errore: errore.testo, errori: [errore] });
+    }
+    throw e;
+  }
+  registraIscrizione(req);
+  const token = await tokenApp.creaToken(cliente.id, dati.dispositivo);
+  res.json({ token, utente: utenteJson(cliente) });
+});
+
 router.post('/logout', async (req, res) => {
-  await tokenApp.revocaToken(tokenDellaRichiesta(req));
+  const token = tokenDellaRichiesta(req);
+  // Il telefono che esce non deve più ricevere le notifiche di questo utente (se manda il suo token push).
+  const utente = token ? await tokenApp.utenteDaToken(token) : null;
+  const tokenPush = req.body && req.body.token_push;
+  if (utente && tokenPush) await push.rimuovi(tokenPush, utente.id).catch(() => {});
+  await tokenApp.revocaToken(token);
   res.json({ ok: true });
 });
 
 router.get('/me', richiedeCliente, async (req, res) => {
   res.json({ utente: utenteJson(req.utente) });
+});
+
+// ---------- Profilo, notifiche push, eliminazione dell'account ----------
+
+// "La mia anagrafica": gli stessi dati della pagina /profilo del sito, in sola lettura.
+router.get('/profilo', richiedeCliente, async (req, res) => {
+  const u = req.utente;
+  const legami = await anagrafiche.legamiDelCliente(u.id);
+  const riferimento = anagrafiche.distributoreDiRiferimento(legami);
+  res.json({
+    utente: {
+      ...utenteJson(u),
+      tipo_soggetto: u.tipo_soggetto,
+      tipo_testo: anagrafiche.TIPI_SOGGETTO[u.tipo_soggetto] || '',
+      referente: u.referente || '',
+      partita_iva: u.partita_iva || '',
+      codice_fiscale: u.codice_fiscale || '',
+      indirizzo: u.indirizzo || '',
+      cap: u.cap || '',
+      citta: u.citta || '',
+      provincia: u.provincia || '',
+      sdi_pec: u.sdi_pec || '',
+      email: u.email || '',
+      telefono: u.telefono || '',
+      indirizzo_consegna: u.indirizzo_consegna || '',
+    },
+    distributore: riferimento ? format.nomeCommerciale(riferimento.distributore) : null,
+    assistenza: azienda().email || null,
+  });
+});
+
+// Il telefono comunica il suo token push (Expo) appena l'utente entra nell'app.
+router.post('/dispositivi', richiedeCliente, async (req, res) => {
+  const body = req.body || {};
+  const ok = await push.registra(req.utente.id, body.token, body.piattaforma);
+  if (!ok) return res.status(400).json({ errore: 'Token delle notifiche non valido.' });
+  res.json({ ok: true });
+});
+
+router.delete('/dispositivi', richiedeCliente, async (req, res) => {
+  await push.rimuovi((req.body && req.body.token) || '', req.utente.id);
+  res.json({ ok: true });
+});
+
+// Elimina (anonimizza) l'account: serve la password, come conferma. Vedi src/account.js per cosa resta e cosa sparisce.
+router.delete('/account', richiedeCliente, async (req, res) => {
+  const username = String(req.utente.username || '');
+  if (accessoBloccato(req, username)) {
+    return res.status(429).json({ errore: 'Troppi tentativi non riusciti. Riprova tra qualche minuto.' });
+  }
+  if (!(await passwordValida(req.body && req.body.password, req.utente))) {
+    registraAccessoFallito(req, username);
+    return res.status(401).json({ errore: 'Password non corretta.' });
+  }
+  accessoRiuscito(req, username);
+  try {
+    await account.eliminaAccount(req.utente);
+  } catch (e) {
+    if (!(e instanceof account.AccountNonEliminabile)) throw e;
+    return res.status(409).json({ errore: e.messaggioCliente });
+  }
+  tokenApp.dimenticaUtente(req.utente.id);
+  res.json({ ok: true });
 });
 
 // ---------- Catalogo ----------
@@ -169,23 +275,25 @@ router.get('/con-foto', richiedeCliente, async (req, res) => {
 // con i prezzi veri, come la pagina Carrello del sito (merce, RAEE, spedizione, minimo).
 router.post('/carrello/riepilogo', richiedeCliente, async (req, res) => {
   const righe = await flusso.righeDaQuantita(req.body && req.body.righe);
-  const r = await flusso.riepilogoCarrello(righe);
+  const [r, intestazione] = await Promise.all([flusso.riepilogoCarrello(righe), anagrafiche.intestazioneCliente(req.utente.id).catch(() => null)]);
   const presenti = new Set(righe.map((x) => x.prodotto.id));
   res.json({
     merce: pricing.euro(r.totali.totale_netto), // a prezzo del banco: il 10% di servizio sta solo nella voce Servizio (`riepilogo`)
     raee: r.totali.contributo_raee > 0 ? pricing.euro(r.totali.contributo_raee) : null,
     spedizione: pricing.euro(r.spedizione),
-    // Totale da pagare: l'installatore paga all'invio della richiesta (pagamento simulato).
     imponibile: pricing.euro(r.totali.imponibile),
     iva: pricing.euro(r.totali.iva),
     iva_pct: r.ivaPct,
+    // La spesa complessiva (consegna + materiale). Quello che si paga ORA in app è `da_pagare_ora`; il resto si paga dopo al banco.
     totale_ivato: pricing.euro(r.totali.totale_ivato),
-    // Quello che si paga in app (servizio + consegna, IVA inclusa) e quello che si paga dopo al banco (materiale, IVA inclusa).
-    // L'app mostra ancora `totale_ivato`: da allineare.
     da_pagare_ora: pricing.euro(r.totali.da_pagare_app),
     da_pagare_al_banco: pricing.euro(r.totali.materiale_banco),
     // Le due parti con ogni voce già in testo (corriere, servizio, IVA / merce, RAEE, IVA), come le disegna il carrello del sito.
     riepilogo: r.vista,
+    // Nome della ditta a cui si paga il materiale ("BOREA"), per "Lo paghi dopo a ...".
+    ditta: intestazione && intestazione.distributore ? format.nomeCommerciale(intestazione.distributore) : null,
+    // Con la carta vera (Stripe) o di prova (nessun addebito): l'app lo dice sul pulsante di pagamento.
+    pagamento_reale: stripePagamenti.pagaConStripe(),
     // Destinazione di partenza: l'indirizzo di consegna abituale (il cliente può cambiarlo).
     indirizzo_consegna: req.utente.indirizzo_consegna || '',
     minimo: pricing.euro(r.minimo),
@@ -199,22 +307,72 @@ router.post('/carrello/riepilogo', richiedeCliente, async (req, res) => {
   });
 });
 
-// Paga (simulato) e invia la richiesta, con destinazione e note scritte nel carrello. `chiave` (facoltativa) identifica
-// l'invio dal carrello: lo stesso invio ripetuto (doppio tocco, ritentativo) risponde con la richiesta già partita, senza
-// crearne un'altra.
+// Come finisce una richiesta di pagamento Stripe, nella forma dell'app: { esito: 'da_pagare', id, client_secret, chiave_pubblica, importo, modo } finché la
+// carta non è autorizzata (l'app apre il foglio di pagamento), { esito: 'ok', request_id } quando la richiesta è nata, e gli altri esiti di
+// stripe_pagamenti.preparaPagina ('in_corso', 'rifiutato' con titolo e messaggio, 'annullato', 'non_configurato').
+async function esitoPagamentoJson(id, clienteId) {
+  const riga = await db.prepare('SELECT importo_cent FROM stripe_pagamenti WHERE id = ? AND cliente_id = ?').get(id, clienteId);
+  const pagina = await stripePagamenti.preparaPagina(id, clienteId);
+  switch (pagina.esito) {
+    case 'pagina':
+      return {
+        esito: 'da_pagare',
+        id,
+        client_secret: pagina.clientSecret,
+        chiave_pubblica: pagina.chiavePubblica,
+        importo: e2((riga ? riga.importo_cent : pagina.importoCent) / 100),
+        modo: pagamentiModulo.modoStripe(),
+      };
+    case 'ok':
+      return { esito: 'ok', id, request_id: pagina.requestId, tipo: pagina.tipo };
+    case 'da_pagare':
+      // Pagamento aperto da oltre un'ora e mai autorizzato: la pagina non si apre più (come sul sito) e il blocco scade da solo.
+      return { esito: 'annullato' };
+    case 'rifiutato':
+      return { esito: 'rifiutato', titolo: pagina.titolo, messaggio: pagina.messaggio };
+    default:
+      return { esito: pagina.esito };
+  }
+}
+
+function rispostaErroreFlusso(res, e) {
+  return res.status(400).json({ errore: e.message, titolo: e.titolo, codice: e.codice, request_id: e.requestId || null });
+}
+
+// Paga e invia la richiesta, con destinazione e note scritte nel carrello. `chiave` (facoltativa) identifica l'invio dal carrello: lo
+// stesso invio ripetuto (doppio tocco, ritentativo) risponde con la richiesta già partita, senza crearne un'altra.
+//  · Senza Stripe (sviluppo, prove, pagamento simulato): la richiesta parte subito → { id }.
+//  · Con Stripe: la richiesta NON nasce qui. Si crea il pagamento (carta solo autorizzata) e l'app apre il foglio di pagamento → { pagamento: { esito:
+//    'da_pagare', id, client_secret, chiave_pubblica, importo } }; la richiesta nasce quando la carta è autorizzata (GET /pagamenti/:id, il webhook o il
+//    timer del server). Così dall'app NON si ordina senza pagare, come dal sito.
 router.post('/richieste', richiedeCliente, async (req, res) => {
   try {
     const body = req.body || {};
-    const id = await flusso.nuovaRichiesta(req.utente.id, await flusso.righeDaQuantita(body.righe), {
-      destinazione: body.destinazione,
-      note: body.note,
-      chiaveInvio: body.chiave,
-    });
+    const righe = await flusso.righeDaQuantita(body.righe);
+    const dati = { destinazione: body.destinazione, note: body.note, chiaveInvio: body.chiave };
+    if (stripePagamenti.pagaConStripe()) {
+      const pagamentoId = await stripePagamenti.avviaPagamento(req.utente.id, righe, dati);
+      const pagamento = await esitoPagamentoJson(pagamentoId, req.utente.id);
+      if (pagamento.esito === 'non_configurato') {
+        return res.status(503).json({ errore: 'Il pagamento non è disponibile in questo momento. Non è stato addebitato nulla.' });
+      }
+      return res.json(pagamento.esito === 'ok' ? { id: pagamento.request_id } : { pagamento });
+    }
+    const id = await flusso.nuovaRichiesta(req.utente.id, righe, dati);
     res.json({ id });
   } catch (e) {
     if (!(e instanceof flusso.ErroreFlusso)) throw e;
-    res.status(400).json({ errore: e.message, titolo: e.titolo, codice: e.codice, request_id: e.requestId || null });
+    // Questo invio ha già dato una richiesta (secondo tocco, risposta persa): si porta a quella.
+    if (e.codice === 'gia_inviata' && e.requestId) return res.json({ id: e.requestId });
+    rispostaErroreFlusso(res, e);
   }
+});
+
+// Come sta andando un pagamento Stripe iniziato da POST /richieste o /richieste/:id/reinvia: l'app lo chiede dopo il foglio di pagamento
+// finché non è 'ok' (o un altro esito definitivo). Solo il cliente del pagamento.
+router.get('/pagamenti/:id', richiedeCliente, async (req, res) => {
+  if (!stripePagamenti.attivo()) return res.status(404).json({ errore: 'Pagamento non trovato.' });
+  res.json(await esitoPagamentoJson(Number(req.params.id), req.utente.id));
 });
 
 const ESITO_RISPOSTA = {
@@ -227,8 +385,52 @@ function righeJson(righe) {
   return righe.map((r) => ({ quantita: r.quantita, nome: r.nome, codice: r.codice }));
 }
 
-// Il pagamento di una richiesta (simulato, vedi src/pagamenti.js): null se la richiesta è nata col
-// vecchio flusso e non ha pagamento.
+// Le due parti di quello che l'installatore paga, in testo (pricing.importi): la consegna pagata in app e il materiale pagato dopo al banco.
+function importiJson(i) {
+  return {
+    consegna: {
+      totale: e2(i.app.totale),
+      corriere: e2(i.app.corriere),
+      servizio: e2(i.app.servizio),
+      servizio_pct: i.servizioPct,
+      imponibile: e2(i.app.imponibile),
+      iva: e2(i.app.iva),
+      iva_pct: i.ivaPct,
+    },
+    materiale: {
+      totale: e2(i.banco.totale),
+      merce: e2(i.banco.merce),
+      raee: i.banco.raee > 0 ? e2(i.banco.raee) : null,
+      imponibile: e2(i.banco.imponibile),
+      iva: e2(i.banco.iva),
+    },
+    spesa: e2(pricing.round2(i.app.totale + i.banco.totale)),
+  };
+}
+
+const TESTO_STATO_PAGAMENTO = {
+  bloccato: 'Bloccato sulla carta',
+  pagato: 'Pagata',
+  annullato: 'Nessun addebito',
+  rimborsato: 'Rimborsata',
+};
+
+// Cosa dice la carta (pagamenti.calcolaStatoPagamento): 'bloccato' | 'pagato' | 'annullato' | 'rimborsato'. null per le richieste del vecchio flusso.
+function statoPagamentoJson(sp) {
+  if (!sp) return null;
+  return {
+    chiave: sp.chiave,
+    testo: TESTO_STATO_PAGAMENTO[sp.chiave] || '',
+    importo: sp.importo === null || sp.importo === undefined ? null : e2(sp.importo),
+    data: sp.data ? format.dataOraRoma(sp.data, ', ') : null,
+    carta: sp.carta ? sp.carta.testo : null,
+    ricevuta: !!sp.ricevuta,
+    ricevuta_rimborso: !!sp.ricevutaRimborso,
+    prova: !!sp.prova,
+  };
+}
+
+// Il pagamento di una richiesta (forma storica, usata anche dallo storico): null se la richiesta è nata col vecchio flusso e non ha pagamento.
 function pagamentoJson(r) {
   if (!r || !r.pagamento_stato) return null;
   return {
@@ -249,8 +451,8 @@ async function richiestaDelCliente(req, res) {
   return richiesta;
 }
 
-// Una richiesta com'è ora: attesa con conto alla rovescia, chiusa senza ordine (nessuno ha confermato:
-// pagamento rimborsato), annullata o (con order_id) già diventata ordine. L'app la rilegge ogni pochi secondi.
+// Una richiesta com'è ora: attesa con conto alla rovescia, chiusa senza ordine (nessuno ha confermato: blocco sulla carta tolto), annullata o
+// (con order_id) già diventata ordine. L'app la rilegge ogni pochi secondi.
 router.get('/richieste/:id', richiedeCliente, async (req, res) => {
   const richiesta = await richiestaDelCliente(req, res);
   if (!richiesta) return;
@@ -259,21 +461,31 @@ router.get('/richieste/:id', richiedeCliente, async (req, res) => {
     id: richiesta.id,
     stato: richiesta.stato,
     order_id: richiesta.stato === 'ordinata' ? richiesta.order_id : null,
-    creato_il: format.dataOra(richiesta.creato_il),
+    creato_il: format.dataOraRoma(richiesta.creato_il, ', '),
     secondi: d.secondi,
     minuti_risposta: Math.round(d.minutiRisposta),
     righe: righeJson(d.righe),
+    // Le righe a prezzo del banco (come le mostra il sito) e gli importi divisi: consegna pagata in app / materiale pagato dopo al banco.
+    righe_prezzi: d.righePrezzi.map((r) => ({ quantita: r.quantita, nome: r.nome_snapshot, codice: r.codice_snapshot, cad: e2(Number(r.prezzo_netto_unitario) + Number(r.raee_unitario || 0)), totale: e2(Number(r.subtotale) + Number(r.raee_riga || 0)) })),
+    importi: importiJson(d.importi),
+    ditta: d.ditta || null,
+    // Cosa si pagherebbe rinviando una richiesta chiusa (prezzi di oggi): la consegna si addebita di nuovo, il materiale solo se un banco conferma.
+    rinvio: { consegna: e2(d.rinvio.consegna), materiale: e2(d.rinvio.materiale) },
     risposte: d.risposte.map((r) => ({
       distributore: r.distributore_nome,
-      filiale: r.filiale,
+      filiale: '', // l'installatore vede solo la ditta
       esito: r.esito,
       esito_testo: ESITO_RISPOSTA[r.esito] || 'Nessuna risposta',
+      banco_confermato: !!r.bancoConfermato,
     })),
-    // Pagamento fatto all'invio (null per le richieste del vecchio flusso).
     pagamento: pagamentoJson(richiesta),
+    stato_pagamento: statoPagamentoJson(d.statoPag),
+    // Si può annullare solo in fase 1: in attesa e nessun banco ha ancora accettato.
+    annullabile: d.annullabile,
   });
 });
 
+// Solo in fase 1 (in attesa e nessun banco ha accettato): `ok: false` se non è più possibile, la richiesta resta com'è.
 router.post('/richieste/:id/annulla', richiedeCliente, async (req, res) => {
   const richiesta = await richiestaDelCliente(req, res);
   if (!richiesta) return;
@@ -281,9 +493,24 @@ router.post('/richieste/:id/annulla', richiedeCliente, async (req, res) => {
   res.json({ ok });
 });
 
+// "Rinvia richiesta" (solo se chiusa senza ordine). Con Stripe si autorizza di nuovo la consegna: stessa risposta di POST /richieste
+// ({ pagamento: {...} } da pagare con il foglio di pagamento); senza Stripe la richiesta riparte subito → { id }.
 router.post('/richieste/:id/reinvia', richiedeCliente, async (req, res) => {
   const richiesta = await richiestaDelCliente(req, res);
   if (!richiesta) return;
+  if (stripePagamenti.pagaConStripe() && richiesta.stato === 'nessuna_offerta') {
+    try {
+      const pagamentoId = await stripePagamenti.avviaPagamentoReinvio(req.utente.id, richiesta);
+      const pagamento = await esitoPagamentoJson(pagamentoId, req.utente.id);
+      if (pagamento.esito === 'non_configurato') {
+        return res.status(503).json({ errore: 'Il pagamento non è disponibile in questo momento. Non è stato addebitato nulla.' });
+      }
+      return res.json(pagamento.esito === 'ok' ? { id: pagamento.request_id } : { pagamento });
+    } catch (e) {
+      if (!(e instanceof flusso.ErroreFlusso)) throw e;
+      return rispostaErroreFlusso(res, e);
+    }
+  }
   res.json({ id: await flusso.reinviaRichiesta(richiesta) });
 });
 
@@ -306,11 +533,9 @@ router.delete('/richieste/:id', richiedeCliente, async (req, res) => {
 // Non ci sono più la scelta dell'offerta né "Invia l'ordine": l'installatore paga con la richiesta
 // (POST /richieste) e l'ordine nasce da solo quando il corriere prende la consegna.
 
+// Stessi due stati dello Storico del sito: finché l'installatore non conferma di aver ricevuto il materiale l'ordine è "In preparazione".
 function statoOrdineTesto(ordine) {
-  if (ordine.consegnato_il) return 'Consegnato';
-  if (ordine.stato === 'inviato') return 'Inviato';
-  if (ordine.stato === 'in_evasione') return 'In preparazione';
-  return 'In consegna';
+  return ordine.consegnato_il ? 'Consegnato' : 'In preparazione';
 }
 
 async function ordineDelCliente(req, res) {
@@ -322,55 +547,83 @@ async function ordineDelCliente(req, res) {
   return ordine;
 }
 
+// Quando arriva la merce: l'orario del corriere, e senza quello la stima del banco dalla nascita dell'ordine (la stessa regola della pagina
+// dell'ordine e dell'icona del sito). etaSec = secondi all'arrivo (negativi se l'orario è passato), durataSec = dalla nascita all'arrivo.
+function arrivoOrdine(ordine) {
+  const creato = format.istanteUtc(ordine.creato_il);
+  const ore = Number(ordine.consegna_ore);
+  const arrivo = ordine.corriere_arrivo_il
+    ? format.toDate(ordine.corriere_arrivo_il)
+    : creato && ore > 0
+      ? new Date(creato.getTime() + ore * 3600 * 1000)
+      : null;
+  if (!arrivo) return null;
+  const etaSec = Math.round((arrivo.getTime() - Date.now()) / 1000);
+  return {
+    etaSec,
+    durataSec: creato ? Math.max(1, Math.round((arrivo.getTime() - creato.getTime()) / 1000)) : null,
+    inArrivo: format.inArrivo(etaSec),
+    ora: format.oraRoma(arrivo),
+    conCorriere: !!ordine.corriere_arrivo_il,
+  };
+}
+
 router.get('/ordini/:id', richiedeCliente, async (req, res) => {
   const ordine = await ordineDelCliente(req, res);
   if (!ordine) return;
   // Il cliente sta guardando proprio questo ordine: niente pallino per i suoi cambi di stato.
-  await notifiche.segnaLetteCategoria(req.utente.id, 'ordini');
-  await notifiche.segnaLetteCategoria(req.utente.id, 'richieste');
+  await Promise.all([notifiche.segnaLetteCategoria(req.utente.id, 'ordini'), notifiche.segnaLetteCategoria(req.utente.id, 'richieste')]);
   const d = await flusso.dettaglioOrdine(ordine);
+  const arrivo = ordine.consegnato_il ? null : arrivoOrdine(ordine);
+  const ditta = d.distributore ? format.nomeCommerciale(d.distributore.nome) : '';
+  const importi = importiJson(d.importi);
   res.json({
     id: ordine.id,
     stato: ordine.stato,
     stato_testo: statoOrdineTesto(ordine),
     consegnato: !!ordine.consegnato_il,
+    // "Arriva entro 6 ore" / "Arriva entro le 18:30" / "In arrivo" (a 3 minuti o meno): lo stesso testo del titolo della pagina dell'ordine.
     tempo_testo: ordine.consegnato_il
-      ? 'Consegnato il ' + format.dataOra(ordine.consegnato_il)
-      : ordine.modalita === 'ritiro'
-        ? 'Pronto per il ritiro al banco'
-        : ordine.corriere_arrivo_il
-          ? 'Consegna prevista entro le ' + format.oraRoma(ordine.corriere_arrivo_il)
-          : ordine.consegna_ore
-            ? 'Arriva entro ' + format.tempoConsegna(ordine.consegna_ore)
-            : 'Tempi di consegna da confermare',
-    creato_il: format.dataOra(ordine.creato_il),
+      ? 'Consegnato il ' + format.dataOraRoma(ordine.consegnato_il, ', ')
+      : !arrivo
+        ? 'Tempi di consegna da confermare'
+        : arrivo.inArrivo
+          ? 'In arrivo'
+          : arrivo.conCorriere
+            ? 'Arriva entro le ' + arrivo.ora
+            : 'Arriva entro ' + format.tempoConsegna(ordine.consegna_ore),
+    // Per il conto alla rovescia dell'app: secondi all'arrivo al momento della risposta e durata totale (null senza orario).
+    eta_sec: arrivo ? arrivo.etaSec : null,
+    durata_sec: arrivo ? arrivo.durataSec : null,
+    in_arrivo: arrivo ? arrivo.inArrivo : false,
+    corriere: String(ordine.corriere_nome || '').trim() || null,
+    creato_il: format.dataOraRoma(ordine.creato_il, ', '),
+    consegnato_il: ordine.consegnato_il ? format.dataOraRoma(ordine.consegnato_il, ', ') : null,
     // Solo la ditta: la filiale da cui parte l'ordine non si mostra all'installatore.
     distributore: d.distributore ? { nome: d.distributore.nome, filiale: '' } : null,
+    ditta,
     modalita: ordine.modalita,
-    modalita_testo: ordine.modalita === 'ritiro' ? 'Ritiro al banco' : 'Consegna con mezzo del distributore',
-    tempi_testo: ordine.corriere_arrivo_il
-      ? 'Consegna con corriere, prevista entro le ' + format.oraRoma(ordine.corriere_arrivo_il)
-      : (ordine.partenza_ore ? 'Partenza stimata: ' + format.tempoConsegna(ordine.partenza_ore) + ' · ' : '') +
-        (ordine.consegna_ore ? 'consegna stimata: ' + format.tempoConsegna(ordine.consegna_ore) : 'tempo da concordare'),
     destinazione: ordine.destinazione || null,
     note: ordine.note || null,
-    ddt: ordine.ddt_numero ? { numero: ordine.ddt_numero, data: format.dataSola(ordine.ddt_data) } : null,
+    ddt: ordine.ddt_numero ? { numero: ordine.ddt_numero, data: format.dataSolaRoma(ordine.ddt_data) } : null,
+    // Le righe a PREZZO DEL BANCO (mai quello col 10% di servizio, che si paga in app e sta solo nella voce Servizio).
     righe: d.righe.map((r) => ({
       quantita: r.quantita,
       nome: r.nome_snapshot,
       codice: r.codice_snapshot,
-      subtotale: pricing.euro(r.subtotale_cliente),
+      cad: e2(Number(r.prezzo_netto_unitario) + Number(r.raee_unitario || 0)),
+      subtotale: e2(Number(r.subtotale) + Number(r.raee_riga || 0)),
     })),
+    importi,
+    // Forma storica dei totali, ora coerente con gli importi divisi: merce a prezzo del banco, consegna, IVA delle due parti, spesa complessiva.
     totali: {
-      merce: pricing.euro(ordine.totale_finale),
-      raee: ordine.contributo_raee > 0 ? pricing.euro(ordine.contributo_raee) : null,
-      consegna: ordine.costo_consegna > 0 ? pricing.euro(ordine.costo_consegna) : null,
-      iva: pricing.euro(ordine.iva),
-      // Gli ordini creati prima delle offerte per distributore non hanno l'IVA calcolata.
-      totale: pricing.euro(ordine.totale_ivato > 0 ? ordine.totale_ivato : ordine.totale_finale),
+      merce: importi.materiale.merce,
+      raee: importi.materiale.raee,
+      consegna: importi.consegna.corriere,
+      iva: e2(pricing.round2(d.importi.app.iva + d.importi.banco.iva)),
+      totale: importi.spesa,
     },
     iva_pct: d.ivaPct,
-    // Pagamento fatto all'invio della richiesta (null per gli ordini del vecchio flusso).
     pagamento: d.pagamento
       ? {
           stato: d.pagamento.stato,
@@ -380,16 +633,54 @@ router.get('/ordini/:id', richiedeCliente, async (req, res) => {
           pagato_il: d.pagamento.pagato_il ? format.dataOra(d.pagamento.pagato_il) : null,
         }
       : null,
+    stato_pagamento: statoPagamentoJson(d.statoPag),
+    // Sempre false: il cliente non annulla un ordine (il banco ha già confermato). Non c'è più il pulsante.
     annullabile: d.annullabile,
-    da_confermare_consegna: ordine.stato === 'evaso' && !ordine.consegnato_il,
+    // "Ho ricevuto il materiale": come sul sito, il pulsante c'è finché l'ordine non è segnato consegnato.
+    da_confermare_consegna: !ordine.consegnato_il,
   });
 });
 
+// "Ho ricevuto il materiale". Come sul sito: con la bolla emessa (ordine 'evaso') è la conferma vera; prima della bolla vale quella provvisoria
+// (flusso.segnaConsegnatoProva), perché la consegna non è ancora segnata da un evento vero.
 router.post('/ordini/:id/consegnato', richiedeCliente, async (req, res) => {
   const ordine = await ordineDelCliente(req, res);
   if (!ordine) return;
-  await flusso.segnaConsegnato(ordine);
+  if (ordine.stato === 'evaso') await flusso.segnaConsegnato(ordine);
+  else await flusso.segnaConsegnatoProva(ordine);
   res.json({ ok: true });
+});
+
+// "Riordina gli stessi pezzi" (sugli ordini consegnati, come sul sito): gli articoli di un ordine che si possono rimettere nel carrello, nella forma delle
+// righe del carrello dell'app, e quanti non sono più disponibili (tolti dal catalogo). Il carrello sta sul telefono: aggiunge lui.
+router.get('/ordini/:id/riordina', richiedeCliente, async (req, res) => {
+  const ordine = await ordineDelCliente(req, res);
+  if (!ordine) return;
+  const r = await flusso.articoliDaRiordinare(req.utente.id, ordine.id);
+  if (!r || r === 'altrui') return res.status(404).json({ errore: 'Ordine non trovato.' });
+  const ids = r.articoli.map((a) => a.id);
+  const prodotti = ids.length ? await db.prepare('SELECT * FROM products WHERE attivo = 1 AND id = ANY(?::int[])').all(ids) : [];
+  const perId = new Map(prodotti.map((p) => [Number(p.id), p]));
+  const articoli = [];
+  let saltati = r.saltati;
+  for (const a of r.articoli) {
+    const p = perId.get(a.id);
+    if (!p) {
+      saltati++;
+      continue;
+    }
+    articoli.push({
+      id: p.id,
+      nome: p.nome,
+      etichetta: null,
+      codice: p.codice,
+      prezzo: pricing.euro(pricing.prezzoNetto(p)),
+      prezzo_valore: pricing.prezzoNetto(p),
+      foto_url: p.foto_url || null,
+      quantita: a.quantita,
+    });
+  }
+  res.json({ articoli, saltati });
 });
 
 router.delete('/ordini/:id', richiedeCliente, async (req, res) => {
@@ -406,11 +697,77 @@ router.delete('/ordini/:id', richiedeCliente, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Ricevute di pagamento (PDF) ----------
+
+// Il telefono non può mandare l'intestazione Authorization quando apre un PDF nel browser o nel lettore di sistema: per questo la ricevuta si
+// scarica da un indirizzo firmato (HMAC) valido pochi minuti, fatto per UN ordine e UN cliente. Chi non ha il link non scarica niente; chi lo
+// perde dopo cinque minuti non scarica più.
+const VALIDITA_LINK_RICEVUTA_SEC = 5 * 60;
+const segretoLink = () =>
+  crypto.createHash('sha256').update('ricevuta-app|' + (process.env.SESSION_SECRET || process.env.DATABASE_URL || 'sviluppo-locale')).digest();
+const firmaLink = (ordineId, clienteId, scadenza) =>
+  crypto.createHmac('sha256', segretoLink()).update(`${ordineId}|${clienteId}|${scadenza}`).digest('hex');
+
+function baseUrl(req) {
+  const fisso = String(process.env.APP_URL || '').trim().replace(/\/+$/, '');
+  return fisso || req.protocol + '://' + req.get('host');
+}
+
+router.post('/ordini/:id/ricevuta', richiedeCliente, async (req, res) => {
+  const ordine = await ordineDelCliente(req, res);
+  if (!ordine) return;
+  const dati = await ricevuteModulo.datiRicevuta(ordine.id, { tipo: 'pagamento', clienteId: req.utente.id });
+  if (!dati) return res.status(404).json({ errore: 'Per questo ordine non c’è una ricevuta di pagamento.' });
+  const scadenza = Math.floor(Date.now() / 1000) + VALIDITA_LINK_RICEVUTA_SEC;
+  const firma = firmaLink(ordine.id, req.utente.id, scadenza);
+  res.json({ url: `${baseUrl(req)}/api/v1/ricevute/${ordine.id}.pdf?c=${req.utente.id}&e=${scadenza}&s=${firma}` });
+});
+
+router.get('/ricevute/:ordineId.pdf', async (req, res) => {
+  const ordineId = Number(req.params.ordineId);
+  const clienteId = Number(req.query.c);
+  const scadenza = Number(req.query.e);
+  const firma = String(req.query.s || '');
+  const attesa = Number.isInteger(ordineId) && ordineId > 0 && Number.isInteger(clienteId) && Number.isInteger(scadenza) ? firmaLink(ordineId, clienteId, scadenza) : '';
+  const valida = attesa.length === firma.length && attesa.length > 0 && crypto.timingSafeEqual(Buffer.from(attesa), Buffer.from(firma));
+  if (!valida || scadenza < Math.floor(Date.now() / 1000)) return res.status(403).json({ errore: 'Il link della ricevuta non è valido o è scaduto: riaprila dall’app.' });
+  const dati = await ricevuteModulo.datiRicevuta(ordineId, { tipo: 'pagamento', clienteId });
+  if (!dati) return res.status(404).json({ errore: 'Ricevuta non disponibile.' });
+  const pdf = await ricevuteModulo.pdfRicevute([dati], 'Ricevuta di pagamento');
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', 'inline; filename="' + ricevuteModulo.nomeFilePdf(dati) + '"');
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.send(pdf);
+});
+
 // ---------- Stato ordini e storico ----------
 
-// L'unica attività da mostrare in "Stato ordini" (stesse regole del sito), o null.
+// Una voce di "Stato ordini" per l'app (flusso.vociStriscia, le stesse dell'icona e della striscia del sito): richiesta in attesa col suo conto alla
+// rovescia, ordine in consegna con l'arrivo previsto, o richiesta scaduta da poco da rinviare.
+function voceJson(v) {
+  return {
+    tipo: v.tipo,
+    id: v.id,
+    fase: v.fase,
+    richiesta_id: v.richiestaId,
+    breve: v.breve || '',
+    secondi: v.secondi === undefined ? null : v.secondi,
+    durata: v.durata === undefined ? null : v.durata,
+    eta_sec: v.etaSec === undefined ? null : v.etaSec,
+    durata_sec: v.durataSec === undefined ? null : v.durataSec,
+    in_arrivo: !!v.inArrivo,
+    minuti: v.minuti === undefined ? null : v.minuti,
+    corriere: v.corriere || '',
+  };
+}
+
+// Tutte le attività in corso (`voci`, nell'ordine del sito) e, per comodità, `attivo`: la prima inviata (la richiesta con l'id più basso), o la
+// scaduta da poco se non c'è altro. Apre "Stato ordini": segna lette le notifiche di richieste e ordini.
 router.get('/stato-ordini', richiedeCliente, async (req, res) => {
-  res.json({ attivo: await flusso.attivitaCorrente(req.utente.id) });
+  const voci = await flusso.vociStriscia(req.utente.id, { segnaLette: true, breve: true });
+  const inCorso = voci.filter((v) => v.fase !== 'scaduta');
+  const prima = inCorso.length ? inCorso.reduce((a, b) => (b.richiestaId < a.richiestaId ? b : a)) : voci.find((v) => v.fase === 'scaduta');
+  res.json({ attivo: prima ? { tipo: prima.tipo, id: prima.id } : null, voci: voci.map(voceJson) });
 });
 
 router.get('/storico', richiedeCliente, async (req, res) => {
@@ -424,28 +781,69 @@ router.get('/storico', richiedeCliente, async (req, res) => {
         : r.stato === 'in_attesa'
           ? 'In attesa'
           : r.stato === 'ordinata'
-            ? c.ordine
-              ? c.ordine.stato === 'inviato'
-                ? 'Inviato'
-                : c.ordine.stato === 'in_evasione'
-                  ? 'In preparazione'
-                  : 'Partito'
-              : 'Ordinata'
+            ? 'In preparazione'
             : r.stato === 'nessuna_offerta'
-              ? 'Scaduta senza ordine'
+              ? 'Nessuna risposta'
               : r.stato === 'annullata'
                 ? 'Annullata'
                 : r.stato;
       return {
         richiesta_id: r.id,
         order_id: c.step === 3 && c.ordine ? c.ordine.id : null,
-        data: format.dataOra(r.creato_il),
+        data: format.dataOraRoma(r.creato_il, ', '),
         materiale: c.righe.map((x) => x.quantita + '× ' + x.nome).join(', '),
         etichetta,
         // Colore del badge: verde a buon fine, arancio da fare, rosso chiusa senza ordine.
         tono: consegnato || r.stato === 'ordinata' ? 'ok' : r.stato === 'in_attesa' ? 'attesa' : 'ko',
       };
     }),
+  });
+});
+
+// Lo Storico come sul sito (src/materiale.js, lo stesso calcolo): il materiale ordinato mese per mese, con i prezzi IVA inclusa e quanto si deve
+// al banco, più la consegna pagata in app. ?mese=AAAA-MM|tutto  ?vista=ordine|articolo.
+router.get('/materiale', richiedeCliente, async (req, res) => {
+  const m = await materialeModulo.materialeOrdini({ clienteId: req.utente.id, mese: req.query.mese, vista: req.query.vista });
+  const righeJsonOrdine = (o) => o.righe.map((r) => ({ quantita: r.quantita, nome: r.nome, codice: r.codice, cad: e2(r.cad), totale: e2(r.totale) }));
+  res.json({
+    mese: m.mese,
+    vista: m.vista,
+    mesi: m.mesi,
+    ditte: m.ditte,
+    riepilogo: { totale: e2(m.riepilogo.totale), servizio: e2(m.riepilogo.servizio), n_ordini: m.riepilogo.nOrdini },
+    elenco: m.elenco.map((x) =>
+      x.tipo === 'ordine'
+        ? {
+            tipo: 'ordine',
+            id: x.ordine.id,
+            data: x.ordine.data,
+            stato: x.ordine.stato.etichetta,
+            consegnato: x.ordine.consegnato,
+            totale: e2(x.ordine.totale),
+            servizio: e2(x.ordine.servizio),
+            primo: x.ordine.primo,
+            altri: x.ordine.altri,
+            ditta: x.ordine.ditta,
+            ddt: x.ordine.ddt || null,
+            ricevuta: !!x.ordine.ricevuta,
+            righe: righeJsonOrdine(x.ordine),
+          }
+        : {
+            tipo: 'richiesta',
+            id: x.richiesta.id,
+            data: x.richiesta.data,
+            etichetta: x.richiesta.etichetta,
+            tono: x.richiesta.tono,
+            primo: x.richiesta.primo,
+            altri: x.richiesta.altri,
+            apribile: !!x.richiesta.href,
+            righe: x.richiesta.righe.map((r) => ({ quantita: r.quantita, nome: r.nome })),
+          }
+    ),
+    articoli: m.gruppi
+      .flatMap((g) => g.articoli)
+      .map((a) => ({ codice: a.codice, nome: a.nome, cad: a.cad === null ? null : e2(a.cad), quantita: a.quantita, totale: e2(a.totale), n_ordini: a.ordini.length })),
+    vuoto: m.vuoto,
   });
 });
 
@@ -456,8 +854,13 @@ router.use((req, res) => {
 // Gli errori dell'API restano JSON: il gestore generale di server.js risponde con una
 // pagina HTML, che l'app non saprebbe mostrare.
 router.use((err, req, res, next) => {
-  console.error('Errore API', req.method, req.originalUrl, ':', err);
   if (res.headersSent) return next(err);
+  // Un valore che Postgres non accetta (testo con NUL, numero fuori misura...) viene dall'input, non da un guasto: 400 e non 500.
+  if (err && ['22021', '22P05', '22003', '22P02', '22007', '22008'].includes(err.code)) {
+    console.warn('Valore non valido (' + err.code + ') in', req.method, req.originalUrl, ':', err.message);
+    return res.status(400).json({ errore: 'Alcuni dati inviati non sono validi.' });
+  }
+  console.error('Errore API', req.method, req.originalUrl, ':', err);
   res.status(500).json({ errore: 'Si è verificato un problema imprevisto. Riprova tra poco.' });
 });
 

@@ -136,6 +136,9 @@ Object.assign(ordiniProva.ordini, {
   73: { ...ordiniProva.base, ...importiNuovi, id: 73, request_id: 81, stato: 'evaso', creato_il: fa(3 * 86400000), consegnato_il: consegnatoIl, ddt_numero: 'A/12', ddt_data: fa(3 * 86400000) },
   74: { ...ordiniProva.base, ...importiNuovi, id: 74, request_id: 81, stato: 'inviato', creato_il: fa(3600000), consegnato_il: null },
   75: { ...ordiniProva.base, ...importiNuovi, id: 75, request_id: 82, stato: 'inviato', creato_il: fa(3600000), consegnato_il: null },
+  // gli stessi ordini 97 e 91 della fixture del materiale (Storico di ottobre), per la ricevuta in PDF del singolo ordine e di "Ricevute del mese"
+  97: { ...ordiniProva.base, ...importiNuovi, id: 97, request_id: 197, stato: 'evaso', creato_il: new Date(Date.UTC(2026, 9, 15, 17, 15)), consegnato_il: consegnatoIl },
+  91: { ...ordiniProva.base, ...importiNuovi, id: 91, request_id: 191, stato: 'evaso', creato_il: new Date(Date.UTC(2026, 9, 14, 20, 29)), consegnato_il: consegnatoIl },
 });
 const righeOrdineNuovo = [
   { id: 11, quantita: 1, codice_snapshot: '12514597', nome_snapshot: 'Adattatore Ø80/100mm Per Caldaia 45-65kw', prezzo_netto_unitario: 54.5, subtotale: 54.5, raee_unitario: 0, raee_riga: 0, subtotale_cliente: 59.95 },
@@ -152,7 +155,7 @@ function eseguiOrdineProva(s, p, modo) {
   if (/^SELECT \* FROM distributors WHERE id = \?/.test(s)) return { id: 2, nome: 'BOREA SRL', filiale: 'Banco Genova Fegino' };
   if (/FROM requests WHERE id = \?/.test(s) && /pagamento_stato, pagamento_metodo/.test(s)) {
     // 81: consegna pagata con Stripe (20,07); 82: la stessa, poi rimborsata; le altre: l'ordine di prima, pagato tutto in app (149,49)
-    if (Number(p[0]) === 81) return { pagamento_stato: 'pagato', pagamento_metodo: 'stripe', pagamento_importo: 20.07, pagato_il: pagatoIlProva };
+    if ([81, 191, 197].includes(Number(p[0]))) return { pagamento_stato: 'pagato', pagamento_metodo: 'stripe', pagamento_importo: 20.07, pagato_il: pagatoIlProva };
     if (Number(p[0]) === 82) return { pagamento_stato: 'rimborsato', pagamento_metodo: 'stripe', pagamento_importo: 20.07, pagato_il: pagatoIlProva };
     return { pagamento_stato: 'pagato', pagamento_metodo: 'simulato', pagamento_importo: 149.49, pagato_il: fa(3 * 86400000) };
   }
@@ -195,12 +198,12 @@ function eseguiRegistrazione(s, p, modo) {
 //   #91 consegnato, 2× bocchettone + 1× raccordo -> materiale 73,20 + 12,81 = 86,01; servizio (6 + 1,05 + 10) × 1,22 = 20,80
 // e #30 di settembre (consegnato, 3 × netto 100 -> materiale 366,00; addebitato non salvato, quindi servizio calcolato (30 + 10) × 1,22 = 48,80).
 // Totale ottobre: 271,45; servizio ottobre: 63,50.
-const materialeProva = { attivo: false, chiamate: [] }; // chiamate: con quale cliente e filiale si sono lette le righe
+const materialeProva = { attivo: false, chiamate: [], ricevute: [] }; // chiamate: con quale cliente e filiale si sono lette le righe; ricevute: id delle richieste con un incasso Stripe vero
 const dataProva = (anno, mese, giorno, ore, minuti) => naive(new Date(Date.UTC(anno, mese - 1, giorno, ore, minuti)));
 materialeProva.ordini = [
   { id: 98, totale_netto: 50, creato_il: dataProva(2026, 10, 16, 7, 12), stato: 'in_evasione', consegnato_il: null, distributor_id: 2, costo_consegna: 10, contributo_raee: 0, iva: 14.3, totale_finale: 55, distributore_nome: 'BOREA SRL', pagamento_importo: 18.3 },
-  { id: 97, totale_netto: 100, creato_il: dataProva(2026, 10, 15, 17, 15), stato: 'evaso', consegnato_il: dataProva(2026, 10, 15, 20, 0), distributor_id: 2, costo_consegna: 10, contributo_raee: 2, iva: 26.84, totale_finale: 110, distributore_nome: 'BOREA SRL', pagamento_importo: 148.84 },
-  { id: 91, totale_netto: 70.5, creato_il: dataProva(2026, 10, 14, 20, 29), stato: 'evaso', consegnato_il: dataProva(2026, 10, 14, 22, 0), distributor_id: 2, costo_consegna: 10, contributo_raee: 0, iva: 19.26, totale_finale: 77.55, distributore_nome: 'BOREA SRL', pagamento_importo: 20.8 },
+  { id: 97, request_id: 197, totale_netto: 100, creato_il: dataProva(2026, 10, 15, 17, 15), stato: 'evaso', consegnato_il: dataProva(2026, 10, 15, 20, 0), distributor_id: 2, costo_consegna: 10, contributo_raee: 2, iva: 26.84, totale_finale: 110, distributore_nome: 'BOREA SRL', pagamento_importo: 148.84 },
+  { id: 91, request_id: 191, totale_netto: 70.5, creato_il: dataProva(2026, 10, 14, 20, 29), stato: 'evaso', consegnato_il: dataProva(2026, 10, 14, 22, 0), distributor_id: 2, costo_consegna: 10, contributo_raee: 0, iva: 19.26, totale_finale: 77.55, distributore_nome: 'BOREA SRL', pagamento_importo: 20.8 },
   { id: 30, totale_netto: 300, creato_il: dataProva(2026, 9, 12, 8, 0), stato: 'evaso', consegnato_il: dataProva(2026, 9, 12, 12, 0), distributor_id: 2, costo_consegna: 10, contributo_raee: 0, iva: 74.8, totale_finale: 330, distributore_nome: 'BOREA SRL', pagamento_importo: null },
 ];
 materialeProva.righe = [
@@ -216,13 +219,22 @@ materialeProva.richieste = [
   { id: 2, stato: 'annullata', creato_il: dataProva(2026, 9, 25, 8, 0) },
 ];
 
+// le righe delle richieste chiuse senza ordine (quantità e nome, nessun prezzo)
+materialeProva.righeRichieste = [
+  { request_id: 4, quantita: 2, nome: 'Valvola a sfera 1/2' },
+  { request_id: 4, quantita: 1, nome: 'Raccordo a T' },
+  { request_id: 2, quantita: 3, nome: 'Sifone doccia' },
+];
+
 function eseguiMaterialeProva(s, p) {
+  if (/FROM request_items ri JOIN products p ON p\.id = ri\.product_id WHERE ri\.request_id IN \(/.test(s)) return materialeProva.righeRichieste;
   if (/FROM orders o LEFT JOIN distributors d ON d\.id = o\.distributor_id LEFT JOIN requests r ON r\.id = o\.request_id WHERE o\.cliente_id = \?/.test(s)) {
     const filiale = /AND o\.distributor_id = \?/.test(s) ? p[1] : null;
     materialeProva.chiamate.push({ cliente: p[0], filiale });
     return materialeProva.ordini.filter((o) => filiale === null || o.distributor_id === filiale);
   }
   if (/FROM order_items WHERE order_id = ANY/.test(s)) return materialeProva.righe.filter((r) => p[0].includes(r.order_id));
+  if (/SELECT DISTINCT request_id FROM stripe_pagamenti/.test(s)) return materialeProva.ricevute.filter((id) => p[0].includes(id)).map((id) => ({ request_id: id }));
   if (/FROM requests WHERE cliente_id = \? AND order_id IS NULL AND stato IN/.test(s)) return materialeProva.richieste;
   return undefined;
 }
@@ -273,7 +285,7 @@ const ordiniBanco = [
 const storicoBanco = {
   viste: [],
   assoluto: true, // false = il banco ha ordini (solo che i filtri non ne trovano): cambia il messaggio dello stato vuoto
-  conteggi: { tutti: 4, da_preparare: 1, in_preparazione: 1, partiti: 1, consegnati: 1 },
+  conteggi: { tutti: 4, da_preparare: 1, in_consegna: 2, consegnati: 1 },
   righe: [
     { id: 91, creato_il: fa(5000), stato: 'inviato', consegnato_il: null, totale_finale: 100.43, totale_ivato: 122.53, ddt_numero: null, cliente_nome: 'Rossi <b>Impianti</b> S.r.l.', cliente_citta: 'Genova' },
     { id: 90, creato_il: fa(6000), stato: 'in_evasione', consegnato_il: null, totale_finale: 54, totale_ivato: 0, ddt_numero: null, cliente_nome: 'Termoidraulica Verdi S.r.l.', cliente_citta: null },
@@ -296,8 +308,54 @@ const ordiniDelBanco = {
 };
 const scrittureOrdini = [];
 
+// L'ordine 1295 della pagina dell'ordine del banco (come nel disegno), "Da preparare": Rossi Impianti, due articoli da 54,50 + 10,00 (merce 64,50, IVA 14,19,
+// totale 78,69; il prezzo col servizio sarebbe 59,95 + 11,00), il corriere Marco che ritira fra 22 minuti e la seconda riga già spuntata. Le spunte si leggono e si
+// scrivono qui, come la bolla (scrittureBolla).
+const ordine1295 = {
+  ...importiNuovi, id: 1295, cliente_id: 1, distributor_id: 2, stato: 'inviato', request_id: 177, modalita: 'consegna_mezzo_grossista', note: null,
+  destinazione: 'Via Castel Morrone 1/7r, 16161 Genova (GE)', creato_il: fa(60000), consegnato_il: null, ddt_numero: null, ddt_data: null, evaso_il: null,
+  corriere_nome: 'Marco', corriere_arrivo_il: new Date(Date.now() + 22 * 60000), corriere_risposto_il: new Date(Date.now() - 4 * 60000),
+};
+ordiniDelBanco[1295] = ordine1295;
+const righeOrdineBanco = {
+  1295: [
+    { id: 11, order_id: 1295, quantita: 1, codice_snapshot: '12514597', nome_snapshot: 'Adattatore Ø80/100mm Per Caldaia 45-65kw', prezzo_netto_unitario: 54.5, subtotale: 54.5, raee_unitario: 0, raee_riga: 0, prezzo_unitario_cliente: 59.95, subtotale_cliente: 59.95, preso_il: null },
+    { id: 12, order_id: 1295, quantita: 1, codice_snapshot: '12697319', nome_snapshot: 'Adattatore Ø80/60mm Sistema Sdoppiato Condensazione', prezzo_netto_unitario: 10, subtotale: 10, raee_unitario: 0, raee_riga: 0, prezzo_unitario_cliente: 11, subtotale_cliente: 11, preso_il: new Date() },
+  ],
+};
+const scritturePreso = [];
+const scrittureBolla = [];
+
 function eseguiBanco(s, p, modo) {
   if (/^SELECT \* FROM orders WHERE id = \?/.test(s)) return ordiniDelBanco[p[0]] || null;
+  if (/^SELECT \* FROM order_items WHERE order_id = \?/.test(s)) return righeOrdineBanco[p[0]] || [];
+  if (/^UPDATE order_items SET preso_il/.test(s)) {
+    const riga = (righeOrdineBanco[p[1]] || []).find((r) => r.id === Number(p[0]));
+    if (!riga) return { changes: 0 };
+    scritturePreso.push({ s, p });
+    if (/preso_il = NULL/.test(s)) riga.preso_il = null;
+    else if (/COALESCE/.test(s)) riga.preso_il = riga.preso_il || new Date();
+    else riga.preso_il = riga.preso_il ? null : new Date(); // inversione
+    return { changes: 1 };
+  }
+  // La bolla (ddt.emetti): anno, numerazione, e l'UPDATE dell'ordine con i dati del modulo
+  if (/^SELECT EXTRACT\(YEAR FROM NOW\(\)\)::int AS a/.test(s)) return { a: 2026 };
+  if (/^SELECT ddt_numero FROM orders WHERE id = \? FOR UPDATE/.test(s)) return { ddt_numero: (ordiniDelBanco[p[0]] || {}).ddt_numero || null };
+  if (/^INSERT INTO ddt_counters|^UPDATE ddt_counters/.test(s)) return { changes: 1 };
+  if (/^SELECT ultimo FROM ddt_counters/.test(s)) return { ultimo: 7 };
+  if (/^UPDATE orders SET ddt_numero = \?/.test(s)) { scrittureBolla.push({ s, p }); return { changes: 1 }; }
+  if (/^SELECT preso_il FROM order_items WHERE id = \?/.test(s)) {
+    for (const lista of Object.values(righeOrdineBanco)) { const r = lista.find((x) => x.id === Number(p[0])); if (r) return { preso_il: r.preso_il }; }
+    return null;
+  }
+  if (/COUNT\(preso_il\) AS presi FROM order_items WHERE order_id = \?/.test(s)) {
+    const lista = righeOrdineBanco[p[0]] || [];
+    return { totale: lista.length, presi: lista.filter((r) => r.preso_il).length };
+  }
+  if (/^SELECT EXTRACT\(EPOCH FROM \(corriere_arrivo_il - NOW\(\)\)\)::int AS secondi FROM orders WHERE id = \?/.test(s)) {
+    const o = ordiniDelBanco[p[0]];
+    return o && o.corriere_arrivo_il ? { secondi: Math.round((o.corriere_arrivo_il.getTime() - Date.now()) / 1000) } : null;
+  }
   if (/^UPDATE orders SET stato = 'in_evasione'/.test(s)) { scrittureOrdini.push({ s, p }); return { changes: 1 }; }
   if (/COUNT\(\*\) AS tutti,/.test(s)) { storicoBanco.viste.push({ tipo: 'conteggi', s, p }); return storicoBanco.conteggi; }
   if (/^SELECT o\.id, o\.creato_il, o\.stato, o\.consegnato_il/.test(s)) { storicoBanco.viste.push({ tipo: 'lista', s, p }); return storicoBanco.righe; }
@@ -337,6 +395,10 @@ function eseguiStripe(s, p) {
     stripeRighe.find((r) => r.id === Number(p[1])).payment_intent_id = p[0];
     return { changes: 1 };
   }
+  if (/FROM stripe_pagamenti WHERE request_id = \? AND stato IN/.test(s)) {
+    const viste = stripeRighe.filter((r) => r.request_id === Number(p[0]) && ['autorizzato', 'da_incassare', 'incassato', 'da_rilasciare', 'rilasciato', 'scaduto', 'da_rimborsare', 'rimborsato'].includes(r.stato));
+    return viste.length ? viste[viste.length - 1] : null;
+  }
   if (/FROM stripe_pagamenti WHERE id = \? AND cliente_id = \?/.test(s)) return stripeRighe.find((r) => r.id === Number(p[0]) && r.cliente_id === p[1]) || null;
   if (/FROM stripe_pagamenti WHERE payment_intent_id = \? AND cliente_id = \?/.test(s)) return stripeRighe.find((r) => r.payment_intent_id === p[0] && r.cliente_id === p[1]) || null;
   return undefined;
@@ -375,9 +437,27 @@ function eseguiRichiestaProva(s, p) {
   return undefined;
 }
 
+// Ricevute (src/ricevute.js): la tabella in memoria, con la stessa regola di numerazione dell'INSERT vero.
+const ricevuteFinte = [];
+function eseguiRicevute(s, p) {
+  if (/^SELECT \* FROM ricevute WHERE ordine_id = \? AND tipo = \?/.test(s)) return ricevuteFinte.find((r) => r.ordine_id === Number(p[0]) && r.tipo === p[1]) || null;
+  if (/^INSERT INTO ricevute/.test(s)) {
+    const [ordineId, tipo] = p;
+    if (ricevuteFinte.some((r) => r.ordine_id === Number(ordineId) && r.tipo === tipo)) return { changes: 0 };
+    const numero = Math.max(0, ...ricevuteFinte.filter((r) => r.tipo === tipo).map((r) => r.numero)) + 1;
+    ricevuteFinte.push({ id: ricevuteFinte.length + 1, anno: 2026, numero, ordine_id: Number(ordineId), tipo, creato_il: new Date() });
+    return { changes: 1 };
+  }
+  return undefined;
+}
+
 function esegui(sql, p, modo) {
   const s = sql.replace(/\s+/g, ' ');
   registro.push(s.slice(0, 90));
+  if (/\bricevute\b/.test(s)) {
+    const r = eseguiRicevute(s, p);
+    if (r !== undefined) return r;
+  }
   if (/stripe_pagamenti/.test(s)) {
     const r = eseguiStripe(s, p);
     if (r !== undefined) return r;
@@ -801,7 +881,7 @@ const pagina = async (percorso) => {
 // Il totale mostrato nel riquadro blu ("€ 271,45") di una pagina.
 const totaleRiquadro = (t) => (t.match(/<span class="sm-importo">€ ([\d.,]+)<\/span>/) || [])[1];
 
-test('storico: riquadro "Da pagare a BOREA SRL", chip dei mesi, servizio fuori dal totale, un ordine aperto solo il primo', async () => {
+test('storico: riquadro "Da pagare a BOREA SRL", chip dei mesi, servizio fuori dal totale, ordini tutti chiusi', async () => {
   cookie = '';
   await chiedi('/login', form({ username: 'prova', password: 'password-di-prova' }));
   materialeProva.attivo = true;
@@ -813,9 +893,10 @@ test('storico: riquadro "Da pagare a BOREA SRL", chip dei mesi, servizio fuori d
     assert.equal(totaleRiquadro(t), '271,45');
     assert.match(t, /<span class="sm-iva">IVA inclusa<\/span>/);
     assert.match(t, /Materiale di 3 ordini/);
-    assert.match(t, /Servizio già pagato in app: <strong>€ 63,50<\/strong>/);
+    assert.match(t, /Consegne pagate in app: <strong>€ 63,50<\/strong>/);
     assert.doesNotMatch(t, /334,95|€ 271,45 ?\+/, 'il servizio (18,30 + 24,40 + 20,80) NON è dentro il totale');
-    assert.match(t, /<a class="sm-esporta" href="\/storico\/materiale\.csv\?mese=2026-10">/);
+    assert.match(t, /<a class="sm-esporta" href="\/storico\/materiale\.csv\?mese=2026-10"><svg[\s\S]*?<\/svg>Esporta elenco<\/a>/);
+    assert.doesNotMatch(t, /Ricevute del mese|class="sm-ricevuta"/, 'senza pagamenti incassati non ci sono ricevute (né pulsante né link)');
     // chip: i mesi con attività dal più recente + "Tutto", l'attivo è ottobre
     const chip = [...t.matchAll(/<a class="sm-chip( attivo)?" href="([^"]+)"[^>]*>([^<]+)<\/a>/g)].map((m) => [m[3], !!m[1], m[2]]);
     assert.deepEqual(chip.map((c) => c[0]), ['Ottobre 2026', 'Settembre 2026', 'Tutto']);
@@ -823,10 +904,10 @@ test('storico: riquadro "Da pagare a BOREA SRL", chip dei mesi, servizio fuori d
     assert.equal(chip[1][2], '/storico?mese=2026-09&amp;vista=ordine');
     // b) il selettore: "Per ordine" attivo
     assert.match(t, /<a class="attiva" href="\/storico\?mese=2026-10&amp;vista=ordine" aria-current="page">Per ordine<\/a>\s*<a class="" href="\/storico\?mese=2026-10&amp;vista=articolo">Per articolo<\/a>/);
-    // c) tre schede ordine, aperta solo la prima (la più recente, #98)
-    assert.equal((t.match(/<details class="sm-ordine"/g) || []).length, 3);
-    assert.equal((t.match(/<details class="sm-ordine" open>/g) || []).length, 1);
-    assert.ok(t.indexOf('<details class="sm-ordine" open>') < t.indexOf('Ordine #97'), 'la aperta è la prima');
+    // c) tre schede ordine, tutte chiuse all'arrivo (si aprono al tocco); più la richiesta senza risposta (#4), che ha la stessa scheda
+    assert.equal((t.match(/<strong>Ordine #/g) || []).length, 3);
+    assert.equal((t.match(/<details class="sm-ordine"/g) || []).length, 4);
+    assert.equal((t.match(/<details class="sm-ordine" open/g) || []).length, 0);
     // chiusa: numero, data, totale IVA inclusa; stato, primo articolo e " +N"
     assert.match(t, /<strong>Ordine #98<\/strong> <span class="sm-data">16 ott, 09:12<\/span>[\s\S]*?<span class="sm-tot">€ 61,00<\/span>/);
     assert.match(t, /<span class="st-stato st-preparazione">In preparazione<\/span>\s*<span class="sm-primo">1× Valvola Deviatrice 3vie Per Easy<\/span>/);
@@ -835,17 +916,28 @@ test('storico: riquadro "Da pagare a BOREA SRL", chip dei mesi, servizio fuori d
     assert.match(t, /<span class="sm-qta">1×<\/span>[\s\S]*?87 Elemento A &#34;t&#34; 87gr Diam\. 100[\s\S]*?€ 124,44 cad\.[\s\S]*?<span class="sm-riga-totale">€ 124,44<\/span>/);
     assert.match(t, /Bocchettone A 90° Sanpress<\/div>\s*<div class="sm-riga-sotto">€ 36,60 cad\.<\/div>[\s\S]*?<span class="sm-riga-totale">€ 73,20<\/span>/);
     // il servizio per ordine: l'addebitato quando torna (98, 91), il calcolato quando in app si pagava tutto (97: 148,84 non è un servizio)
-    const servizi = [...t.matchAll(/<div class="sm-servizio"><span>Servizio pagato in app<\/span><span>€ ([\d,]+)<\/span><\/div>/g)].map((m) => m[1]);
+    const servizi = [...t.matchAll(/<div class="sm-servizio"><span>Consegna pagata in app · corriere \+ 10% \+ IVA<\/span><span>€ ([\d,]+)<\/span><\/div>/g)].map((m) => m[1]);
     assert.deepEqual(servizi, ['18,30', '24,40', '20,80']);
     assert.doesNotMatch(t, /148,84/);
     // Riordina solo sui consegnati (97 e 91), come form fuori dal <summary>; "Dettagli ›" per tutti
     const riordina = [...t.matchAll(/<form class="st-riordina" method="POST" action="\/storico\/(\d+)\/riordina">/g)].map((m) => m[1]);
     assert.deepEqual(riordina.sort(), ['91', '97']);
     assert.doesNotMatch(t, /<summary>(?:(?!<\/summary>)[\s\S])*<form/);
-    assert.deepEqual([...t.matchAll(/<a class="sm-dettagli" href="([^"]+)">Dettagli ›<\/a>/g)].map((m) => m[1]), ['/ordini/98', '/ordini/97', '/ordini/91']);
+    // (e la richiesta senza risposta, nella sua scheda aperta, porta alla sua pagina: da lì si rinvia)
+    assert.deepEqual([...t.matchAll(/<a class="sm-dettagli" href="([^"]+)">Dettagli ›<\/a>/g)].map((m) => m[1]), ['/ordini/98', '/ordini/97', '/ordini/91', '/richieste/4']);
     // le richieste senza ordine: "Nessun costo", e a ottobre solo la 4
-    assert.match(t, /<a class="sm-senza" href="\/richieste\/4">\s*<span class="st-stato st-nessuna">Nessuna risposta<\/span>\s*<span class="sm-senza-testo">Richiesta #4 · 13 ott<\/span>\s*<span class="sm-senza-costo">Nessun costo<\/span>/);
-    assert.doesNotMatch(t, /Richiesta #2 ·/);
+    // ...nello STESSO formato di una scheda ordine: <details> chiuso con "Richiesta #4", data, "Nessun costo", stato, primo articolo e "+1"; aperta, le righe e "Dettagli ›"
+    assert.match(t, /<details class="sm-ordine">\s*<summary>\s*<span class="sm-riga1">\s*<span class="sm-nome"><strong>Richiesta #4<\/strong> <span class="sm-data">13 ott, 11:00<\/span><\/span>\s*<span class="sm-tot sm-tot-zero">Nessun costo<\/span>\s*<\/span>\s*<span class="sm-riga2">\s*<span class="st-stato st-nessuna">Nessuna risposta<\/span>\s*<span class="sm-primo">2× Valvola a sfera 1\/2<\/span>\s*<span class="sm-altri">\+1<\/span>\s*<span class="sm-freccia"/);
+    const richiesta4 = t.match(/<strong>Richiesta #4<\/strong>[\s\S]*?<\/details>/)[0];
+    assert.match(richiesta4, /<span class="sm-qta">2×<\/span>\s*<div class="sm-riga-corpo">\s*<div class="sm-riga-nome">Valvola a sfera 1\/2<\/div>/);
+    assert.match(richiesta4, /<span class="sm-qta">1×<\/span>\s*<div class="sm-riga-corpo">\s*<div class="sm-riga-nome">Raccordo a T<\/div>/);
+    assert.doesNotMatch(richiesta4, /€ \d+,\d\d cad\.|sm-riga-totale/); // le richieste non hanno prezzi
+    assert.match(richiesta4, /Nessun addebito sulla carta/);
+    assert.match(richiesta4, /<a class="sm-dettagli" href="\/richieste\/4">Dettagli ›<\/a>/);
+    assert.doesNotMatch(t, /sm-senza|Richiesta #2 ·|Richiesta #2</);
+    // UN solo elenco cronologico: niente intestazione "Senza ordine", la richiesta #4 (13 ott) viene dopo gli ordini 98, 97, 91 (16, 15 e 14 ott)
+    assert.doesNotMatch(t, /Senza ordine|st-titolo/);
+    assert.deepEqual([...t.matchAll(/<strong>Ordine #(\d+)<\/strong>|<strong>Richiesta #(\d+)<\/strong>/g)].map((m) => (m[1] ? 'O' + m[1] : 'R' + m[2])), ['O98', 'O97', 'O91', 'R4']);
     // niente più "In corso" né le schede del vecchio elenco
     assert.doesNotMatch(t, />In corso<|class="st-link"|class="st-scheda"/);
     // il fondo lascia spazio al menu flottante
@@ -862,10 +954,17 @@ test('storico: cambio mese, "Tutto", mese non valido e vista per articolo', asyn
     let t = await pagina('/storico?mese=2026-09');
     assert.equal(totaleRiquadro(t), '366,00');
     assert.match(t, /Materiale di 1 ordine</);
-    assert.match(t, /Servizio già pagato in app: <strong>€ 48,80<\/strong>/); // addebitato non salvato: (30 + 10) × 1,22
-    assert.match(t, /Richiesta #2 · 25 set/);
+    assert.match(t, /Consegne pagate in app: <strong>€ 48,80<\/strong>/); // addebitato non salvato: (30 + 10) × 1,22
+    assert.match(t, /<strong>Richiesta #2<\/strong> <span class="sm-data">25 set, 10:00<\/span>/);
     assert.match(t, /class="st-stato st-annullata">Annullata/);
-    assert.doesNotMatch(t, /Richiesta #4 ·/);
+    // in ordine cronologico, mescolata agli ordini: la richiesta annullata (25 set) viene prima dell'ordine #30 (12 set), senza sezioni a parte
+    assert.ok(t.indexOf('<strong>Richiesta #2</strong>') < t.indexOf('<strong>Ordine #30</strong>'));
+    assert.doesNotMatch(t, /Senza ordine/);
+    // la richiesta annullata si vede ma NON apre nessuna pagina: niente link (né dalla scheda né da altro)
+    // (stessa scheda dell'ordine ma un <div> fisso: niente <details>, niente freccia, niente "Dettagli")
+    assert.match(t, /<div class="sm-ordine sm-ordine-chiusa">\s*<div class="sm-fissa">\s*<span class="sm-riga1">\s*<span class="sm-nome"><strong>Richiesta #2<\/strong> <span class="sm-data">25 set, 10:00<\/span><\/span>\s*<span class="sm-tot sm-tot-zero">Nessun costo<\/span>\s*<\/span>\s*<span class="sm-riga2">\s*<span class="st-stato st-annullata">Annullata<\/span>\s*<span class="sm-primo">3× Sifone doccia<\/span>\s*<\/span>\s*<\/div>\s*<\/div>/);
+    assert.doesNotMatch(t, /href="\/richieste\/2"/);
+    assert.doesNotMatch(t, /Richiesta #4</);
     // "Tutto": ottobre + settembre
     t = await pagina('/storico?mese=tutto');
     assert.equal(totaleRiquadro(t), '637,45'); // 271,45 + 366,00
@@ -906,8 +1005,8 @@ test('storico: nessun ordine nel mese e nessun ordine ancora', async () => {
     let t = await pagina('/storico?mese=2026-10');
     assert.equal(totaleRiquadro(t), '0,00');
     assert.match(t, /Materiale di 0 ordini/);
-    assert.doesNotMatch(t, /<details class="sm-ordine"/);
-    assert.match(t, /Richiesta #4 · 13 ott/);
+    assert.doesNotMatch(t, /Ordine #/);
+    assert.match(t, /<strong>Richiesta #4<\/strong> <span class="sm-data">13 ott, 11:00<\/span>/);
     // né ordini né richieste: la pagina vuota di sempre
     materialeProva.richieste = [];
     t = await pagina('/storico');
@@ -961,6 +1060,57 @@ test('storico: CSV del materiale (";" e BOM), solo del cliente loggato, righe pe
   }
 });
 
+test('storico con pagamenti incassati: "Ricevute del mese" e "Esporta elenco" affiancati, link "Ricevuta" solo sugli ordini con un incasso vero, PDF del mese con una pagina per ricevuta', async () => {
+  cookie = '';
+  await chiedi('/login', form({ username: 'prova', password: 'password-di-prova' }));
+  materialeProva.attivo = true;
+  ordiniProva.attivo = true;
+  materialeProva.ricevute = [197, 191]; // gli ordini 97 e 91 di ottobre hanno un incasso Stripe; il 98 (in preparazione) e il 30 di settembre no
+  const riga = (id, requestId) => ({
+    id, cliente_id: 1, tipo: 'richiesta', modo: 'test', stato: 'incassato', payment_intent_id: 'pi_prova_' + requestId, importo_cent: 2007, incasso_cent: 2007, request_id: requestId,
+    carta_marca: 'mastercard', carta_ultime4: '5555', incassato_il: pagatoIlProva, aggiornato_il: pagatoIlProva,
+  });
+  stripeRighe.push(riga(910, 197), riga(911, 191));
+  try {
+    const t = await pagina('/storico?mese=2026-10');
+    // in fondo al riquadro blu: la riga "Consegne pagate in app" e due pulsanti affiancati
+    assert.match(t, /Consegne pagate in app: <strong>€ 63,50<\/strong>/);
+    assert.match(t, /<div class="sm-bottoni">\s*<a class="sm-esporta sm-ricevute" href="\/storico\/ricevute\.pdf\?mese=2026-10" target="_blank" rel="noopener"><svg[\s\S]*?<\/svg>Ricevute del mese<\/a>\s*<a class="sm-esporta" href="\/storico\/materiale\.csv\?mese=2026-10"><svg[\s\S]*?<\/svg>Esporta elenco<\/a>\s*<\/div>/);
+    // in ogni ordine aperto, accanto a "Dettagli ›": "Ricevuta" solo dove l'incasso c'è (97 e 91, non il 98)
+    assert.deepEqual([...t.matchAll(/<a class="sm-ricevuta" href="\/ordini\/(\d+)\/ricevuta\.pdf" target="_blank" rel="noopener">[\s\S]*?<\/svg>Ricevuta<\/a>/g)].map((m) => m[1]), ['97', '91']);
+    assert.match(t, /<span class="sm-destra">\s*<a class="sm-ricevuta"[^>]*>[\s\S]*?Ricevuta<\/a>\s*<a class="sm-dettagli" href="\/ordini\/97">Dettagli ›<\/a>\s*<\/span>/);
+    // la riga sotto il materiale: la consegna pagata in app (corriere + 10% + IVA)
+    assert.match(t, /<div class="sm-servizio"><span>Consegna pagata in app · corriere \+ 10% \+ IVA<\/span><span>€ 18,30<\/span><\/div>/);
+
+    // un mese senza incassi: né il pulsante né i link (il PDF sarebbe vuoto), e il PDF risponde 404
+    const sett = await pagina('/storico?mese=2026-09');
+    assert.doesNotMatch(sett, /Ricevute del mese|class="sm-ricevuta"/);
+    assert.match(sett, /<a class="sm-esporta" href="\/storico\/materiale\.csv\?mese=2026-09">/);
+    const vuoto = await chiedi('/storico/ricevute.pdf?mese=2026-09');
+    assert.equal(vuoto.status, 404);
+    assert.match(await vuoto.text(), /In questo periodo non ci sono ricevute di pagamento/);
+
+    // il PDF del mese: un solo file, una pagina per ricevuta (97 e 91), numerate nell'ordine in cui sono nati gli ordini
+    const r = await chiedi('/storico/ricevute.pdf?mese=2026-10');
+    assert.equal(r.status, 200);
+    assert.equal(r.headers.get('content-type'), 'application/pdf');
+    assert.equal(r.headers.get('content-disposition'), 'inline; filename="ricevute-2026-10.pdf"');
+    const pdf = Buffer.from(await r.arrayBuffer());
+    assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
+    assert.equal((pdf.toString('latin1').match(/\/Type \/Page(?!s)/g) || []).length, 2, 'due pagine');
+    // senza accesso niente PDF del mese
+    const cookiePrima = cookie;
+    cookie = '';
+    assert.ok([302, 401, 403].includes((await chiedi('/storico/ricevute.pdf?mese=2026-10')).status));
+    cookie = cookiePrima;
+  } finally {
+    materialeProva.attivo = false;
+    ordiniProva.attivo = false;
+    materialeProva.ricevute = [];
+    stripeRighe.splice(stripeRighe.length - 2, 2);
+  }
+});
+
 test('banco e installatore vedono le STESSE cifre: totale, servizio e CSV identici per lo stesso cliente e lo stesso mese', async () => {
   materialeProva.attivo = true;
   banco.attivo = true;
@@ -976,25 +1126,154 @@ test('banco e installatore vedono le STESSE cifre: totale, servizio e CSV identi
     const latoBanco = await pagina('/distributore/clienti/32?mese=2026-10');
     const csvBanco = await (await chiedi('/distributore/clienti/32/materiale.csv?mese=2026-10')).text();
 
+    // Il markup è diverso (il banco ha la sua scheda "Materiale ordinato", senza servizio), i NUMERI sono gli stessi: li fa un calcolo solo.
     assert.equal(totaleRiquadro(lato), '271,45');
-    assert.equal(totaleRiquadro(latoBanco), totaleRiquadro(lato), 'lo stesso totale del materiale');
-    assert.match(latoBanco, /<div class="sm-occhiello">Da incassare<\/div>/);
-    const servizio = (t) => (t.match(/Servizio già pagato in app: <strong>€ ([\d,]+)<\/strong>/) || [])[1];
-    assert.equal(servizio(latoBanco), servizio(lato));
-    assert.equal(servizio(latoBanco), '63,50');
-    // gli stessi ordini con gli stessi totali di riga
-    const totaliOrdini = (t) => [...t.matchAll(/<strong>Ordine #(\d+)<\/strong>[\s\S]*?<span class="sm-tot">€ ([\d,]+)<\/span>/g)].map((m) => m[1] + '=' + m[2]);
-    assert.deepEqual(totaliOrdini(latoBanco), totaliOrdini(lato));
-    assert.deepEqual(totaliOrdini(lato), ['98=61,00', '97=124,44', '91=86,01']);
-    assert.equal(csvBanco, csvInstallatore, 'il CSV è lo stesso');
-    // il banco non ha Riordina, né il link al dettaglio (aprirlo prende in carico un ordine inviato), né le richieste senza ordine
-    assert.doesNotMatch(latoBanco, /st-riordina|class="sm-dettagli"|Richiesta #|sm-senza/);
-    assert.match(latoBanco, /<a class="sm-esporta" href="\/distributore\/clienti\/32\/materiale\.csv\?mese=2026-10">/);
-    assert.match(latoBanco, /href="\/distributore\/clienti\/32\?mese=2026-09#materiale"/);
-    // un cliente da verificare non ha il blocco, e il suo CSV non esiste
+    const totaleBanco = (t) => (t.match(/<div class="mc-box mc-box-totale">[\s\S]*?<div class="mc-box-val">€ ([\d.,]+)<\/div>/) || [])[1];
+    assert.equal(totaleBanco(latoBanco), totaleRiquadro(lato), 'lo stesso totale del materiale');
+    // gli stessi ordini con gli stessi totali (l'installatore: Ordine #N … sm-tot; il banco: mc-num … mc-tot)
+    const totaliInstallatore = [...lato.matchAll(/<strong>Ordine #(\d+)<\/strong>[\s\S]*?<span class="sm-tot">€ ([\d.,]+)<\/span>/g)].map((m) => m[1] + '=' + m[2]);
+    const totaliBanco = [...latoBanco.matchAll(/<span class="mc-num">Ordine #(\d+)<\/span>[\s\S]*?<span class="mc-tot">€ ([\d.,]+)<\/span>/g)].map((m) => m[1] + '=' + m[2]);
+    assert.deepEqual(totaliBanco, totaliInstallatore);
+    assert.deepEqual(totaliInstallatore, ['98=61,00', '97=124,44', '91=86,01']);
+    // il CSV: stesse righe (ordine, codice, quantità, prezzo cad., totale), colonne diverse (il banco ha il DDT e NON il servizio)
+    const celle = (csv) => csv.replace(/^\uFEFF/, '').trim().split('\r\n').map((r) => r.split(';'));
+    const [testaInst, ...righeInst] = celle(csvInstallatore);
+    const [testaBanco, ...righeBanco] = celle(csvBanco);
+    assert.equal(testaInst.at(-1), 'Servizio pagato');
+    assert.deepEqual(testaBanco, ['Data', 'Ordine', 'DDT', 'Stato', 'Codice', 'Articolo', 'Quantità', 'Prezzo cad. IVA incl.', 'Totale IVA incl.']);
+    assert.deepEqual(
+      righeBanco.slice(0, -1).map((r) => [r[1], r[4], r[6], r[7], r[8]]),
+      righeInst.slice(0, -1).map((r) => [r[1], r[3], r[5], r[6], r[7]]),
+    );
+    assert.equal(righeBanco.at(-1).at(-1), '271,45');
+    assert.equal(righeInst.at(-1)[7], '271,45');
+    // il servizio (18,30 + 24,40 + 20,80 = 63,50) non è mai nella pagina del banco: né come riquadro né come cifra
+    assert.doesNotMatch(latoBanco, /Servizio (già )?pagat|63,50|18,30|24,40|20,80/);
+    // il banco non ha Riordina, né le richieste senza ordine
+    assert.doesNotMatch(latoBanco, /st-riordina|Richiesta #|sm-senza|sm-riquadro/);
+    // un cliente da verificare non ha la scheda, e il suo CSV non esiste
     const nonApprovato = await pagina('/distributore/clienti/31');
-    assert.doesNotMatch(nonApprovato, /sm-riquadro/);
+    assert.doesNotMatch(nonApprovato, /mc-card|Materiale ordinato/);
     assert.equal((await chiedi('/distributore/clienti/31/materiale.csv')).status, 404);
+  } finally {
+    materialeProva.attivo = false;
+    banco.attivo = false;
+    cookie = '';
+    await chiedi('/login', form({ username: 'prova', password: 'password-di-prova' }));
+  }
+});
+
+test('banco: "Materiale ordinato" del cliente approvato: tutti gli ordini, IVA e RAEE nei totali, mesi, "Tutto", per articolo, niente servizio', async () => {
+  cookie = '';
+  materialeProva.attivo = true;
+  banco.attivo = true;
+  try {
+    await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }));
+
+    // ----- ottobre, per ordine -----
+    let t = await pagina('/distributore/clienti/32?mese=2026-10');
+    assert.match(t, /Prezzi IVA inclusa\. Il cliente ha pagato solo il servizio: il materiale lo paga a BOREA\./);
+    assert.match(t, /<a class="mc-esporta" href="\/distributore\/clienti\/32\/materiale\.csv\?mese=2026-10">/);
+    // riepilogo: 3 ordini, 4 articoli distinti, 5 pezzi (1 + 1 + 2 + 1); totale 61,00 + 124,44 (RAEE dentro) + 86,01 = 271,45;
+    // di cui IVA = totale − netti di riga (50 + 102 + 70,50 = 222,50) = 48,95
+    assert.match(t, /<div class="mc-box-eti">Ordini<\/div>\s*<div class="mc-box-val">3<\/div>/);
+    assert.match(t, /<div class="mc-box-eti">Articoli · pezzi<\/div>\s*<div class="mc-box-val">4 · 5<\/div>/);
+    assert.match(t, /<div class="mc-box mc-box-totale">\s*<div class="mc-box-eti">Totale materiale IVA inclusa<\/div>\s*<div class="mc-box-val">€ 271,45<\/div>\s*<div class="mc-box-sotto">di cui IVA € 48,95<\/div>/);
+    // TUTTI gli ordini (anche quello ancora in preparazione), dal più recente; aperti i primi due
+    assert.deepEqual([...t.matchAll(/<span class="mc-num">Ordine #(\d+)<\/span>/g)].map((m) => m[1]), ['98', '97', '91']);
+    assert.equal((t.match(/<details class="mc-ordine"/g) || []).length, 3);
+    assert.equal((t.match(/<details class="mc-ordine" open>/g) || []).length, 2);
+    assert.ok(t.indexOf('Ordine #91') > t.indexOf('<details class="mc-ordine">'), 'il terzo è chiuso');
+    // riga dell'ordine: numero, "data · DDT · articoli", pillola dello stato del banco, totale IVA inclusa
+    assert.match(t, /<span class="mc-num">Ordine #98<\/span>\s*<span class="mc-meta">16 ott, 09:12 · DDT — · 1 articolo<\/span>\s*<span class="sto-pillola sto-st-in_consegna mc-stato"><span class="sto-punto" aria-hidden="true"><\/span>In consegna<\/span>\s*<span class="mc-tot">€ 61,00<\/span>/);
+    assert.match(t, /<span class="mc-num">Ordine #91<\/span>\s*<span class="mc-meta">14 ott, 22:29 · DDT — · 2 articoli<\/span>\s*<span class="sto-pillola sto-st-consegnato mc-stato"><span class="sto-punto" aria-hidden="true"><\/span>Consegnato<\/span>\s*<span class="mc-tot">€ 86,01<\/span>/);
+    // righe: prezzo cad. = (netto + RAEE) × 1,22, totale riga = (netto riga + RAEE riga) × 1,22; mai il prezzo col servizio
+    assert.match(t, /<span class="mc-qta">1×<\/span>[\s\S]*?87 Elemento A &#34;t&#34; 87gr Diam\. 100<\/div>\s*<div class="mc-cod">Cod\. C97[\s\S]*?<td class="mc-c-num mc-c-cad">€ 124,44<\/td>\s*<td class="mc-c-num mc-c-tot">€ 124,44<\/td>/);
+    assert.match(t, /<span class="mc-qta">2×<\/span>[\s\S]*?Bocchettone A 90° Sanpress<\/div>[\s\S]*?<td class="mc-c-num mc-c-cad">€ 36,60<\/td>\s*<td class="mc-c-num mc-c-tot">€ 73,20<\/td>/);
+    assert.doesNotMatch(t, /110,00|134,20|€ 55,00|€ 66,00/, 'né subtotale_cliente né il prezzo col servizio');
+    // niente "Vedi ordine #N ›" (richiesta esplicita del 19/10/2026: la pagina dell'ordine c'è solo per quelli "Da preparare", e ci si arriva dalla home); e
+    // senza bolla (nessuno di questi ha il DDT) non c'è nessun link
+    assert.doesNotMatch(t, /Vedi ordine|mc-vedi|\/distributore\/ordini\//);
+    assert.match(t, /<p class="mc-fondo">Totale di ottobre <strong>€ 271,45<\/strong> IVA inclusa<\/p>/);
+    // il servizio pagato in app non si vede né come voce né come cifra; niente richieste senza ordine
+    assert.doesNotMatch(t, /Servizio (già )?pagat|63,50|18,30|24,40|20,80|Richiesta #|st-riordina/);
+    // filtri: i due mesi più recenti con ordini + "Tutto", poi "Per ordine | Per articolo"; senza "Altri mesi" (non ce ne sono)
+    const voci = [...t.matchAll(/<a class="mc-seg-voce( attiva)?" href="([^"]+)"[^>]*>([^<]+)<\/a>/g)].map((m) => [m[3], !!m[1], m[2]]);
+    assert.deepEqual(voci.map((v) => v[0]), ['Ottobre 2026', 'Settembre 2026', 'Tutto', 'Per ordine', 'Per articolo']);
+    assert.deepEqual(voci.map((v) => v[1]), [true, false, false, true, false]);
+    assert.equal(voci[1][2], '/distributore/clienti/32?mese=2026-09&amp;vista=ordine#materiale');
+    assert.equal(voci[4][2], '/distributore/clienti/32?mese=2026-10&amp;vista=articolo#materiale');
+    assert.doesNotMatch(t, /mc-altri/);
+
+    // ----- settembre: un ordine, IVA 66,00 (366,00 − 300,00) -----
+    t = await pagina('/distributore/clienti/32?mese=2026-09');
+    assert.deepEqual([...t.matchAll(/<span class="mc-num">Ordine #(\d+)<\/span>/g)].map((m) => m[1]), ['30']);
+    assert.match(t, /<div class="mc-box-val">€ 366,00<\/div>\s*<div class="mc-box-sotto">di cui IVA € 66,00<\/div>/);
+    assert.match(t, /Totale di settembre <strong>€ 366,00<\/strong>/);
+    assert.doesNotMatch(t, /Ordine #98|Ordine #97/);
+
+    // ----- "Tutto" (ottobre + settembre): 4 ordini, 8 pezzi; il totale di tutti -----
+    t = await pagina('/distributore/clienti/32?mese=tutto');
+    assert.deepEqual([...t.matchAll(/<span class="mc-num">Ordine #(\d+)<\/span>/g)].map((m) => m[1]), ['98', '97', '91', '30']);
+    assert.match(t, /<div class="mc-box-val">4 · 8<\/div>/);
+    assert.match(t, /<div class="mc-box-val">€ 637,45<\/div>\s*<div class="mc-box-sotto">di cui IVA € 114,95<\/div>/);
+    assert.match(t, /<p class="mc-fondo">Totale <strong>€ 637,45<\/strong> IVA inclusa<\/p>/, '"Tutto": "Totale" senza il mese');
+    // un mese senza ordini torna al default (ottobre), un valore sbagliato pure
+    for (const mese of ['2026-02', 'ciao']) {
+      assert.match(await pagina('/distributore/clienti/32?mese=' + mese), /<div class="mc-box-val">€ 271,45<\/div>/, 'mese=' + mese);
+    }
+
+    // ----- per articolo: righe sommate per codice e nome (anche con prezzi diversi), dal totale più alto -----
+    t = await pagina('/distributore/clienti/32?mese=tutto&vista=articolo');
+    assert.doesNotMatch(t, /<details class="mc-ordine"/);
+    assert.deepEqual([...t.matchAll(/<div class="mc-art">([^<]+)<\/div>/g)].map((m) => m[1]),
+      ['87 Elemento A &#34;t&#34; 87gr Diam. 100', 'Bocchettone A 90° Sanpress', 'Valvola Deviatrice 3vie Per Easy', 'Raccordo a T']);
+    // l'elemento: 1 (#97, 124,44) + 3 (#30, 122,00 l'uno) = 4 pezzi, 490,44; due prezzi cad. diversi → "prezzi diversi"
+    assert.match(t, /<span class="mc-qta">4×<\/span>[\s\S]*?Cod\. C97 · prezzi diversi<span class="mc-negli-sub"> · #97, #30<\/span>[\s\S]*?<td class="mc-c-ordini">#97, #30<\/td>\s*<td class="mc-c-num mc-c-tot">€ 490,44<\/td>/);
+    // un articolo con un solo prezzo mostra "€ X cad."
+    assert.match(t, /Cod\. C91A · € 36,60 cad\./);
+    assert.match(t, /<th class="mc-c-qta" scope="col">Q\.tà totale<\/th>/);
+    assert.match(t, /<th class="mc-c-ordini" scope="col">Negli ordini<\/th>/);
+    assert.match(t, /<a class="mc-seg-voce attiva" href="[^"]+"[^>]*>Per articolo<\/a>/);
+
+    // ----- la bolla: un ordine con il DDT ha il suo link a "Apri la bolla / DDT" (al posto del vecchio "Vedi ordine"); uno ancora "Da preparare" non ha né l'uno né l'altro -----
+    const o98 = materialeProva.ordini.find((o) => o.id === 98);
+    const prima = { stato: o98.stato, request_id: o98.request_id, ddt_numero: o98.ddt_numero };
+    try {
+      Object.assign(o98, { stato: 'evaso', request_id: 555, ddt_numero: '123' });
+      t = await pagina('/distributore/clienti/32?mese=2026-10');
+      assert.match(t, /<span class="mc-meta">16 ott, 09:12 · DDT 123 · 1 articolo<\/span>\s*<span class="sto-pillola sto-st-in_consegna mc-stato"><span class="sto-punto" aria-hidden="true"><\/span>In consegna<\/span>/);
+      assert.deepEqual([...t.matchAll(/<a class="mc-vedi" href="([^"]+)">([^<]*)<\/a>/g)].map((m) => [m[1], m[2]]), [['/ddt/98', 'Apri la bolla / DDT 123 ›']]);
+      assert.doesNotMatch(t, /Vedi ordine|\/distributore\/ordini\/|\/distributore\/richieste\/555/);
+      // ancora da preparare e senza bolla: nessun link (la pagina dell'ordine si apre dalla home)
+      Object.assign(o98, { stato: 'inviato', ddt_numero: null });
+      t = await pagina('/distributore/clienti/32?mese=2026-10');
+      assert.match(t, /sto-st-da_preparare mc-stato"><span class="sto-punto" aria-hidden="true"><\/span>Da preparare<\/span>/);
+      assert.doesNotMatch(t, /mc-vedi|Vedi ordine|\/distributore\/ordini\//);
+    } finally {
+      Object.assign(o98, prima);
+    }
+
+    // ----- CSV: ";" e BOM, dal più vecchio, DDT e stato, nessun servizio, totale in fondo, nome del file dal cliente e dal mese -----
+    const r = await chiedi('/distributore/clienti/32/materiale.csv?mese=2026-10');
+    assert.equal(r.status, 200);
+    assert.match(r.headers.get('content-type'), /^text\/csv/);
+    assert.equal(r.headers.get('content-disposition'), 'attachment; filename="materiale_rossi-b-impianti-b-s-r-l_2026-10.csv"');
+    // il BOM si vede dai byte: Response.text() lo toglie da sé (decodifica UTF-8 della specifica Fetch)
+    const byte = Buffer.from(await r.arrayBuffer());
+    assert.deepEqual([...byte.subarray(0, 3)], [0xef, 0xbb, 0xbf], 'BOM UTF-8: Excel in italiano legge le lettere accentate');
+    const csv = byte.toString('utf8');
+    assert.equal(csv.charCodeAt(0), 0xfeff);
+    assert.deepEqual(csv.slice(1).trim().split('\r\n'), [
+      'Data;Ordine;DDT;Stato;Codice;Articolo;Quantità;Prezzo cad. IVA incl.;Totale IVA incl.',
+      '14/10/2026;#91;;Consegnato;C91A;Bocchettone A 90° Sanpress;2;36,60;73,20',
+      '14/10/2026;#91;;Consegnato;C91B;Raccordo a T;1;12,81;12,81',
+      '15/10/2026;#97;;Consegnato;C97;"87 Elemento A ""t"" 87gr Diam. 100";1;124,44;124,44',
+      '16/10/2026;#98;;In consegna;C98;Valvola Deviatrice 3vie Per Easy;1;61,00;61,00',
+      'Totale;;;;;;;;271,45',
+    ]);
+    // "Tutto" nel nome del file
+    assert.match((await chiedi('/distributore/clienti/32/materiale.csv?mese=tutto')).headers.get('content-disposition'), /_tutto\.csv"$/);
   } finally {
     materialeProva.attivo = false;
     banco.attivo = false;
@@ -1199,7 +1478,7 @@ async function conRichiesta(id, campi, articoli, prova) {
   }
 }
 
-test('richiesta in attesa: righe e "Merce" a prezzo del banco, scheda "Pagamenti" (consegna pagata, materiale in sospeso) e solo "Annulla la richiesta"', async () => {
+test('richiesta in attesa: righe e "Merce" a prezzo del banco, scheda "Pagamenti" (carta BLOCCATA, materiale in sospeso) e "Annulla la richiesta" solo finché nessun banco conferma', async () => {
   await conRichiesta(6, { ...IMPORTI_SALVATI, pagamento_importo: 20.07, pagamento_metodo: 'stripe', pagato_il: fa(60000) }, DUE_ARTICOLI(), async () => {
     storico.risposte[6] = [rispostaProva(6)];
     let t = await (await chiedi('/richieste/6')).text();
@@ -1210,14 +1489,16 @@ test('richiesta in attesa: righe e "Merce" a prezzo del banco, scheda "Pagamenti
     assert.match(t, /<div class="att-cod">Cod\. 12697319 · € 10,00 cad\.<\/div>\s*<\/div>\s*<span class="att-prezzo-riga">€ 10,00<\/span>/);
     assert.match(t, /<dt>Merce · IVA esclusa · prezzi del banco<\/dt><dd>€ 64,50<\/dd>/);
     assert.doesNotMatch(t, /att-pagato|<span>Pagato<\/span>|Richiesta del|prezzi IVA esclusa/);
-    // 2. "Pagamenti": consegna pagata (verde), materiale in sospeso (tratteggiato, grigio)
-    assert.match(t, /<div class="card att-card pg-card" data-pagamenti data-stato="attesa">\s*<h2 class="pg-titolo">Pagamenti<\/h2>/);
-    assert.match(t, /<div class="pg-riga pg-consegna">[\s\S]*?Consegna in cantiere[\s\S]*?Pagata in app · rimborsata se nessuno accetta[\s\S]*?<div class="pg-importo" data-importo-app>€ 20,07<\/div>/);
+    // 2. "Pagamenti", stato 'bloccato': la carta è solo AUTORIZZATA. Consegna azzurra con il lucchetto, materiale tratteggiato "solo se conferma"
+    assert.match(t, /<div class="card att-card pg-card" data-pagamenti data-stato="attesa" data-pagamento="bloccato">\s*<h2 class="pg-titolo">Pagamenti<\/h2>/);
+    assert.match(t, /<div class="pg-riga pg-bloccata">[\s\S]*?Consegna in cantiere[\s\S]*?<span class="pg-lucchetto"[\s\S]*?<\/span>Bloccati sulla carta · addebitati solo se BOREA conferma[\s\S]*?<div class="pg-importo" data-importo-app>€ 20,07<\/div>/);
     assert.match(t, /<div class="pg-riga pg-materiale pg-sospeso">[\s\S]*?<div class="pg-nome">Materiale<\/div>\s*<div class="pg-sub">Lo paghi a BOREA solo se conferma<\/div>[\s\S]*?<div class="pg-importo" data-importo-banco>€ 78,69<\/div>/);
-    // 3. il dettaglio (chiuso): consegna 10,00 / 6,45 / 3,62 e materiale 64,50 / 14,19, senza RAEE
+    assert.doesNotMatch(t, /Pagata|rimborsata se nessuno accetta|pg-consegna|Rimborso/, 'non è pagata: è bloccata');
+    assert.doesNotMatch(t, /Ricevuta|ricevuta\.pdf/, 'la ricevuta nasce con l\'ordine, non prima');
+    // 3. il dettaglio (chiuso): consegna bloccata 10,00 / 6,45 / 3,62 e materiale 64,50 / 14,19, senza RAEE
     assert.match(t, /<details class="pg-dettaglio">/);
     assert.doesNotMatch(t, /<details class="pg-dettaglio" open/);
-    assert.match(t, /<h3>Consegna · pagata<\/h3>/);
+    assert.match(t, /<h3>Consegna · bloccata sulla carta<\/h3>/);
     assert.match(t, /Corriere<\/span> <span class="pg-sp">· costo fisso<\/span><\/dt><dd>€ 10,00<\/dd>/);
     assert.match(t, /Servizio<\/span> <span class="pg-sp">· 10% della merce<\/span><\/dt><dd>€ 6,45<\/dd>/);
     assert.match(t, /IVA 22%<\/span> <span class="pg-sp">· su € 16,45<\/span><\/dt><dd>€ 3,62<\/dd>/);
@@ -1225,13 +1506,22 @@ test('richiesta in attesa: righe e "Merce" a prezzo del banco, scheda "Pagamenti
     assert.match(t, /Merce<\/span> <span class="pg-sp">· prezzo del banco<\/span><\/dt><dd>€ 64,50<\/dd>/);
     assert.match(t, /IVA 22%<\/span> <span class="pg-sp">· su € 64,50<\/span><\/dt><dd>€ 14,19<\/dd>/);
     assert.doesNotMatch(t, /Contributo RAEE/);
-    // 4. si può solo annullare: niente "Elimina definitivamente" (la rotta c'è, si usa dalla richiesta chiusa)
-    assert.match(t, /action="\/richieste\/6\/annulla"/);
+    // 4. si può solo annullare (fase 1: nessun banco ha ancora accettato): niente "Elimina definitivamente" (la rotta c'è, si usa dalla richiesta chiusa)
+    assert.match(t, /<form method="POST" action="\/richieste\/6\/annulla" data-annulla-richiesta>/);
     assert.match(t, /Annulla la richiesta/);
     assert.doesNotMatch(t, /Elimina definitivamente|\/richieste\/6\/elimina/);
+    assert.equal((await (await chiedi('/api/richieste/6')).json()).annullabile, true);
+    // un banco ha confermato (anche se il corriere non ha ancora risposto: all'installatore risulta ancora "in attesa"): "Annulla la richiesta"
+    // non c'è più, e il controllo periodico della pagina lo dice (la pagina lo nasconde da sola)
+    storico.risposte[6] = [rispostaProva(6, { esito: 'confermato', corriere_stato: 'in_attesa' })];
+    t = await (await chiedi('/richieste/6')).text();
+    assert.match(t, /<form method="POST" action="\/richieste\/6\/annulla" data-annulla-richiesta hidden>/);
+    assert.equal((await (await chiedi('/api/richieste/6')).json()).annullabile, false);
+    storico.risposte[6] = [rispostaProva(6)];
     // con più ditte interpellate non c'è un nome solo: "al banco"
     storico.risposte[6] = [rispostaProva(6), rispostaProva(6, { id: 2, distributore_nome: 'AFIS SPA', ditta_id: 7 })];
     t = await (await chiedi('/richieste/6')).text();
+    assert.match(t, /addebitati solo se il banco conferma/);
     assert.match(t, /Lo paghi al banco solo se conferma/);
     assert.match(t, /<h3>Materiale · se il banco conferma<\/h3>/);
   });
@@ -1259,77 +1549,88 @@ test('richiesta in attesa del vecchio flusso (mai pagata): righe e materiale, ma
   });
 });
 
-test('richiesta scaduta: "Rimborsata il …", materiale "Niente da pagare" e la nota col ricalcolo di OGGI; Rinvia ed Elimina', async () => {
+test('richiesta scaduta: UNA sola riga grigia "Nessun addebito € 0,00" (niente furgone, niente verde), pillola "Nessun addebito sulla carta", la nota col blocco di OGGI; Rinvia ed Elimina', async () => {
   const campi = { ...IMPORTI_SALVATI, pagamento_stato: 'rimborsato', pagamento_importo: 20.07, pagamento_metodo: 'stripe', rimborsato_il: new Date(2025, 2, 20, 9, 10) };
   await conRichiesta(4, campi, DUE_ARTICOLI(), async () => {
     storico.risposte[4] = [rispostaProva(4, { esito: 'scaduto' })];
     let t = await (await chiedi('/richieste/4')).text();
-    // in alto: il testo non dipende dalla durata della finestra, la pillola è quanto è tornato indietro
+    // in alto: il testo non dipende dalla durata della finestra; la pillola dice che la carta non è stata addebitata (era solo bloccata: non c'è un rimborso)
     assert.match(t, /<p class="att-sotto">Il tempo per rispondere è scaduto\.<\/p>/);
     assert.doesNotMatch(t, /Il tempo di/);
-    assert.match(t, /<span class="att-rimborso">[\s\S]*?€ 20,07 rimborsati<\/span>/);
+    assert.match(t, /<span class="att-rimborso">[\s\S]*?Nessun addebito sulla carta<\/span>/);
+    assert.doesNotMatch(t, /rimborsati|Rimborso in corso|Rimborsata/);
     // materiale richiesto: prezzi del banco, niente più "Richiesta del …"
     assert.match(t, /<dt>Merce · IVA esclusa · prezzi del banco<\/dt><dd>€ 64,50<\/dd>/);
     assert.doesNotMatch(t, /Richiesta del|prezzi IVA esclusa/);
-    // Pagamenti: la consegna rimborsata (verde, con la freccia di ritorno) e il materiale a zero
-    assert.match(t, /<div class="card att-card pg-card" data-pagamenti data-stato="chiusa">/);
-    assert.match(t, /<div class="pg-riga pg-consegna">[\s\S]*?<span class="pg-tondo">[\s\S]*?<\/span>Rimborsata il 20\/03\/2025 sulla tua carta<\/div>[\s\S]*?<div class="pg-importo" data-importo-app>€ 20,07<\/div>/);
-    assert.match(t, /<div class="pg-riga pg-materiale pg-nullo">[\s\S]*?<div class="pg-sub">Niente da pagare: BOREA non ha confermato<\/div>[\s\S]*?<div class="pg-importo" data-importo-banco>€ 0,00<\/div>/);
-    assert.doesNotMatch(t, /<details class="pg-dettaglio">/, 'niente link al dettaglio');
+    // Pagamenti, stato 'annullato': UNA riga grigia con la carta di credito; niente consegna, materiale, dettaglio né ricevuta
+    assert.match(t, /<div class="card att-card pg-card" data-pagamenti data-stato="chiusa" data-pagamento="annullato">/);
+    assert.match(t, /<div class="pg-riga pg-nessuno">[\s\S]*?<div class="pg-nome">Nessun addebito<\/div>\s*<div class="pg-sub">Il blocco di € 20,07 sulla carta è stato annullato\. Nessuna consegna, niente da pagare a BOREA\.<\/div>[\s\S]*?<div class="pg-importo" data-importo-app>€ 0,00<\/div>/);
+    assert.equal((t.match(/class="pg-riga/g) || []).length, 1, 'una sola riga');
+    assert.doesNotMatch(t, /pg-consegna|pg-materiale|pg-bloccata|<details class="pg-dettaglio">|Ricevuta|data-importo-banco/);
     // la nota: gli stessi prezzi di oggi di quando si preme "Rinvia" (qui non sono cambiati: 20,07 e 78,69)
-    assert.match(t, /<p class="pg-nota" data-nota-rinvio>Se rinvii la richiesta paghi di nuovo solo la consegna \(€ 20,07\)\. Il materiale resta € 78,69, da pagare a BOREA se conferma\.<\/p>/);
+    assert.match(t, /<p class="pg-nota" data-nota-rinvio>Se rinvii la richiesta blocchiamo di nuovo € 20,07 sulla carta, addebitati solo se BOREA conferma\. Il materiale \(€ 78,69\) lo paghi a BOREA\.<\/p>/);
     // Rinvia (blu) ed Elimina, come prima
     assert.match(t, /action="\/richieste\/4\/reinvia"[\s\S]*?Rinvia richiesta/);
     assert.match(t, /action="\/richieste\/4\/elimina"[\s\S]*?Elimina richiesta/);
 
-    // i prezzi sono cambiati dopo la chiusura: la nota usa quelli di oggi (articolo da 104,50: merce 114,50 -> 26,17 e 139,69); quanto è stato
-    // rimborsato resta quello pagato
+    // i prezzi sono cambiati dopo la chiusura: la nota usa quelli di oggi (articolo da 104,50: merce 114,50 -> 26,17 e 139,69)
     storico.righe[4][0].prezzo_listino = 104.5;
     t = await (await chiedi('/richieste/4')).text();
-    assert.match(t, /consegna \(€ 26,17\)\. Il materiale resta € 139,69, da pagare a BOREA se conferma\./);
-    assert.match(t, /<div class="pg-importo" data-importo-app>€ 20,07<\/div>/);
-    assert.match(t, /€ 20,07 rimborsati<\/span>/);
+    assert.match(t, /blocchiamo di nuovo € 26,17 sulla carta, addebitati solo se BOREA conferma\. Il materiale \(€ 139,69\) lo paghi a BOREA\./);
+    assert.match(t, /<div class="pg-importo" data-importo-app>€ 0,00<\/div>/);
+    assert.match(t, /Il blocco di € 20,07 sulla carta è stato annullato/, 'il blocco annullato è quello che era stato fatto');
 
     // più ditte: "al banco"
     storico.risposte[4] = [rispostaProva(4, { esito: 'scaduto' }), rispostaProva(4, { id: 2, distributore_nome: 'AFIS SPA', ditta_id: 7, esito: 'scaduto' })];
     t = await (await chiedi('/richieste/4')).text();
-    assert.match(t, /Niente da pagare: nessun banco ha confermato/);
-    assert.match(t, /da pagare al banco se conferma\./);
+    assert.match(t, /Nessuna consegna, niente da pagare al banco\./);
+    assert.match(t, /addebitati solo se il banco conferma\. Il materiale \(€ 139,69\) lo paghi al banco\./);
   });
 });
 
-test('richiesta scaduta: rimborso ancora in corso, banco che aveva accettato ma senza corriere, e metodo che non è una carta', async () => {
+test('richiesta scaduta con carta già rilasciata su Stripe, e banco che aveva accettato ma senza corriere: sempre "Nessun addebito" (mai "rimborso in corso")', async () => {
   const campi = { ...IMPORTI_SALVATI, pagamento_stato: 'pagato', pagamento_importo: 20.07, pagamento_metodo: 'stripe' };
   await conRichiesta(4, campi, DUE_ARTICOLI(), async (r) => {
     storico.risposte[4] = [rispostaProva(4, { esito: 'confermato', corriere_stato: 'scaduto' })];
+    // il giro di Stripe non ha ancora rilasciato il blocco (la richiesta si è appena chiusa): per chi guarda è già annullato
     let t = await (await chiedi('/richieste/4')).text();
-    assert.match(t, /<span class="att-rimborso att-rimborso-attesa">Rimborso in corso · € 20,07<\/span>/);
-    assert.match(t, /<div class="pg-riga pg-rimborso-corso">[\s\S]*?<div class="pg-sub">Rimborso in corso<\/div>[\s\S]*?data-importo-app>€ 20,07<\/div>/);
-    // il banco ha accettato e nessun corriere ha preso la consegna: la causa è il corriere
-    assert.match(t, /<div class="pg-sub">Niente da pagare: nessun corriere ha accettato la consegna<\/div>/);
-    // rimborsata, ma il metodo non è una carta (e non c'è la data): "sul tuo metodo di pagamento"
+    assert.match(t, /<span class="att-rimborso">[\s\S]*?Nessun addebito sulla carta<\/span>/);
+    assert.doesNotMatch(t, /Rimborso in corso|att-rimborso-attesa|pg-rimborso-corso/);
+    assert.match(t, /<div class="pg-riga pg-nessuno">[\s\S]*?Il blocco di € 20,07 sulla carta è stato annullato\. Nessuna consegna, niente da pagare a BOREA\./);
+    // la riga di Stripe dice la stessa cosa (blocco rilasciato)
+    stripeRighe.push({ id: 901, cliente_id: 1, tipo: 'richiesta', modo: 'test', stato: 'rilasciato', payment_intent_id: 'pi_prova_4', importo_cent: 2007, incasso_cent: null, request_id: 4, aggiornato_il: fa(60000) });
+    try {
+      t = await (await chiedi('/richieste/4')).text();
+      assert.match(t, /data-pagamento="annullato"/);
+      assert.match(t, /<span class="att-rimborso">[\s\S]*?Nessun addebito sulla carta<\/span>/);
+    } finally {
+      stripeRighe.pop();
+    }
+    // metodo che non è una carta, già "rimborsata" nel vecchio senso: stessa cosa
     Object.assign(r, { pagamento_stato: 'rimborsato', pagamento_metodo: null, rimborsato_il: null });
     storico.risposte[4] = [rispostaProva(4, { esito: 'scaduto' })];
     t = await (await chiedi('/richieste/4')).text();
-    // senza `rimborsato_il` (rimborsi di prima della colonna) la data è quella della scadenza della richiesta
-    assert.match(t, /Rimborsata il 20\/03\/2025 sul tuo metodo di pagamento<\/div>/);
+    assert.match(t, /<div class="pg-riga pg-nessuno">[\s\S]*?<div class="pg-nome">Nessun addebito<\/div>/);
   });
 });
 
-test('richiesta annullata: stessa scheda "Pagamenti" (consegna rimborsata, materiale "Niente da pagare") e righe a prezzo del banco', async () => {
-  const campi = { ...IMPORTI_SALVATI, pagamento_stato: 'rimborsato', pagamento_importo: 20.07, pagamento_metodo: 'simulato', rimborsato_il: null };
+test('richiesta annullata da te in fase 1: UNA riga grigia "Hai annullato la richiesta: il blocco … è stato tolto dalla carta", nessun addebito', async () => {
+  const campi = { ...IMPORTI_SALVATI, pagamento_stato: 'rimborsato', pagamento_importo: 20.07, pagamento_metodo: 'stripe', rimborsato_il: null };
   await conRichiesta(2, campi, DUE_ARTICOLI(), async () => {
     storico.risposte[2] = [rispostaProva(2, { esito: 'scaduto' })];
-    const t = await (await chiedi('/richieste/2')).text();
-    assert.match(t, /Hai annullato questa richiesta\./);
-    assert.match(t, /<dt>Merce · IVA esclusa · prezzi del banco<\/dt><dd>€ 64,50<\/dd>/);
-    assert.doesNotMatch(t, /già comprensivi del servizio|Richiesta del/);
-    assert.match(t, /<div class="card att-card pg-card" data-pagamenti data-stato="chiusa">/);
-    // annullata dal cliente non ha data di rimborso (nessuna scadenza da usare): niente "il …"
-    assert.match(t, /Rimborsata sulla tua carta<\/div>/);
-    assert.match(t, /<div class="pg-sub">Niente da pagare: hai annullato la richiesta<\/div>/);
-    assert.match(t, /<div class="pg-importo" data-importo-banco>€ 0,00<\/div>/);
-    assert.doesNotMatch(t, /data-nota-rinvio/, 'una richiesta annullata non si rinvia');
+    stripeRighe.push({ id: 902, cliente_id: 1, tipo: 'richiesta', modo: 'test', stato: 'rilasciato', payment_intent_id: 'pi_prova_2', importo_cent: 2007, incasso_cent: null, request_id: 2, aggiornato_il: fa(60000) });
+    try {
+      const t = await (await chiedi('/richieste/2')).text();
+      assert.match(t, /Hai annullato questa richiesta\.\s*Nessun addebito sulla carta\./);
+      assert.match(t, /<dt>Merce · IVA esclusa · prezzi del banco<\/dt><dd>€ 64,50<\/dd>/);
+      assert.doesNotMatch(t, /già comprensivi del servizio|Richiesta del|rimborsato/);
+      assert.match(t, /<div class="card att-card pg-card" data-pagamenti data-stato="chiusa" data-pagamento="annullato">/);
+      assert.match(t, /<div class="pg-riga pg-nessuno">[\s\S]*?<div class="pg-nome">Nessun addebito<\/div>\s*<div class="pg-sub">Hai annullato la richiesta: il blocco di € 20,07 è stato tolto dalla carta\.<\/div>[\s\S]*?<div class="pg-importo" data-importo-app>€ 0,00<\/div>/);
+      assert.equal((t.match(/class="pg-riga/g) || []).length, 1, 'una sola riga: niente materiale');
+      assert.doesNotMatch(t, /data-nota-rinvio|pg-materiale|Ricevuta/, 'una richiesta annullata non si rinvia e non ha ricevuta');
+    } finally {
+      stripeRighe.pop();
+    }
   });
 });
 
@@ -1545,8 +1846,8 @@ test('ordine in consegna: righe a prezzo del banco, "Merce · IVA esclusa", sche
     assert.doesNotMatch(t, /Dettagli consegna|att-dettagli|Prezzo definitivo, con eventuale sconto/);
     // Pagamenti: la consegna pagata in app (con la data) e il materiale da pagare a BOREA, in fattura
     assert.match(t, /<h2 class="pg-titolo">Pagamenti<\/h2>/);
-    assert.match(t, /<div class="pg-nome">Consegna in cantiere<\/div>\s*<div class="pg-sub"><span class="pg-spunta">[\s\S]*?<\/span>Pagata in app il 15\/10(?:\/2026)?<\/div>\s*<\/div>\s*<div class="pg-importo" data-importo-app>€ 20,07<\/div>/);
-    assert.match(t, /<div class="pg-nome">Materiale<\/div>\s*<div class="pg-sub">Da pagare a BOREA, in fattura<\/div>\s*<\/div>\s*<div class="pg-importo" data-importo-banco>€ 78,69<\/div>/);
+    assert.match(t, /<div class="pg-nome">Consegna in cantiere<\/div>\s*<div class="pg-sub"><span class="pg-spunta">[\s\S]*?<\/span>Pagata il 15\/10<\/div>\s*<\/div>\s*<div class="pg-importo" data-importo-app>€ 20,07<\/div>/);
+    assert.match(t, /<div class="pg-nome">Materiale<\/div>\s*<div class="pg-sub">Lo paghi a BOREA con la sua fattura<\/div>\s*<\/div>\s*<div class="pg-importo" data-importo-banco>€ 78,69<\/div>/);
     assert.doesNotMatch(t, /98,76/, 'mai la somma dei due in un totale unico');
     // il dettaglio degli importi: <details> chiuso, due riquadri piccoli
     assert.match(t, /<details class="pg-dettaglio">\s*<summary><span class="pg-apri">Vedi il dettaglio degli importi<\/span><span class="pg-chiudi">Nascondi il dettaglio<\/span>/);
@@ -1557,8 +1858,8 @@ test('ordine in consegna: righe a prezzo del banco, "Merce · IVA esclusa", sche
     // il pulsante: stessa azione, nuovo testo
     assert.match(t, /<form method="POST" action="\/ordini\/74\/consegnato-prova">\s*<button class="btn btn-primary btn-blocco" type="submit" title="[^"]*">Ho ricevuto il materiale<\/button>/);
     assert.doesNotMatch(t, />Ordine consegnato</);
-    // l'annullo resta (ordine inviato, non consegnato)
-    assert.match(t, /Annulla ordine/);
+    // niente "Annulla ordine": il banco ha già confermato e la carta è stata incassata, quindi l'ordine non si annulla più
+    assert.doesNotMatch(t, /Annulla ordine|att-annulla|\/elimina/);
   } finally {
     ordiniProva.attivo = false;
   }
@@ -1588,7 +1889,7 @@ test('ordine consegnato: stessa struttura in verde (materiale consegnato, DDT, P
     // il DDT (e solo quello) in una riga "Documenti" in fondo alla scheda del materiale
     assert.match(t, /<a class="att-documenti" href="\/ddt\/73">[\s\S]*?Documenti · DDT n° A\/12<\/span>/);
     // Pagamenti: come nell'ordine in consegna
-    assert.match(t, /Pagata in app il 15\/10(?:\/2026)?<\/div>\s*<\/div>\s*<div class="pg-importo" data-importo-app>€ 20,07<\/div>/);
+    assert.match(t, /Pagata il 15\/10<\/div>\s*<\/div>\s*<div class="pg-importo" data-importo-app>€ 20,07<\/div>/);
     assert.match(t, /data-importo-banco>€ 78,69<\/div>/);
     // tolti: Totale, la sezione dettagli (consegna, destinazione, pagamento, note), la nota sul prezzo, Annulla e il pulsante vecchio
     assert.doesNotMatch(t, /att-totale|<dt>Totale<\/dt>|Dettagli consegna|att-dettagli|att-dett-|Prezzo definitivo|Annulla ordine|att-annulla|\/elimina|consegnato-prova|>Ordine consegnato</);
@@ -1619,45 +1920,106 @@ test('ordine VECCHIO (senza le colonne nuove): gli importi si ricalcolano dai va
   }
 });
 
-test('ordine con il pagamento rimborsato: la consegna è grigia e dice "Rimborsata", senza "pagata"', async () => {
+test('ordine con il pagamento rimborsato (caso raro): UNA riga grigia "Rimborsata il … su Visa •••• 4242" con "Ricevuta" e "Ricevuta rimborso", niente furgone', async () => {
   ordiniProva.attivo = true;
+  stripeRighe.push({
+    id: 903, cliente_id: 1, tipo: 'richiesta', modo: 'test', stato: 'rimborsato', payment_intent_id: 'pi_prova_82', importo_cent: 2007, incasso_cent: 2007, request_id: 82,
+    carta_marca: 'visa', carta_ultime4: '4242', incassato_il: pagatoIlProva, aggiornato_il: new Date(Date.UTC(2026, 9, 16, 9, 0)),
+  });
   try {
     const t = await (await chiedi('/ordini/75')).text();
-    assert.match(t, /<div class="pg-riga pg-consegna pg-rimborsata">/);
-    assert.match(t, /<div class="pg-sub">Rimborsata<\/div>/);
-    assert.doesNotMatch(t, /Pagata in app/);
+    assert.match(t, /data-pagamento="rimborsato"/);
+    assert.match(t, /<div class="pg-riga pg-nessuno">[\s\S]*?<div class="pg-nome">Rimborsata il 16\/10 su <span class="pg-nowrap">Visa •••• 4242<\/span><\/div>/);
+    assert.match(t, /<a class="pg-ricevuta" href="\/ordini\/75\/ricevuta\.pdf"[^>]*>[\s\S]*?<\/svg>Ricevuta<\/a>\s*<a class="pg-ricevuta" href="\/ordini\/75\/ricevuta-rimborso\.pdf"[^>]*>[\s\S]*?<\/svg>Ricevuta rimborso<\/a>/);
     assert.match(t, /data-importo-app>€ 20,07<\/div>/);
+    assert.doesNotMatch(t, /Pagata|pg-consegna|pg-materiale|<details class="pg-dettaglio">/);
+    assert.equal((t.match(/class="pg-riga/g) || []).length, 1);
+    // le due ricevute in PDF: pagamento e rimborso, numerate a parte (R-2026-… per tipo)
+    const pagamento = await chiedi('/ordini/75/ricevuta.pdf');
+    const rimborso = await chiedi('/ordini/75/ricevuta-rimborso.pdf');
+    assert.equal(pagamento.status, 200);
+    assert.equal(rimborso.status, 200);
+    assert.match(rimborso.headers.get('content-disposition'), /filename="ricevuta-rimborso-R-2026-\d{6}\.pdf"/);
   } finally {
+    stripeRighe.pop();
     ordiniProva.attivo = false;
   }
 });
 
-test('ordine consegnato ma rimasto "inviato" (rotta provvisoria): niente "Annulla", e la rotta rifiuta senza toccare niente', async () => {
+test('ordine pagato con Stripe: "Pagata il 15/10 · Visa •••• 4242", link "Ricevuta"; la ricevuta in PDF è solo del proprietario e solo di un incasso vero', async () => {
+  ordiniProva.attivo = true;
+  stripeRighe.push({
+    id: 904, cliente_id: 1, tipo: 'richiesta', modo: 'test', stato: 'incassato', payment_intent_id: 'pi_prova_81', importo_cent: 2007, incasso_cent: 2007, request_id: 81,
+    carta_marca: 'visa', carta_ultime4: '4242', receipt_url: 'https://pay.stripe.com/receipts/prova', incassato_il: pagatoIlProva, aggiornato_il: pagatoIlProva,
+  });
+  try {
+    const t = await (await chiedi('/ordini/74')).text();
+    assert.match(t, /data-pagamento="pagato"/);
+    assert.match(t, /<div class="pg-riga pg-consegna">[\s\S]*?<span class="pg-spunta">[\s\S]*?<\/span>Pagata il 15\/10 · <span class="pg-nowrap">Visa •••• 4242<\/span><\/div>/);
+    // a destra, in colonna: l'importo e il link sottolineato "Ricevuta", che apre il PDF in una nuova scheda
+    assert.match(t, /<div class="pg-destra">\s*<div class="pg-importo" data-importo-app>€ 20,07<\/div>\s*<a class="pg-ricevuta" href="\/ordini\/74\/ricevuta\.pdf" target="_blank" rel="noopener">[\s\S]*?<\/svg>Ricevuta<\/a>/);
+    assert.match(t, /Lo paghi a BOREA con la sua fattura/);
+    assert.doesNotMatch(t, /Ricevuta rimborso|Bloccati sulla carta|pg-bloccata/);
+
+    // la ricevuta in PDF: stesso numero a ogni apertura (una per ordine e tipo), nome del file col numero
+    const r = await chiedi('/ordini/74/ricevuta.pdf');
+    assert.equal(r.status, 200);
+    assert.equal(r.headers.get('content-type'), 'application/pdf');
+    const nome = (r.headers.get('content-disposition').match(/^inline; filename="(ricevuta-R-2026-\d{6}\.pdf)"$/) || [])[1];
+    assert.ok(nome, r.headers.get('content-disposition'));
+    const pdf = Buffer.from(await r.arrayBuffer());
+    assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
+    assert.ok(pdf.length > 1500);
+    const ancora = await chiedi('/ordini/74/ricevuta.pdf');
+    assert.match(ancora.headers.get('content-disposition'), new RegExp(nome.replace(/\./g, '\\.')), 'stesso numero la seconda volta');
+    // un pagamento SIMULATO (sandbox: ordine 72, nessuna riga di Stripe) ha la sua ricevuta, "di prova"
+    const simulata = await chiedi('/ordini/72/ricevuta.pdf');
+    assert.equal(simulata.status, 200);
+    assert.equal(simulata.headers.get('content-type'), 'application/pdf');
+    assert.equal(Buffer.from(await simulata.arrayBuffer()).subarray(0, 5).toString(), '%PDF-');
+    // non c'è una ricevuta di rimborso (non è stato rimborsato), né per un blocco annullato (la richiesta 80 con la carta rilasciata), né per un ordine che non esiste
+    assert.equal((await chiedi('/ordini/74/ricevuta-rimborso.pdf')).status, 404);
+    stripeRighe.push({ id: 905, cliente_id: 1, tipo: 'richiesta', modo: 'test', stato: 'rilasciato', payment_intent_id: 'pi_prova_80', importo_cent: 2007, incasso_cent: null, request_id: 80, aggiornato_il: fa(60000) });
+    const senza = await chiedi('/ordini/72/ricevuta.pdf');
+    stripeRighe.pop();
+    assert.equal(senza.status, 404);
+    assert.match(await senza.text(), /Per questo ordine non c(?:'|&#39;)è una ricevuta di pagamento/);
+    assert.equal((await chiedi('/ordini/99/ricevuta.pdf')).status, 404);
+    // e senza essere collegati si va al login
+    const cookiePrima = cookie;
+    cookie = '';
+    const anonimo = await chiedi('/ordini/74/ricevuta.pdf');
+    assert.ok([302, 401, 403].includes(anonimo.status), 'senza accesso niente PDF: ' + anonimo.status);
+    cookie = cookiePrima;
+  } finally {
+    stripeRighe.pop();
+    ordiniProva.attivo = false;
+  }
+});
+
+test('il cliente non annulla MAI un ordine: nessun pulsante, e la rotta rifiuta (anche per un ordine "inviato" non consegnato) senza toccare niente', async () => {
   ordiniProva.attivo = true;
   try {
-    // la pagina: nessun link, nemmeno per un ordine che a DB è ancora 'inviato'
-    const t = await (await chiedi('/ordini/71')).text();
-    assert.match(t, /<h2 class="att-titolo">Consegnato<\/h2>/);
-    assert.doesNotMatch(t, /Annulla ordine|\/elimina/);
-
+    const MESSAGGIO = /Il banco ha già confermato: l(?:'|&#39;)ordine non si può più annullare\. Per problemi contatta l(?:'|&#39;)assistenza\./;
+    // la pagina: nessun link, né per un ordine consegnato rimasto 'inviato' (71), né per uno 'inviato' non consegnato (72), né per uno in consegna (74)
+    for (const id of [71, 72, 74]) {
+      const t = await (await chiedi('/ordini/' + id)).text();
+      assert.doesNotMatch(t, /Annulla ordine|att-annulla|\/elimina/, 'ordine ' + id);
+    }
     // chiamando l'URL a mano: errore chiaro, nessuna scrittura
-    const prima = registro.length;
-    const r = await chiedi('/ordini/71/elimina', { method: 'POST' });
-    assert.equal(r.status, 400);
-    const e = await r.text();
-    assert.match(e, /Ordine già consegnato/);
-    assert.match(e, /già stato consegnato e non si può più annullare/);
-    assert.match(e, /href="\/ordini\/71"/);
-    const dopo = registro.slice(prima);
-    assert.deepEqual(dopo.filter((q) => /^(DELETE|UPDATE|INSERT)/.test(q) && !/session|notifications/.test(q)), [], 'nessuna modifica');
-
-    // anche dalla richiesta dell'ordine (/richieste/:id/elimina) vale la stessa regola: stessa funzione
-    // un ordine consegnato di un altro cliente o inesistente resta 404 come prima
+    for (const id of [71, 72]) {
+      const prima = registro.length;
+      const r = await chiedi('/ordini/' + id + '/elimina', { method: 'POST' });
+      assert.equal(r.status, 400, 'ordine ' + id);
+      const e = await r.text();
+      assert.match(e, /Annullamento non possibile/);
+      assert.match(e, MESSAGGIO);
+      assert.match(e, new RegExp('href="/ordini/' + id + '"'));
+      const dopo = registro.slice(prima);
+      assert.deepEqual(dopo.filter((q) => /^(DELETE|UPDATE|INSERT)/.test(q) && !/session|notifications/.test(q)), [], 'nessuna modifica per l\'ordine ' + id);
+    }
+    // un ordine di un altro cliente o inesistente resta 404 come prima
     assert.equal((await chiedi('/ordini/99/elimina', { method: 'POST' })).status, 404);
-
-    // controllo: un ordine 'inviato' non consegnato resta annullabile (link presente)
-    const t72 = await (await chiedi('/ordini/72')).text();
-    assert.match(t72, /<button class="att-annulla" type="submit">Annulla ordine<\/button>/);
   } finally {
     ordiniProva.attivo = false;
   }
@@ -1674,6 +2036,60 @@ test('JSON malformato: 400 pulito (non 500); corpo enorme: 413', async () => {
 test('CSRF: un POST da un altro sito è respinto', async () => {
   const r = await chiedi('/logout', { method: 'POST', headers: { origin: 'http://sito-cattivo.example' } });
   assert.equal(r.status, 403);
+});
+
+test('sicurezza: CSP "leggera" (niente cornici, niente <base>, moduli solo qui), Permissions-Policy, niente HSTS su HTTP semplice', async () => {
+  const r = await chiedi('/login');
+  const csp = r.headers.get('content-security-policy');
+  assert.match(csp, /frame-ancestors 'self'/);
+  assert.match(csp, /base-uri 'self'/);
+  assert.match(csp, /object-src 'none'/);
+  assert.match(csp, /form-action 'self'/);
+  assert.doesNotMatch(csp, /script-src/, 'le pagine usano script in linea: niente script-src');
+  assert.match(r.headers.get('permissions-policy'), /camera=\(\)/);
+  assert.equal(r.headers.get('strict-transport-security'), null, 'HSTS solo quando la richiesta è HTTPS');
+  // Dietro il proxy (trust proxy 1) X-Forwarded-Proto dice che la richiesta è arrivata in HTTPS: lì l'intestazione c'è.
+  const https = await chiedi('/login', { headers: { 'x-forwarded-proto': 'https' } });
+  assert.match(https.headers.get('strict-transport-security'), /^max-age=\d+$/);
+});
+
+test('open redirect: "ritorno" vale solo se è un percorso di questo sito', async () => {
+  for (const cattivo of ['https://sito-cattivo.example/x', '//sito-cattivo.example', '/\\sito-cattivo.example', 'javascript:alert(1)']) {
+    const r = await chiedi('/carrello', form({ quantita_1: '1', ritorno: cattivo }));
+    assert.equal(r.status, 302);
+    assert.equal(r.headers.get('location'), '/carrello', cattivo);
+  }
+  const ok = await chiedi('/carrello', form({ quantita_1: '1', ritorno: '/categoria/idraulica?p=2' }));
+  assert.equal(ok.headers.get('location'), '/categoria/idraulica?p=2');
+  await chiedi('/carrello/svuota', form({}));
+});
+
+test('caratteri NUL: nella query sono tolti, nel percorso 400; nessun 500', async () => {
+  assert.equal((await chiedi('/cerca?q=val%00vola')).status, 200);
+  assert.equal((await chiedi('/api/cerca?q=ab%00cd')).status, 200);
+  assert.equal((await chiedi('/categoria/idraulica%00x')).status, 400);
+  assert.equal((await chiedi('/api/carrello/aggiungi', json({ id: 1, qty: 1, nota: 'a\u0000b' }))).status, 200);
+});
+
+test('pagine pubbliche per Google Play: informativa sulla privacy e come eliminare l’account, anche senza accesso', async () => {
+  const salvato = cookie;
+  cookie = '';
+  try {
+    const p = await chiedi('/privacy');
+    assert.equal(p.status, 200);
+    const t = await p.text();
+    assert.match(t, /Informativa sulla privacy/);
+    assert.match(t, /Stripe/);
+    assert.match(t, /non raccoglie la posizione/);
+    const e = await chiedi('/elimina-account');
+    assert.equal(e.status, 200);
+    const te = await e.text();
+    assert.match(te, /Eliminazione dell’account/);
+    assert.match(te, /Elimina account/);
+    assert.match(await (await chiedi('/login')).text(), /href="\/privacy"/);
+  } finally {
+    cookie = salvato;
+  }
 });
 
 test('ruolo sbagliato: la pagina del banco a un cliente -> 403', async () => {
@@ -1911,7 +2327,7 @@ test('home del banco: bacheca a tre colonne, senza interruttore né riquadri con
     // sotto, affiancati: "Ispeziona" (un link al dettaglio, con l'occhio) e "Non disponibile" (rifiuta subito)
     assert.match(t, /<div class="scheda-azioni-secondarie">\s*<a class="btn-banco btn-banco-secondario btn-banco-piccolo" href="\/distributore\/richieste\/11"><svg[\s\S]*?<\/svg>Ispeziona<\/a>/);
     assert.match(t, /action="\/distributore\/richieste\/11\/rispondi">\s*<input type="hidden" name="azione" value="rifiuta">\s*<input type="hidden" name="torna" value="home">\s*<button class="btn-banco btn-banco-secondario btn-banco-piccolo" type="submit">Non disponibile</);
-    assert.equal(t.match(/>Ispeziona<\/a>/g).length, 4, 'due in "Da confermare", uno in "Attesa corriere" e uno in "Da preparare" (l\'ordine con la richiesta)');
+    assert.equal(t.match(/>Ispeziona<\/a>/g).length, 5, 'due in "Da confermare", uno in "Attesa corriere" e due in "Da preparare" (uno per ordine)');
     // i nomi vengono dal DB: mai HTML grezzo
     assert.ok(t.includes('Rossi &lt;b&gt;Impianti&lt;/b&gt; S.r.l.'));
     assert.doesNotMatch(t, /<b>Impianti<\/b>/);
@@ -1921,8 +2337,8 @@ test('home del banco: bacheca a tre colonne, senza interruttore né riquadri con
     assert.match(t, /<h3 class="scheda-nome">Verdi S\.n\.c\.<\/h3>/);
     assert.match(t, /<a class="btn-ispeziona" href="\/distributore\/richieste\/21" aria-label="Ispeziona la richiesta di Verdi S\.n\.c\."><svg[\s\S]*?<\/svg>Ispeziona<\/a>/);
     assert.doesNotMatch(t, /<a href="\/distributore\/richieste\/21">/);
-    // "Da preparare": Ispeziona solo sull'ordine che ha una richiesta da aprire
-    assert.equal(t.slice(t.indexOf('id="col-preparare"')).match(/>Ispeziona<\/a>/g).length, 1);
+    // "Da preparare": Ispeziona su ogni ordine, anche senza richiesta (porta alla pagina dell'ordine)
+    assert.equal(t.slice(t.indexOf('id="col-preparare"')).match(/>Ispeziona<\/a>/g).length, 2);
     assert.match(t, /Confermato da te\. Non preparare ancora: aspetta che un corriere prenda la consegna\./);
     assert.match(t, /data-corriere data-trascorsi="190"/);
 
@@ -1932,11 +2348,11 @@ test('home del banco: bacheca a tre colonne, senza interruttore né riquadri con
     assert.match(t, /pillola-arrivo vicino/); // 8 minuti: sotto i 15
     assert.match(t, /Ordine #1281\s*<\/div>/); // senza corriere nessun "ritira", nessuna pillola
     assert.equal(t.match(/data-arrivo /g).length, 1);
-    // ... con "Ispeziona" (la richiesta dell'ordine, col timer del corriere) e "Preparato" (toglie l'ordine dalla colonna)
+    // ... con "Ispeziona" (la pagina dell'ordine: spunta del materiale e bolla, senza prenderlo in carico) e "Preparato" (toglie l'ordine dalla colonna: "In consegna")
     assert.doesNotMatch(t, /btn-banco-prepara"[^>]*href|>\s*<svg[^>]*>[\s\S]*?<\/svg>Prepara\s*</);
-    assert.match(t, /<a class="btn-banco btn-banco-secondario btn-banco-piccolo" href="\/distributore\/richieste\/177"><svg[\s\S]*?<\/svg>Ispeziona<\/a>\s*<form method="POST" action="\/distributore\/ordini\/1280\/preparazione">\s*<input type="hidden" name="torna" value="home">\s*<button class="btn-banco btn-banco-prepara btn-banco-piccolo" type="submit"><svg[\s\S]*?<\/svg>Preparato<\/button>/);
-    // l'ordine 1281 non ha una richiesta: niente Ispeziona, solo Preparato
-    assert.match(t, /<div class="scheda-azioni-ordine">\s*<form method="POST" action="\/distributore\/ordini\/1281\/preparazione">/);
+    assert.match(t, /<a class="btn-banco btn-banco-secondario btn-banco-piccolo" href="\/distributore\/ordini\/1280"><svg[\s\S]*?<\/svg>Ispeziona<\/a>\s*<form method="POST" action="\/distributore\/ordini\/1280\/preparazione">\s*<input type="hidden" name="torna" value="home">\s*<button class="btn-banco btn-banco-prepara btn-banco-piccolo" type="submit"><svg[\s\S]*?<\/svg>Preparato<\/button>/);
+    // anche l'ordine 1281, che non ha una richiesta, ha il suo Ispeziona (l'ordine c'è sempre)
+    assert.match(t, /<div class="scheda-azioni-ordine">\s*<a class="btn-banco btn-banco-secondario btn-banco-piccolo" href="\/distributore\/ordini\/1281"><svg[\s\S]*?<\/svg>Ispeziona<\/a>\s*<form method="POST" action="\/distributore\/ordini\/1281\/preparazione">/);
     assert.equal(t.match(/>Preparato<\/button>/g).length, 2);
 
     // la pausa della ricezione non esiste più
@@ -2112,6 +2528,9 @@ test('banco: pagina del cliente a due colonne (da verificare, approvato, rifiuta
     assert.match(t, /<button class="cli-rifiuta" type="submit" name="azione" value="rifiuta"\s+onclick="return confirm\([^"]*"[^>]*>\s*<svg[\s\S]*?<\/svg>Non lo riconosco: rifiuta/);
     assert.equal((t.match(/onclick="return confirm/g) || []).length, 1, 'la conferma è solo sul rifiuto');
     assert.doesNotMatch(t, /\/sconti|Sconti concordati/);
+    // il layout nuovo è solo dell'approvato: gli altri stati restano com'erano (decisione a destra, nessuna scheda materiale)
+    assert.match(t, /<div class="cli-layout cli-layout-decisione">/);
+    assert.doesNotMatch(t, /cli-layout-approvato|cli-indietro-tondo|mc-card|Materiale ordinato/);
 
     // ----- approvato: poche informazioni, le voci vuote non si disegnano -----
     r = await chiedi('/distributore/clienti/32');
@@ -2123,14 +2542,20 @@ test('banco: pagina del cliente a due colonne (da verificare, approvato, rifiuta
     assert.doesNotMatch(t, /referente|Codice fiscale|Codice SDI|Consegna abituale|Telefono|href="tel:/);
     assert.match(t, /href="mailto:rossi@example\.com"/);
     assert.match(t, /Sede legale<\/dt>\s*<dd class="cli-dato-val">Via Roma 1<\/dd>\s*<dd class="cli-dato-det">16121 GENOVA \(GE\)<\/dd>/);
-    // a destra codice, note e sconti, con gli stessi campi di prima
+    // approvato: due colonne (dati e "Cliente approvato" a sinistra, materiale a destra), freccia tonda nella testata
+    assert.match(t, /<div class="cli-layout cli-layout-approvato">/);
+    assert.match(t, /<div class="cli-intesta cli-intesta-app">\s*<a class="cli-indietro-tondo" href="\/distributore\/clienti" aria-label="Torna ai clienti">/);
+    assert.doesNotMatch(t, /<a class="cli-indietro"/, 'la riga "← Clienti" c\'è solo per gli altri stati');
     assert.match(t, /Codice cliente<\/dt>\s*<dd class="cli-dato-val cli-cifre">DEMO-ROSSI</);
     assert.match(t, /Note interne<\/dt>\s*<dd class="cli-dato-val cli-dato-note">Paga a 30 giorni</);
-    assert.match(t, /<form method="POST" action="\/distributore\/clienti\/32\/sconti">/);
-    assert.match(t, /name="sconto1_macro_idraulica"/);
-    assert.match(t, /name="sconto5_macro_scarichi"/);
-    assert.match(t, /Salva gli sconti/);
+    const dove = (testo) => t.indexOf(testo);
+    assert.ok(dove('id="cli-fatturazione"') < dove('id="cli-titolo-approvato"') && dove('id="cli-titolo-approvato"') < dove('id="materiale"'), 'dati, "Cliente approvato", poi il materiale');
+    assert.match(t, /<div class="cli-colonna cli-colonna-destra cli-colonna-materiale">/);
+    // gli sconti non stanno più nella pagina (la rotta POST resta, senza modulo)
+    assert.doesNotMatch(t, /\/sconti|Sconti concordati|Salva gli sconti|name="sconto\d_|cli-elenco-sconti|barra-azione/);
     assert.doesNotMatch(t, /È un tuo cliente\?|cli-approva|\/decidi/);
+    // la scheda "Materiale ordinato" c'è (qui il DB finto dà due ordini senza prezzi: il contenuto è provato nel test dedicato, lo stato vuoto in materiale.test.js)
+    assert.match(t, /<h2 class="mc-titolo" id="mc-titolo">Materiale ordinato<\/h2>/);
 
     // ----- rifiutato: si può ripensarci con lo stesso POST -----
     r = await chiedi('/distributore/clienti/34');
@@ -2139,6 +2564,9 @@ test('banco: pagina del cliente a due colonne (da verificare, approvato, rifiuta
     assert.match(t, /<span class="avatar avatar-56 avatar-grigio"[^>]*>NI</);
     assert.match(t, /cli-etichetta cli-etichetta-rosso">Rifiutato</);
     assert.match(t, /Hai rifiutato questa anagrafica: Mai visto\./);
+    assert.match(t, /<div class="cli-layout cli-layout-decisione">/);
+    assert.match(t, /<a class="cli-indietro" href="\/distributore\/clienti">/);
+    assert.doesNotMatch(t, /cli-layout-approvato|mc-card|Materiale ordinato/);
     assert.match(t, /action="\/distributore\/clienti\/34\/decidi">\s*<input type="hidden" name="codice_cliente" value="">\s*<button class="cli-approva" type="submit" name="azione" value="approva">/);
 
     // ----- un cliente che non è del banco: 404 -----
@@ -2193,8 +2621,7 @@ test('banco: Storico ordini con schede, periodo, righe raggruppate per giorno e 
     assert.deepEqual(schede, [
       ['Tutti', 4, true, '', '/distributore/storico?stato=tutti&amp;periodo=7'],
       ['Da preparare', 1, false, 'da_preparare', '/distributore/storico?stato=da_preparare&amp;periodo=7'],
-      ['In preparazione', 1, false, 'in_preparazione', '/distributore/storico?stato=in_preparazione&amp;periodo=7'],
-      ['Partiti', 1, false, 'partito', '/distributore/storico?stato=partiti&amp;periodo=7'],
+      ['In consegna', 2, false, 'in_consegna', '/distributore/storico?stato=in_consegna&amp;periodo=7'],
       ['Consegnati', 1, false, 'consegnato', '/distributore/storico?stato=consegnati&amp;periodo=7'],
     ]);
 
@@ -2204,10 +2631,21 @@ test('banco: Storico ordini con schede, periodo, righe raggruppate per giorno e 
     assert.deepEqual(giorni, [['Oggi', '2 ordini'], ['12 marzo 2025', '2 ordini']]);
     assert.doesNotMatch(t, /Flusso del banco/);
 
-    // ogni riga è un solo link al dettaglio dell'ordine; ordine decrescente
-    const righe = t.split('<a class="sto-riga"').slice(1).map((x) => x.slice(0, x.indexOf('</a>')));
+    // ordine decrescente. Solo la riga "Da preparare" si apre (un link alla pagina dell'ordine, con lo Storico com'è adesso in `torna` perché la freccia riporti
+    // qui e non alla home); le altre (In consegna, Consegnato) non hanno più una pagina: sono righe e basta, senza link né freccia.
+    const trovate = [...t.matchAll(/<(a|div) class="sto-riga([^"]*)"([^>]*)>([\s\S]*?)<\/\1>(?=\s*(?:<(?:a|div) class="sto-riga|<div class="sto-giorno"|<\/div>))/g)];
+    const righe = trovate.map((m) => m[4]);
     assert.equal(righe.length, 4);
-    assert.deepEqual(righe.map((x) => x.match(/^ href="([^"]*)"/)[1]), ['/distributore/ordini/91', '/distributore/ordini/90', '/distributore/ordini/89', '/distributore/ordini/88']);
+    const tornaStorico = '?torna=' + encodeURIComponent('/distributore/storico?stato=tutti&periodo=7');
+    assert.deepEqual(trovate.map((m) => [m[1], m[2].trim(), m[3].trim()]), [
+      ['a', '', 'href="/distributore/ordini/91' + tornaStorico + '"'],
+      ['div', 'sto-riga-fissa', ''],
+      ['div', 'sto-riga-fissa', ''],
+      ['div', 'sto-riga-fissa', ''],
+    ]);
+    assert.equal(t.match(/\/distributore\/ordini\//g).length, 1, 'un solo link alla pagina dell\'ordine, quello dell\'ordine da preparare');
+    assert.match(righe[0], /<span class="sto-c-freccia" aria-hidden="true"><svg/);
+    for (const fissa of righe.slice(1)) assert.match(fissa, /<span class="sto-c-freccia" aria-hidden="true"><\/span>/);
     const [r91, r90, r89, r88] = righe;
     // #91: da preparare, cliente (con il nome escapato) e città, un solo articolo, totale con IVA, nessun DDT
     assert.match(r91, /sto-c-ordine">#91</);
@@ -2218,15 +2656,17 @@ test('banco: Storico ordini con schede, periodo, righe raggruppate per giorno e 
     assert.match(r91, /sto-c-totale">€ 122,53</);
     assert.match(r91, /sto-c-ddt sto-senza">\s*<span class="sto-nessuno">—<\/span>/);
     assert.match(r91, /<span class="sto-pillola sto-st-da_preparare"><span class="sto-punto" aria-hidden="true"><\/span>Da preparare<\/span>/);
-    // #90: in preparazione, "+ 1 articolo", senza città; il totale vecchio (totale_ivato 0) è la merce
-    assert.match(r90, /<span class="sto-pillola sto-st-in_preparazione">[\s\S]*?In preparazione<\/span>/);
+    // #90: in consegna (Preparato), "+ 1 articolo", senza città; il totale vecchio (totale_ivato 0) è la merce
+    assert.match(r90, /<span class="sto-pillola sto-st-in_consegna">[\s\S]*?In consegna<\/span>/);
     assert.match(r90, /sto-mat-nome">2× Bocchettone A 90°<\/span><span class="sto-mat-altri">\+ 1 articolo<\/span>/);
     assert.doesNotMatch(r90, /sto-cliente-citta/);
     assert.match(r90, /sto-c-totale">€ 54,00</);
-    // #89: partito, "+ 2 articoli", DDT, ora italiana (10:40 UTC = 11:40 a Roma d'inverno)
-    assert.match(r89, /sto-st-partito">[\s\S]*?Partito<\/span>/);
+    // #89: bolla emessa, anche lui "In consegna" (non c'è più "Partito"), "+ 2 articoli", DDT, ora italiana (10:40 UTC = 11:40 a Roma d'inverno)
+    assert.match(r89, /sto-st-in_consegna">[\s\S]*?In consegna<\/span>/);
+    assert.doesNotMatch(t, /In preparazione|Partito|Partiti|sto-st-partito|sto-st-in_preparazione/);
     assert.match(r89, /sto-mat-altri">\+ 2 articoli</);
-    assert.match(r89, /sto-c-ddt">\s*<span class="sto-ddt-sigla">DDT <\/span>A\/89\s*</);
+    // il numero di DDT è un link alla bolla (senza una pagina dell'ordine è l'unico modo di rivederla da qui)
+    assert.match(r89, /sto-c-ddt">\s*<a class="sto-ddt-link" href="\/ddt\/89" aria-label="Apri la bolla n\. A\/89"><span class="sto-ddt-sigla">DDT <\/span>A\/89<\/a>\s*</);
     assert.match(r89, /sto-c-ora">11:40</);
     // #88: consegnato_il vale più dello stato: resta 'inviato' ma è Consegnato; senza righe "—"
     assert.match(r88, /sto-st-consegnato">[\s\S]*?Consegnato<\/span>/);
@@ -2279,12 +2719,15 @@ test('banco: Storico ordini, filtri nell\'URL (stato, periodo, ricerca per nome,
     assert.match(v.testo, /class="attivo" aria-current="true">30 giorni</);
     for (const [stato, condizione] of [
       ['da_preparare', /\(o\.consegnato_il IS NULL AND o\.stato = 'inviato'\)/],
-      ['in_preparazione', /\(o\.consegnato_il IS NULL AND o\.stato = 'in_evasione'\)/],
-      ['partiti', /\(o\.consegnato_il IS NULL AND o\.stato = 'evaso'\)/],
+      ['in_consegna', /\(o\.consegnato_il IS NULL AND o\.stato IN \('in_evasione', 'evaso'\)\)/],
+      // i segnalibri vecchi (In preparazione e Partiti) portano a "In consegna", che li ha assorbiti
+      ['in_preparazione', /\(o\.consegnato_il IS NULL AND o\.stato IN \('in_evasione', 'evaso'\)\)/],
+      ['partiti', /\(o\.consegnato_il IS NULL AND o\.stato IN \('in_evasione', 'evaso'\)\)/],
     ]) {
       v = await vista('/distributore/storico?stato=' + stato);
       assert.match(dopoWhere(v.lista), condizione, stato);
     }
+    assert.match((await vista('/distributore/storico?stato=partiti')).testo, /<a class="sto-scheda attiva" href="[^"]*stato=in_consegna[^"]*"/);
 
     // valori sconosciuti: tornano ai predefiniti (tutti, 7 giorni) senza errori
     v = await vista('/distributore/storico?stato=boh&periodo=3&pagina=zzz');
@@ -2322,9 +2765,9 @@ test('banco: Storico ordini, filtri nell\'URL (stato, periodo, ricerca per nome,
     v = await vista('/distributore/storico?q=' + '9'.repeat(20));
     assert.doesNotMatch(dopoWhere(v.conteggi), /o\.id = \?/);
     // con la ricerca i link di stato e periodo la mantengono
-    v = await vista('/distributore/storico?q=rossi&stato=partiti&periodo=30');
+    v = await vista('/distributore/storico?q=rossi&stato=in_consegna&periodo=30');
     assert.match(v.testo, /href="\/distributore\/storico\?stato=consegnati&amp;periodo=30&amp;q=rossi"/);
-    assert.match(v.testo, /href="\/distributore\/storico\?stato=partiti&amp;periodo=oggi&amp;q=rossi"/);
+    assert.match(v.testo, /href="\/distributore\/storico\?stato=in_consegna&amp;periodo=oggi&amp;q=rossi"/);
   } finally {
     banco.attivo = false;
     await chiedi('/logout', { method: 'POST' });
@@ -2340,10 +2783,10 @@ test('banco: Storico ordini, paginazione da 50 e stati vuoti', async () => {
     assert.equal((await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }))).status, 302);
 
     // 120 ordini = 3 pagine da 50, con i filtri nei link; la pagina 2 parte dal 51° (OFFSET 50)
-    storicoBanco.conteggi = { tutti: 120, da_preparare: 20, in_preparazione: 30, partiti: 40, consegnati: 30 };
+    storicoBanco.conteggi = { tutti: 120, da_preparare: 20, in_consegna: 40, consegnati: 60 };
     storicoBanco.viste.length = 0;
-    let t = await (await chiedi('/distributore/storico?stato=partiti&periodo=30&q=rossi&pagina=2')).text();
-    // "partiti" = 40 ordini: una sola pagina, quindi la pagina 2 chiesta a mano (OFFSET 50) si porta sull'ultima (OFFSET 0)
+    let t = await (await chiedi('/distributore/storico?stato=in_consegna&periodo=30&q=rossi&pagina=2')).text();
+    // "in consegna" = 40 ordini: una sola pagina, quindi la pagina 2 chiesta a mano (OFFSET 50) si porta sull'ultima (OFFSET 0)
     assert.deepEqual(storicoBanco.viste.filter((v) => v.tipo === 'lista').map((v) => v.p.slice(-1)[0]), [50, 0]);
     assert.doesNotMatch(t, /class="paginazione"/);
 
@@ -2360,7 +2803,7 @@ test('banco: Storico ordini, paginazione da 50 e stati vuoti', async () => {
     assert.deepEqual(storicoBanco.viste.filter((v) => v.tipo === 'lista').map((v) => v.p.slice(-1)[0]), [98 * 50, 100]);
 
     // nessun risultato con i filtri (ma il banco ha ordini): messaggio e link per mostrare tutto, schede ancora cliccabili
-    storicoBanco.conteggi = { tutti: 0, da_preparare: 0, in_preparazione: 0, partiti: 0, consegnati: 0 };
+    storicoBanco.conteggi = { tutti: 0, da_preparare: 0, in_consegna: 0, consegnati: 0 };
     storicoBanco.righe = [];
     storicoBanco.assoluto = false;
     t = await (await chiedi('/distributore/storico?periodo=oggi&q=zzz')).text();
@@ -2561,7 +3004,8 @@ test('banco: richiesta dopo la risposta (attesa corriere, confermata, nessun cor
     let t = await (await chiedi('/distributore/richieste/177')).text();
     assert.deepEqual(stati(t), ['confermata', 'Confermata']);
     assert.match(t, /ric-esito-verde[\s\S]*?Consegna presa da Marco: <strong>25 minuti<\/strong> in totale/);
-    assert.match(t, /<a class="ric-btn ric-btn-ordine" href="\/distributore\/ordini\/5">Gestisci l'ordine #5<\/a>/);
+    // l'ordine è già "In consegna" (Preparato): la sua pagina non c'è più, quindi niente "Gestisci l'ordine"
+    assert.doesNotMatch(t, /Gestisci l'ordine|\/distributore\/ordini\//);
     assert.doesNotMatch(t, /Cosa succede dopo la conferma/); // a ordine fatto i passi non servono più
 
     // l'ordine l'ha preso un altro banco: chiusa
@@ -2666,7 +3110,7 @@ test('banco: richiesta in attesa del corriere, con ora di conferma, Avanzamento 
     });
     t = await (await chiedi('/distributore/richieste/177')).text();
     assert.match(t, /<p class="ric-attesa-parziale">Hai confermato <strong>solo una parte<\/strong> del materiale\.<\/p>/);
-    assert.match(t, /<div class="ric-attesa-ordine"><span>Ordine collegato<\/span><a href="\/distributore\/ordini\/5">Ordine #5 /);
+    assert.match(t, /<div class="ric-attesa-ordine"><span>Ordine collegato<\/span><a href="\/distributore\/ordini\/5\?torna=%2Fdistributore%2Frichieste%2F177">Ordine #5 /);
     assert.ok(t.indexOf('ric-attesa-nota') < t.indexOf('ric-attesa-parziale') && t.indexOf('ric-attesa-parziale') < t.indexOf('ric-attesa-ordine'), 'ordine delle righe');
 
     // "Da confermare" non cambia: niente "confermata alle", pallino fermo, "Materiale richiesto" e i passi di prima
@@ -2726,6 +3170,368 @@ test('banco: "Preparato" toglie l\'ordine dalla colonna (in preparazione, torna 
   }
 });
 
+test('banco: la freccia di ordine e richiesta riporta alla pagina da cui si arriva (Storico, scheda cliente, richiesta), mai fuori dal sito', async () => {
+  cookie = '';
+  banco.attivo = true;
+  richiestaProva.attivo = true;
+  // gli href escono con le `&` come `&amp;`
+  // la pagina dell'ordine e quella della richiesta hanno la stessa testata: la freccia è `ric-indietro` (e l'intestazione del banco non ne ha una sua)
+  const freccia = (t) => ((t.match(/<a class="ric-indietro" href="([^"]*)"/) || [])[1] || '').replace(/&amp;/g, '&');
+  const frecciaRichiesta = freccia;
+  const storicoCon = '/distributore/storico?stato=consegnati&periodo=30&q=rossi&pagina=2';
+  const clienteCon = '/distributore/clienti/32?mese=2026-10&vista=ordine#materiale';
+  try {
+    assert.equal((await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }))).status, 302);
+
+    // ----- pagina dell'ordine (1295: da preparare): senza `torna` la home; con `torna` la pagina di partenza, filtri e ancora compresi -----
+    preparaRichiesta({ secondi: 0, stato: 'ordinata', esito: 'confermato', corriere: 'preso', trascorsi: 300, ordine: ordine1295 });
+    let r = await chiedi('/distributore/ordini/1295');
+    assert.equal(r.status, 200);
+    assert.equal(freccia(await r.text()), '/distributore');
+    for (const da of [storicoCon, clienteCon, '/distributore/clienti', '/distributore/richieste/177']) {
+      r = await chiedi('/distributore/ordini/1295?torna=' + encodeURIComponent(da));
+      assert.equal(r.status, 200, da);
+      assert.equal(freccia(await r.text()), da, da);
+    }
+    // un `torna` che non è una pagina del banco (indirizzo esterno, altro percorso, pagina con effetti) non porta fuori: home
+    for (const no of ['https://altro.it/storico', '//altro.it', '/carrello', '/distributore/ordini/1285/elimina', '/distributore/clienti/32/materiale.csv', 'javascript:alert(1)']) {
+      r = await chiedi('/distributore/ordini/1295?torna=' + encodeURIComponent(no));
+      assert.equal(freccia(await r.text()), '/distributore', no);
+    }
+    // e non si inietta nel markup: il valore esce con le virgolette escapate
+    r = await chiedi('/distributore/ordini/1295?torna=' + encodeURIComponent('/distributore/storico?q="><script>x</script>'));
+    const t = await r.text();
+    assert.doesNotMatch(t, /<script>x<\/script>/);
+
+    // ----- pagina della richiesta (177, con l'ordine collegato): la freccia torna da dove si è arrivati; il link all'ordine passa da qui -----
+    preparaRichiesta({ secondi: 0, stato: 'ordinata', esito: 'confermato', corriere: 'preso', ordine: { id: 5, distributor_id: 2, cliente_id: 1, stato: 'inviato', creato_il: fa(60000), consegnato_il: null }, extra: { corriere_nome: 'Marco', corriere_minuti: 25 } });
+    r = await chiedi('/distributore/richieste/177');
+    let pagina = await r.text();
+    assert.equal(frecciaRichiesta(pagina), '/distributore');
+    assert.doesNotMatch(pagina, /banco-indietro/, 'una sola freccia: quella della richiesta');
+    // senza `torna`, dall'ordine collegato si torna alla richiesta
+    assert.match(pagina, /<a class="ric-btn ric-btn-neutro ric-btn-bolla" href="\/distributore\/ordini\/5\?torna=%2Fdistributore%2Frichieste%2F177"><svg[\s\S]*?<\/svg>Apri l'ordine e la bolla<\/a>/);
+
+    r = await chiedi('/distributore/richieste/177?torna=' + encodeURIComponent(storicoCon));
+    pagina = await r.text();
+    assert.equal(frecciaRichiesta(pagina), storicoCon);
+    assert.doesNotMatch(pagina, /banco-indietro/);
+    // dall'ordine collegato la freccia riporta alla richiesta, e questa allo Storico: la catena si ricostruisce passo passo
+    const linkOrdine = pagina.match(/<a class="ric-btn ric-btn-neutro ric-btn-bolla" href="([^"]*)">/)[1].replace(/&amp;/g, '&');
+    assert.equal(linkOrdine, '/distributore/ordini/5?torna=' + encodeURIComponent('/distributore/richieste/177?torna=' + encodeURIComponent(storicoCon)));
+    const dallOrdine = new URL(linkOrdine, 'http://x').searchParams.get('torna');
+    assert.equal(dallOrdine, '/distributore/richieste/177?torna=' + encodeURIComponent(storicoCon));
+    assert.equal(new URL(dallOrdine, 'http://x').searchParams.get('torna'), storicoCon);
+
+    // un `torna` che non è una pagina del banco: home
+    r = await chiedi('/distributore/richieste/177?torna=' + encodeURIComponent('https://altro.it'));
+    assert.equal(frecciaRichiesta(await r.text()), '/distributore');
+  } finally {
+    richiestaProva.attivo = false;
+    banco.attivo = false;
+    await chiedi('/logout', { method: 'POST' });
+  }
+});
+
+test('banco: pagina dell\'ordine a due colonne: materiale a prezzo del banco con la spunta, consegna, cliente, avanzamento, ritiro e bolla', async () => {
+  cookie = '';
+  banco.attivo = true;
+  richiestaProva.attivo = true;
+  const ripristina = { ...ordine1295 };
+  const spunte = righeOrdineBanco[1295].map((r) => r.preso_il);
+  const imposta = (extra = {}) => { for (const k of Object.keys(ordine1295)) delete ordine1295[k]; Object.assign(ordine1295, ripristina, extra); };
+  const pagina = async () => { const r = await chiedi('/distributore/ordini/1295'); assert.equal(r.status, 200); return r.text(); };
+  const fasi = (t) => [...t.matchAll(/<li class="ric-passo ric-passo-(\w+) ric-fase-(\w+)"[^>]*>[\s\S]*?<strong>([^<]*)<\/strong>\s*<span>([^<]*)<\/span>/g)].map((m) => [m[3], m[2], m[1], m[4]]);
+  try {
+    assert.equal((await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }))).status, 302);
+    // istanti del corriere freschi (il disegno li vuole a 22 minuti dal ritiro: la prova gira qualche secondo dopo il caricamento del file)
+    imposta({ corriere_arrivo_il: new Date(Date.now() + 22 * 60000), corriere_risposto_il: new Date(Date.now() - 4 * 60000) });
+    preparaRichiesta({ secondi: 0, stato: 'ordinata', esito: 'confermato', corriere: 'preso', trascorsi: 900, ordine: ordine1295 });
+    const rispostoIl = richiestaProva.risposta.risposto_il; // TIMESTAMP UTC senza fuso, letto come ora locale
+    const confermatoAlle = oraRoma(new Date(Date.UTC(rispostoIl.getFullYear(), rispostoIl.getMonth(), rispostoIl.getDate(), rispostoIl.getHours(), rispostoIl.getMinutes(), rispostoIl.getSeconds())));
+    scrittureOrdini.length = 0;
+    let t = await pagina();
+    assert.equal(scrittureOrdini.length, 0, 'aprire la pagina non scrive niente: l\'ordine resta "Da preparare" finché non si preme Preparato o si emette la bolla');
+
+    // ----- testata: freccia, titolo, stato (da preparare: blu, col pallino che pulsa), cliente e quando è arrivato -----
+    assert.match(t, /<header class="banco-testa">/);
+    assert.match(t, /class="banco-storico attiva" href="\/distributore\/storico" aria-current="page"/, '"Storico ordini" resta accesa');
+    assert.match(t, /<a class="ric-indietro" href="\/distributore"/);
+    assert.match(t, /<h1 class="ric-titolo">Ordine #1295<\/h1>\s*<span class="ric-stato ric-st-da_preparare"><span class="ric-punto pulse" aria-hidden="true"><\/span>Da preparare<\/span>\s*<span class="ord-cliente-nome">Prova S\.r\.l\.<\/span>/);
+    assert.match(t, /<span class="ric-ricevuta">Ricevuto oggi alle \d\d:\d\d · da richiesta #177<\/span>/);
+    // niente delle vecchie righe: partenza e consegna dichiarate, "Consegna con mezzo del distributore", "Cliente ordinante", imponibile col servizio
+    assert.doesNotMatch(t, /Partenza dichiarata|Consegna dichiarata|mezzo del distributore|Cliente ordinante|Dove consegnare|Imponibile|80,95/);
+
+    // ----- materiale da preparare: "1 di 2 presi", righe a PREZZO DEL BANCO (mai 59,95 / 11,00), la seconda già spuntata -----
+    assert.match(t, /<h2 class="ric-h2" id="ord-mat-titolo">Materiale da preparare<\/h2>/);
+    assert.match(t, /<span class="ord-presi" data-presi-pillola role="status">1 di 2 presi<\/span>/);
+    assert.match(t, /<button class="ord-stampa-btn" type="button" data-stampa><svg[\s\S]*?<\/svg>Lista di prelievo<\/button>/);
+    assert.match(t, /<span>Preso<\/span><span>Q\.tà<\/span><span>Articolo<\/span><span class="ric-num">Prezzo cad\.<\/span><span class="ric-num">Totale<\/span>/);
+    const righe = t.split('<label class="ord-riga').slice(1).map((x) => x.slice(0, x.indexOf('</label>')));
+    assert.equal(righe.length, 2);
+    assert.match(righe[0], /^" data-riga>\s*<input class="ord-check" type="checkbox" data-preso data-url="\/distributore\/ordini\/1295\/righe\/11\/preso" aria-label="Preso: Adattatore Ø80\/100mm Per Caldaia 45-65kw">/);
+    assert.match(righe[0], /<span class="ric-qta">1×<\/span>[\s\S]*?<strong class="ric-nome">Adattatore Ø80\/100mm Per Caldaia 45-65kw<\/strong>\s*<small class="ric-cod">Cod\. 12514597<span class="ord-cad-sub"> · € 54,50 cad\.<\/span><\/small>/);
+    assert.match(righe[0], /<span class="ric-num ord-cad">€ 54,50<\/span>\s*<span class="ric-num ric-tot">€ 54,50<\/span>/);
+    assert.match(righe[1], /^ preso" data-riga>\s*<input class="ord-check" type="checkbox" data-preso data-url="\/distributore\/ordini\/1295\/righe\/12\/preso" checked /);
+    assert.match(righe[1], /<span class="ric-num ord-cad">€ 10,00<\/span>\s*<span class="ric-num ric-tot">€ 10,00<\/span>/);
+    assert.doesNotMatch(t.slice(t.indexOf('ord-materiale'), t.indexOf('ord-coppia')), /59,95|11,00|richiesti/);
+    // piede: la nota e Merce, IVA e Totale del banco (importi(ordine).banco: 64,50 + 14,19 = 78,69)
+    assert.match(t, /<p class="ord-piede-nota">Il materiale lo incassi tu dal cliente, con la tua fattura\. Prezzi del banco\.<\/p>/);
+    assert.match(t, /<dt>Merce<\/dt><dd>€ 64,50<\/dd><\/div>\s*<div><dt>IVA 22%<\/dt><dd>€ 14,19<\/dd><\/div>\s*<div class="ord-totale"><dt>Totale<\/dt><dd>€ 78,69<\/dd>/);
+    assert.doesNotMatch(t, /<dt>RAEE<\/dt>/);
+
+    // ----- ritiro del corriere: verde (22 min, più della soglia di 15), l'ora e chi ha accettato -----
+    const ritira = oraRoma(ordine1295.corriere_arrivo_il);
+    assert.match(t, /<section class="ric-scheda ord-ritiro" aria-label="Ritiro del corriere">\s*<div class="ric-arrivo-testa" data-ric-arrivo\s+data-secondi="13[12]\d" data-soglia-arrivo="15">/);
+    assert.match(t, /<span class="ric-arrivo-min" data-arrivo-min>22 min<\/span>\s*<span class="ric-arrivo-sotto">al ritiro<\/span>/);
+    assert.match(t, new RegExp('<h2 class="ric-arrivo-titolo">Il corriere ritira alle ' + ritira + '</h2>\\s*<p>Marco ha accettato alle ' + oraRoma(ordine1295.corriere_risposto_il) + '\\. Prepara la merce e la bolla\\.</p>'));
+
+    // ----- consegna: via in grassetto, sotto CAP e città; furgone; Maps. E cliente: iniziali, referente e P. IVA, telefono, scheda -----
+    assert.match(t, /<h2 class="ric-occhiello" id="ord-cons-et">Consegna<\/h2>/);
+    assert.match(t, /<strong>Via Castel Morrone 1\/7r<\/strong>\s*<small>16161 Genova \(GE\)<\/small>/);
+    assert.match(t, /<span>Corriere Marco · ritiro al banco<\/span>/);
+    assert.match(t, /<a class="ric-apri-cliente" href="https:\/\/www\.google\.com\/maps\/search\/\?api=1&amp;query=Via%20Castel%20Morrone%201%2F7r%2C%2016161%20Genova%20\(GE\)" target="_blank" rel="noopener">Apri in Maps/);
+    assert.match(t, /<h2 class="ric-occhiello" id="ord-cli-et">Cliente<\/h2>\s*<div class="ric-cliente-testa">\s*<span class="avatar avatar-42" aria-hidden="true">PR<\/span>/);
+    assert.match(t, /<strong>Prova S\.r\.l\.<\/strong>\s*<small>referente Mario · P\. IVA 01234567890<\/small>/);
+    assert.match(t, /<a href="tel:010123456">010 123 456<\/a>/);
+    assert.match(t, /<a class="ric-apri-cliente" href="\/distributore\/clienti\/1">Apri scheda cliente/);
+
+    // ----- avanzamento: confermato (con l'ora), corriere trovato, da preparare (attuale, blu, "Ritiro alle"), in consegna, consegnato -----
+    assert.deepEqual(fasi(t), [
+      ['Confermato da te', 'fatto', 'verde', 'Alle ' + confermatoAlle],
+      ['Corriere trovato', 'fatto', 'verde', 'Marco ha accettato alle ' + oraRoma(ordine1295.corriere_risposto_il)],
+      ['Da preparare', 'corrente', 'blu', 'Ritiro alle ' + ritira],
+      ['In consegna', 'futuro', 'verde', 'La merce passa al corriere'],
+      ['Consegnato', 'futuro', 'verde', 'Lo conferma il cliente'],
+    ]);
+
+    // ----- bolla: colli con − e +, aspetto a segmenti, causale e trasporto (vettore: c'è il corriere), nota, pulsante spento finché non è tutto spuntato -----
+    assert.match(t, /<h2 class="ric-h2 ord-bolla-titolo" id="ord-bolla-titolo">[\s\S]*?<\/svg><\/span>Bolla \/ DDT<\/h2>/);
+    assert.match(t, /<form method="POST" action="\/distributore\/ordini\/1295\/ddt" data-bolla-form>/);
+    assert.match(t, /<button class="ord-stepper-btn" type="button" data-colli="-1" aria-label="Un collo in meno">−<\/button>\s*<input id="ord-colli" name="colli" type="number" min="1" max="999" step="1" value="1" inputmode="numeric">\s*<button class="ord-stepper-btn" type="button" data-colli="1"/);
+    assert.deepEqual([...t.matchAll(/<input type="radio" name="aspetto" value="([^"]+)"( checked)?><span>/g)].map((m) => [m[1], !!m[2]]),
+      [['Colli', true], ['Bancali', false], ['Scatole', false], ['Sfuso', false]]);
+    assert.deepEqual([...t.matchAll(/<option>([^<]+)<\/option>/g)].map((m) => m[1]), ['Vendita', 'Conto visione', 'Reso', 'Conto lavorazione']);
+    assert.match(t, /<option value="vettore" selected>Vettore \(corriere\)<\/option>/);
+    assert.doesNotMatch(t, /<option value="(mittente|destinatario)" selected>/);
+    assert.match(t, /<textarea id="ord-note" name="note" rows="2" maxlength="500" placeholder="[^"]*"><\/textarea>/);
+    assert.match(t, /Annotazioni in bolla <span class="ord-facoltativo">· facoltative<\/span>/);
+    assert.match(t, /<button class="ord-bolla-btn" type="submit" data-bolla-invia aria-disabled="true">\s*<svg[\s\S]*?<\/svg>Emetti bolla e consegna al corriere\s*<\/button>/);
+    assert.match(t, /<p class="ord-bolla-nota" data-bolla-nota="bloccata">Spunta tutto il materiale per emettere la bolla\.<\/p>\s*<p class="ord-bolla-nota" data-bolla-nota="pronta" hidden>Segna la merce come partita e avvisa il cliente\.<\/p>/);
+
+    // ----- "Elimina ordine" in fondo, com'era; la lista di prelievo in stampa: caselle vuote, nessun prezzo -----
+    assert.match(t, /<form class="ric-elimina-riga" method="POST" action="\/distributore\/ordini\/1295\/elimina" onsubmit="return confirm\([^"]*\)">\s*<button class="ric-elimina" type="submit"><svg[\s\S]*?<\/svg>Elimina ordine<\/button>/);
+    assert.ok(t.indexOf('ric-elimina-riga') > t.indexOf('ric-passi'), 'in fondo alla colonna di sinistra');
+    const stampa = t.slice(t.indexOf('<div class="ord-stampa"'), t.indexOf('</table>', t.indexOf('<div class="ord-stampa"')));
+    assert.match(stampa, /Lista di prelievo · Ordine #1295/);
+    assert.match(stampa, /<strong>Cliente:<\/strong> Prova S\.r\.l\./);
+    assert.match(stampa, /<strong>Indirizzo:<\/strong> Via Castel Morrone 1\/7r, 16161 Genova \(GE\)/);
+    assert.equal((stampa.match(/<span class="ord-stampa-casella"><\/span>/g) || []).length, 2, 'una casella vuota per riga, anche per la già spuntata');
+    assert.doesNotMatch(stampa, /€|54,50|64,50/);
+
+    // ----- la spunta si salva sul server: una riga alla volta, con il valore esplicito (o invertita), e si vede dopo il ricaricamento -----
+    const spunta = (id, corpo) => chiedi('/distributore/ordini/1295/righe/' + id + '/preso', json(corpo));
+    scritturePreso.length = 0;
+    let r = await spunta(11, { preso: true });
+    assert.equal(r.status, 200);
+    assert.deepEqual(await r.json(), { ok: true, preso: true, presi: 2, totale: 2 });
+    assert.match(scritturePreso[0].s, /COALESCE\(preso_il, NOW\(\)\)/);
+    assert.deepEqual(scritturePreso[0].p, [11, 1295]);
+    t = await pagina();
+    assert.match(t, /<span class="ord-presi completa" data-presi-pillola role="status">2 di 2 presi<\/span>/);
+    assert.match(t, /data-bolla-invia>\s*<svg/, 'tutto spuntato: il pulsante della bolla è attivo');
+    assert.match(t, /<p class="ord-bolla-nota" data-bolla-nota="bloccata" hidden>[\s\S]*?<p class="ord-bolla-nota" data-bolla-nota="pronta">Segna la merce come partita e avvisa il cliente\.<\/p>/);
+    // ripetere lo stesso valore non cambia niente (l'ultimo vince); false la toglie; senza valore si inverte
+    r = await spunta(11, { preso: true });
+    assert.equal((await r.json()).presi, 2);
+    r = await spunta(11, { preso: false });
+    assert.deepEqual(await r.json(), { ok: true, preso: false, presi: 1, totale: 2 });
+    assert.match(scritturePreso[scritturePreso.length - 1].s, /preso_il = NULL/);
+    r = await spunta(11, {});
+    assert.deepEqual(await r.json(), { ok: true, preso: true, presi: 2, totale: 2 });
+    r = await chiedi('/distributore/ordini/1295/righe/11/preso', form({ preso: '0' }));
+    assert.deepEqual(await r.json(), { ok: true, preso: false, presi: 1, totale: 2 });
+    // una riga che non è di quest'ordine, un id sbagliato e l'ordine di un altro banco: 404 in JSON, niente scritto
+    scritturePreso.length = 0;
+    for (const [ordineId, rigaId] of [[1295, 999], [1295, 'abc'], [1295, 0], [1290, 11], [1999, 11]]) {
+      r = await chiedi('/distributore/ordini/' + ordineId + '/righe/' + rigaId + '/preso', json({ preso: true }));
+      assert.equal(r.status, 404, ordineId + '/' + rigaId);
+      assert.equal((await r.json()).ok, false);
+    }
+    assert.equal(scritturePreso.length, 0);
+    // senza accesso come banco: non risponde (reindirizza al login), mai la scrittura
+    const diversoCookie = cookie;
+    cookie = '';
+    r = await chiedi('/distributore/ordini/1295/righe/11/preso', json({ preso: true }));
+    assert.ok([302, 401, 403].includes(r.status), String(r.status));
+    assert.equal(scritturePreso.length, 0);
+    cookie = diversoCookie;
+
+    // ----- con il corriere vicino (8 min) il cerchio è rosso; in ritardo, "In ritardo"; poi, partita la merce, il riquadro sparisce -----
+    imposta({ corriere_arrivo_il: new Date(Date.now() + 8 * 60000) });
+    t = await pagina();
+    assert.match(t, /<div class="ric-arrivo-testa vicino" data-ric-arrivo\s+data-secondi="4[78]\d"/);
+    assert.match(t, /data-arrivo-min>8 min</);
+    imposta({ corriere_arrivo_il: new Date(Date.now() - 2 * 60000) });
+    t = await pagina();
+    assert.match(t, /ric-arrivo-testa vicino/);
+    assert.match(t, /data-arrivo-min>In ritardo</);
+
+    // ----- senza corriere (modulo WhatsApp spento): niente riquadro Ritiro né "Corriere trovato"; consegna con il mezzo del banco; mittente; pulsante senza corriere -----
+    imposta({ corriere_nome: '', corriere_arrivo_il: null, corriere_risposto_il: null });
+    t = await pagina();
+    assert.doesNotMatch(t, /ord-ritiro|data-ric-arrivo|Corriere trovato/);
+    assert.match(t, /<span>Consegna con mezzo del banco<\/span>/);
+    assert.deepEqual(fasi(t).map((f) => [f[0], f[1], f[3]]), [
+      ['Confermato da te', 'fatto', fasi(t)[0][3]], ['Da preparare', 'corrente', 'Prepara la merce e la bolla'], ['In consegna', 'futuro', 'La merce passa al corriere'], ['Consegnato', 'futuro', 'Lo conferma il cliente'],
+    ]);
+    assert.match(t, /<option value="mittente" selected>Mittente \(banco\)<\/option>/);
+    assert.match(t, /Emetti bolla e segna la merce partita/);
+    assert.doesNotMatch(t, /consegna al corriere/);
+
+    // ----- la pagina c'è SOLO per un ordine "Da preparare" (richiesta esplicita del 19/10/2026): dopo "Preparato" o la bolla (In consegna) e da consegnato non esiste più,
+    // e chi ci arriva (un segnalibro, una notifica vecchia) va allo Storico; niente da scrivere né da leggere oltre all'ordine -----
+    for (const [nome, extra] of [
+      ['Preparato, senza bolla (in_evasione)', { stato: 'in_evasione' }],
+      ['bolla emessa (evaso)', { stato: 'evaso', ddt_numero: '12/2026', ddt_data: fa(0), evaso_il: fa(0) }],
+      ['consegnato', { stato: 'evaso', ddt_numero: '12/2026', ddt_data: fa(0), evaso_il: fa(0), consegnato_il: fa(0) }],
+      ['segnato consegnato con la rotta provvisoria, ancora inviato', { stato: 'inviato', consegnato_il: fa(0) }],
+    ]) {
+      imposta(extra);
+      scrittureOrdini.length = 0;
+      const r = await chiedi('/distributore/ordini/1295?torna=' + encodeURIComponent('/distributore/clienti/32'));
+      assert.equal(r.status, 302, nome);
+      assert.equal(r.headers.get('location'), '/distributore/storico', nome);
+      assert.equal(scrittureOrdini.length, 0, nome);
+    }
+  } finally {
+    imposta();
+    righeOrdineBanco[1295].forEach((riga, i) => { riga.preso_il = spunte[i]; });
+    richiestaProva.attivo = false;
+    banco.attivo = false;
+    await chiedi('/logout', { method: 'POST' });
+  }
+});
+
+test('banco: pagina dell\'ordine, disponibilità parziale e RAEE, e aprirla non lo prende in carico', async () => {
+  cookie = '';
+  banco.attivo = true;
+  richiestaProva.attivo = true;
+  const originale = { ...ordine1295 };
+  const righeOriginali = righeOrdineBanco[1295];
+  try {
+    assert.equal((await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }))).status, 302);
+
+    // Aprire la pagina NON prende più in carico l'ordine (prima lo portava in preparazione e avvisava il cliente): resta "Da preparare", da qualunque parte
+    // si arrivi (Storico, scheda cliente, home, un altro sito). "In consegna" viene solo da "Preparato" o dalla bolla.
+    preparaRichiesta({ secondi: 0, stato: 'ordinata', esito: 'confermato', corriere: 'preso', trascorsi: 300, ordine: ordine1295 });
+    for (const intestazioni of [{}, { 'sec-fetch-site': 'same-origin' }, { 'sec-fetch-site': 'cross-site' }]) {
+      scrittureOrdini.length = 0;
+      const r = await chiedi('/distributore/ordini/1295', { headers: intestazioni });
+      assert.equal(r.status, 200);
+      assert.equal(scrittureOrdini.length, 0, JSON.stringify(intestazioni));
+      assert.match(await r.text(), /ric-st-da_preparare"><span class="ric-punto pulse" aria-hidden="true"><\/span>Da preparare/);
+    }
+    assert.equal(ordine1295.stato, 'inviato');
+
+    // Contributo RAEE: dentro prezzo cad. e totale di riga, e una voce a parte nel piede; Totale = merce + RAEE + IVA
+    righeOrdineBanco[1295] = [
+      { id: 21, order_id: 1295, quantita: 2, codice_snapshot: 'C1', nome_snapshot: 'Scaldabagno', prezzo_netto_unitario: 100, subtotale: 200, raee_unitario: 1.5, raee_riga: 3, preso_il: null },
+    ];
+    Object.assign(ordine1295, { totale_netto: 200, contributo_raee: 3, imponibile_banco: 203, iva_banco: 44.66, materiale_banco: 247.66, da_pagare_app: 20.07 });
+    let t = await (await chiedi('/distributore/ordini/1295')).text();
+    assert.match(t, /<span class="ric-num ord-cad">€ 101,50<\/span>\s*<span class="ric-num ric-tot">€ 203,00<\/span>/);
+    assert.match(t, /<dt>Merce<\/dt><dd>€ 200,00<\/dd><\/div>\s*<div><dt>RAEE<\/dt><dd>€ 3,00<\/dd><\/div>\s*<div><dt>IVA 22%<\/dt><dd>€ 44,66<\/dd><\/div>\s*<div class="ord-totale"><dt>Totale<\/dt><dd>€ 247,66<\/dd>/);
+    Object.assign(ordine1295, originale);
+    righeOrdineBanco[1295] = righeOriginali;
+
+    // Disponibilità parziale (il banco ha confermato meno del richiesto): sotto il codice "richiesti 3, ne hai confermati 1"; un articolo confermato a zero
+    // non è una riga dell'ordine, e si legge sotto la tabella perché non si perda di vista
+    const rigaSalvata = { ...rigaRichiestaProva };
+    try {
+      preparaRichiesta({ secondi: 0, stato: 'ordinata', esito: 'confermato', corriere: 'preso', trascorsi: 300, ordine: ordine1295, extra: { copertura: 'parziale' } });
+      Object.assign(rigaRichiestaProva, { codice: '12514597', quantita_richiesta: 3, quantita_disponibile: 1 });
+      t = await (await chiedi('/distributore/ordini/1295')).text();
+      assert.match(t, /Cod\. 12514597<span class="ord-cad-sub">[^<]*<\/span><\/small>\s*<small class="ord-mancano">richiesti 3, ne hai confermati 1<\/small>/);
+      assert.equal((t.match(/class="ord-mancano"/g) || []).length, 1, 'solo la riga confermata a metà');
+      assert.doesNotMatch(t, /Non confermati, quindi/);
+      Object.assign(rigaRichiestaProva, { codice: 'ZZ9', nome: 'Pompa', quantita_richiesta: 2, quantita_disponibile: 0 });
+      t = await (await chiedi('/distributore/ordini/1295')).text();
+      assert.match(t, /Non confermati, quindi non in questo ordine:\s*2 pz di Pompa\./);
+      assert.doesNotMatch(t, /class="ord-mancano"/);
+    } finally {
+      Object.assign(rigaRichiestaProva, rigaSalvata);
+    }
+    preparaRichiesta({ secondi: 0, stato: 'ordinata', esito: 'confermato', corriere: 'preso', trascorsi: 300, ordine: ordine1295 });
+
+    // Senza articoli: niente pillola "N di M", il pulsante della bolla è attivo (non c'è niente da spuntare)
+    righeOrdineBanco[1295] = [];
+    t = await (await chiedi('/distributore/ordini/1295')).text();
+    assert.doesNotMatch(t, /data-presi-pillola/);
+    assert.match(t, /Nessun articolo in questo ordine/);
+    assert.match(t, /data-bolla-invia>\s*<svg/);
+    righeOrdineBanco[1295] = righeOriginali;
+  } finally {
+    for (const k of Object.keys(ordine1295)) delete ordine1295[k];
+    Object.assign(ordine1295, originale);
+    righeOrdineBanco[1295] = righeOriginali;
+    richiestaProva.attivo = false;
+    banco.attivo = false;
+    await chiedi('/logout', { method: 'POST' });
+  }
+});
+
+test('banco: la bolla si emette solo mentre l\'ordine è "Da preparare" (poi "In consegna": il server rifiuta, e la pagina dell\'ordine non c\'è più)', async () => {
+  cookie = '';
+  banco.attivo = true;
+  richiestaProva.attivo = true;
+  const originale = { ...ordine1295 };
+  const imposta = (extra = {}) => { for (const k of Object.keys(ordine1295)) delete ordine1295[k]; Object.assign(ordine1295, originale, extra); };
+  const emetti = (corpo = {}) => chiedi('/distributore/ordini/1295/ddt', form({ colli: '2', aspetto: 'Bancali', causale: 'Vendita', trasporto: 'vettore', note: 'Citofonare', ...corpo }));
+  try {
+    assert.equal((await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }))).status, 302);
+    preparaRichiesta({ secondi: 0, stato: 'ordinata', esito: 'confermato', corriere: 'preso', trascorsi: 300, ordine: ordine1295 });
+
+    // Da preparare: la bolla si emette, con i dati del modulo, e porta alla bolla da stampare
+    scrittureBolla.length = 0;
+    let r = await emetti();
+    assert.equal(r.status, 302);
+    assert.equal(r.headers.get('location'), '/ddt/1295');
+    assert.equal(scrittureBolla.length, 1);
+    assert.deepEqual(scrittureBolla[0].p, ['7/2026', 2, 'Bancali', 'vettore', 'Vendita', 'Citofonare', 1295]);
+    assert.match(scrittureBolla[0].s, /stato = 'evaso'/, 'emessa la bolla l\'ordine non è più da preparare: "In consegna"');
+
+    // "In consegna" senza bolla (Preparato premuto, magari da un'altra scheda rimasta aperta): non si emette; la pagina dell'ordine non esiste più per lui,
+    // quindi una pagina d'errore con il perché e il ritorno allo Storico
+    imposta({ stato: 'in_evasione' });
+    scrittureBolla.length = 0;
+    r = await emetti();
+    assert.equal(r.status, 409);
+    assert.equal(scrittureBolla.length, 0);
+    const t = await r.text();
+    assert.match(t, /La bolla si emette quando l.ordine è ancora da preparare: ora è già in consegna\./);
+    assert.match(t, /href="\/distributore\/storico">\s*Torna allo Storico ordini\s*<\/a>/);
+    // anche "evaso" senza bolla (un ordine rimasto da prima): niente
+    imposta({ stato: 'evaso' });
+    assert.equal((await emetti()).status, 409);
+    assert.equal(scrittureBolla.length, 0);
+
+    // un secondo invio con la bolla già emessa (doppio tocco, pagina riaperta) passa: la bolla c'è, non si rinumera né si riscrive
+    imposta({ stato: 'evaso', ddt_numero: '7/2026', ddt_data: fa(0), evaso_il: fa(0) });
+    r = await emetti();
+    assert.equal(r.headers.get('location'), '/ddt/1295');
+    assert.equal(scrittureBolla.length, 0);
+    // l'ordine di un altro banco: come prima
+    r = await chiedi('/distributore/ordini/1290/ddt', form({ colli: '1' }));
+    assert.equal(r.headers.get('location'), '/distributore/storico');
+  } finally {
+    imposta();
+    richiestaProva.attivo = false;
+    banco.attivo = false;
+    await chiedi('/logout', { method: 'POST' });
+  }
+});
+
 test('banco: richiesta con l\'ordine da preparare, timer del corriere e Preparato', async () => {
   cookie = '';
   banco.attivo = true;
@@ -2760,6 +3566,9 @@ test('banco: richiesta con l\'ordine da preparare, timer del corriere e Preparat
     assert.match(t, /<form class="ric-pulsanti" method="POST" action="\/distributore\/ordini\/5\/preparazione">\s*<input type="hidden" name="torna" value="home">\s*<button class="ric-btn ric-btn-ordine" type="submit"><svg[\s\S]*?<\/svg>Preparato<\/button>/);
     assert.doesNotMatch(t, /data-ric-timer|Conferma: è disponibile|Gestisci l'ordine|data-ric-attesa/);
     assert.match(t, /Con &#34;Preparato&#34; l'ordine esce da &#34;Da preparare&#34;|Con "Preparato" l.ordine esce da/);
+    assert.match(t, /passa "In consegna"/);
+    // la bolla si emette dalla pagina dell'ordine, finché è "Da preparare": un pulsante la raggiunge (e da lì la freccia riporta a questa richiesta)
+    assert.match(t, /<a class="ric-btn ric-btn-neutro ric-btn-bolla" href="\/distributore\/ordini\/5\?torna=%2Fdistributore%2Frichieste%2F177"><svg[\s\S]*?<\/svg>Apri l'ordine e la bolla<\/a>/);
     // Avanzamento: conferma e corriere fatti, "Da preparare" in corso
     assert.match(t, /<h2 class="ric-h2" id="ric-passi-titolo">Avanzamento<\/h2>/);
     assert.deepEqual(fasi(t), [
@@ -2792,12 +3601,12 @@ test('banco: richiesta con l\'ordine da preparare, timer del corriere e Preparat
     t = await (await chiedi('/distributore/richieste/177')).text();
     assert.deepEqual(fasi(t).map((f) => [f[0], f[1]]), [['fatto', 'Disponibilità confermata'], ['corrente', 'Da preparare']]);
 
-    // dopo "Preparato" (l'ordine è in preparazione) la richiesta torna "Confermata", con il link all'ordine e senza Preparato
+    // dopo "Preparato" (l'ordine è "In consegna") la richiesta torna "Confermata", senza Preparato e senza link all'ordine (la sua pagina non c'è più)
     prepara(ordine({ stato: 'in_evasione' }));
     t = await (await chiedi('/distributore/richieste/177')).text();
     assert.match(t, /ric-st-confermata/);
     assert.doesNotMatch(t, /ric-arrivo|\/preparazione/);
-    assert.match(t, /<a class="ric-btn ric-btn-ordine" href="\/distributore\/ordini\/5">Gestisci l'ordine #5<\/a>/);
+    assert.doesNotMatch(t, /Gestisci l'ordine|ric-btn-bolla|href="\/distributore\/ordini\/5/);
   } finally {
     delete process.env.WHATSAPP_ATTIVO;
     richiestaProva.attivo = false;

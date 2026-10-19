@@ -1,5 +1,15 @@
 const db = require('../db');
 
+// ============================ REGOLE DEI PAGAMENTI (lato installatore) ============================
+//  · All'invio della richiesta la carta è solo AUTORIZZATA (capture_method manual): l'importo è "bloccato", non pagato.
+//  · Si incassa SOLO quando nasce l'ordine (un banco conferma). Da quel momento esiste la ricevuta.
+//  · Se nessun banco conferma, o il cliente annulla in fase 1, il blocco si annulla: nessun addebito, nessun rimborso, nessuna
+//    ricevuta, nessuna consegna.
+//  · Il cliente può annullare SOLO in fase 1: richiesta in attesa e nessun banco ha ancora accettato. Dopo, mai: né la richiesta né
+//    l'ordine (flusso_cliente.annullaRichiesta, ordineAnnullabileDalCliente; per un problema si contatta l'assistenza).
+// Cosa vede l'installatore lo dice statoPagamento (più in basso): 'bloccato' | 'pagato' | 'annullato' | 'rimborsato'.
+// ===================================================================================================
+
 // Pagamento dell'installatore: avviene quando manda la richiesta, prima che un banco o un corriere
 // la prendano in carico. Due modi, scelti da chi crea la richiesta (`pagamento_metodo` sulla richiesta):
 //  - 'simulato': nessun provider, il pagamento riesce sempre e si annota solo sulla richiesta. È quello dell'app
@@ -70,9 +80,14 @@ function impostaElaboratore(fn) {
 }
 function richiediElaborazione() {
   if (!elaboratore) return;
-  setTimeout(() => {
-    elaboratore().catch((e) => console.error('[stripe] elaborazione:', e.message));
-  }, 2000).unref();
+  // Si chiama anche da dentro le transazioni del flusso (creazione dell'ordine, chiusura della finestra): il timer non deve ereditare il
+  // client di quella transazione, che a 2 secondi di distanza è già chiusa e restituita al pool (vedi db.fuoriDallaTransazione).
+  const fuori = typeof db.fuoriDallaTransazione === 'function' ? db.fuoriDallaTransazione : (fn) => fn();
+  fuori(() => {
+    setTimeout(() => {
+      elaboratore().catch((e) => console.error('[stripe] elaborazione:', e.message));
+    }, 2000).unref();
+  });
 }
 
 // Il pagamento torna all'installatore. Vero solo la prima volta e solo se c'era qualcosa da
@@ -128,7 +143,120 @@ async function incassaDiNuovo(requestId, { metodo = METODO_SIMULATO, importo = n
   return r.changes > 0;
 }
 
+// ---------- Cosa vede l'installatore: lo stato del pagamento ----------
+
+// Gli stati di stripe_pagamenti che raccontano il destino della carta (gli altri, da_pagare / in_creazione / fallito / da_verificare, sono
+// tentativi non andati a buon fine o in corso: non sono "il pagamento" di una richiesta) e la chiave che ne esce per le viste.
+const STATI_CARTA = ['autorizzato', 'da_incassare', 'incassato', 'da_rilasciare', 'rilasciato', 'scaduto', 'da_rimborsare', 'rimborsato'];
+const CHIAVE_DA_STATO_CARTA = {
+  autorizzato: 'bloccato',
+  da_incassare: 'bloccato',
+  incassato: 'pagato',
+  da_rilasciare: 'annullato',
+  rilasciato: 'annullato',
+  scaduto: 'annullato',
+  da_rimborsare: 'rimborsato',
+  rimborsato: 'rimborsato',
+};
+
+// La riga di stripe_pagamenti che vale per una richiesta: l'ultima fra quelle che raccontano il destino della carta (con "Rinvia
+// richiesta" ce ne sono due: la prima rilasciata, la seconda autorizzata). Una sola lettura; null se la richiesta non è stata pagata con Stripe.
+async function rigaPagamento(requestId) {
+  if (!requestId) return null;
+  return (
+    (await db
+      .prepare(`SELECT * FROM stripe_pagamenti WHERE request_id = ? AND stato IN (${STATI_CARTA.map((s) => `'${s}'`).join(', ')}) ORDER BY id DESC LIMIT 1`)
+      .get(requestId)) || null
+  );
+}
+
+// "visa" -> "Visa", "amex" -> "American Express": come si scrive la marca accanto alle ultime 4 cifre.
+const NOMI_MARCA = { visa: 'Visa', mastercard: 'Mastercard', amex: 'American Express', maestro: 'Maestro', diners: 'Diners Club', discover: 'Discover', jcb: 'JCB', unionpay: 'UnionPay' };
+function nomeMarca(marca) {
+  const m = String(marca || '').trim().toLowerCase();
+  return NOMI_MARCA[m] || (m ? m.charAt(0).toUpperCase() + m.slice(1) : '');
+}
+
+// Il calcolo, senza DB: `riga` = rigaPagamento, `richiesta` = la riga di requests (stato, order_id, pagamento_*), `ordine` = la riga di orders se
+// la pagina è quella di un ordine. Ritorna null per una richiesta del vecchio flusso (mai pagata), altrimenti
+//   { chiave: 'bloccato' | 'pagato' | 'annullato' | 'rimborsato', importo (euro), data (quando), carta ({ marca, ultime4, testo }|null),
+//     receiptUrl (ricevuta di Stripe), ricevuta (c'è una ricevuta di pagamento), ricevutaRimborso, prova (pagamento NON reale), metodo }
+//  · 'bloccato'  ← carta autorizzata o incasso da fare (richiesta in attesa);
+//  · 'pagato'    ← incassata (ordine nato);
+//  · 'annullato' ← blocco rilasciato o scaduto, oppure richiesta chiusa/annullata senza incasso: niente addebito, niente rimborso;
+//  · 'rimborsato'← incassata e poi restituita (caso raro, lo gestisce l'assistenza).
+// Senza riga di Stripe (pagamento simulato dell'app e del PC, o richiesta di prima) si ricava lo stesso dalla richiesta. Anche il pagamento simulato (la
+// "sandbox") ha la sua ricevuta una volta nato l'ordine (richiesta esplicita del 19/10/2026), come un incasso vero: ma è un pagamento NON reale, quindi
+// `prova` è true (vale anche per le righe di Stripe nate con la chiave di prova, `modo = 'test'`) e la ricevuta lo scrive.
+function calcolaStatoPagamento({ riga = null, richiesta = null, ordine = null } = {}) {
+  const chiusaSenzaOrdine = !!richiesta && ['annullata', 'nessuna_offerta'].includes(richiesta.stato) && !richiesta.order_id && !ordine;
+  if (riga && CHIAVE_DA_STATO_CARTA[riga.stato]) {
+    let chiave = CHIAVE_DA_STATO_CARTA[riga.stato];
+    // Richiesta chiusa senza ordine ma il blocco non risulta ancora rilasciato (un attimo prima del giro di Stripe): per chi guarda è annullato.
+    if (chiave === 'bloccato' && chiusaSenzaOrdine) chiave = 'annullato';
+    const cent = Number(riga.incasso_cent) > 0 ? Number(riga.incasso_cent) : Number(riga.importo_cent);
+    const incassata = ['incassato', 'da_rimborsare', 'rimborsato'].includes(riga.stato) && !!riga.incasso_cent;
+    return {
+      chiave,
+      importo: Number.isFinite(cent) ? cent / 100 : null,
+      data: (chiave === 'pagato' ? riga.incassato_il : null) || riga.aggiornato_il || null,
+      carta: riga.carta_ultime4
+        ? { marca: nomeMarca(riga.carta_marca), ultime4: String(riga.carta_ultime4), testo: `${nomeMarca(riga.carta_marca) || 'Carta'} •••• ${riga.carta_ultime4}` }
+        : null,
+      receiptUrl: riga.receipt_url || null,
+      ricevuta: incassata,
+      ricevutaRimborso: riga.stato === 'rimborsato' && incassata,
+      prova: riga.modo === 'test',
+      metodo: METODO_STRIPE,
+    };
+  }
+  if (!richiesta || !richiesta.pagamento_stato) return null;
+  const conOrdine = !!ordine || !!richiesta.order_id;
+  const simulato = richiesta.pagamento_metodo === METODO_SIMULATO;
+  let chiave;
+  if (richiesta.pagamento_stato === 'rimborsato') chiave = conOrdine ? 'rimborsato' : 'annullato';
+  else chiave = chiusaSenzaOrdine ? 'annullato' : conOrdine ? 'pagato' : 'bloccato';
+  return {
+    chiave,
+    importo: richiesta.pagamento_importo === null || richiesta.pagamento_importo === undefined ? null : Number(richiesta.pagamento_importo),
+    data: (chiave === 'pagato' ? richiesta.pagato_il : richiesta.rimborsato_il) || null,
+    carta: null,
+    receiptUrl: null,
+    // Solo per il pagamento SIMULATO, e con l'ordine nato (pagato, o poi rimborsato); senza ordine (bloccato, annullato) no, come per Stripe. Un pagamento
+    // 'stripe' senza la sua riga non è una prova: lì la ricevuta non c'è (non si sa se è stato incassato).
+    ricevuta: simulato && conOrdine && (chiave === 'pagato' || chiave === 'rimborsato'),
+    ricevutaRimborso: simulato && conOrdine && chiave === 'rimborsato',
+    prova: simulato,
+    metodo: richiesta.pagamento_metodo || null,
+  };
+}
+
+// Lo stato del pagamento di una richiesta o di un ordine (con le sue letture). `opzioni.richiesta` / `opzioni.riga` evitano di rileggere quello che la
+// pagina ha già in mano. Una richiesta si riconosce da pagamento_stato / scade_il / order_id, un ordine da request_id.
+async function statoPagamento(oggetto, opzioni = {}) {
+  if (!oggetto) return null;
+  const eRichiesta = ['pagamento_stato', 'scade_il', 'order_id'].some((k) => k in oggetto);
+  const richiestaId = eRichiesta ? oggetto.id : oggetto.request_id;
+  const [riga, richiesta] = await Promise.all([
+    opzioni.riga !== undefined ? opzioni.riga : rigaPagamento(richiestaId),
+    eRichiesta
+      ? oggetto
+      : opzioni.richiesta !== undefined
+        ? opzioni.richiesta
+        : richiestaId
+          ? db
+              .prepare('SELECT id, stato, order_id, pagamento_stato, pagamento_metodo, pagamento_importo, pagato_il, rimborsato_il FROM requests WHERE id = ?')
+              .get(richiestaId)
+          : null,
+  ]);
+  return calcolaStatoPagamento({ riga, richiesta, ordine: eRichiesta ? null : oggetto });
+}
+
 module.exports = {
+  rigaPagamento,
+  calcolaStatoPagamento,
+  statoPagamento,
+  nomeMarca,
   METODO_SIMULATO,
   METODO_STRIPE,
   stripeAttivo,

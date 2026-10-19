@@ -605,8 +605,10 @@ async function rispondi(
   const attesaCorriere = esito === 'confermato' && whatsapp.attivo();
 
   // Il tempo di consegna non può precedere quello di partenza.
-  const partenza = Math.max(0, parseInt(partenza_ore, 10) || 0);
-  const consegnaOre = Math.max(partenza, parseInt(consegna_ore, 10) || partenza || 24);
+  // Con un tetto (30 giorni): un numero enorme non entra in una colonna intera (errore "out of range", 500).
+  const ORE_MASSIME = 720;
+  const partenza = Math.min(ORE_MASSIME, Math.max(0, parseInt(partenza_ore, 10) || 0));
+  const consegnaOre = Math.min(ORE_MASSIME, Math.max(partenza, parseInt(consegna_ore, 10) || partenza || 24));
 
   const profilo =
     scontoCliente === null || String(scontoCliente).trim() === ''

@@ -11,8 +11,7 @@ const PER_PAGINA = 50;
 const SCHEDE = [
   { filtro: 'tutti', chiave: null, etichetta: 'Tutti' },
   { filtro: 'da_preparare', chiave: 'da_preparare', etichetta: 'Da preparare' },
-  { filtro: 'in_preparazione', chiave: 'in_preparazione', etichetta: 'In preparazione' },
-  { filtro: 'partiti', chiave: 'partito', etichetta: 'Partiti' },
+  { filtro: 'in_consegna', chiave: 'in_consegna', etichetta: 'In consegna' },
   { filtro: 'consegnati', chiave: 'consegnato', etichetta: 'Consegnati' },
 ];
 
@@ -28,25 +27,29 @@ const PERIODI = [
 // Testo fisso, mai costruito da dati dell'utente: i conteggi delle schede e il filtro della lista le usano entrambi.
 const CONDIZIONE_STATO = {
   da_preparare: "o.consegnato_il IS NULL AND o.stato = 'inviato'",
-  in_preparazione: "o.consegnato_il IS NULL AND o.stato = 'in_evasione'",
-  partiti: "o.consegnato_il IS NULL AND o.stato = 'evaso'",
+  in_consegna: "o.consegnato_il IS NULL AND o.stato IN ('in_evasione', 'evaso')",
   consegnati: 'o.consegnato_il IS NOT NULL',
 };
 
-// Lo stato di un ordine per lo Storico: { chiave, etichetta }. L'unico punto dove si decide, usato dalla riga della lista.
+// Lo stato di un ordine per il banco: { chiave, etichetta }. L'unico punto dove si decide: lo usano la lista dello Storico, la scheda del cliente
+// e la pagina dell'ordine. Tre stati (richiesta esplicita del 19/10/2026): "Da preparare" (blu: l'ordine aspetta il banco, ed è lì che si emette la
+// bolla), "In consegna" (verde: dopo "Preparato", o dopo la bolla, la merce è del corriere) e "Consegnato". Le colonne `stato` 'in_evasione'
+// (Preparato) ed 'evaso' (bolla emessa) sono la stessa cosa per il banco: non esistono più "In preparazione" e "Partito".
 function statoStorico(o) {
   if (o.consegnato_il) return { chiave: 'consegnato', etichetta: 'Consegnato' };
-  if (o.stato === 'inviato') return { chiave: 'da_preparare', etichetta: 'Da preparare' };
-  if (o.stato === 'in_evasione') return { chiave: 'in_preparazione', etichetta: 'In preparazione' };
-  if (o.stato === 'evaso') return { chiave: 'partito', etichetta: 'Partito' };
-  return { chiave: 'da_preparare', etichetta: 'Da preparare' }; // il CHECK del DB non ammette altro
+  if (o.stato === 'in_evasione' || o.stato === 'evaso') return { chiave: 'in_consegna', etichetta: 'In consegna' };
+  return { chiave: 'da_preparare', etichetta: 'Da preparare' }; // 'inviato' (il CHECK del DB non ammette altro)
 }
+
+// I vecchi indirizzi (segnalibri) con ?stato=in_preparazione o ?stato=partiti portano ora a "In consegna", che li ha assorbiti.
+const FILTRI_VECCHI = { in_preparazione: 'in_consegna', partiti: 'in_consegna' };
 
 // I filtri dalla query string (ogni parametro è già una stringa, vedi leggiQuery in src/http.js). Valori sconosciuti
 // tornano al default: stato=tutti, periodo=7.
 function leggiFiltri(query) {
   const q = query || {};
-  const stato = SCHEDE.some((s) => s.filtro === q.stato) ? q.stato : 'tutti';
+  const richiesto = Object.hasOwn(FILTRI_VECCHI, q.stato) ? FILTRI_VECCHI[q.stato] : q.stato;
+  const stato = SCHEDE.some((s) => s.filtro === richiesto) ? richiesto : 'tutti';
   const periodo = PERIODI.some((p) => p.valore === q.periodo) ? q.periodo : '7';
   const ricerca = String(q.q || '').replace(/\s+/g, ' ').trim().slice(0, 80);
   const pagina = Math.min(100000, Math.max(1, parseInt(q.pagina, 10) || 1));
@@ -134,8 +137,7 @@ async function storicoOrdini(distributorId, filtri) {
   const sqlConteggi =
     `SELECT COUNT(*) AS tutti,
             COUNT(*) FILTER (WHERE ${CONDIZIONE_STATO.da_preparare}) AS da_preparare,
-            COUNT(*) FILTER (WHERE ${CONDIZIONE_STATO.in_preparazione}) AS in_preparazione,
-            COUNT(*) FILTER (WHERE ${CONDIZIONE_STATO.partiti}) AS partiti,
+            COUNT(*) FILTER (WHERE ${CONDIZIONE_STATO.in_consegna}) AS in_consegna,
             COUNT(*) FILTER (WHERE ${CONDIZIONE_STATO.consegnati}) AS consegnati
        FROM orders o
        JOIN users u ON u.id = o.cliente_id
@@ -160,8 +162,7 @@ async function storicoOrdini(distributorId, filtri) {
   const conteggi = {
     tutti: Number(riga.tutti),
     da_preparare: Number(riga.da_preparare),
-    in_preparazione: Number(riga.in_preparazione),
-    partiti: Number(riga.partiti),
+    in_consegna: Number(riga.in_consegna),
     consegnati: Number(riga.consegnati),
   };
   const totale = conteggi[filtri.stato];

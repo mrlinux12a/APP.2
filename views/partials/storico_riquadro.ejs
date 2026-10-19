@@ -1,15 +1,12 @@
 <%
-  // Il riquadro blu "Da pagare a {ditta}" dello Storico ordini. `g` = { nome, riepilogo: { totale, servizio, nOrdini } } di UNA ditta; `m` il
-  // materiale (src/materiale.js); `primo` = è il primo riquadro: solo lì stanno i chip del mese (uno per pagina, non uno per ditta).
-  // I numeri sono quelli di materialeOrdini, gli stessi del banco: totale = materiale a prezzo del banco IVA inclusa, servizio = quanto
-  // già pagato in app (fuori dal totale).
+  // Il riquadro blu "Da pagare a {ditta}" dello Storico ordini dell'installatore. `g` = { nome, riepilogo: { totale, servizio, nOrdini }, ordini } di UNA ditta;
+  // `m` il materiale (src/materiale.js); `primo` = è il primo riquadro: solo lì stanno i chip del mese (uno per pagina, non uno per ditta).
+  // I numeri sono quelli di materialeOrdini: totale = materiale a prezzo del banco IVA inclusa, servizio = quanto già pagato in app per le consegne
+  // (fuori dal totale). In fondo due pulsanti affiancati: "Ricevute del mese" (un PDF con le ricevute di pagamento degli ordini del mese; compare
+  // solo se ce n'è almeno una, altrimenti il PDF sarebbe vuoto) ed "Esporta elenco" (il CSV).
+  const nRicevute = (g.ordini || []).filter(function (o) { return o.ricevuta; }).length;
 %>
-<%
-  // Parametri facoltativi: `occhiello` (default "Da pagare a {ditta}": lato banco "Da incassare") ed `esporta` (indirizzo del CSV).
-  const testoOcchiello = typeof occhiello !== 'undefined' && occhiello ? occhiello : 'Da pagare a ' + g.nome;
-  const indirizzoCsv = typeof esporta !== 'undefined' && esporta ? esporta : '/storico/materiale.csv';
-%>
-<section class="sm-riquadro" aria-label="<%= testoOcchiello %>">
+<section class="sm-riquadro" aria-label="Da pagare a <%= g.nome %>">
   <% if (primo) { %>
     <nav class="sm-mesi" aria-label="Mese">
       <% m.mesi.forEach(function (x) { %>
@@ -18,11 +15,16 @@
       <a class="sm-chip<%= m.mese === 'tutto' ? ' attivo' : '' %>" href="<%= link({ mese: 'tutto' }) %>"<%- m.mese === 'tutto' ? ' aria-current="true"' : '' %>>Tutto</a>
     </nav>
   <% } %>
-  <div class="sm-occhiello"><%= testoOcchiello %></div>
+  <div class="sm-occhiello">Da pagare a <%= g.nome %></div>
   <div class="sm-totale"><span class="sm-importo">€ <%= euro(g.riepilogo.totale) %></span><span class="sm-iva">IVA inclusa</span></div>
   <div class="sm-sotto">Materiale di <%= g.riepilogo.nOrdini %> <%= g.riepilogo.nOrdini === 1 ? 'ordine' : 'ordini' %></div>
   <div class="sm-fondo">
-    <span>Servizio già pagato in app: <strong>€ <%= euro(g.riepilogo.servizio) %></strong></span>
-    <a class="sm-esporta" href="<%= indirizzoCsv %>?mese=<%= encodeURIComponent(m.mese) %>"><%- iconaDownload %>Esporta</a>
+    <span>Consegne pagate in app: <strong>€ <%= euro(g.riepilogo.servizio) %></strong></span>
+  </div>
+  <div class="sm-bottoni">
+    <% if (nRicevute) { %>
+      <a class="sm-esporta sm-ricevute" href="/storico/ricevute.pdf?mese=<%= encodeURIComponent(m.mese) %>" target="_blank" rel="noopener"><%- iconaScontrino %>Ricevute del mese</a>
+    <% } %>
+    <a class="sm-esporta" href="/storico/materiale.csv?mese=<%= encodeURIComponent(m.mese) %>"><%- iconaDownload %>Esporta elenco</a>
   </div>
 </section>

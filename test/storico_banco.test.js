@@ -5,10 +5,10 @@ const assert = require('node:assert/strict');
 const sb = require('../src/storico_banco');
 const { giornoRoma, oraSolaRoma } = require('../src/format');
 
-test('statoStorico: consegnato_il vale per primo, poi lo stato dell\'ordine', () => {
+test('statoStorico: consegnato_il vale per primo; poi Da preparare (inviato) e In consegna (Preparato o bolla emessa: niente più "In preparazione" né "Partito")', () => {
   assert.deepEqual(sb.statoStorico({ stato: 'inviato', consegnato_il: null }), { chiave: 'da_preparare', etichetta: 'Da preparare' });
-  assert.deepEqual(sb.statoStorico({ stato: 'in_evasione', consegnato_il: null }), { chiave: 'in_preparazione', etichetta: 'In preparazione' });
-  assert.deepEqual(sb.statoStorico({ stato: 'evaso', consegnato_il: null }), { chiave: 'partito', etichetta: 'Partito' });
+  assert.deepEqual(sb.statoStorico({ stato: 'in_evasione', consegnato_il: null }), { chiave: 'in_consegna', etichetta: 'In consegna' });
+  assert.deepEqual(sb.statoStorico({ stato: 'evaso', consegnato_il: null }), { chiave: 'in_consegna', etichetta: 'In consegna' });
   // un ordine segnato consegnato con la rotta provvisoria può restare in qualunque stato: è Consegnato
   for (const stato of ['inviato', 'in_evasione', 'evaso']) {
     assert.deepEqual(sb.statoStorico({ stato, consegnato_il: new Date() }), { chiave: 'consegnato', etichetta: 'Consegnato' }, stato);
@@ -20,7 +20,12 @@ test('leggiFiltri: predefiniti (tutti, 7 giorni), valori sconosciuti scartati, r
   assert.deepEqual(sb.leggiFiltri(undefined), { stato: 'tutti', periodo: '7', q: '', pagina: 1 });
   assert.deepEqual(sb.leggiFiltri({ stato: 'consegnati', periodo: 'oggi', q: '  rossi   impianti ', pagina: '3' }),
     { stato: 'consegnati', periodo: 'oggi', q: 'rossi impianti', pagina: 3 });
-  for (const stato of ['da_preparare', 'in_preparazione', 'partiti', 'consegnati', 'tutti']) assert.equal(sb.leggiFiltri({ stato }).stato, stato);
+  for (const stato of ['da_preparare', 'in_consegna', 'consegnati', 'tutti']) assert.equal(sb.leggiFiltri({ stato }).stato, stato);
+  // i segnalibri vecchi (?stato=in_preparazione, ?stato=partiti) portano a "In consegna", che li ha assorbiti; i nomi di Object.prototype non passano
+  assert.equal(sb.leggiFiltri({ stato: 'in_preparazione' }).stato, 'in_consegna');
+  assert.equal(sb.leggiFiltri({ stato: 'partiti' }).stato, 'in_consegna');
+  assert.equal(sb.leggiFiltri({ stato: 'constructor' }).stato, 'tutti');
+  assert.equal(sb.leggiFiltri({ stato: '__proto__' }).stato, 'tutti');
   for (const periodo of ['oggi', '7', '30', 'tutti']) assert.equal(sb.leggiFiltri({ periodo }).periodo, periodo);
   assert.equal(sb.leggiFiltri({ stato: "x'; DROP TABLE orders; --", periodo: '365' }).stato, 'tutti');
   assert.equal(sb.leggiFiltri({ periodo: '365' }).periodo, '7');
@@ -34,7 +39,7 @@ test('leggiFiltri: predefiniti (tutti, 7 giorni), valori sconosciuti scartati, r
 test('urlStorico: stato e periodo sempre, ricerca e pagina solo se servono; cambiando un filtro si torna alla prima pagina', () => {
   const f = { stato: 'tutti', periodo: '7', q: '', pagina: 1 };
   assert.equal(sb.urlStorico(f), '/distributore/storico?stato=tutti&periodo=7');
-  assert.equal(sb.urlStorico(f, { stato: 'partiti' }), '/distributore/storico?stato=partiti&periodo=7');
+  assert.equal(sb.urlStorico(f, { stato: 'in_consegna' }), '/distributore/storico?stato=in_consegna&periodo=7');
   assert.equal(sb.urlStorico({ ...f, q: '#91 & co' }), '/distributore/storico?stato=tutti&periodo=7&q=%2391%20%26%20co');
   const alla3 = { stato: 'consegnati', periodo: '30', q: 'rossi', pagina: 3 };
   assert.equal(sb.urlStorico(alla3), '/distributore/storico?stato=consegnati&periodo=30&q=rossi&pagina=3');
@@ -91,11 +96,29 @@ test('condizioni: la ricerca copre cliente e DDT, il numero d\'ordine solo con s
 
 test('le condizioni SQL degli stati sono le stesse di statoStorico (conteggi e filtro della lista non possono divergere)', () => {
   assert.equal(sb.CONDIZIONE_STATO.consegnati, 'o.consegnato_il IS NOT NULL');
-  // gli altri tre escludono i consegnati: un ordine consegnato non è anche "da preparare"
-  for (const stato of ['da_preparare', 'in_preparazione', 'partiti']) assert.match(sb.CONDIZIONE_STATO[stato], /^o\.consegnato_il IS NULL AND o\.stato = /);
-  assert.deepEqual(Object.keys(sb.CONDIZIONE_STATO).sort(), ['consegnati', 'da_preparare', 'in_preparazione', 'partiti']);
-  assert.deepEqual(sb.SCHEDE.map((s) => s.filtro), ['tutti', 'da_preparare', 'in_preparazione', 'partiti', 'consegnati']);
-  assert.deepEqual(sb.SCHEDE.map((s) => s.chiave), [null, 'da_preparare', 'in_preparazione', 'partito', 'consegnato']);
+  // gli altri due escludono i consegnati: un ordine consegnato non è anche "da preparare"
+  assert.equal(sb.CONDIZIONE_STATO.da_preparare, "o.consegnato_il IS NULL AND o.stato = 'inviato'");
+  assert.equal(sb.CONDIZIONE_STATO.in_consegna, "o.consegnato_il IS NULL AND o.stato IN ('in_evasione', 'evaso')");
+  assert.deepEqual(Object.keys(sb.CONDIZIONE_STATO).sort(), ['consegnati', 'da_preparare', 'in_consegna']);
+  assert.deepEqual(sb.SCHEDE.map((s) => s.filtro), ['tutti', 'da_preparare', 'in_consegna', 'consegnati']);
+  assert.deepEqual(sb.SCHEDE.map((s) => s.chiave), [null, 'da_preparare', 'in_consegna', 'consegnato']);
+  assert.deepEqual(sb.SCHEDE.map((s) => s.etichetta), ['Tutti', 'Da preparare', 'In consegna', 'Consegnati']);
+  // la stessa regola in JS e in SQL: ogni combinazione (stato, consegnato) cade in UNA sola condizione, quella della sua chiave
+  const vale = (condizione, o) => {
+    const consegnato = !!o.consegnato_il;
+    if (condizione === sb.CONDIZIONE_STATO.consegnati) return consegnato;
+    if (condizione === sb.CONDIZIONE_STATO.da_preparare) return !consegnato && o.stato === 'inviato';
+    if (condizione === sb.CONDIZIONE_STATO.in_consegna) return !consegnato && ['in_evasione', 'evaso'].includes(o.stato);
+    throw new Error('condizione sconosciuta');
+  };
+  const filtroDi = { da_preparare: 'da_preparare', in_consegna: 'in_consegna', consegnato: 'consegnati' };
+  for (const stato of ['inviato', 'in_evasione', 'evaso']) {
+    for (const consegnato_il of [null, new Date()]) {
+      const o = { stato, consegnato_il };
+      const cadute = Object.keys(sb.CONDIZIONE_STATO).filter((k) => vale(sb.CONDIZIONE_STATO[k], o));
+      assert.deepEqual(cadute, [filtroDi[sb.statoStorico(o).chiave]], stato + ' ' + (consegnato_il ? 'consegnato' : ''));
+    }
+  }
   assert.deepEqual(sb.PERIODI.map((p) => p.valore), ['oggi', '7', '30', 'tutti']);
 });
 

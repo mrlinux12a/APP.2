@@ -9,10 +9,13 @@
 //     recupera i pagamenti autorizzati che nessuno ha raccolto. Chi arriva prima (`completaRiga`) fa nascere la
 //     richiesta, gli altri trovano già tutto fatto: una UPDATE atomica sullo stato lo garantisce.
 //  3. Quando nasce l'ordine la carta si INCASSA (per il totale dell'ordine, mai più di quanto autorizzato); se la
-//     richiesta si chiude senza ordine il blocco si RILASCIA e non è passato un euro. Se l'ordine viene annullato dopo
-//     l'incasso, si RIMBORSA. Il flusso (src/pagamenti.js) segna sul DB cosa fare; `elabora` lo esegue con Stripe,
-//     subito dopo (richiediElaborazione) e dal timer di server.js, così nessuna chiamata di rete sta dentro una
-//     transazione e un guasto di Stripe si riprova da solo.
+//     richiesta si chiude senza ordine (o il cliente annulla in fase 1) il blocco si RILASCIA e non è passato un euro:
+//     nessun addebito, nessun rimborso, nessuna ricevuta. Dopo l'incasso il cliente non annulla più (un rimborso è un
+//     caso raro, a mano: stato `da_rimborsare`). Il flusso (src/pagamenti.js) segna sul DB cosa fare; `elabora` lo esegue
+//     con Stripe, subito dopo (richiediElaborazione) e dal timer di server.js, così nessuna chiamata di rete sta dentro
+//     una transazione e un guasto di Stripe si riprova da solo.
+//  4. All'incasso (`dopoIncasso`) si salvano ricevuta di Stripe, carta e istante, si numera la ricevuta nostra
+//     (src/ricevute.js) e parte l'email (src/email.js): tutto "best effort", mai a rischio dell'incasso.
 //
 // Stripe sa tutto dei soldi; qui il DB dice a che punto è ogni pagamento (vedi `stato` in schema.sql). Le chiavi
 // stanno nel .env: STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY, STRIPE_WEBHOOK_SECRET, APP_URL (vedi README).
@@ -20,6 +23,8 @@ const db = require('../db');
 const pagamenti = require('./pagamenti');
 const flusso = require('./flusso_cliente');
 const richieste = require('./richieste');
+const ricevute = require('./ricevute');
+const email = require('./email');
 
 const { ErroreFlusso } = flusso;
 
@@ -399,6 +404,52 @@ async function gestisciEvento(evento) {
 
 // ---------- Incassi, rilasci e rimborsi ----------
 
+// Subito dopo un incasso riuscito, tutto "best effort": l'incasso è già fatto e registrato, quindi NIENTE di quello che segue può farlo fallire
+// né ripeterlo (ogni passo ha il suo try/catch e scrive solo nel log):
+//  1. la ricevuta di Stripe (receipt_url), la marca e le ultime 4 cifre della carta e l'istante dell'incasso si salvano sulla riga. Sono colonne
+//     nuove (blocco "Ricevute di pagamento" di schema.sql): se lo schema non è ancora aggiornato la UPDATE fallisce, si scrive nel log e l'incasso
+//     resta com'è;
+//  2. si assegna il numero della ricevuta nostra (src/ricevute.js);
+//  3. parte l'email "Pagamento ricevuto" (src/email.js): NON si aspetta, un SMTP lento non deve fermare il giro dei pagamenti.
+// La ricevuta di Stripe via email all'incasso la manda Stripe da sola: il PaymentIntent ha già `receipt_email` (creaIntento).
+async function dopoIncasso(lavoro) {
+  let urlRicevuta = null;
+  let marca = null;
+  let ultime4 = null;
+  try {
+    const intento = await stripe().paymentIntents.retrieve(lavoro.payment_intent_id, { expand: ['latest_charge'] });
+    const addebito = intento && intento.latest_charge && typeof intento.latest_charge === 'object' ? intento.latest_charge : null;
+    if (addebito) {
+      urlRicevuta = addebito.receipt_url || null;
+      const carta = addebito.payment_method_details && addebito.payment_method_details.card;
+      if (carta) {
+        marca = carta.brand || null;
+        ultime4 = carta.last4 || null;
+      }
+    }
+  } catch (e) {
+    console.error(`[stripe] pagamento ${lavoro.id}: dati della carta non letti:`, e.message);
+  }
+  try {
+    await db
+      .prepare(`UPDATE stripe_pagamenti SET receipt_url = ?, carta_marca = ?, carta_ultime4 = ?, incassato_il = NOW() WHERE id = ?`)
+      .run(urlRicevuta, marca, ultime4, lavoro.id);
+  } catch (e) {
+    console.error(`[stripe] pagamento ${lavoro.id}: dati della ricevuta non salvati:`, e.message);
+  }
+  try {
+    const ordine = lavoro.request_id ? await db.prepare('SELECT id FROM orders WHERE request_id = ?').get(lavoro.request_id) : null;
+    if (!ordine) return;
+    const dati = await ricevute.datiRicevuta(ordine.id, { tipo: 'pagamento' });
+    // Senza await: non deve rallentare il giro. Non lancia mai, ma una promessa rifiutata senza nessuno che la raccolga farebbe cadere il processo: il catch c'è comunque.
+    if (dati) {
+      Promise.resolve(email.inviaPagamentoRicevuto(dati)).catch((e) => console.error(`[stripe] pagamento ${lavoro.id}: email non inviata:`, e.message));
+    }
+  } catch (e) {
+    console.error(`[stripe] pagamento ${lavoro.id}: ricevuta o email non preparate:`, e.message);
+  }
+}
+
 async function eseguiLavoro(lavoro) {
   const s = stripe();
   const intento = lavoro.payment_intent_id;
@@ -415,13 +466,15 @@ async function eseguiLavoro(lavoro) {
       const pi = await s.paymentIntents.retrieve(intento);
       if (pi.status !== 'succeeded') throw e; // già incassata da un altro giro: va bene; altrimenti si riprova
     }
-    await db
+    const registrato = await db
       .prepare(`UPDATE stripe_pagamenti SET stato = 'incassato', incasso_cent = ?, errore = NULL, aggiornato_il = NOW() WHERE id = ? AND stato = 'da_incassare'`)
       .run(daIncassare, lavoro.id);
     // Incassato meno di quanto autorizzato: l'importo pagato che il cliente vede è quello vero.
     if (lavoro.request_id && daIncassare < lavoro.importo_cent) {
       await db.prepare(`UPDATE requests SET pagamento_importo = ? WHERE id = ?`).run(daIncassare / 100, lavoro.request_id);
     }
+    // Da qui in poi esiste la ricevuta. Solo la prima volta (la UPDATE di sopra la vince un solo giro): una email sola.
+    if (registrato.changes) await dopoIncasso(lavoro);
     return;
   }
 

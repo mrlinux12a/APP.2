@@ -1151,6 +1151,11 @@ const Minuteria = (function () {
               nodo.className = 'stato-badge ' + et[1];
             });
           }
+          // "Annulla la richiesta" si può solo finché nessun banco ha accettato: appena uno conferma il link sparisce.
+          if (dati.annullabile === false) {
+            const annulla = document.querySelector('[data-annulla-richiesta]');
+            if (annulla) annulla.hidden = true;
+          }
           // L'ordine è nato (corriere trovato): si va dritti all'ordine, con il banner di conferma.
           if (dati.order_id) window.location.href = '/ordini/' + dati.order_id + '?nuovo=1';
           else if (dati.stato !== 'in_attesa') window.location.reload();
@@ -1522,6 +1527,110 @@ const Minuteria = (function () {
 
   tick();
   setInterval(tick, 1000);
+})();
+
+/* Pagina dell'ordine del banco (views/distributore_ordine.ejs). La spunta "preso" di ogni riga si salva sul server (POST .../righe/:id/preso, con il valore
+   esplicito: l'ultimo vince) senza ricaricare la pagina. Le richieste partono una alla volta, nell'ordine dei tocchi: due insieme potrebbero arrivare
+   invertite. Se il salvataggio non riesce la casella torna com'era e compare un avviso. Si aggiornano anche la pillola "N di M presi" e il pulsante della
+   bolla, che resta "spento" (aria-disabled) finché non è tutto spuntato: il controllo è solo qui, senza JavaScript il pulsante funziona.
+   Qui anche: "Lista di prelievo" (window.print, la pagina in stampa mostra solo la lista) e i + e - dei colli. */
+(function () {
+  'use strict';
+  const pagina = document.querySelector('[data-ordine-banco]');
+  if (!pagina) return;
+
+  const caselle = Array.prototype.slice.call(pagina.querySelectorAll('[data-preso]'));
+  const pillola = pagina.querySelector('[data-presi-pillola]');
+  const avviso = pagina.querySelector('[data-preso-errore]');
+  const bottone = pagina.querySelector('[data-bolla-invia]');
+  const notaBloccata = pagina.querySelector('[data-bolla-nota="bloccata"]');
+  const notaPronta = pagina.querySelector('[data-bolla-nota="pronta"]');
+
+  function segnaRiga(casella) {
+    const riga = casella.closest('[data-riga]');
+    if (riga) riga.classList.toggle('preso', casella.checked);
+  }
+
+  function aggiorna() {
+    const presi = caselle.filter(function (c) { return c.checked; }).length;
+    const tutti = presi === caselle.length;
+    if (pillola) {
+      const testo = presi + ' di ' + caselle.length + ' presi';
+      if (pillola.textContent !== testo) pillola.textContent = testo;
+      pillola.classList.toggle('completa', tutti);
+    }
+    if (bottone) {
+      if (tutti) bottone.removeAttribute('aria-disabled');
+      else bottone.setAttribute('aria-disabled', 'true');
+    }
+    if (notaBloccata) notaBloccata.hidden = tutti;
+    if (notaPronta) notaPronta.hidden = !tutti;
+  }
+
+  function mostraErrore(testo) {
+    if (!avviso) return;
+    avviso.textContent = testo;
+    avviso.hidden = !testo;
+  }
+
+  let coda = Promise.resolve();
+  function salva(casella, preso) {
+    coda = coda
+      .then(function () {
+        return fetch(casella.getAttribute('data-url'), {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ preso: preso }),
+        });
+      })
+      .then(Minuteria.leggiJson)
+      .then(function (dati) {
+        if (!dati || !dati.ok) throw new Error((dati && dati.errore) || 'non salvata');
+        mostraErrore('');
+      })
+      .catch(function (err) {
+        if (err && err.sessioneScaduta) return; // si sta tornando al login
+        // La casella torna com'era, a meno che nel frattempo non sia stata toccata di nuovo (quel tocco ha la sua richiesta in coda).
+        if (casella.checked === preso) {
+          casella.checked = !preso;
+          segnaRiga(casella);
+          aggiorna();
+        }
+        mostraErrore('Non sono riuscito a salvare la spunta. Controlla la connessione e riprova.');
+      });
+  }
+
+  caselle.forEach(function (casella) {
+    casella.addEventListener('change', function () {
+      segnaRiga(casella);
+      aggiorna();
+      salva(casella, casella.checked);
+    });
+  });
+  aggiorna();
+
+  if (bottone) {
+    bottone.addEventListener('click', function (e) {
+      if (bottone.getAttribute('aria-disabled') !== 'true') return;
+      // Blocca anche l'invio da tastiera (Invio in un campo = clic sul pulsante) e porta alla prima riga da spuntare.
+      e.preventDefault();
+      const prima = caselle.filter(function (c) { return !c.checked; })[0];
+      if (prima) prima.focus();
+    });
+  }
+
+  const stampa = pagina.querySelector('[data-stampa]');
+  if (stampa) stampa.addEventListener('click', function () { window.print(); });
+
+  const colli = pagina.querySelector('#ord-colli');
+  Array.prototype.forEach.call(pagina.querySelectorAll('[data-colli]'), function (pulsante) {
+    pulsante.addEventListener('click', function () {
+      if (!colli) return;
+      const n = (parseInt(colli.value, 10) || 1) + parseInt(pulsante.getAttribute('data-colli'), 10);
+      colli.value = String(Math.min(999, Math.max(1, n)));
+    });
+  });
 })();
 
 /* Impedisce il doppio invio dei form che cambiano stato (conferma ordine, risposta del

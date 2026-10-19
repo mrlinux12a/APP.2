@@ -406,7 +406,7 @@ function formattaScalare(regola) {
 }
 
 async function salvaRegola(distributorId, clienteId, ambito, chiave, scaglioni) {
-  const chiavePulita = pulisci(chiave);
+  const chiavePulita = pulisci(chiave).slice(0, 200); // la chiave di una regola è uno slug: un testo enorme scritto a mano non serve a nessuno
   const effettivo = scontoEffettivo(scaglioni);
 
   // Tutti i campi vuoti: la regola sparisce e torna a valere quella più generale.

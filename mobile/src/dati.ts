@@ -10,12 +10,15 @@ import {
   urlFoto,
   type Attivita,
   type Categoria,
+  type Materiale,
   type Ordine,
+  type Profilo,
   type Pagina,
   type Prodotto,
   type Richiesta,
   type RiepilogoCarrello,
   type Sottocategoria,
+  type VoceAttivita,
   type VoceStorico,
 } from './api';
 
@@ -237,12 +240,34 @@ export function useOrdine(id: number) {
   return query;
 }
 
+// Le attività in corso, come sul sito: una per richiesta in attesa o ordine in consegna (`voci`, già nell'ordine da mostrare), più `attivo`, la prima
+// inviata. Mentre c'è una richiesta in attesa si rilegge ogni 15 secondi (come l'icona del sito), con un ordine in consegna ogni minuto.
 export function useStatoOrdini() {
+  const inPrimoPiano = useIsFocused();
   return useQuery({
     queryKey: ['stato-ordini'],
-    queryFn: () => chiamaApi<{ attivo: Attivita }>('/stato-ordini'),
+    queryFn: () => chiamaApi<{ attivo: Attivita; voci: VoceAttivita[] }>('/stato-ordini'),
     staleTime: 0,
+    refetchInterval: (q) => {
+      const voci = q.state.data?.voci || [];
+      if (voci.some((v) => v.fase === 'richiesta')) return inPrimoPiano ? 15000 : 60000;
+      return voci.length ? 60000 : false;
+    },
   });
+}
+
+// Lo Storico come sul sito: il materiale ordinato per mese (o "tutto"), per ordine o per articolo.
+export function useMateriale(mese: string | null, vista: 'ordine' | 'articolo') {
+  return useQuery({
+    queryKey: ['materiale', mese, vista],
+    queryFn: () => chiamaApi<Materiale>(conParametri('/materiale', { mese, vista })),
+    staleTime: 0,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useProfilo() {
+  return useQuery({ queryKey: ['profilo'], queryFn: () => chiamaApi<Profilo>('/profilo'), staleTime: 5 * 60 * 1000 });
 }
 
 export function useStorico() {

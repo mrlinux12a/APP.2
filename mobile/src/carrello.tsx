@@ -7,6 +7,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, type ReactNode } from 'react';
 
+import { chiamaApi } from './api';
 import { creaNegozio, useNegozio } from './negozio';
 import { useSessione } from './sessione';
 
@@ -56,6 +57,20 @@ export const carrello = {
     return Object.values(negozioCarrello.leggi()).map((r) => ({ id: r.id, quantita: r.quantita }));
   },
 };
+
+// "Riordina gli stessi pezzi" di un ordine consegnato: il server dice quali articoli ci sono ancora (con i prezzi di oggi) e si sommano alle quantità già nel
+// carrello. Ritorna quanti articoli sono stati aggiunti e quanti non sono più disponibili.
+export async function riordina(ordineId: number): Promise<{ aggiunti: number; saltati: number }> {
+  const { articoli, saltati } = await chiamaApi<{ articoli: (DatiRiga & { quantita: number })[]; saltati: number }>(`/ordini/${ordineId}/riordina`);
+  negozioCarrello.scrivi((prima) => {
+    const dopo = { ...prima };
+    for (const { quantita, ...dati } of articoli) {
+      dopo[dati.id] = { ...dati, quantita: Math.min(9999, (prima[dati.id] ? prima[dati.id].quantita : 0) + quantita) };
+    }
+    return dopo;
+  });
+  return { aggiunti: articoli.length, saltati };
+}
 
 export function useQuantitaNelCarrello(id: number) {
   return useNegozio(negozioCarrello, (s) => (s[id] ? s[id].quantita : 0));

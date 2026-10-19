@@ -41,7 +41,14 @@ PAGAMENTO_SIMULATO=1  # SOLO nel .env del PC, MAI sulla VPS: "Paga e invia" salt
 PAGAMENTO_SIMULATO_FORZA=1  # SOLO se vuoi il bypass ANCHE sulla VPS (con PAGAMENTO_SIMULATO=1): salta Stripe pure con sk_live_ e produzione,
                       #   quindi i clienti veri ordinano SENZA pagare. All'avvio il log scrive ATTENZIONE. Per spegnerlo: togli una riga e riavvia pm2
 APP_URL=https://tuodominio.it        # indirizzo pubblico del sito, per il ritorno da Stripe
+PUSH_ATTIVO=0         # facoltativa: spegne le notifiche push dell'app (di default accese; senza la tabella dispositivi_push non partono)
+EXPO_ACCESS_TOKEN=... # facoltativa: solo se nel progetto Expo è attiva la "sicurezza avanzata" delle push
 ```
+
+**Il proxy davanti al sito deve passare l'indirizzo vero del cliente** (`X-Forwarded-For`) e il protocollo (`X-Forwarded-Proto`): il server si fida di UN solo proxy
+(`trust proxy 1`) e da lì ricava l'indirizzo su cui contare i tentativi di accesso e le registrazioni, e se la richiesta è HTTPS (HSTS, cookie `Secure`). Con nginx:
+`proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;` e `proxy_set_header X-Forwarded-Proto $scheme;`. Con DUE proxy in fila (per esempio Cloudflare + nginx)
+`trust proxy` va portato a 2 in `server.js`, altrimenti tutti i clienti sembrano arrivare dallo stesso indirizzo. Il server resta in ascolto su `127.0.0.1`: non esporlo direttamente.
 
 Il processo gira sotto **pm2** (nome `minuteria`). Per aggiornare dopo un nuovo commit:
 
@@ -128,7 +135,9 @@ server scrive un errore nel log (`[registrazione] distributore predefinito ... n
 *"Nuova anagrafica da approvare"*, e il distributore apre la scheda del cliente, vede tutti i dati fiscali
 e decide: **approva** (indicando il proprio codice cliente) o **rifiuta** se non lo riconosce. I clienti già
 registrati prima del cambio e ancora in attesa restano tali finché il banco non decide (pagina Clienti).
-Il banco può comunque impostare gli **sconti concordati** a ogni cliente approvato (vedi "Sconti al banco").
+Nella pagina di un cliente approvato il banco vede **tutto il materiale che ha ordinato** (ogni ordine, con prezzi IVA inclusa,
+filtro per mese e CSV): è ciò che deve incassare, perché in app l'installatore paga solo il servizio. Gli **sconti concordati**
+non si impostano più da lì (vedi "Sconti al banco").
 
 > **Non ancora applicato**: il codice non blocca né filtra sulla base dell'approvazione — un
 > cliente registrato ma non approvato da nessun banco può comunque inviare richieste, e queste
@@ -147,11 +156,13 @@ niente: tutto resta simulato, anche in locale e nelle prove.
 nel suo iframe e non passa dal nostro server. La carta viene solo **autorizzata**: Stripe blocca l'importo ma non lo
 incassa (`capture_method: manual`). Con la carta autorizzata la richiesta nasce e parte verso i banchi, come prima.
 - **Nasce l'ordine** → la carta si **incassa**, per il totale dell'ordine (se il banco ha applicato uno sconto è più
-  basso dell'autorizzato; mai più alto).
-- **La richiesta si chiude senza ordine** (nessun banco, nessun corriere, annullo) → il blocco si **rilascia**: non è
-  passato un euro, niente rimborsi né commissioni perse. Per "Rinvia richiesta" si paga di nuovo, e la stessa richiesta
-  si riapre.
-- **L'ordine viene annullato dopo l'incasso** → **rimborso** Stripe.
+  basso dell'autorizzato; mai più alto). Da lì esiste la **ricevuta** (vedi "Ricevute, email e annullamento").
+- **La richiesta si chiude senza ordine** (nessun banco, nessun corriere, annullo in fase 1) → il blocco si **rilascia**:
+  non è passato un euro, nessun addebito, nessun rimborso, nessuna ricevuta. Per "Rinvia richiesta" si paga di nuovo
+  (si blocca di nuovo la carta), e la stessa richiesta si riapre.
+- **Il cliente non annulla mai un ordine**: dopo la conferma del banco niente annullamento (né dal sito né dall'app); per un
+  problema si contatta l'assistenza, che può rimborsare dal Dashboard di Stripe (caso raro: la scheda Pagamenti dice
+  "Rimborsata il … su Visa •••• 4242" e compare la "Ricevuta rimborso").
 
 **Quali metodi di pagamento compaiono** lo decide Stripe (scelta dinamica): quelli attivi in Dashboard > Impostazioni >
 Metodi di pagamento che supportano il blocco senza incasso, adatti a paese e dispositivo. Nella sandbox di prova oggi:
@@ -209,9 +220,65 @@ produzione è già stato fatto il 14/10/2026.
 `motivo`, `errore`, `tentativi`, `payment_intent_id`): le righe `da_verificare` sono incassi, rilasci o rimborsi che
 non sono riusciti 30 volte e vanno guardati a mano nel Dashboard. Il log del server riporta `[stripe] ...`.
 
-> **Limite attuale**: l'**app nativa non paga con Stripe**. Finché la `POST /api/v1/richieste` resta simulata, chi
-> ordina dall'app non paga niente anche con Stripe acceso sul sito. Va deciso come portarlo nell'app (pagina di
-> pagamento nel browser di sistema o PaymentSheet) prima di darla ai clienti.
+### Ricevute, email e annullamento
+
+**Cosa vede l'installatore** (scheda "Pagamenti", `partials/pagamenti.ejs`; lo stato lo calcola `pagamenti.statoPagamento`):
+- **Richiesta in attesa** — consegna azzurra "Bloccati sulla carta · addebitati solo se {ditta} conferma", materiale tratteggiato
+  "Lo paghi a {ditta} solo se conferma". Nessuna ricevuta. Resta solo "Annulla la richiesta".
+- **Ordine nato** — la carta è incassata: consegna verde "Pagata il 15/10 · Visa •••• 4242" con il link **Ricevuta**; materiale
+  "Lo paghi a {ditta} con la sua fattura".
+- **Nessuna risposta, o annullata da lui** — UNA riga grigia "Nessun addebito · € 0,00": niente furgone, niente verde, niente
+  ricevuta, pillola "Nessun addebito sulla carta".
+
+**Annullamento solo in fase 1**: richiesta in attesa **e** nessun banco ha ancora accettato (anche se il corriere non ha risposto).
+Il controllo sta dentro la `UPDATE` (e la riga si blocca prima), così una conferma e un annullamento insieme non si incrociano;
+il link sparisce da solo appena un banco conferma. Un ordine non si annulla mai: il sito rifiuta con "Il banco ha già confermato:
+l'ordine non si può più annullare. Per problemi contatta l'assistenza.", e l'API dell'app dice sempre `annullabile: false`.
+
+**Ricevuta.** Al momento dell'incasso si salvano su `stripe_pagamenti` l'indirizzo della ricevuta di Stripe, marca e ultime 4
+cifre della carta e l'istante dell'incasso, e si assegna il numero della **ricevuta nostra** (`R-AAAA-NNNNNN`, progressivo per anno
+e per tipo, tabella `ricevute`). Il PDF (`pdfkit`, A4) si apre da `GET /ordini/:id/ricevuta.pdf` (e `…/ricevuta-rimborso.pdf`),
+solo per il cliente proprietario e solo per un pagamento **incassato**: nessuna ricevuta per un blocco annullato o per una
+richiesta in attesa. C'è anche per i pagamenti **non reali** (simulato dell'app e del PC, Stripe con la chiave di prova), con scritto
+"Pagamento di prova (sandbox): nessun addebito reale."; il numero è lo stesso progressivo dei veri. Nello Storico: "Ricevute del mese" (`GET /storico/ricevute.pdf?mese=AAAA-MM`: un
+solo PDF con una pagina per ricevuta) e il link "Ricevuta" in ogni ordine incassato. Stripe manda per conto suo la propria
+ricevuta via email all'incasso (`receipt_email` sul PaymentIntent), ma **solo in modalità reale**.
+
+**Dati dell'azienda** (nel `.env`, mai nel codice; tutto facoltativo, quello che manca non si stampa):
+
+```
+AZIENDA_NOME=Minuteria                 # logo e intestazione dell'email (default "Minuteria")
+AZIENDA_SOTTOTITOLO=Consegna materiale in cantiere
+AZIENDA_RAGIONE_SOCIALE=...            # "EMESSA DA" nella ricevuta
+AZIENDA_INDIRIZZO=Via ..., 16100 Genova (GE)
+AZIENDA_PIVA=...
+AZIENDA_EMAIL=assistenza@...           # in fondo alla ricevuta
+RICEVUTA_NOTA_FISCALE=...              # riga di nota fiscale, DA FAR CONFERMARE AL COMMERCIALISTA; se manca non si stampa
+```
+
+**Email "Pagamento ricevuto"** (`src/email.js`, nodemailer). Parte dopo l'incasso, **senza mai bloccarlo** (se fallisce si scrive
+nel log e basta). Senza `SMTP_HOST` non parte niente:
+
+```
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587                          # con TLS diretto (465) anche SMTP_SECURE=1
+SMTP_USER=...
+SMTP_PASS=...
+EMAIL_DA=Minuteria <ordini@tuodominio.it>   # facoltativa: se manca "Nome" <SMTP_USER>
+```
+
+I pulsanti della mail ("Scarica la ricevuta", "Segui l'ordine") usano `APP_URL`; senza non compaiono.
+
+**Messa in produzione di questa parte**: lo schema (blocco "Ricevute di pagamento e dati della carta" in fondo a
+`db/postgres/schema.sql`: 4 colonne nuove su `stripe_pagamenti` e la tabella `ricevute`) è **già applicato al database condiviso**
+(19/10/2026, e la VPS usa lo stesso); in un altro database va applicato **prima** del riavvio di pm2. Sulla VPS: `npm ci`
+(nuove dipendenze `pdfkit` e `nodemailer`) e le righe del `.env` qui sopra. Anche se lo schema mancasse, l'incasso non
+si ferma: ricevuta e dati della carta sono "best effort" (errore nel log, nessun effetto sui soldi).
+
+> **L'app nativa paga con Stripe dal 19/10/2026** (foglio di pagamento, PaymentSheet): con Stripe acceso `POST /api/v1/richieste` e
+> `/richieste/:id/reinvia` non creano più la richiesta ma il pagamento, e la richiesta nasce a carta autorizzata (`GET /api/v1/pagamenti/:id`,
+> webhook o timer: la stessa logica del sito). Prima chi ordinava dall'app non pagava niente. Il foglio su un telefono vero non è stato provato
+> (vedi `mobile/ANDROID.md`).
 
 ## Punti vendita sulla mappa
 
@@ -242,7 +309,7 @@ disattivati) sono solo in `db/punti_vendita.js`: lo script che li carica,
    e, in fondo, il riepilogo (merce, RAEE, spedizione, imponibile, IVA, **totale da pagare**) e
    **Paga e invia la richiesta**, attivo solo con l'ordine minimo raggiunto. Il pagamento è
    **Stripe** sul sito se nel `.env` c'è `STRIPE_SECRET_KEY` (vedi "Pagamenti con Stripe"), altrimenti
-   **simulato** (nessun provider né addebito; è anche quello dell'app nativa): `src/pagamenti.js`, colonne
+   **simulato** (nessun provider né addebito; è anche quello dell'app senza Stripe): `src/pagamenti.js`, colonne
    `pagamento_*` su `requests`. Va restituito se la richiesta si chiude senza ordine. Consegna sempre con il
    corriere: il ritiro al banco non esiste più.
 5. **Attesa** — la richiesta parte verso **tutti i distributori attivi** (non filtrata per zona
@@ -250,19 +317,19 @@ disattivati) sono solo in `db/punti_vendita.js`: lo script che li carica,
    disponibilità e, con il gruppo WhatsApp acceso, trovare un corriere. Il cliente vede un
    countdown e lo stato di ogni banco: può chiudere la schermata. Può mandare altre richieste anche
    con una già in attesa o un ordine in consegna ("Stato ordini" le segue tutte); può annullarla
-   (pagamento rimborsato).
+   (solo **finché nessun banco ha accettato**: il blocco sulla carta si toglie, nessun addebito).
 6. **Ordine automatico** — l'installatore **non sceglie né conferma più niente**. L'ordine nasce da
    solo quando una risposta del banco diventa valida: appena **un corriere prende la consegna**
    nel gruppo (vedi "Gruppo WhatsApp dei corrieri") o, a modulo spento, appena il banco accetta.
    All'installatore arriva "Ordine confermato" con il tempo di consegna stimato (quello scritto
    dal corriere). Se nessun banco accetta o nessun corriere prende la consegna entro la finestra,
-   la richiesta si chiude ("Nessuna conferma ricevuta"), il **pagamento torna** e si può
-   reinviare (si paga di nuovo lo stesso importo).
+   la richiesta si chiude ("Nessuna conferma ricevuta"), il **blocco sulla carta si toglie** (nessun
+   addebito) e si può reinviare (si blocca di nuovo la carta).
 7. **Stato ordini** — mostra sempre e solo l'attività più rilevante (in attesa > in consegna >
-   scaduta da poco); lo **Storico** ha tutto il resto. Sul sito l'icona nella barra in basso segue la
+   scaduta da poco); lo **Storico** ha tutto il resto (le richieste annullate si vedono ma non si aprono). Sul sito l'icona nella barra in basso segue la
    fase: anello con conto alla rovescia (in attesa), furgone con i minuti all'arrivo (in consegna),
-   "!" (nessuna risposta). Per ora l'ordine si può ancora annullare finché il banco non lo prende in
-   carico (rimborso): lasciato per la fase di prova.
+   "!" (nessuna risposta). Un ordine **non si annulla mai** dall'app o dal sito: il banco ha già
+   confermato e la carta è incassata (per un problema, l'assistenza).
 
 **Distributore** (banco, telefono) — profili AFIS, BOREA, CAMBIELLI e FIDRA.
 
@@ -313,9 +380,10 @@ nulla, la card mostra lo spazio vuoto.
 ## Sconti al banco
 
 Nella risposta a una richiesta il distributore **non** ha un modulo per scontare: accetta tutto
-al prezzo standard del proprio listino o rifiuta. Restano attivi gli **sconti per ambito** nella
-scheda del singolo cliente (`/distributore/clienti`), anche **a scalare** su 5 colonne (40+10+5 =
-48,7%):
+al prezzo standard del proprio listino o rifiuta. Le **regole di sconto per ambito** già salvate
+restano nel DB (`client_discount_rules`) e la rotta `POST /distributore/clienti/:id/sconti` esiste ancora, ma
+dal 18/10/2026 la pagina del cliente **non ha più il modulo** per modificarle (da decidere se eliminarle del
+tutto). Erano anche **a scalare** su 5 colonne (40+10+5 = 48,7%):
 
 | Ambito | Esempio | Precedenza |
 |---|---|---|
@@ -396,15 +464,13 @@ esempio `preso 30` (anche `preso 1 ora e 15`, `preso 1h30`, `preso mezz'ora`).
 - Senza la parola chiave un messaggio è una chiacchiera e viene ignorato. Se il bot è il numero di
   chi risponde, quello che scrive dal proprio telefono vale come risposta; non valgono i messaggi che
   il bot stesso manda nel gruppo.
-- **Modulo spento** (`WHATSAPP_ATTIVO` non impostato, come in locale): i banchi accettano e
+- **Modulo spento** (`WHATSAPP_ATTIVO=0` o non impostato): i banchi accettano e
   l'ordine nasce subito, senza corriere (con i tempi di consegna stimati dal banco).
 
 Usa Baileys, una libreria **non ufficiale**: il server si comporta come un dispositivo collegato a
 un numero WhatsApp. Serve un **numero dedicato** (con il proprio, il ban blocca anche il telefono)
-che faccia parte del gruppo; WhatsApp può bloccare il numero in qualsiasi momento. Spento finché
-non c'è `WHATSAPP_ATTIVO=1`, e va acceso **in un solo posto, la VPS**: due istanze collegate
-leggerebbero lo stesso gruppo e risponderebbero due volte, e un server locale (stesso DB di
-produzione) scriverebbe nel gruppo vero per ogni ordine di prova. Nel `.env` della VPS:
+che faccia parte del gruppo; WhatsApp può bloccare il numero in qualsiasi momento. Si accende e si spegne dal
+`.env` con `WHATSAPP_ATTIVO=1` / `0` (riavviando il server). Nel `.env` della VPS:
 
 ```
 WHATSAPP_ATTIVO=1
@@ -427,9 +493,28 @@ giù partono appena torna. Prima del primo avvio vanno applicati i due blocchi W
 (senza `--applica` prova a secco; il primo blocco comincia con "-- Gruppo WhatsApp dei corrieri: coda
 dei messaggi").
 
+**In locale** (stesso DB e stesso gruppo della VPS) si può accendere con lo stesso interruttore, ma con due regole, già scritte nel `.env` locale:
+
+```
+WHATSAPP_ATTIVO=0                       # 1 = acceso
+WHATSAPP_ISTANZA=locale                 # il nome di questo server
+WHATSAPP_AUTH_DIR=whatsapp_auth_locale  # una sessione SUA, non quella della VPS
+WHATSAPP_GRUPPO=...                     # nome esatto o id (xxx@g.us); se è vuoto, al collegamento stampa i gruppi del numero
+```
+
+- **Sessione propria**: la prima volta il server stampa un QR (o, con `WHATSAPP_NUMERO`, un codice) da collegare da *Dispositivi collegati*: è un secondo
+  dispositivo sullo stesso numero. Le stesse credenziali usate da due macchine insieme si scollegano a vicenda (errore 440) e rovinano le chiavi: la VPS
+  perderebbe il collegamento. La cartella è fuori da git (`whatsapp_auth*/`).
+- **Un nome per istanza**: ogni messaggio in coda porta il nome del server che l'ha creato (`whatsapp_messaggi.istanza`) e lo invia, lo elimina e ne legge
+  le risposte solo lui, così VPS e locale accesi insieme nello stesso gruppo non mandano messaggi doppi né rispondono due volte al corriere. La VPS, senza
+  `WHATSAPP_ISTANZA`, usa il nome del computer e tratta anche i messaggi senza nome (di prima): **aggiornarla (`git pull` + riavvio) prima di accendere il locale**,
+  altrimenti la versione vecchia manda anche i messaggi del locale. Blocco di schema "WhatsApp: istanza proprietaria dei messaggi" (già applicato al DB condiviso il 19/10/2026).
+- Acceso, l'ordine nasce quando un corriere risponde `preso <minuti>` nel gruppo, con quel tempo di consegna; **ogni ordine di prova fatto in locale scrive nel gruppo vero**.
+  Con `FINESTRA_CONFERMA_SEC` nel `.env` il corriere ha solo quei secondi per rispondere (all'avvio il server lo scrive): togliere la riga.
+
 **Prova con una richiesta finta**, senza toccare banchi e clienti veri: crea un gruppo di prova (il
-numero del bot + un altro telefono che risponde, o il telefono stesso del bot) e lancia, dal PC e
-senza `WHATSAPP_ATTIVO` nel `.env`:
+numero del bot + un altro telefono che risponde, o il telefono stesso del bot) e lancia, dal PC
+(si accende da solo, qualunque cosa dica `WHATSAPP_ATTIVO`):
 
 ```
 node scripts/prova_whatsapp.js --gruppo="Nome del gruppo di prova"
@@ -450,17 +535,18 @@ collegamento solo se il telefono resta offline per circa 14 giorni, se il dispos
 rimosso da *Dispositivi collegati* o se si cancella la cartella: il log dice "sessione chiusa dal
 telefono".
 
-## App nativa (in costruzione)
+## App nativa (Android)
 
-In `mobile/` c'è l'app per telefono, **React Native con Expo** (niente WebView). Per ora è solo
-per l'**installatore**: login, catalogo, ricerca, categorie, elementi con foto, carrello con
-pagamento simulato e richiesta, ordine, stato ordini e storico. Mancano le notifiche push, la
-registrazione (per ora rimanda al sito) e la cancellazione account. Banco e agente restano sul sito.
+In `mobile/` c'è l'app per telefono, **React Native con Expo** (niente WebView), per l'**installatore**: accesso e **registrazione** (tre passi, come il sito), catalogo, ricerca,
+categorie, elementi con foto, carrello con **pagamento con carta** (foglio di Stripe: la carta viene solo bloccata e addebitata quando un banco conferma; senza `STRIPE_SECRET_KEY` è
+il pagamento di prova, nessun addebito), richiesta in attesa, ordine, **Stato ordini con più attività insieme**, Storico (il materiale per mese, con la ricevuta in PDF e "Riordina"),
+profilo con l'anagrafica ed **Elimina account**, **notifiche push**. Banco e agente restano sul sito. Come costruirla, firmarla e pubblicarla su Google Play: **`mobile/ANDROID.md`**.
 
 L'app parla con il server tramite l'API JSON `/api/v1/...` (`src/api_v1.js`), con accesso a
-**token** (`Authorization: Bearer`, tabella `app_tokens`) invece del cookie di sessione.
+**token** (`Authorization: Bearer`, tabella `app_tokens`) invece del cookie di sessione. Con Stripe acceso `POST /api/v1/richieste` **non** crea la richiesta: crea il pagamento e
+l'app apre il foglio di pagamento (`GET /api/v1/pagamenti/:id` dice com'è andata): dall'app non si ordina più senza pagare.
 
-Per provarla sul telefono (stessa rete Wi-Fi del PC, app **Expo Go** installata):
+Per provarla sul telefono (stessa rete Wi-Fi del PC, app **Expo Go** installata; lì non funzionano Google Pay e le push):
 
 ```
 npm start                 # il server, nel progetto principale
@@ -478,10 +564,11 @@ EXPO_PUBLIC_API_URL=http://indirizzo-del-server:3000
 ```
 
 Expo legge i `.env` solo da `mobile/` (quello alla radice è del server). Un indirizzo `http://`
-va bene con Expo Go; in un'app compilata Android e iOS bloccano il traffico non cifrato, quindi
-per la build serve HTTPS. L'aspetto è solo chiaro (niente modalità scura). Le icone delle
-categorie si generano da `src/icone.js` con `node scripts/genera_icone_app.js`; `icon.png` e
-`splash-icon.png` sono ancora i segnaposto di Expo.
+va bene in sviluppo; in un'app installata Android blocca il traffico non cifrato (e l'app, senza un indirizzo HTTPS vero, mostra "App non configurata"),
+quindi per la build serve HTTPS (`mobile/eas.json`). L'aspetto è solo chiaro (niente modalità scura). Le icone delle
+categorie si generano da `src/icone.js` con `node scripts/genera_icone_app.js`; icona e schermata di avvio (la "M" su blu, segnaposto) con `node scripts/genera_icone_android.js`.
+
+Le pagine che Google Play chiede sono nel sito: `/privacy` e `/elimina-account` (`src/testi_legali.js`: **bozza da far rileggere**; il titolare viene da `AZIENDA_*` nel `.env`).
 
 ## Struttura
 
@@ -502,7 +589,10 @@ src/ddt.js             numerazione e dati della bolla / DDT
 src/geo.js             lettura della posizione e distanze
 src/notifiche.js       notifiche in-app
 src/prodotto_json.js   formato JSON dei prodotti (ricerca live, scroll infinito, app)
-src/limite_login.js    limite ai tentativi di login (web e app)
+src/limite_login.js    limiti ai tentativi di login (per utente e per indirizzo, web e app) e alle registrazioni
+src/push.js            notifiche push dell'app (Expo Push Service), registrazione dei telefoni
+src/account.js         eliminazione (anonimizzazione) dell'account dell'installatore
+src/testi_legali.js    informativa sulla privacy e "come eliminare l'account" (/privacy, /elimina-account)
 src/icone.js           icone SVG (sorgente anche per l'app)
 src/sessioni.js        archivio sessioni su database
 src/memo.js            cache a scadenza (60 s) per letture che il server non scrive mai

@@ -4,14 +4,22 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { chiamaApi, ErroreApi, type Richiesta } from '../api';
 import { useContoAllaRovescia, useRichiesta } from '../dati';
+import { completaInvio, type RispostaInvio } from '../pagamento';
+import { useSessione } from '../sessione';
 import { FONT, useTema } from '../tema';
 import { chiedi, informa } from './dialoghi';
+import { Pagamenti } from './Pagamenti';
 import { Caricamento, Errore } from './Stato';
 import { Avviso, Bottone, Card, mmss, Nota, RigaArticolo, SezioneTitolo, StatoBadge } from './ui';
 import { VistaOrdine } from './VistaOrdine';
 
 function tonoEsito(esito: string) {
   return esito === 'confermato' ? 'ok' : esito === 'in_attesa' ? 'info' : 'ko';
+}
+
+// Per l'installatore un banco che sta controllando "sta verificando" (non "in attesa").
+function testoEsito(r: Richiesta['risposte'][number]) {
+  return r.esito === 'in_attesa' ? 'Sta verificando' : r.esito_testo;
 }
 
 function Distributori({ risposte }: { risposte: Richiesta['risposte'] }) {
@@ -27,30 +35,36 @@ function Distributori({ risposte }: { risposte: Richiesta['risposte'] }) {
             <Text style={[stili.pillNome, { color: c.testo }]}>{r.distributore}</Text>
             {r.filiale ? <Text style={[stili.meta, { color: c.grigio }]}>{r.filiale}</Text> : null}
           </View>
-          <StatoBadge testo={r.esito_testo} tono={tonoEsito(r.esito)} />
+          <StatoBadge testo={testoEsito(r)} tono={tonoEsito(r.esito)} />
         </View>
       ))}
     </Card>
   );
 }
 
-function Materiale({ righe }: { righe: Richiesta['righe'] }) {
+// Il materiale richiesto, a prezzo del banco (come sul sito): "Cod. … · € cad.", e sotto "Merce · IVA esclusa".
+function Materiale({ r }: { r: Richiesta }) {
   return (
     <Card>
-      {righe.map((r, i) => (
-        <RigaArticolo key={i} quantita={r.quantita} nome={r.nome} meta={'Cod. ' + r.codice} ultima={i === righe.length - 1} />
+      {r.righe_prezzi.map((x, i) => (
+        <RigaArticolo
+          key={i}
+          quantita={x.quantita}
+          nome={x.nome}
+          meta={`Cod. ${x.codice} · € ${x.cad} cad.`}
+          importo={x.totale}
+          ultima={i === r.righe_prezzi.length - 1}
+        />
       ))}
     </Card>
   );
 }
 
-// Una richiesta pagata, in qualunque stato: attesa di banchi e corrieri (con conto alla rovescia),
-// chiusa senza ordine (pagamento rimborsato) o annullata. Appena l'ordine nasce (corriere trovato) mostra
-// direttamente l'ordine, con il banner di conferma. Si aggiorna da sola ogni pochi secondi finché è aperta.
-// dopoEliminazione: dove andare quando la richiesta non esiste più (una pagina aperta dallo
-// storico torna indietro; "Stato ordini" invece si ridisegna da sola).
-// quandoChiusa: chiamata appena il server conferma un annullamento o un'eliminazione, prima
-// di ricaricare i dati ("Stato ordini" ci mostra "Nessun ordine in corso").
+// Una richiesta, in qualunque stato: verifica della disponibilità (con conto alla rovescia), chiusa senza ordine (nessun addebito) o annullata. Appena
+// nasce l'ordine (corriere trovato) mostra direttamente l'ordine, con il banner di conferma. Si aggiorna da sola ogni pochi secondi finché è aperta.
+// dopoEliminazione: dove andare quando la richiesta non esiste più (una pagina aperta dallo storico torna indietro; "Stato ordini" invece si ridisegna da sola).
+// quandoChiusa: chiamata appena il server conferma un annullamento o un'eliminazione, prima di ricaricare i dati ("Stato ordini" ci mostra
+// "Nessun ordine in corso").
 export function VistaRichiesta({
   id,
   dopoEliminazione,
@@ -61,12 +75,12 @@ export function VistaRichiesta({
   quandoChiusa?: () => void;
 }) {
   const { c } = useTema();
+  const { utente } = useSessione();
   const clientDati = useQueryClient();
   const q = useRichiesta(id);
   const [azione, setAzione] = useState<string | null>(null);
   const secondi = useContoAllaRovescia(q.data?.stato === 'in_attesa' ? q.data.secondi : null, q.dataUpdatedAt);
-  // Se questa schermata ha visto la richiesta "in attesa" e poi è nato l'ordine, l'installatore era qui
-  // ad aspettare: gli si mostra il banner "Ordine confermato".
+  // Se questa schermata ha visto la richiesta "in attesa" e poi è nato l'ordine, l'installatore era qui ad aspettare: gli si mostra il banner "Ordine confermato".
   const vistaInAttesa = useRef(false);
 
   if (q.isPending) return <Caricamento />;
@@ -74,11 +88,10 @@ export function VistaRichiesta({
   const r = q.data;
   if (r.stato === 'in_attesa') vistaInAttesa.current = true;
   if (r.stato === 'ordinata' && r.order_id) {
-    return <VistaOrdine id={r.order_id} nuovo={vistaInAttesa.current} dopoEliminazione={dopoEliminazione} quandoChiusa={quandoChiusa} />;
+    return <VistaOrdine id={r.order_id} nuovo={vistaInAttesa.current} />;
   }
 
-  // eliminata: la richiesta non esiste più, quindi non si rilegge (darebbe "non trovata") e si
-  // esce dalla schermata solo dopo aver aggiornato "Stato ordini", non prima.
+  // eliminata: la richiesta non esiste più, quindi non si rilegge (darebbe "non trovata") e si esce dalla schermata solo dopo aver aggiornato "Stato ordini".
   const esegui = async (nome: string, fn: () => Promise<unknown>, eliminata = false) => {
     setAzione(nome);
     try {
@@ -89,7 +102,7 @@ export function VistaRichiesta({
           : clientDati.invalidateQueries({ queryKey: ['richiesta', id] }),
         // 'all': la scheda "Stato ordini" può essere sotto questa schermata, non in primo piano.
         clientDati.invalidateQueries({ queryKey: ['stato-ordini'], refetchType: 'all' }),
-        clientDati.invalidateQueries({ queryKey: ['storico'] }),
+        clientDati.invalidateQueries({ queryKey: ['materiale'] }),
       ]);
       if (eliminata) dopoEliminazione?.();
     } catch (e) {
@@ -100,28 +113,43 @@ export function VistaRichiesta({
   };
 
   const annulla = () =>
-    chiedi('Annullare la richiesta?', 'Il pagamento ti verrà rimborsato.', 'Annulla richiesta', () =>
-      esegui('annulla', async () => {
-        // ok: false = non più annullabile (l'ordine è nato un istante prima): si ricarica e si
-        // vede l'ordine, senza dire "nessun ordine in corso".
-        const { ok } = await chiamaApi<{ ok: boolean }>(`/richieste/${id}/annulla`, { metodo: 'POST' });
-        if (ok) quandoChiusa?.();
-      })
-    , true);
+    chiedi(
+      'Annullare la richiesta?',
+      'Nessun banco ha ancora confermato: il blocco sulla carta viene tolto e non paghi niente.',
+      'Annulla richiesta',
+      () =>
+        esegui('annulla', async () => {
+          // ok: false = non più annullabile (un banco ha confermato un istante prima): si ricarica e si vede com'è andata.
+          const { ok } = await chiamaApi<{ ok: boolean }>(`/richieste/${id}/annulla`, { metodo: 'POST' });
+          if (ok) quandoChiusa?.();
+          else informa('Non più annullabile', 'Un banco ha appena confermato: la richiesta prosegue e non si può più annullare.');
+        }),
+      true
+    );
   const elimina = () =>
-    chiedi('Eliminare definitivamente?', 'Sparirà anche per i venditori.', 'Elimina', () =>
-      esegui(
-        'elimina',
-        async () => {
-          await chiamaApi(`/richieste/${id}`, { metodo: 'DELETE' });
-          quandoChiusa?.();
-        },
-        true
-      )
-    , true);
-  const reinvia = () => esegui('reinvia', () => chiamaApi(`/richieste/${id}/reinvia`, { metodo: 'POST' }));
+    chiedi(
+      'Eliminare definitivamente?',
+      'La richiesta sparirà dallo storico.',
+      'Elimina',
+      () =>
+        esegui(
+          'elimina',
+          async () => {
+            await chiamaApi(`/richieste/${id}`, { metodo: 'DELETE' });
+            quandoChiusa?.();
+          },
+          true
+        ),
+      true
+    );
+  // "Rinvia richiesta": con la carta vera si blocca di nuovo la consegna (foglio di pagamento), con il pagamento di prova riparte subito.
+  const reinvia = () =>
+    esegui('reinvia', async () => {
+      const risposta = await chiamaApi<RispostaInvio>(`/richieste/${id}/reinvia`, { metodo: 'POST' });
+      await completaInvio(risposta, utente?.ragione_sociale);
+    });
 
-  const rimborsato = r.pagamento?.stato === 'rimborsato';
+  const bancoConfermato = r.risposte.some((x) => x.banco_confermato);
 
   return (
     <ScrollView style={{ backgroundColor: c.sfondo }} contentContainerStyle={stili.pagina}>
@@ -131,63 +159,54 @@ export function VistaRichiesta({
             <View style={[stili.cerchio, { borderColor: c.accentoChiaro, backgroundColor: c.superficie }]}>
               <Text style={[stili.cerchioTesto, { color: c.accento }]}>{mmss(secondi ?? r.secondi)}</Text>
             </View>
-            <Text style={[stili.attesaTitolo, { color: c.testo }]}>Stiamo chiedendo al banco</Text>
+            <Text style={[stili.attesaTitolo, { color: c.testo }]}>Verifica disponibilità</Text>
             <Text style={[stili.attesaTesto, { color: c.grigio }]}>
-              I distributori hanno {r.minuti_risposta} minuti per confermare la disponibilità del materiale e trovare chi
-              consegna. Appena è tutto pronto ti arriva la conferma dell'ordine con il tempo stimato: questa schermata si
-              aggiorna da sola.
+              {r.ditta || 'Il banco'} ha {r.minuti_risposta} minuti per confermare il materiale e trovare chi consegna. Appena è tutto pronto ti arriva la
+              conferma dell’ordine con il tempo stimato: questa schermata si aggiorna da sola.
             </Text>
-            {r.pagamento?.stato === 'pagato' ? (
-              <Text style={[stili.attesaTesto, { color: c.grigio }]}>
-                Hai pagato € {r.pagamento.importo}. Se nessuno conferma in tempo, ti viene rimborsato.
-              </Text>
-            ) : null}
           </Card>
-          <SezioneTitolo>Distributori interpellati</SezioneTitolo>
+          <SezioneTitolo>Banco interpellato</SezioneTitolo>
           <Distributori risposte={r.risposte} />
-          <Nota>
-            Se un distributore non risponde entro i {r.minuti_risposta} minuti la richiesta risulta non confermata: il
-            materiale potrebbe esserci ma non essere reperibile al banco. Se la richiesta si chiude senza ordine, il
-            pagamento ti torna.
-          </Nota>
         </>
+      ) : r.stato === 'annullata' ? (
+        <Avviso tipo="attenzione">Hai annullato questa richiesta.</Avviso>
       ) : (
-        <>
-          {r.stato === 'annullata' ? (
-            <Avviso tipo="attenzione">
-              Hai annullato questa richiesta.{rimborsato && r.pagamento ? ` Il pagamento di € ${r.pagamento.importo} è stato rimborsato.` : ''}
-            </Avviso>
-          ) : (
-            <Avviso tipo="attenzione">
-              Nessun distributore ha confermato la consegna entro i {r.minuti_risposta} minuti. La mancata risposta non
-              vale come disponibilità: il materiale potrebbe esserci ma non essere reperibile al banco.
-              {rimborsato && r.pagamento ? ` Il pagamento di € ${r.pagamento.importo} è stato rimborsato.` : ''}
-            </Avviso>
-          )}
-          {r.risposte.length ? (
-            <>
-              <SezioneTitolo>Distributori interpellati</SezioneTitolo>
-              <Distributori risposte={r.risposte} />
-            </>
-          ) : null}
-        </>
+        <Card stile={stili.attesa}>
+          <View style={[stili.cerchio, { borderColor: c.rossoChiaro, backgroundColor: c.superficie }]}>
+            <Text style={[stili.cerchioTesto, { color: c.grigio }]}>00:00</Text>
+          </View>
+          <Text style={[stili.attesaTitolo, { color: c.testo }]}>{bancoConfermato ? 'Nessun corriere ha confermato' : 'Nessun banco ha confermato'}</Text>
+          <Text style={[stili.attesaTesto, { color: c.grigio }]}>Il tempo per rispondere è scaduto.</Text>
+          <View style={{ marginTop: 10 }}>
+            <StatoBadge testo="Nessun addebito sulla carta" tono="ok" />
+          </View>
+        </Card>
       )}
 
-      <SezioneTitolo>Materiale richiesto</SezioneTitolo>
-      <Materiale righe={r.righe} />
-      <Nota>Prezzi IVA esclusa, già comprensivi del servizio. Richiesta del {r.creato_il}.</Nota>
+      {r.stato === 'nessuna_offerta' && r.risposte.length ? (
+        <>
+          <SezioneTitolo>Banco interpellato</SezioneTitolo>
+          <Distributori risposte={r.risposte} />
+        </>
+      ) : null}
 
-      {r.stato === 'nessuna_offerta' ? (
-        <Bottone
-          titolo={r.pagamento ? `Reinvia richiesta · paghi di nuovo € ${r.pagamento.importo}` : 'Reinvia richiesta'}
-          onPress={reinvia}
-          inCorso={azione === 'reinvia'}
-        />
-      ) : null}
-      {r.stato === 'in_attesa' ? (
-        <Bottone titolo="Annulla la richiesta" tipo="chiaro" onPress={annulla} inCorso={azione === 'annulla'} />
-      ) : null}
-      <Bottone titolo="Elimina definitivamente" tipo="rosso" onPress={elimina} inCorso={azione === 'elimina'} />
+      <SezioneTitolo>Materiale richiesto</SezioneTitolo>
+      <Materiale r={r} />
+      <Nota>Merce · IVA esclusa: € {r.importi.materiale.imponibile}. Prezzi del banco. Richiesta del {r.creato_il}.</Nota>
+
+      <Pagamenti
+        importi={r.importi}
+        stato={r.stato_pagamento}
+        fallback={r.stato === 'in_attesa' ? 'attesa' : 'chiusa'}
+        ditta={r.ditta}
+        motivoChiusura={r.stato === 'annullata' ? 'annullata' : 'banco'}
+        rinvio={r.stato === 'nessuna_offerta' ? r.rinvio : undefined}
+      />
+
+      {r.stato === 'nessuna_offerta' ? <Bottone titolo="Rinvia richiesta" onPress={reinvia} inCorso={azione === 'reinvia'} /> : null}
+      {/* Si annulla solo finché nessun banco ha accettato: poi il pulsante sparisce (anche dalla lettura periodica). */}
+      {r.annullabile ? <Bottone titolo="Annulla la richiesta" tipo="chiaro" onPress={annulla} inCorso={azione === 'annulla'} /> : null}
+      {r.stato !== 'in_attesa' ? <Bottone titolo="Elimina richiesta" tipo="rosso" onPress={elimina} inCorso={azione === 'elimina'} /> : null}
     </ScrollView>
   );
 }

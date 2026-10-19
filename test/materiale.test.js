@@ -7,6 +7,7 @@ const path = require('path');
 let ordini = [];
 let righe = [];
 let richieste = [];
+let righeRichieste = [];
 const chiamate = [];
 const dbFinto = {
   prepare: (sql) => {
@@ -19,6 +20,9 @@ const dbFinto = {
         return ordini.filter((o) => o.cliente_id === p[0] && (filiale === null || o.distributor_id === filiale)).sort((a, b) => b.id - a.id); // ORDER BY o.id DESC
       }
       if (/FROM order_items WHERE order_id = ANY/.test(s)) return righe.filter((r) => p[0].includes(r.order_id));
+      if (/SELECT DISTINCT request_id FROM stripe_pagamenti/.test(s)) return [];
+      // le righe delle richieste chiuse (una lettura sola, con la sotto-query delle stesse richieste) PRIMA della lettura delle richieste: la contiene
+      if (/FROM request_items ri JOIN products p ON p\.id = ri\.product_id WHERE ri\.request_id IN \(/.test(s)) return righeRichieste;
       if (/FROM requests WHERE cliente_id = \? AND order_id IS NULL/.test(s)) return richieste;
       throw new Error('query non prevista dal DB finto: ' + s.slice(0, 100));
     };
@@ -38,20 +42,21 @@ const quando = (anno, mese, giorno, ore = 10, minuti = 0) => {
   return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds());
 };
 // Un ordine con UNA riga: netto del banco, +10% di servizio, RAEE opzionale, consegna 10, IVA 22%.
-function ordine(id, { cliente = 1, banco = 2, ditta = 'BOREA SRL', data = quando(2026, 10, 15), stato = 'evaso', consegnato = false, netto = 100, qta = 1, raee = 0, addebitato = null } = {}) {
+function ordine(id, { cliente = 1, banco = 2, ditta = 'BOREA SRL', data = quando(2026, 10, 15), stato = 'evaso', consegnato = false, netto = 100, qta = 1, raee = 0, addebitato = null, metodo = null, statoPag = null } = {}) {
   const subtotale = netto * qta;
   const cliente_ = Math.round(subtotale * 1.1 * 100) / 100;
   const imponibile = cliente_ + raee * qta + 10;
   ordini.push({
     id, cliente_id: cliente, creato_il: data, stato, consegnato_il: consegnato ? data : null, distributor_id: banco, costo_consegna: 10, totale_netto: subtotale,
     contributo_raee: raee * qta, iva: Math.round(imponibile * 0.22 * 100) / 100, totale_finale: cliente_, distributore_nome: ditta, pagamento_importo: addebitato,
+    request_id: id + 1000, pagamento_metodo: metodo, pagamento_stato: statoPag,
   });
   righe.push({
     order_id: id, product_id: id, codice_snapshot: 'C' + id, nome_snapshot: 'Articolo ' + id, quantita: qta, prezzo_netto_unitario: netto,
     subtotale, subtotale_cliente: cliente_, raee_unitario: raee, raee_riga: raee * qta,
   });
 }
-const prova = (f) => async () => { ordini = []; righe = []; richieste = []; chiamate.length = 0; await f(); };
+const prova = (f) => async () => { ordini = []; righe = []; richieste = []; righeRichieste = []; chiamate.length = 0; await f(); };
 
 test('importo che si paga in app: servizio (10%) + consegna, IVA inclusa; il materiale (prezzo del banco + RAEE) si paga dopo; le due parti fanno il totale', async () => {
   const prodotto = (id, listino, sconto, raee) => ({ prodotto: { id, codice: 'C' + id, nome: 'P' + id, prezzo_listino: listino, sconto_base_pct: sconto, raee }, quantita: 2 });
@@ -114,14 +119,14 @@ test('Storico e pagina del banco: gli importi di un ordine sono quelli di pricin
   assert.deepEqual(per, { 30: [78.69, 20.07], 31: [78.69, 20.07] }, 'nuovo e vecchio dicono la stessa cosa');
 }));
 
-test('stato dell\'ordine: Consegnato, In consegna (partito), In preparazione (inviato o in preparazione)', prova(async () => {
+test('stato dell\'ordine: Consegnato oppure In preparazione (inviato, in preparazione e anche partito: niente "In consegna")', prova(async () => {
   ordine(30, { consegnato: true });
   ordine(31, { stato: 'evaso' });
   ordine(32, { stato: 'in_evasione' });
   ordine(33, { stato: 'inviato' });
   const m = await materiale.materialeOrdini({ clienteId: 1, mese: '2026-10' });
   const stati = Object.fromEntries(m.gruppi[0].ordini.map((o) => [o.id, o.stato.etichetta]));
-  assert.deepEqual(stati, { 30: 'Consegnato', 31: 'In consegna', 32: 'In preparazione', 33: 'In preparazione' });
+  assert.deepEqual(stati, { 30: 'Consegnato', 31: 'In preparazione', 32: 'In preparazione', 33: 'In preparazione' });
   assert.equal(m.riepilogo.nOrdini, 4, 'compaiono tutti, anche quelli ancora in preparazione o in consegna');
 }));
 
@@ -160,15 +165,27 @@ test('più distributori: un gruppo (un riquadro) per ditta; il filtro sul banco 
     { id: 7, stato: 'nessuna_offerta', creato_il: quando(2026, 10, 2) },
     { id: 8, stato: 'annullata', creato_il: quando(2026, 9, 2) },
   ];
+  righeRichieste = [{ request_id: 7, quantita: 2, nome: 'Valvola a sfera' }, { request_id: 7, quantita: 1, nome: 'Raccordo a T' }];
   const m = await materiale.materialeOrdini({ clienteId: 1, mese: 'tutto' });
   assert.deepEqual(m.gruppi.map((g) => [g.nome, g.riepilogo.nOrdini, g.riepilogo.totale]), [['AFIS SPA', 1, 61], ['BOREA SRL', 1, 122]] /* la ditta con l'ordine più recente per prima */);
   assert.equal(m.riepilogo.totale, 183);
   assert.deepEqual(m.senzaOrdine.map((r) => [r.id, r.etichetta, r.tono]), [[7, 'Nessuna risposta', 'nessuna'], [8, 'Annullata', 'annullata']]);
+  // la richiesta ANNULLATA non apre nessuna pagina (href null); quella senza risposta sì (da lì si rinvia)
+  assert.deepEqual(m.senzaOrdine.map((r) => r.href), ['/richieste/7', null]);
+  // la stessa forma di un ordine: data compatta, primo articolo con "+altri" e le righe (quantità e nome, nessun prezzo); senza righe salvate niente primo
+  assert.equal(m.senzaOrdine[0].data, '2 ott, 12:00');
+  assert.equal(m.senzaOrdine[0].primo, '2× Valvola a sfera');
+  assert.equal(m.senzaOrdine[0].altri, 1);
+  assert.deepEqual(m.senzaOrdine[0].righe, [{ quantita: 2, nome: 'Valvola a sfera' }, { quantita: 1, nome: 'Raccordo a T' }]);
+  assert.deepEqual([m.senzaOrdine[1].primo, m.senzaOrdine[1].altri, m.senzaOrdine[1].righe], ['', 0, []]);
+  // le righe di tutte le richieste con UNA sola lettura, insieme alle altre (non una in fila dopo)
+  assert.equal(chiamate.filter((c) => /FROM request_items/.test(c.s)).length, 1);
   assert.deepEqual(m.ditte, ['AFIS SPA', 'BOREA SRL']);
   // il banco: solo i suoi ordini, niente richieste senza ordine, niente Riordina, nessun link se non lo vuole
   const lato = await materiale.materialeOrdini({ clienteId: 1, distributorId: 1, mese: 'tutto', hrefOrdine: () => null });
   assert.deepEqual(lato.gruppi.map((g) => g.nome), ['AFIS SPA']);
   assert.deepEqual(lato.senzaOrdine, []);
+  assert.equal(chiamate.filter((c) => /FROM request_items/.test(c.s)).length, 1, 'il banco non legge le righe delle richieste: nessuna lettura in più');
   assert.equal(lato.gruppi[0].ordini[0].href, null);
   assert.equal(lato.gruppi[0].ordini[0].riordinaId, null);
   // e l'installatore ha Riordina solo sui consegnati
@@ -213,8 +230,192 @@ test('CSV: ";", BOM, una riga per articolo, servizio sulla prima riga dell\'ordi
   assert.equal(csv.charCodeAt(0), 0xfeff);
   const linee = csv.slice(1).split('\r\n');
   assert.equal(linee[0], 'Data;Ordine;Stato;Codice;Articolo;Quantità;Prezzo cad. IVA incl.;Totale IVA incl.;Servizio pagato');
-  assert.equal(linee[1], '15/10/2026;#100;In consegna;C100;"\'- Materiale; ""speciale""";1;122,00;122,00;24,40');
+  assert.equal(linee[1], '15/10/2026;#100;In preparazione;C100;"\'- Materiale; ""speciale""";1;122,00;122,00;24,40');
   assert.equal(linee[2], 'Totale;;;;;;;122,00;24,40');
   assert.equal(materiale.nomeFileCsv(m), 'materiale-2026-10.csv');
   assert.equal(materiale.nomeFileCsv({ mese: 'tutto' }), 'materiale-tutto.csv');
+}));
+
+// ---------- Pagina del cliente lato banco: materialeCliente (stessi numeri di materialeOrdini, disposti per il banco) ----------
+
+test('materialeCliente: TUTTI gli ordini di quel banco, stato del banco, DDT, totali con IVA e RAEE, "di cui IVA", articoli e pezzi', prova(async () => {
+  ordine(10, { netto: 100, raee: 2, stato: 'inviato', data: quando(2026, 10, 16) }); // da preparare: (100 + 2) × 1,22 = 124,44
+  ordine(11, { netto: 30, qta: 2, raee: 1, stato: 'in_evasione', data: quando(2026, 10, 15) }); // (60 + 2) × 1,22 = 75,64
+  ordine(12, { netto: 50, stato: 'evaso', data: quando(2026, 10, 14) }); // bolla emessa, anche lui "in consegna": 61,00
+  ordine(13, { netto: 50, consegnato: true, data: quando(2026, 10, 13) }); // consegnato: 61,00
+  ordine(14, { netto: 999, cliente: 9 }); // di un altro cliente: mai
+  ordine(15, { netto: 999, banco: 1, ditta: 'AFIS SPA' }); // dello stesso cliente ma di un altro banco: mai
+  Object.assign(ordini.find((o) => o.id === 10), { ddt_numero: ' 77 ', request_id: 500 });
+  const m = await materiale.materialeCliente(2, 1, { mese: '2026-10', adesso: quando(2026, 10, 20) });
+  assert.deepEqual(m.ordini.map((o) => [o.id, o.stato.chiave, o.stato.etichetta, o.ddt, o.nArticoli, o.totale]), [
+    [10, 'da_preparare', 'Da preparare', '77', 1, 124.44],
+    [11, 'in_consegna', 'In consegna', '', 1, 75.64],
+    [12, 'in_consegna', 'In consegna', '', 1, 61],
+    [13, 'consegnato', 'Consegnato', '', 1, 61],
+  ], 'dal più recente; ci sono anche quelli ancora da preparare');
+  // totale = somma dei totali di ordine (già IVA inclusa, RAEE dentro); IVA = totale − netti di riga (102 + 62 + 50 + 50 = 264)
+  assert.deepEqual(m.riepilogo, { nOrdini: 4, nArticoli: 4, pezzi: 5, totale: 322.08, iva: 58.08 });
+  // righe: prezzo cad. e totale di riga dai valori salvati, il servizio non c'è
+  assert.deepEqual(m.ordini[1].righe.map((r) => [r.quantita, r.cad, r.totale]), [[2, 37.82, 75.64]]);
+  assert.deepEqual([m.mese, m.meseNome, m.vista, m.vuoto, m.ditta], ['2026-10', 'ottobre', 'ordine', false, 'BOREA']);
+  assert.equal('servizio' in m.ordini[0], false);
+  // la lettura è una sola per gli ordini e una per le righe (niente query per ordine)
+  assert.equal(chiamate.filter((c) => /FROM order_items/.test(c.s)).length, 1);
+  // il banco giusto: le query sono filtrate per cliente e filiale
+  assert.deepEqual(chiamate.find((c) => /FROM orders o/.test(c.s)).p, [1, 2]);
+}));
+
+test('materialeCliente: gli ordini non portano più un link alla pagina dell\'ordine (c\'è solo per quelli "Da preparare", e ci si arriva dalla home)', prova(async () => {
+  ordine(10, { stato: 'inviato' });
+  ordine(11, { stato: 'in_evasione' });
+  ordine(12, { stato: 'evaso' });
+  ordine(13, { stato: 'inviato', consegnato: true }); // segnato consegnato con la rotta provvisoria, ma per il DB è ancora 'inviato'
+  Object.assign(ordini.find((o) => o.id === 10), { request_id: 500 });
+  const m = await materiale.materialeCliente(2, 1, { mese: '2026-10' });
+  assert.deepEqual(m.ordini.map((o) => o.id).sort(), [10, 11, 12, 13]);
+  for (const o of m.ordini) assert.equal('href' in o, false, '#' + o.id);
+  assert.equal(m.ordini.find((o) => o.id === 13).stato.etichetta, 'Consegnato', 'lo stato mostrato guarda consegnato_il per primo');
+  assert.equal('linkOrdineBanco' in materiale, false);
+}));
+
+test('materialeCliente: i due mesi più recenti, gli altri a parte; mese corrente o più recente; "Tutto"; nome del mese', prova(async () => {
+  ordine(40, { data: quando(2026, 10, 15) });
+  ordine(41, { data: quando(2026, 9, 3) });
+  ordine(42, { data: quando(2026, 6, 20) });
+  ordine(43, { data: quando(2026, 3, 2) });
+  const chiedi = (mese, adesso = quando(2026, 10, 20)) => materiale.materialeCliente(2, 1, { mese, adesso });
+  const m = await chiedi(undefined);
+  assert.equal(m.mese, '2026-10');
+  assert.deepEqual(m.mesiRecenti.map((x) => x.chiave), ['2026-10', '2026-09']);
+  assert.deepEqual(m.mesiAltri.map((x) => x.titolo), ['Giugno 2026', 'Marzo 2026']);
+  assert.equal((await chiedi(undefined, quando(2026, 11, 3))).mese, '2026-10', 'novembre non ha ordini: il più recente che ne ha');
+  const tutto = await chiedi('tutto');
+  assert.deepEqual([tutto.mese, tutto.meseNome, tutto.riepilogo.nOrdini], ['tutto', '', 4]);
+  const giugno = await chiedi('2026-06');
+  assert.deepEqual([giugno.mese, giugno.meseNome], ['2026-06', 'giugno']);
+  assert.equal((await chiedi('2026-02')).mese, '2026-10', 'un mese senza ordini torna al corrente');
+  // nessun ordine: scheda vuota, nome del banco dal ripiego, mese corrente
+  ordini = []; righe = [];
+  const vuoto = await materiale.materialeCliente(2, 1, { adesso: quando(2026, 10, 20), ditta: 'AFIS SPA' });
+  assert.deepEqual([vuoto.vuoto, vuoto.mese, vuoto.meseNome, vuoto.ditta, vuoto.mesiRecenti.length], [true, '2026-10', 'ottobre', 'AFIS', 0]);
+  assert.deepEqual(vuoto.riepilogo, { nOrdini: 0, nArticoli: 0, pezzi: 0, totale: 0, iva: 0 });
+}));
+
+test('materialeCliente, per articolo: somma per codice e nome, "prezzi diversi" se i cad. non sono tutti uguali, dal totale più alto', prova(async () => {
+  ordine(20, { netto: 100, qta: 1, data: quando(2026, 10, 10) }); // l'articolo A a 122,00
+  ordine(21, { netto: 100, qta: 3, data: quando(2026, 10, 11) }); // lo stesso articolo A, stesso prezzo
+  ordine(22, { netto: 80, qta: 1, data: quando(2026, 10, 12) }); // ancora A, ma a 97,60
+  ordine(23, { netto: 10, qta: 2, data: quando(2026, 10, 13) }); // B: un solo prezzo
+  ordine(24, { netto: 10, qta: 1, data: quando(2026, 10, 14) }); // ancora B, stesso prezzo
+  for (const id of [21, 22]) Object.assign(righe.find((r) => r.order_id === id), { codice_snapshot: 'C20', nome_snapshot: 'Articolo 20' });
+  Object.assign(righe.find((r) => r.order_id === 24), { codice_snapshot: 'C23', nome_snapshot: 'Articolo 23' });
+  const m = await materiale.materialeCliente(2, 1, { mese: '2026-10', vista: 'articolo' });
+  assert.equal(m.vista, 'articolo');
+  assert.deepEqual(m.articoli.map((a) => [a.nome, a.quantita, a.cad, a.prezziDiversi, a.totale, a.ordini]), [
+    ['Articolo 20', 5, null, true, 585.6, [22, 21, 20]], // 122,00 + 366,00 + 97,60
+    ['Articolo 23', 3, 12.2, false, 36.6, [24, 23]],
+  ]);
+  assert.deepEqual([m.riepilogo.nArticoli, m.riepilogo.pezzi], [2, 8], 'articoli distinti e pezzi totali');
+  assert.equal((await materiale.materialeCliente(2, 1, { mese: '2026-10', vista: 'cosa' })).vista, 'ordine');
+  // lo Storico dell'installatore non cambia: lì le righe restano divise per prezzo
+  const mio = await materiale.materialeOrdini({ clienteId: 1, mese: '2026-10', vista: 'articolo' });
+  assert.deepEqual(mio.gruppi[0].articoli.filter((a) => a.nome === 'Articolo 20').map((a) => [a.quantita, a.cad]), [[4, 122], [1, 97.6]]);
+}));
+
+test('CSV del banco: ";" e BOM, dal più vecchio, DDT e stato del banco, nessun servizio, totale in fondo; nome del file dal cliente e dal mese', prova(async () => {
+  ordine(100, { netto: 100, data: quando(2026, 10, 15) });
+  righe[0].nome_snapshot = '- Materiale; "speciale"'; // comincia per "-" (formula in Excel), ha ";" e virgolette
+  ordine(101, { netto: 50, stato: 'inviato', data: quando(2026, 10, 16) });
+  Object.assign(ordini.find((o) => o.id === 100), { ddt_numero: 'A/1' });
+  const m = await materiale.materialeCliente(2, 1, { mese: '2026-10' });
+  const csv = materiale.csvMaterialeCliente(m);
+  assert.equal(csv.charCodeAt(0), 0xfeff);
+  assert.deepEqual(csv.slice(1).split('\r\n'), [
+    'Data;Ordine;DDT;Stato;Codice;Articolo;Quantità;Prezzo cad. IVA incl.;Totale IVA incl.',
+    '15/10/2026;#100;A/1;In consegna;C100;"\'- Materiale; ""speciale""";1;122,00;122,00',
+    '16/10/2026;#101;;Da preparare;C101;Articolo 101;1;61,00;61,00',
+    'Totale;;;;;;;;183,00',
+    '',
+  ]);
+  assert.equal(/Servizio/i.test(csv), false);
+  assert.equal(materiale.nomeFileCsvCliente('Rossi Impianti S.r.l.', '2026-10'), 'materiale_rossi-impianti-s-r-l_2026-10.csv');
+  assert.equal(materiale.nomeFileCsvCliente('Génova & Figli — Società', 'tutto'), 'materiale_genova-figli-societa_tutto.csv');
+  assert.equal(materiale.nomeFileCsvCliente('', '2026-09'), 'materiale_cliente_2026-09.csv');
+}));
+
+test('scheda "Materiale ordinato" (partial): stato vuoto, "Altri mesi" solo con più di due mesi, nessun servizio', prova(async () => {
+  const ejs = require('ejs');
+  const format = require('../src/format');
+  const icone = require('../src/icone');
+  const disegna = (m) => ejs.renderFile(
+    path.join(__dirname, '..', 'views', 'partials', 'materiale_cliente.ejs'),
+    { m, clienteId: 5, esporta: '/distributore/clienti/5/materiale.csv', euro: pricing.euro, fmt: format, conRitorno: require('../src/http').conRitorno, ...icone },
+  );
+  // nessun ordine: zeri, "Nessun ordine in questo periodo.", niente riga del totale, solo "Tutto" fra i mesi
+  const vuoto = await disegna(await materiale.materialeCliente(2, 1, { adesso: quando(2026, 10, 20), ditta: 'BOREA SRL' }));
+  assert.match(vuoto, /<p class="mc-vuoto">Nessun ordine in questo periodo\.<\/p>/);
+  assert.doesNotMatch(vuoto, /mc-fondo|<details|<table/);
+  assert.match(vuoto, /<div class="mc-box-val">0 · 0<\/div>/);
+  assert.match(vuoto, /<div class="mc-box-val">€ 0,00<\/div>\s*<div class="mc-box-sotto">di cui IVA € 0,00<\/div>/);
+  assert.deepEqual([...vuoto.matchAll(/<a class="mc-seg-voce[^"]*" href="[^"]+"[^>]*>([^<]+)<\/a>/g)].map((x) => x[1]), ['Tutto', 'Per ordine', 'Per articolo']);
+  assert.match(vuoto, /il materiale lo paga a BOREA\./);
+  // vista per articolo vuota: lo stesso messaggio, niente tabella
+  assert.match(await disegna(await materiale.materialeCliente(2, 1, { vista: 'articolo', adesso: quando(2026, 10, 20) })), /Nessun ordine in questo periodo\./);
+
+  // due mesi: nessun "Altri mesi"; quattro mesi: la <select> con gli altri due; se il mese scelto è fra gli altri, la select è quella attiva
+  ordine(40, { data: quando(2026, 10, 15) });
+  ordine(41, { data: quando(2026, 9, 3) });
+  let t = await disegna(await materiale.materialeCliente(2, 1, { mese: '2026-10', adesso: quando(2026, 10, 20) }));
+  assert.doesNotMatch(t, /mc-altri/);
+  ordine(42, { data: quando(2026, 6, 20) });
+  ordine(43, { data: quando(2026, 3, 2) });
+  t = await disegna(await materiale.materialeCliente(2, 1, { mese: '2026-10', adesso: quando(2026, 10, 20) }));
+  assert.match(t, /<input type="hidden" name="vista" value="ordine">\s*<select class="mc-altri-select" name="mese" aria-label="Altri mesi"[^>]*>\s*<option value="" selected disabled>Altri mesi<\/option>\s*<option value="2026-06">Giugno 2026<\/option>\s*<option value="2026-03">Marzo 2026<\/option>/);
+  t = await disegna(await materiale.materialeCliente(2, 1, { mese: '2026-06', adesso: quando(2026, 10, 20) }));
+  assert.match(t, /<select class="mc-altri-select attiva" name="mese"/);
+  assert.match(t, /<option value="2026-06" selected>Giugno 2026<\/option>/);
+  assert.doesNotMatch(t, /selected disabled/, 'con un mese degli "altri" scelto, niente segnaposto');
+  assert.match(t, /Totale di giugno <strong>€ 122,00<\/strong> IVA inclusa/);
+  // nessuna voce mensile attiva fra i segmenti (è la select ad esserlo) e "Tutto" non lo è
+  assert.deepEqual([...t.matchAll(/<a class="mc-seg-voce( attiva)?" href="[^"]+"[^>]*>([^<]+)<\/a>/g)].map((x) => [x[2], !!x[1]]),
+    [['Ottobre 2026', false], ['Settembre 2026', false], ['Tutto', false], ['Per ordine', true], ['Per articolo', false]]);
+}));
+
+test('elenco: ordini e richieste chiuse INSIEME, dal più recente per data di creazione (niente sezione a parte); a parità, prima l\'ordine', prova(async () => {
+  ordine(50, { data: quando(2026, 10, 15, 10, 0) });
+  ordine(51, { data: quando(2026, 10, 5, 10, 0) });
+  ordine(52, { data: quando(2026, 10, 1, 9, 0) });
+  richieste = [
+    { id: 7, stato: 'nessuna_offerta', creato_il: quando(2026, 10, 10, 9, 0) }, // fra il 50 e il 51
+    { id: 8, stato: 'annullata', creato_il: quando(2026, 10, 5, 10, 0) }, // stesso istante del 51: l'ordine prima
+    { id: 9, stato: 'annullata', creato_il: quando(2026, 10, 20, 8, 0) }, // la più recente di tutte
+    { id: 3, stato: 'annullata', creato_il: quando(2026, 9, 30, 8, 0) }, // un altro mese: non c'è
+  ];
+  const m = await materiale.materialeOrdini({ clienteId: 1, mese: '2026-10' });
+  const sigla = (v) => (v.tipo === 'ordine' ? 'O' + v.ordine.id : 'R' + v.richiesta.id);
+  assert.deepEqual(m.elenco.map(sigla), ['R9', 'O50', 'R7', 'O51', 'R8', 'O52']);
+  // le richieste restano nei dati di prima (senzaOrdine) e "vuoto" le conta
+  assert.deepEqual(m.senzaOrdine.map((r) => r.id), [7, 8, 9]);
+  assert.equal(m.vuoto, false);
+  // un mese con le sole richieste non è vuoto; "tutto" le mette in fila con gli ordini
+  const tutto = await materiale.materialeOrdini({ clienteId: 1, mese: 'tutto' });
+  assert.deepEqual(tutto.elenco.map(sigla), ['R9', 'O50', 'R7', 'O51', 'R8', 'O52', 'R3']);
+  // la vista per articolo non cambia: l'elenco c'è sempre, la vista sceglie cosa disegnare
+  assert.equal((await materiale.materialeOrdini({ clienteId: 1, mese: '2026-10', vista: 'articolo' })).elenco.length, 6);
+  // il banco non ha richieste senza ordine: l'elenco ha solo i suoi ordini
+  const lato = await materiale.materialeOrdini({ clienteId: 1, distributorId: 2, mese: '2026-10', hrefOrdine: () => null });
+  assert.deepEqual(lato.elenco.map(sigla), ['O50', 'O51', 'O52']);
+}));
+
+test('ricevuta: anche un pagamento simulato (sandbox) la ha; un pagamento senza incasso né simulato no; il banco mai', prova(async () => {
+  ordine(70, { metodo: 'simulato', statoPag: 'pagato' }); // pagato in simulato: ricevuta di prova
+  ordine(71, { metodo: 'simulato', statoPag: 'rimborsato' }); // blocco tornato: niente
+  ordine(72, { metodo: 'stripe', statoPag: 'pagato' }); // Stripe senza un incasso registrato: niente (lo dice stripe_pagamenti, non la richiesta)
+  ordine(73); // vecchio flusso: niente
+  const m = await materiale.materialeOrdini({ clienteId: 1, mese: 'tutto' });
+  const ricevute = Object.fromEntries(m.gruppi.flatMap((g) => g.ordini).map((o) => [o.id, o.ricevuta]));
+  assert.deepEqual(ricevute, { 70: true, 71: false, 72: false, 73: false });
+  // lato banco: nessun link alle ricevute dell'installatore
+  const lato = await materiale.materialeOrdini({ clienteId: 1, distributorId: 2, mese: 'tutto', hrefOrdine: () => null });
+  assert.ok(lato.gruppi.flatMap((g) => g.ordini).every((o) => o.ricevuta === false));
 }));

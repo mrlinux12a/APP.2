@@ -1,25 +1,10 @@
 <%
-  // Regola di sconto già impostata per un certo ambito/chiave, se c'è.
-  function regola(ambito, chiave) {
-    return regole.find(function (x) { return x.ambito === ambito && x.chiave === (chiave || ''); });
-  }
-  // Valore di uno dei cinque scaglioni a scalare.
-  function scaglione(ambito, chiave, n) {
-    const r = regola(ambito, chiave);
-    if (!r) return '';
-    const v = r['sconto' + n];
-    // Le regole salvate prima delle 5 colonne avevano un valore unico.
-    if (v === null || v === undefined) return n === 1 && !r.sconto1 && r.sconto_pct ? r.sconto_pct : '';
-    return v;
-  }
-  function effettivo(ambito, chiave) {
-    const r = regola(ambito, chiave);
-    return r ? r.sconto_pct : null;
-  }
-
-  // Pagina di un cliente del banco. Tre stati (rapporto.stato): da verificare (a destra il riquadro "È un tuo
-  // cliente?"), approvato (a destra codice, note e sconti) e rifiutato (a destra il pulsante per ripensarci). La
-  // colonna sinistra, con i dati dell'anagrafica, è la stessa per tutti. Una voce senza dato non si disegna.
+  // Pagina di un cliente del banco. Tre stati (rapporto.stato):
+  //  · da verificare: a destra il riquadro "È un tuo cliente?" (colonne 1,5 : 1);
+  //  · rifiutato: a destra il pulsante per ripensarci (come sopra);
+  //  · approvato: a sinistra (360px) i dati dell'anagrafica e la scheda "Cliente approvato", a destra "Materiale ordinato" (tutti gli
+  //    ordini fatti a questo banco, col materiale a prezzi IVA inclusa). Sotto i 900px le colonne si impilano con il materiale SOPRA i dati.
+  // Una voce senza dato non si disegna. Gli sconti concordati non stanno più qui (la rotta POST .../sconti c'è ancora, senza modulo).
   const stato = rapporto.stato;
   const eApprovato = stato === 'approvato';
   const eRifiutato = stato === 'rifiutato';
@@ -64,14 +49,16 @@
   <%# Intestazione unica del banco, con la scheda "Clienti" attiva (la sceglie il percorso /distributore/clienti/...). %>
   <%- include('partials/banco_testa') %>
 
-  <main class="cli-pagina<%= eApprovato ? ' cli-con-barra' : '' %>">
-    <a class="cli-indietro" href="/distributore/clienti"><%- iconaIndietro %>Clienti</a>
-
-    <% if (salvato) { %>
-      <div class="avviso avviso-ok cli-avviso" role="status">Sconti salvati: valgono dalla prossima richiesta.</div>
+  <main class="cli-pagina<%= eApprovato ? ' cli-pagina-larga' : '' %>">
+    <%# Approvato: la freccia sta nella testata, accanto alle iniziali. Gli altri stati hanno la riga "← Clienti" sopra. %>
+    <% if (!eApprovato) { %>
+      <a class="cli-indietro" href="/distributore/clienti"><%- iconaIndietro %>Clienti</a>
     <% } %>
 
-    <div class="cli-intesta">
+    <div class="cli-intesta<%= eApprovato ? ' cli-intesta-app' : '' %>">
+      <% if (eApprovato) { %>
+        <a class="cli-indietro-tondo" href="/distributore/clienti" aria-label="Torna ai clienti"><%- iconaIndietro %></a>
+      <% } %>
       <%- include('partials/iniziali', { nome: cliente.ragione_sociale, persona: cliente.referente, misura: 56, tono: tonoCerchio }) %>
       <div class="cli-intesta-testi">
         <div class="cli-intesta-riga">
@@ -82,7 +69,7 @@
       </div>
     </div>
 
-    <div class="cli-layout<%= eApprovato ? '' : ' cli-layout-decisione' %>">
+    <div class="cli-layout<%= eApprovato ? ' cli-layout-approvato' : ' cli-layout-decisione' %>">
 
       <%# ---------- Sinistra: i dati dell'anagrafica ---------- %>
       <div class="cli-colonna">
@@ -154,33 +141,37 @@
           </section>
         <% } %>
 
-        <%# Materiale ordinato da questo cliente a QUESTO banco e quanto c'è da incassare, mese per mese: gli stessi numeri dello Storico
-            ordini dell'installatore (src/materiale.js, un solo calcolo). Solo per i clienti approvati. %>
-        <% if (eApprovato && typeof materiale !== 'undefined' && materiale) { %>
-          <%
-            const linkMateriale = function (cambio) {
-              const q = Object.assign({ mese: materiale.mese }, cambio);
-              return '/distributore/clienti/' + cliente.id + '?' + Object.keys(q).map(function (k) { return k + '=' + encodeURIComponent(q[k]); }).join('&') + '#materiale';
-            };
-            const gruppoMateriale = materiale.gruppi[0] || { nome: materiale.ditte[0] || 'BOREA', riepilogo: materiale.riepilogo };
-          %>
-          <div class="cli-materiale" id="materiale">
-            <%- include('partials/storico_riquadro', {
-                  m: materiale, g: gruppoMateriale, primo: true, link: linkMateriale,
-                  occhiello: 'Da incassare', esporta: '/distributore/clienti/' + cliente.id + '/materiale.csv'
-                }) %>
-            <% if (materiale.vuoto) { %>
-              <p class="cli-nota">Nessun ordine in questo mese.</p>
-            <% } %>
-            <% materiale.gruppi.forEach(function (g) { g.ordini.forEach(function (o, i) { %>
-              <%- include('partials/storico_ordine', { o, aperto: false }) %>
-            <% }); }); %>
-          </div>
+        <%# Cliente approvato: codice, note e data (le schede di prima, spostate a sinistra sotto i dati dell'anagrafica). %>
+        <% if (eApprovato) { %>
+          <section class="cli-scheda" aria-labelledby="cli-titolo-approvato">
+            <h2 class="cli-scheda-titolo" id="cli-titolo-approvato">Cliente approvato</h2>
+            <dl class="cli-dati cli-dati-1">
+              <% if (rapporto.codice_cliente) { %>
+                <div class="cli-dato">
+                  <dt class="cli-dato-eti">Codice cliente</dt>
+                  <dd class="cli-dato-val cli-cifre"><%= rapporto.codice_cliente %></dd>
+                </div>
+              <% } %>
+              <% if (rapporto.note) { %>
+                <div class="cli-dato">
+                  <dt class="cli-dato-eti">Note interne</dt>
+                  <dd class="cli-dato-val cli-dato-note"><%= rapporto.note %></dd>
+                </div>
+              <% } %>
+              <% if (rapporto.deciso_il) { %>
+                <div class="cli-dato">
+                  <dt class="cli-dato-eti">Approvato il</dt>
+                  <dd class="cli-dato-val"><%= fmt.dataOraRoma(rapporto.deciso_il) %></dd>
+                </div>
+              <% } %>
+            </dl>
+            <p class="cli-nota">Può inviarti richieste di disponibilità.</p>
+          </section>
         <% } %>
       </div>
 
-      <%# ---------- Destra: la decisione (o, per chi è già approvato, codice, note e sconti) ---------- %>
-      <div class="cli-colonna cli-colonna-destra">
+      <%# ---------- Destra: la decisione; per chi è già approvato, il materiale ordinato ---------- %>
+      <div class="cli-colonna cli-colonna-destra<%= eApprovato ? ' cli-colonna-materiale' : '' %>">
         <% if (eDaVerificare) { %>
           <section class="cli-decisione" aria-labelledby="cli-titolo-decisione">
             <h2 id="cli-titolo-decisione">È un tuo cliente?</h2>
@@ -214,89 +205,8 @@
           </section>
 
         <% } else { %>
-          <section class="cli-scheda" aria-labelledby="cli-titolo-approvato">
-            <h2 class="cli-scheda-titolo" id="cli-titolo-approvato">Cliente approvato</h2>
-            <dl class="cli-dati cli-dati-1">
-              <% if (rapporto.codice_cliente) { %>
-                <div class="cli-dato">
-                  <dt class="cli-dato-eti">Codice cliente</dt>
-                  <dd class="cli-dato-val cli-cifre"><%= rapporto.codice_cliente %></dd>
-                </div>
-              <% } %>
-              <% if (rapporto.note) { %>
-                <div class="cli-dato">
-                  <dt class="cli-dato-eti">Note interne</dt>
-                  <dd class="cli-dato-val cli-dato-note"><%= rapporto.note %></dd>
-                </div>
-              <% } %>
-              <% if (rapporto.deciso_il) { %>
-                <div class="cli-dato">
-                  <dt class="cli-dato-eti">Approvato il</dt>
-                  <dd class="cli-dato-val"><%= fmt.dataOraRoma(rapporto.deciso_il) %></dd>
-                </div>
-              <% } %>
-            </dl>
-            <p class="cli-nota">Può inviarti richieste di disponibilità.</p>
-          </section>
-
-          <form method="POST" action="/distributore/clienti/<%= cliente.id %>/sconti">
-            <section class="cli-scheda" aria-labelledby="cli-titolo-sconti">
-              <h2 class="cli-scheda-titolo" id="cli-titolo-sconti">Sconti concordati</h2>
-              <p class="cli-nota">
-                Sconti <strong>a scalare</strong>: 40+10+5 non fa 55, fa 48,7% — ogni sconto si applica
-                sul residuo del precedente. Vale sempre la regola più precisa: linea di prodotto, poi
-                marchio, poi categoria merceologica. Dove non metti nulla resta lo sconto Base del tuo
-                listino, e puoi comunque ritoccare i prezzi riga per riga quando rispondi.
-              </p>
-
-              <h3 class="cli-sotto-titolo">Per categoria merceologica</h3>
-              <div class="cli-elenco-sconti">
-                <% macro.forEach(function (m) { %>
-                  <%- include('partials/riga_sconti', {
-                        ambito: 'macro', chiave: m.slug, icona: iconaCategoria(m.slug),
-                        titolo: m.nome, dettaglio: m.n_prodotti + ' prodotti',
-                        scaglione: scaglione, effettivo: effettivo
-                      }) %>
-                <% }); %>
-              </div>
-
-              <% if (marchi.length) { %>
-                <h3 class="cli-sotto-titolo">Per marchio</h3>
-                <div class="cli-elenco-sconti">
-                  <% marchi.forEach(function (b) { %>
-                    <%- include('partials/riga_sconti', {
-                          ambito: 'marchio', chiave: b.slug, icona: iconaMarchio,
-                          titolo: b.nome, dettaglio: b.n_prodotti + ' articoli',
-                          scaglione: scaglione, effettivo: effettivo
-                        }) %>
-                  <% }); %>
-                </div>
-              <% } %>
-
-              <% if (famiglie.length) { %>
-                <h3 class="cli-sotto-titolo">Per linea di prodotto</h3>
-                <div class="cli-elenco-sconti">
-                  <% famiglie.forEach(function (f) { %>
-                    <%- include('partials/riga_sconti', {
-                          ambito: 'famiglia', chiave: f.marchio_slug + ':' + f.codice, icona: iconaFamiglia,
-                          titolo: f.codice + ' · ' + f.marchio,
-                          dettaglio: f.nome + ' — ' + f.n_prodotti + ' articoli',
-                          scaglione: scaglione, effettivo: effettivo
-                        }) %>
-                  <% }); %>
-                </div>
-              <% } %>
-
-              <p class="cli-nota">Svuota i campi di una riga per togliere la regola e tornare a quella più generale.</p>
-            </section>
-
-            <div class="barra-azione">
-              <div class="interno">
-                <a class="btn btn-chiaro" href="/distributore/clienti">Chiudi</a>
-                <button class="btn btn-primary cli-salva" type="submit">Salva gli sconti</button>
-              </div>
-            </div>
-          </form>
+          <%# Materiale ordinato: TUTTI gli ordini del cliente a questo banco, qualunque stato (src/materiale.js, materialeCliente). %>
+          <%- include('partials/materiale_cliente', { m: materiale, clienteId: cliente.id, esporta: '/distributore/clienti/' + cliente.id + '/materiale.csv' }) %>
         <% } %>
       </div>
     </div>

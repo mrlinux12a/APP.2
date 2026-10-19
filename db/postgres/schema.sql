@@ -646,3 +646,51 @@ ALTER TABLE requests ADD COLUMN IF NOT EXISTS raee_banco DOUBLE PRECISION NOT NU
 ALTER TABLE requests ADD COLUMN IF NOT EXISTS iva_banco DOUBLE PRECISION NOT NULL DEFAULT 0;
 ALTER TABLE requests ADD COLUMN IF NOT EXISTS materiale_banco DOUBLE PRECISION NOT NULL DEFAULT 0;
 ALTER TABLE requests ADD COLUMN IF NOT EXISTS rimborsato_il TIMESTAMP;
+
+-- Ricevute di pagamento e dati della carta (18/10/2026)
+-- All'invio la carta è solo AUTORIZZATA; si incassa quando nasce l'ordine, e da lì esiste la ricevuta. Al momento dell'incasso (src/stripe_pagamenti.js)
+-- si salvano sulla riga di stripe_pagamenti l'indirizzo della ricevuta di Stripe, la marca e le ultime 4 cifre della carta e l'istante dell'incasso
+-- (per "Pagata il 15/10 · Visa •••• 4242"). La ricevuta nostra (PDF, src/ricevute.js) ha un numero progressivo PER ANNO e PER TIPO ('pagamento' o
+-- 'rimborso'): R-AAAA-NNNNNN. Un ordine ha una sola ricevuta per tipo (indice unico su ordine_id + tipo), così rigenerare il PDF non cambia il
+-- numero. Nessuna FK su ordine_id: una ricevuta già emessa non deve sparire con l'ordine. Il blocco si può rilanciare.
+ALTER TABLE stripe_pagamenti ADD COLUMN IF NOT EXISTS receipt_url TEXT;
+ALTER TABLE stripe_pagamenti ADD COLUMN IF NOT EXISTS carta_marca TEXT;
+ALTER TABLE stripe_pagamenti ADD COLUMN IF NOT EXISTS carta_ultime4 TEXT;
+ALTER TABLE stripe_pagamenti ADD COLUMN IF NOT EXISTS incassato_il TIMESTAMP;
+CREATE TABLE IF NOT EXISTS ricevute (
+  id SERIAL PRIMARY KEY,
+  anno INTEGER NOT NULL,
+  numero INTEGER NOT NULL,
+  ordine_id INTEGER NOT NULL,
+  tipo TEXT NOT NULL DEFAULT 'pagamento' CHECK (tipo IN ('pagamento', 'rimborso')),
+  creato_il TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ricevute_numero ON ricevute(anno, numero, tipo);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ricevute_ordine ON ricevute(ordine_id, tipo);
+
+-- Notifiche push dell'app Android (19/10/2026)
+-- Un telefono che entra nell'app registra il suo token Expo (ExpoPushToken[...]): src/push.js lo usa per mandare, oltre alla notifica
+-- in-app, una notifica di sistema (ordine confermato, nessuna conferma, ordine annullato...). Un token e' di UN solo telefono: se lo stesso telefono
+-- entra con un altro utente il token passa a lui (ON CONFLICT sul token). Si cancella con l'uscita dall'app, con l'eliminazione dell'account e
+-- quando Expo dice che il telefono non lo riconosce piu' (DeviceNotRegistered). Nessuna FK su user_id: non deve bloccare mai l'anonimizzazione.
+-- Il blocco si puo' rilanciare. Senza questa tabella tutto il resto funziona: l'app non riceve push (il server lo scrive una volta nel log).
+CREATE TABLE IF NOT EXISTS dispositivi_push (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  token TEXT NOT NULL UNIQUE,
+  piattaforma TEXT NOT NULL DEFAULT 'android',
+  creato_il TIMESTAMP NOT NULL DEFAULT NOW(),
+  aggiornato_il TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_dispositivi_push_user ON dispositivi_push(user_id);
+
+-- Materiale preso, pagina dell'ordine del banco (19/10/2026)
+-- Il banco spunta, riga per riga, il materiale che ha gia' preso dagli scaffali. La spunta si salva sul server (order_items.preso_il: l'istante
+-- della spunta, NULL = non preso) cosi' due persone al banco vedono lo stesso stato. Il blocco si puo' rilanciare.
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS preso_il TIMESTAMP;
+
+-- WhatsApp: istanza proprietaria dei messaggi (19/10/2026)
+-- Ogni messaggio in coda porta il nome dell'istanza del server che l'ha creato (WHATSAPP_ISTANZA, o il nome del computer): lo invia, lo elimina e ne
+-- legge le risposte solo lei, cosi' la VPS e un server locale accesi insieme non mandano messaggi doppi ne' rispondono due volte al corriere.
+-- NULL = riga di prima, o creata da un server non ancora aggiornato (la trattano solo le istanze senza un nome scritto nel .env). Il blocco si puo' rilanciare.
+ALTER TABLE whatsapp_messaggi ADD COLUMN IF NOT EXISTS istanza TEXT;

@@ -6,7 +6,7 @@ const path = require('path');
 const radice = path.join(__dirname, '..');
 const express = require('express');
 const session = require('express-session');
-const { leggiQuery, corpoSempreOggetto, idNumerico, gestoreNonTrovato, gestoreErrori } = require(path.join(radice, 'src/http'));
+const { leggiQuery, corpoSempreOggetto, idNumerico, gestoreNonTrovato, gestoreErrori, ritornoBanco, conRitorno } = require(path.join(radice, 'src/http'));
 const { requireLogin, requireRole } = require(path.join(radice, 'src/auth'));
 const { leggiId, leggiQuantita, QUANTITA_MASSIMA } = require(path.join(radice, 'src/input'));
 
@@ -181,4 +181,43 @@ test('input: id e quantità fuori misura', () => {
   assert.equal(leggiQuantita('99999999999'), QUANTITA_MASSIMA);
   assert.equal(leggiQuantita(undefined), 0);
   assert.equal(leggiQuantita('3.9'), 3);
+});
+
+test('ritornoBanco: la freccia dell\'ordine torna solo a una pagina del banco, mai fuori dal sito', () => {
+  // le pagine da cui si arriva, con query e ancora
+  for (const ok of [
+    '/distributore',
+    '/distributore/storico',
+    '/distributore/storico?stato=consegnati&periodo=30&q=rossi&pagina=2',
+    '/distributore/clienti',
+    '/distributore/clienti/32',
+    '/distributore/clienti/32?mese=2026-10&vista=ordine#materiale',
+    '/distributore/richieste/177',
+    '/distributore/richieste/177?torna=%2Fdistributore%2Fstorico%3Fstato%3Dtutti',
+  ]) assert.equal(ritornoBanco(ok), ok, ok);
+  // il resto torna alla home (o al ripiego): indirizzi esterni, altri percorsi, pagine con effetti, valori non testo
+  for (const no of [
+    'https://altro.it', '//altro.it', '/\altro.it', '/distributore/../login', '/distributorex', '/distributore/ordini/5', '/distributore/storicox',
+    '/distributore/clienti/abc', '/distributore/clienti/32/materiale.csv', '/distributore/richieste/1/elimina', '/carrello', 'distributore/storico',
+    '/distributore/storico\n?x=1', '', null, undefined, ['/distributore/storico'], 42, '/distributore/storico?' + 'a'.repeat(1100),
+  ]) assert.equal(ritornoBanco(no), '/distributore', String(no).slice(0, 40));
+  assert.equal(ritornoBanco('https://altro.it', ''), '', 'ripiego a scelta');
+});
+
+test('conRitorno: aggiunge `torna` all\'indirizzo, con la query o senza, e non fa niente senza ritorno', () => {
+  const pagina = '/distributore/clienti/32?mese=2026-10&vista=ordine#materiale';
+  const via = conRitorno('/distributore/ordini/98', pagina);
+  assert.equal(via, '/distributore/ordini/98?torna=' + encodeURIComponent(pagina));
+  // il valore si ritrova uguale una volta letto dalla query (e vale come ritorno)
+  assert.equal(ritornoBanco(new URL(via, 'http://x').searchParams.get('torna')), pagina);
+  assert.equal(conRitorno('/distributore/richieste/5?errore=x', '/distributore/storico'), '/distributore/richieste/5?errore=x&torna=%2Fdistributore%2Fstorico');
+  assert.equal(conRitorno('/distributore/ordini/98', ''), '/distributore/ordini/98');
+  assert.equal(conRitorno('/distributore/ordini/98', undefined), '/distributore/ordini/98');
+  // annidato: ordine <- richiesta <- storico
+  const richiesta = conRitorno('/distributore/richieste/177', '/distributore/storico?stato=tutti&periodo=7');
+  const ordine = conRitorno('/distributore/ordini/5', richiesta);
+  const torna1 = new URL(ordine, 'http://x').searchParams.get('torna');
+  assert.equal(torna1, richiesta);
+  assert.equal(ritornoBanco(torna1), richiesta);
+  assert.equal(new URL(torna1, 'http://x').searchParams.get('torna'), '/distributore/storico?stato=tutti&periodo=7');
 });

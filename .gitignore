@@ -8,7 +8,7 @@ db/supabase_dump_nt.sql
 foto_catalogo
 
 # Sessione WhatsApp del gruppo corrieri: sono le credenziali del numero, mai in git
-whatsapp_auth/
+whatsapp_auth*/
 
 # Config locale di anteprima (percorsi assoluti della macchina)
 .claude/

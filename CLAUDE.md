@@ -49,7 +49,7 @@ già scritto lì.
   **locale** (non in git) fa leggere a `pricing.getFinestraMinuti` 0,5 minuti invece di `config.finestra_conferma_min` (DB condiviso con la VPS: 10 min,
   **non toccato**, i banchi veri di Borea hanno sempre i loro 10 minuti). Vale solo per l'istanza che ha la riga; all'avvio scrive `[config] FINESTRA_CONFERMA_SEC=...`.
   Per toglierla: via la riga e riavvio. `test/server.test.js` la svuota prima di caricare `server.js`. I testi che dicono "N minuti" arrotondano
-  (0,5 → "1 min", `Math.round`): con 30 s sono imprecisi, non toccati. Un corriere su WhatsApp avrebbe 30 s per rispondere (la finestra è la stessa).
+  (0,5 → "1 min", `Math.round`): con 30 s sono imprecisi, non toccati. Un corriere su WhatsApp avrebbe 30 s per rispondere (la finestra è la stessa): togliere la riga quando si accende WhatsApp in locale.
 
 ## Ditte, filiali, dipendenti (solo Borea, dal 30/09/2026)
 
@@ -288,28 +288,30 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   `/profilo?benvenuto=1` non esiste più.
 - **Storico ordini = materiale e quanto si deve a BOREA** (`views/storico.ejs`, `partials/storico_riquadro.ejs`, `partials/storico_ordine.ejs`; richiesta
   esplicita del 16/10/2026, sostituisce lo storico a schede del 05/10; classi `sm-*`, `st-stato`, `st-riordina`). **Dati e calcolo in `src/materiale.js`**
-  (`materialeOrdini`), lo stesso che usa la pagina del cliente lato banco (`GET /distributore/clienti/:id`, blocco "Da incassare" con gli STESSI componenti)
-  e i due CSV: banco e installatore non possono vedere cifre diverse (test "banco e installatore vedono le STESSE cifre"). Regole: prezzo cad. IVA inclusa
+  (`materialeOrdini`), lo stesso calcolo su cui sta la scheda "Materiale ordinato" della pagina del cliente lato banco (`materialeCliente`, vedi "Clienti del banco"):
+  banco e installatore non possono vedere cifre diverse (test "banco e installatore vedono le STESSE cifre": confronta i numeri, il markup e il CSV del banco sono suoi). Regole: prezzo cad. IVA inclusa
   = `(prezzo_netto_unitario + raee_unitario) × (1 + iva)`, totale riga = `(subtotale + raee_riga) × (1 + iva)`, totale ordine = somma delle righe; **mai**
   `prezzo_unitario_cliente`/`subtotale_cliente` nei totali del materiale (sono il prezzo col servizio, che si paga in app); tutto dai valori **salvati**
   nell'ordine, IVA compresa (`iva / imponibile` dell'ordine, ripiego la config). **"Servizio pagato in app"** per ordine = l'importo realmente addebitato
   (`requests.pagamento_importo`, con Stripe già aggiornato all'incassato) **se coerente** col calcolo `(Σ(subtotale_cliente − subtotale) + costo_consegna) × (1 + iva)`
   (tolleranza 1 centesimo); altrimenti il calcolo (gli ordini di prima, pagati interi in app, e quelli senza importo salvato). È servizio **+ consegna** e non
   entra mai nel totale del materiale. Filtri: `?mese=AAAA-MM|tutto` (default il mese corrente se ha attività, altrimenti il più recente; valori sbagliati tornano lì),
-  `?vista=ordine|articolo`; mesi in **ora italiana** (`format.meseRoma`). Compaiono **tutti** gli ordini (anche in preparazione/consegna: Consegnato / In consegna =
-  `evaso` / In preparazione = `inviato` e `in_evasione`), niente più "In corso" (le richieste in attesa stanno in Stato ordini), le richieste chiuse senza ordine
-  (nessuna risposta, annullate) come schede "Nessun costo". Un riquadro blu per **ditta** (oggi una, BOREA; mai la filiale; con più ditte i chip del mese stanno
-  nel primo). Per ordine: `<details>`, aperto solo il primo; "Riordina" (solo consegnati) è un form `POST /storico/:id/riordina` fuori dal `<summary>`,
-  "Dettagli ›" va a `/ordini/:id`. Per articolo: righe sommate per (codice, nome, prezzo cad.), dal totale più alto. **CSV** `GET /storico/materiale.csv?mese=` (e
-  `GET /distributore/clienti/:id/materiale.csv` per il banco, solo clienti approvati): `;`, BOM UTF-8, una riga per articolo, servizio sulla prima riga di ogni
-  ordine, totali in fondo, celle che cominciano per `= + - @` con un apice (nomi come "- Materiale di montaggio" esistono nel catalogo). **Lato banco** niente
-  Riordina né "Dettagli" (aprire il dettaglio di un ordine `inviato` lo prende in carico) né richieste senza ordine. Prove: `test/materiale.test.js` e i test
-  "storico: ..." di `test/server.test.js`. Il fondo pagina è 96px (`.app-storico`).
+  `?vista=ordine|articolo`; mesi in **ora italiana** (`format.meseRoma`). Compaiono **tutti** gli ordini (anche in preparazione: **solo due etichette**, richiesta esplicita del
+  18/10/2026, non rimettere "In consegna": Consegnato = `consegnato_il`, In preparazione = tutto il resto, anche `evaso`, perché dopo il "preso" del corriere su WhatsApp nel DB non c'è
+  nessun evento di ritiro o partenza; il banco dal suo lato dice "In consegna", vedi "Stati dell'ordine per il banco"), niente più "In corso" (le richieste in attesa stanno in Stato ordini), le richieste chiuse senza ordine
+  (nessuna risposta, annullate) **nello stesso elenco degli ordini, dal più recente per data di creazione, SENZA una sezione "Senza ordine" e con la STESSA scheda dell'ordine** (richieste esplicite del
+  19/10/2026: `materialeOrdini` ritorna `elenco` = ordini e richieste fusi, a parità di istante prima l'ordine; `gruppi`/`senzaOrdine` restano per riquadri, vista per articolo e test; scheda in
+  `partials/storico_richiesta.ejs`: "Richiesta #N" + data compatta, "Nessun costo" al posto dell'importo, stato + primo articolo + "+altri"; le righe vengono da `request_items` con UNA lettura per tutte, insieme
+  alle altre, e hanno solo quantità e nome perché le richieste non salvano prezzi). Un riquadro blu per **ditta** (oggi una, BOREA; mai la filiale; con più ditte i chip del mese stanno
+  nel primo). Per ordine: `<details>` **tutti chiusi all'arrivo** (richiesta esplicita del 18/10/2026: non riaprire il primo); "Riordina" (solo consegnati) è un form `POST /storico/:id/riordina` fuori dal `<summary>`,
+  "Dettagli ›" va a `/ordini/:id`. Per articolo: righe sommate per (codice, nome, prezzo cad.), dal totale più alto. **CSV** `GET /storico/materiale.csv?mese=`: `;`, BOM UTF-8, una riga per articolo, servizio sulla prima riga di ogni
+  ordine, totali in fondo, celle che cominciano per `= + - @` con un apice (nomi come "- Materiale di montaggio" esistono nel catalogo). Il banco ha un suo CSV, senza servizio e col DDT
+  (vedi "Clienti del banco"). Prove: `test/materiale.test.js` e i test "storico: ..." di `test/server.test.js`. Il fondo pagina è 96px (`.app-storico`).
 - **Verifica disponibilità** (`views/richiesta_attesa.ejs`, richiesta esplicita del 04/10/2026, non rimettere
   paragrafi di spiegazione, "Hai pagato…", pulsante notifiche): timer con anello da 148px che si **svuota**,
   tre passaggi (`<ol>`), una scheda per banco, scheda "Materiale richiesto" (`partials/richiesta_materiale.ejs`: righe a prezzo del banco con "Cod. … · € cad.", "Merce · IVA
-  esclusa · prezzi del banco"), scheda **"Pagamenti"** (`partials/pagamenti.ejs`, stato `attesa`: consegna verde "Pagata in app · rimborsata se nessuno accetta", materiale
-  IN SOSPESO, bordo tratteggiato e importo grigio, "Lo paghi a BOREA solo se conferma"; vedi "Importi della richiesta" nel Pagamento), "Annulla" come link. Anello e
+  esclusa · prezzi del banco"), scheda **"Pagamenti"** (`partials/pagamenti.ejs`, stato `attesa` = 'bloccato': consegna AZZURRA col lucchetto "Bloccati sulla carta · addebitati solo se BOREA conferma" (la carta è solo autorizzata), materiale
+  IN SOSPESO, bordo tratteggiato e importo grigio, "Lo paghi a BOREA solo se conferma"; vedi "Importi della richiesta" nel Pagamento e "Pagamenti lato installatore" sotto), "Annulla" come link **solo finché nessun banco ha accettato** (sparisce da sé, anche dal polling). Anello e
   numero sono `[data-arco]`/`[data-countdown]` come l'icona della navbar: li muove **lo stesso timer** di
   `nav_ordini.ejs` (stessa durata `scade_il − creato_il`, stessa formula), per questo il numero non ha più
   `id="countdown"` e il vecchio `mostraTempo` di `app.js` non scrive più niente. Il polling di `app.js` riscrive
@@ -323,13 +325,11 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   "Nessun banco ha confermato" (**"Nessun corriere ha confermato"** se un banco aveva accettato e nessun corriere ha preso la consegna in
   tempo, richiesta esplicita del 15/10/2026: `raggruppaRisposteDitta` porta `bancoConfermato` e la vista lo legge con `esito === 'scaduto'`;
   in quel caso il banco ha il chip verde "Disponibile", e la notifica di chiusura dice lo stesso, scelta da `esito.corrieriScaduti` in
-  `chiudiFinestraRisposte`), rimborso in pillola verde ("€ X rimborsati"; se `pagamento_stato` è ancora
-  `pagato` "Rimborso in corso"; senza pagamento niente pillola; l'importo è `importi.app.totale`), un banco per ditta con il suo stato reale. Sotto il titolo
-  "Il tempo per rispondere è scaduto." (non più "di N minuti": non dipende dalla finestra). Dopo il materiale la scheda **"Pagamenti"** (stato `chiusa`): consegna verde con
-  la freccia di ritorno "Rimborsata il gg/mm sulla tua carta" (o "sul tuo metodo di pagamento" se il metodo non è `stripe`/`simulato`), oppure arancio "Rimborso in corso";
-  materiale grigio "Niente da pagare: BOREA non ha confermato" / "nessun corriere ha accettato la consegna" / "hai annullato la richiesta", "€ 0,00"; **nessun dettaglio degli
-  importi**, al suo posto la nota "Se rinvii la richiesta paghi di nuovo solo la consegna (€ X). Il materiale resta € Y, da pagare a BOREA se conferma." con X e Y ricalcolati
-  OGGI (`dettaglioRichiesta` → `rinvio`). Niente più "Richiesta del …" in fondo al materiale.
+  `chiudiFinestraRisposte`), pillola verde "Nessun addebito sulla carta" (dal 18/10/2026, al posto di "€ X rimborsati" / "Rimborso in corso": la carta era solo bloccata, non c'è nessun rimborso; senza pagamento niente pillola), un banco per ditta con il suo stato reale. Sotto il titolo
+  "Il tempo per rispondere è scaduto." (non più "di N minuti": non dipende dalla finestra). Dopo il materiale la scheda **"Pagamenti"** (stato `chiusa`, dal 18/10/2026 UNA sola riga grigia "Nessun addebito · € 0,00" con la carta di credito, niente furgone né verde né
+  materiale né dettaglio né ricevuta: "Il blocco di € X sulla carta è stato annullato. Nessuna consegna, niente da pagare a BOREA." o, se annullata da lui, "Hai annullato la richiesta: il blocco
+  di € X è stato tolto dalla carta."); al posto del dettaglio la nota "Se rinvii la richiesta blocchiamo di nuovo € X sulla carta, addebitati solo se BOREA conferma. Il materiale (€ Y) lo paghi a BOREA."
+  con X e Y ricalcolati OGGI (`dettaglioRichiesta` → `rinvio`). Niente più "Richiesta del …" in fondo al materiale.
   Il pulsante è "Rinvia richiesta" (una sola "i", niente "paghi di nuovo €"): l'azione e il pagamento sono
   quelli di prima. La data è `fmt.dataOraRoma(creato_il, ', ')`, in ora italiana. "Eliminare" è un link con la
   stessa conferma.
@@ -356,10 +356,9 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   (consegna pagata in app / materiale da pagare a BOREA, mai un totale unico; dal 17/10/2026, vedi "Importi dell'ordine" nel Pagamento); pulsante
   "Ho ricevuto il materiale". Non rimettere "Dettagli consegna e documenti" né la nota sul prezzo definitivo (tolti su richiesta esplicita). Non rimettere: il riquadro verde con l'etichetta "Consegnato" e il nome del banco, il titolo
   "Prodotti", "Costo di consegna" (ora "Consegna in cantiere") né il link "Annulla ordine". Banco, agente e il ritiro **non**
-  consegnato hanno ancora il markup vecchio. **Annullamento**: `flusso.ordineAnnullabileDalCliente` è l'unica regola (pagina,
-  `/ordini/:id/elimina`, `/richieste/:id/elimina`, API dell'app) e vuole `stato = 'inviato'` **e** `consegnato_il` vuoto: con la
-  rotta provvisoria `/consegnato-prova` un ordine risulta consegnato restando `inviato`, e prima si poteva annullare (e
-  rimborsare) anche così. Il rifiuto è `OrdineInLavorazione` (con `consegnato` e `messaggioCliente`), nessuna scrittura.
+  consegnato hanno ancora il markup vecchio. **Annullamento**: dal 18/10/2026 il cliente **non annulla mai un ordine** (`flusso.ordineAnnullabileDalCliente` è sempre `false`: nessun pulsante né sul sito né
+  nell'API, e `/ordini/:id/elimina` rifiuta). Il rifiuto è `OrdineInLavorazione` (con `messaggioCliente` = "Il banco ha già confermato: l'ordine non si può più annullare. Per problemi contatta
+  l'assistenza."), nessuna scrittura. Vedi "Pagamenti lato installatore".
 - **Icona "Stato ordini"** (`views/partials/nav_ordini.ejs`; con più attività in corso segue la **prima inviata**, vedi
   "Più ordini insieme in Stato ordini"): fase calcolata da
   `flusso.statoIconaOrdini` (sola lettura, non segna le notifiche come lette) nel `Promise.all` del
@@ -472,8 +471,8 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   (`ordine_dettaglio.ejs`, in consegna, consegnato e il ritiro del vecchio flusso; la parte alta con anello, "Te lo porta…" e barra non è cambiata): scheda "Materiale in
   arrivo" / "Materiale consegnato" (`partials/ordine_righe.ejs`: righe `Cod. X · € cad.` a prezzo del banco + RAEE, "Merce · IVA esclusa", riga "Documenti · DDT n° N ›" solo se
   c'è il DDT) e scheda "Pagamenti" (`partials/pagamenti.ejs`, UNA per ordine e richieste, classi `pg-*`, parametri `{ importi, stato: 'attesa'|'ordine'|'consegnato'|'chiusa', ditta }`:
-  riga verde "Consegna in cantiere · Pagata in app il gg/mm", riga grigia "Materiale · Da pagare a {ditta}, in fattura", `<details>` "Vedi il dettaglio degli importi" con i due
-  riquadri; ordine rimborsato → riga grigia "Rimborsata il gg/mm" se c'è `rimborsato_il`). **Mai un "Totale" unico** né Consegna/IVA/Totale sotto le righe. **Tolti su richiesta esplicita**: la sezione chiusa "Dettagli consegna e
+  riga verde "Consegna in cantiere · Pagata il gg/mm · Visa •••• 4242" con il link "Ricevuta", riga grigia "Materiale · Lo paghi a {ditta} con la sua fattura", `<details>` "Vedi il dettaglio degli importi"
+  con i due riquadri; i quattro stati (bloccato/pagato/annullato/rimborsato) e il parametro `statoPag` sono descritti in "Pagamenti lato installatore"). **Mai un "Totale" unico** né Consegna/IVA/Totale sotto le righe. **Tolti su richiesta esplicita**: la sezione chiusa "Dettagli consegna e
   pagamento/documenti" (resta solo il DDT: **destinazione e note della richiesta non si vedono più** nella pagina dell'ordine) e la nota "Prezzo definitivo, con eventuale sconto
   aggiuntivo…". Il pulsante "Ordine consegnato" ora è "Ho ricevuto il materiale" (stessa azione). **Banco e agente vedono ancora il markup vecchio** (`subtotale_cliente`,
   `totale_finale`, `totale_ivato`; commento sopra il loro ramo in `ordine_dettaglio.ejs`). Prove:
@@ -495,8 +494,8 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   "Se rinvii la richiesta paghi di nuovo solo la consegna (€ X)" dice la verità. Le righe della scheda "Materiale richiesto" sono sempre a prezzi di oggi (`request_items` non salva
   prezzi): se i prezzi cambiano dopo l'invio, "Merce" (salvata) può non tornare con la somma delle righe. Prove: `test/richieste_importi.test.js` (INSERT, rinvio, rimborso,
   `importiRichiesta`) e i test "richiesta in attesa/scaduta/annullata…" di `test/server.test.js`.
-  Rimborso quando la richiesta si chiude senza ordine (finestra scaduta, tutti rifiutano, annullo, ordine
-  annullato); "Rinvia" lo riaddebita. `pagamento_metodo` è `simulato` (app nativa, o sito senza
+  Quando la richiesta si chiude senza ordine (finestra scaduta, tutti rifiutano, annullo in fase 1) il blocco sulla carta si rilascia (`pagamenti.rimborsa`, solo DB; nel DB resta
+  `pagamento_stato = 'rimborsato'`, ma per l'installatore è "nessun addebito"); "Rinvia" blocca di nuovo la carta. `pagamento_metodo` è `simulato` (app o sito senza
   `STRIPE_SECRET_KEY`) o `stripe` (sito con la chiave: vedi "Pagamenti Stripe" sotto).
   **Consegna dell'ordine = spedizione fissa pagata** (corretto il 05/10/2026): `richieste.calcolaOfferta`
   (da cui nascono ordine e totale dell'offerta) usa `pricing.getSpedizioneFissa()`, la stessa cifra del
@@ -509,8 +508,7 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   bassa di quella pagata): non c'è rimborso della differenza.
 - `'con_offerte'` non si scrive più (resta nel CHECK del DB): una richiesta rimasta così dal vecchio
   flusso la chiude `aggiornaScadenza` come `nessuna_offerta`, senza rimborso né notifica.
-- L'annullo dell'ordine da parte dell'installatore (`eliminaOrdine`, finché il banco non lo prende in
-  carico) è **lasciato apposta per la fase di prova**: a regime non deve poterlo fare.
+- L'annullo dell'ordine da parte dell'installatore **non esiste più** (18/10/2026, prima era lasciato per la fase di prova): `eliminaOrdine` lancia sempre `OrdineInLavorazione`.
 - La risposta del banco (`/distributore/richieste/:id/rispondi`) oggi passa solo `rifiuta`,
   `prezzoRichiesto` e `utenteId`: `rispondi()` supporta ancora `righe`/`sconti`/`scontoCliente`
   (disponibilità parziale, sconto riga per riga) ma nessuna route li usa più — non è codice morto
@@ -521,7 +519,7 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
 `src/stripe_pagamenti.js` (PaymentIntent, pagina di pagamento, webhook, incassi) + punti di aggancio DB-only in
 `src/pagamenti.js`; setup e messa in produzione in README ("Pagamenti con Stripe"). Scelte esplicite dell'utente: carta
 **autorizzata e poi incassata** (non addebito + rimborso), **pagamento nella pagina del sito** con il Payment Element di
-Stripe (prima era Checkout ospitato: cambiato lo stesso giorno, su richiesta), **solo sito** (l'app resta simulata),
+Stripe (prima era Checkout ospitato: cambiato lo stesso giorno, su richiesta), **sito e app Android** (l'app dal 19/10/2026 con il foglio di Stripe, vedi "App Android e sicurezza"),
 **un solo conto Stripe** (niente Connect). Da non rompere:
 - **Senza `STRIPE_SECRET_KEY` tutto è come prima** (`pagamenti.stripeAttivo()`): nessuna query su `stripe_pagamenti`,
   pagamento simulato. Le prove (`test/*.test.js`) non toccano mai Stripe né il DB vero (Stripe finto con
@@ -575,11 +573,55 @@ Stripe (prima era Checkout ospitato: cambiato lo stesso giorno, su richiesta), *
   the script" viene dagli script di Google Pay/Apple Pay, bloccati lì. Non pagare dal browser con un cliente demo: il
   timer farebbe nascere la richiesta e arriverebbe ai banchi veri. Pulire con `DELETE FROM stripe_pagamenti` per id e
   `paymentIntents.cancel`.
-- **Buco noto, da chiudere prima dell'app ai clienti**: `POST /api/v1/richieste` (e `/reinvia`) restano simulate, quindi
-  dall'app si ordina senza pagare anche con Stripe acceso sul sito. Il sito in produzione richiede HTTPS (Stripe.js e
-  webhook in modalità reale).
+- **Buco dell'app chiuso il 19/10/2026**: con Stripe acceso `POST /api/v1/richieste` e `/reinvia` creano il pagamento, non la richiesta (vedi "App Android e
+  sicurezza"). Il sito in produzione richiede HTTPS (Stripe.js e webhook in modalità reale).
 - Schema: blocco "Pagamenti con Stripe" in fondo a `schema.sql` (applicato al DB condiviso il 14/10/2026; `session_id`
   del primo giro con Checkout è stata tolta con un `DROP COLUMN` dentro lo stesso blocco).
+
+## Pagamenti lato installatore: stati, ricevute, email, annullamento (18/10/2026)
+
+Le regole stanno in cima a `src/pagamenti.js` (commento). Dove questa sezione contraddice frasi più vecchie qui sopra, vale questa.
+- **La carta all'invio è solo AUTORIZZATA**; si incassa quando nasce l'ordine (un banco conferma e, con WhatsApp, un corriere prende la consegna). Nessun banco / annullo in fase 1 →
+  il blocco si rilascia (cancel del PaymentIntent, stato `rilasciato`): nessun addebito, **nessun rimborso**, nessuna ricevuta (la ricevuta c'è anche per i pagamenti di prova: vedi `statoPagamento`).
+- **`pagamenti.statoPagamento(richiesta|ordine)`** (e `rigaPagamento`, `calcolaStatoPagamento` puro) dà alle viste UNA chiave: `bloccato` (autorizzato, da_incassare), `pagato` (incassato),
+  `annullato` (da_rilasciare, rilasciato, scaduto, **o richiesta annullata/senza risposta senza incasso anche se Stripe non ha ancora rilasciato**), `rimborsato` (da_rimborsare, rimborsato:
+  raro, lo fa l'assistenza dal Dashboard). Prende l'ultima riga di `stripe_pagamenti` fra quelle che raccontano il destino della carta (con "Rinvia" ce ne sono due). **Senza riga di Stripe**
+  (pagamento simulato dell'app / del PC, o richiesta di prima) lo stato si ricava dalla richiesta. **La ricevuta c'è anche per i pagamenti NON reali** (richiesta esplicita del 19/10/2026, al posto della
+  vecchia regola "mai una ricevuta"): per un pagamento **simulato** con l'ordine nato (`pagamento_metodo = 'simulato'`; un 'stripe' senza la sua riga no: non si sa se è stato incassato); `calcolaStatoPagamento` dà `prova: true`
+  (anche per le righe di Stripe nate con la chiave di prova, `modo = 'test'`), `datiRicevuta` lo passa e il PDF aggiunge in fondo al blocco PAGAMENTO "Pagamento di prova (sandbox): nessun addebito reale." (un'unica riga:
+  `modelloRicevuta`). Il numero R-AAAA-NNNNNN è **lo stesso progressivo** dei pagamenti veri (come già per Stripe con la chiave di prova) e si assegna alla prima apertura del PDF (per il simulato non c'è un incasso che lo
+  assegni): sul DB condiviso con la produzione i numeri di prova si intercalano ai veri. Nello Storico il link "Ricevuta" e "Ricevute del mese" li prendono (`materialeOrdini`: `pagamento_metodo = 'simulato'` e `pagamento_stato = 'pagato'`).
+  Su un pagamento simulato **non parte l'email** "Pagamento ricevuto" (parte solo all'incasso Stripe, `dopoIncasso`). `pagamento_stato = 'rimborsato'` sulla richiesta significa ancora "il blocco è tornato", non un rimborso.
+- **`partials/pagamenti.ejs`**: parametro `statoPag` (`dettaglioRichiesta` e `dettaglioOrdine` lo passano; **non `pagamento`, che nell'ordine è già il pagamento grezzo**), `ordineId` per i link; senza
+  `statoPag` si deduce da `stato`. Quattro stati: bloccato (azzurro #E3EDF7 col lucchetto, materiale tratteggiato), pagato (verde #E3F3E6, "Pagata il 15/10 · Visa •••• 4242", a destra importo e link
+  "Ricevuta"), annullato (UNA riga grigia con la carta di credito), rimborsato (riga grigia con "Ricevuta" e "Ricevuta rimborso"). "Visa •••• 4242" è in `.pg-nowrap` (non si spezza). Il dettaglio
+  degli importi c'è solo in bloccato e pagato.
+- **Cattura e dati dell'incasso** (`stripe_pagamenti.js`, `dopoIncasso`): la `capture` è rimasta **identica** (stessi parametri e chiave `cap-<id>`: aggiungere `expand` con la stessa chiave darebbe un errore
+  di idempotenza di Stripe sui retry); dopo la UPDATE a `incassato` (solo se ha cambiato una riga: una email sola) si fa, **ognuno nel suo try/catch**: lettura di `latest_charge` (ricevuta di Stripe, marca e
+  ultime 4 cifre) e UPDATE di `receipt_url`, `carta_marca`, `carta_ultime4`, `incassato_il`; numero della ricevuta; email (**senza await**, con `.catch`: una promessa rifiutata farebbe cadere Node).
+  Un guasto lì non può far fallire né ripetere l'incasso, nemmeno se lo schema nuovo non è ancora applicato. Il `receipt_email` del PaymentIntent c'era già (`creaIntento`): la ricevuta di Stripe via email la manda
+  Stripe da sola, solo in modalità reale. **Non c'è un recupero per gli incassi di prima**: i vecchi `incassato` non hanno carta né `incassato_il` (la pagina dice "Pagata il …" senza carta, data = ultimo aggiornamento).
+- **Ricevute** (`src/ricevute.js`, `src/azienda.js`): `assegna(ordineId, tipo)` dà il numero R-AAAA-NNNNNN (anno italiano, progressivo per anno e per tipo, indice unico anche su ordine+tipo: rigenerare il PDF non
+  cambia il numero; INSERT…SELECT…ON CONFLICT DO NOTHING con riprova); `datiRicevuta(ordineId, { tipo, clienteId })` ritorna null se non c'è una ricevuta (non incassato, annullato, altro cliente);
+  `modelloRicevuta(d)` è la funzione PURA con tutti i testi (si prova senza decodificare il PDF), `disegnaRicevuta` la disegna con pdfkit (Helvetica: non c'è Sora nel PDF, il resto è come il mockup).
+  Dati dell'azienda **solo da .env** (`AZIENDA_*`, `RICEVUTA_NOTA_FISCALE`, vedi README); la nota fiscale non si stampa se manca. Rotte: `GET /ordini/:id/ricevuta.pdf`, `/ordini/:id/ricevuta-rimborso.pdf`,
+  `GET /storico/ricevute.pdf?mese=` (un PDF, una pagina per ricevuta; 404 se non ce ne sono: il pulsante "Ricevute del mese" compare solo se ce n'è almeno una). "Ricevute del mese" prende gli ordini del mese
+  **per data di creazione dell'ordine** (come la lista), non per data di incasso. La ricevuta di rimborso si numera quando la si apre la prima volta, con la data del rimborso.
+- **Email** (`src/email.js`, nodemailer, SMTP dal .env): `inviaPagamentoRicevuto` non lancia MAI; senza `SMTP_HOST` non parte niente; timeout brevi (10/10/20 s). I pulsanti usano `APP_URL` (senza, non ci sono).
+- **Annullamento solo in fase 1** (`flusso.annullaRichiesta`): transazione con `SELECT … FOR UPDATE` della richiesta (come `rispondi`), poi UPDATE con `stato = 'in_attesa' AND NOT EXISTS (… esito = 'confermato')`
+  (anche se il corriere non ha risposto); poi `pagamenti.rimborsa` = rilascio (mai `da_rimborsare` perché in fase 1 non è incassata). `dettaglioRichiesta` porta `annullabile`, `/api/richieste/:id` anche, e il polling
+  di `app.js` nasconde `[data-annulla-richiesta]` da solo. `eliminaRichiesta` segue la stessa regola (se c'è un ordine o un banco ha confermato lancia `OrdineInLavorazione` **prima** di scrivere;
+  `richiestaId` sull'errore per il link di ritorno). L'ordine non si annulla mai (vedi "Pagina dell'ordine"). L'app Expo non legge ancora `annullabile` sulla richiesta (il server rifiuta comunque, `ok: false`).
+- **Storico dell'installatore**: riquadro blu "Consegne pagate in app: € X" con **due pulsanti** (`.sm-bottoni`, 38px): "Ricevute del mese" e "Esporta elenco"; link "Ricevuta" (`.sm-ricevuta`) accanto a "Dettagli ›" solo
+  sugli ordini con un incasso vero (`materialeOrdini` → `ricevuta`, UNA query in più `SELECT DISTINCT request_id FROM stripe_pagamenti …`, solo per l'installatore); riga "Consegna pagata in app · corriere + 10% + IVA".
+  **Le richieste ANNULLATE** (scheda "Annullata", in fila con gli ordini) **non si aprono e non sono un link** (19/10/2026, richiesta esplicita: `materialeOrdini` dà `href: null` e la partial disegna un `<div class="sm-ordine sm-ordine-chiusa">`
+  senza freccia né `<details>`); quelle chiuse per "Nessuna risposta" sono un `<details>` come l'ordine, e aperte portano a "Dettagli ›" (da lì si rinvia). La rotta `/richieste/:id` di una annullata resta raggiungibile con l'indirizzo; l'app mobile ha il suo storico e non è stata toccata.
+- **Schema**: blocco "Ricevute di pagamento e dati della carta (18/10/2026)" in fondo a `schema.sql` (4 colonne su `stripe_pagamenti`, tabella `ricevute`, due indici unici). **Applicato al DB condiviso il 19/10/2026** (prova a secco e poi `--applica`; verificate colonne, tabella e la query di numerazione su Postgres vero, in una transazione annullata): la VPS usa lo stesso
+  Supabase, quindi lo schema c'è già; sulla VPS servono `git pull`, `npm ci` (`pdfkit`, `nodemailer`) e le righe del `.env` (`AZIENDA_*`, `SMTP_*`). Nel `.env` **locale** c'è solo `AZIENDA_EMAIL=qako746@gmail.com`
+  (provvisoria, richiesta esplicita del 19/10/2026): senza `SMTP_HOST` le email "Pagamento ricevuto" non partono.
+- **Prove**: `test/pagamenti_stato.test.js`, `test/ricevute.test.js`, `test/email.test.js`, `test/annullamento.test.js`, i test "incasso: …" di `test/stripe_pagamenti.test.js` e, in `test/server.test.js`, "richiesta in attesa/scaduta/annullata",
+  "ordine pagato con Stripe", "ordine con il pagamento rimborsato", "il cliente non annulla MAI un ordine" e "storico con pagamenti incassati". Per **vedere** un PDF senza poppler: `pypdfium2` in una cartella fuori dal progetto
+  (`pip install --target <cartella> pypdfium2`); il pannello browser incorporato scarica i PDF invece di mostrarli.
 
 ## Installatori in Via Puggia 22/3 (provvisorio)
 
@@ -620,12 +662,10 @@ Attesa corriere → Da preparare, senza numeri d'ordine delle fasi. Convenzioni 
   **"Ispeziona"** (link al dettaglio, con l'occhio) e **"Non disponibile"** (`rispondi` con `rifiuta` e `torna=home`, subito, senza conferma). Nelle
   schede "Attesa corriere" **"Ispeziona"** è una pillola da 38px in cima a destra (`.btn-ispeziona`; sotto ~300px di scheda va a capo) e il nome del
   cliente non è più un link. **"Da preparare" (richiesta esplicita del 14/10/2026, non rimettere "Prepara")**: due pulsanti uguali affiancati (42px,
-  `.scheda-azioni-ordine`): **"Ispeziona"** apre `/distributore/richieste/<request_id>` (il dettaglio nello stato "Da preparare", col timer del corriere) e
-  **non tocca l'ordine**, che resta in colonna; **"Preparato"** (blu) è un form `POST /distributore/ordini/:id/preparazione` con `torna=home`: `prendiInCarico`
-  porta l'ordine in `in_evasione` (esce dalla colonna) e avvisa il cliente. Un ordine **senza `request_id`** non ha Ispeziona, solo Preparato a tutta larghezza.
-  **Non c'è più un pulsante dalla home verso `/distributore/ordini/:id`** (la pagina con la bolla/DDT): ci si arriva dallo Storico ordini o da "Gestisci
-  l'ordine" nel dettaglio della richiesta (a ordine già preso in carico); aprirla prende in carico l'ordine `inviato`. L'occhio è `iconaOcchio` (già c'era,
-  per la password; stroke 1.9 dal CSS dei pulsanti).
+  `.scheda-azioni-ordine`): **"Ispeziona"** apre `/distributore/ordini/<id>` (dal 19/10/2026: la pagina dell'ordine, dove si spunta il materiale e si emette la bolla; prima
+  apriva il dettaglio della richiesta) e **non tocca l'ordine**, che resta in colonna: la pagina non lo prende più in carico; c'è anche per un ordine **senza `request_id`**.
+  **"Preparato"** (blu) è un form `POST /distributore/ordini/:id/preparazione` con `torna=home`: `prendiInCarico` porta l'ordine in `in_evasione` (esce dalla colonna: per il
+  banco è **"In consegna"**) e avvisa il cliente. L'occhio è `iconaOcchio` (già c'era, per la password; stroke 1.9 dal CSS dei pulsanti).
 - **Tempi**: soglie in `BACHECA` (`server.js`) → `data-soglia-*` sulla bacheca → blocco "Home del banco" di `app.js`: il
   server disegna le classi iniziali, lo script le aggiorna ogni secondo dagli istanti (secondi mancanti + `Date.now()`,
   non un contatore che decrementa). Rosso negli ultimi 180 s, "Nuova" per i primi 180 s, pillola dell'ordine rossa sotto
@@ -754,13 +794,13 @@ timer, "Elimina dal banco" solo come link di testo in fondo.
   un istante (`data-trascorsi`) e ogni secondo aggiorna il cerchio e ogni `[data-da]`, con le stesse funzioni della home (`Minuteria.daMinuti` /
   `tempoTrascorso` in `app.js`; sul server `fmt.daMinuti` / `fmt.tempoTrascorso`: le due versioni devono restare uguali). Quando un corriere accetta,
   `data-auto-refresh` ricarica la pagina nello stato "Confermata".
-- **"Da preparare"** (`statoRichiestaBanco`: conferma + ordine del banco ancora `inviato`, non consegnato; pillola verde): la scheda d'azione ha il **timer del
+- **"Da preparare"** (`statoRichiestaBanco`: conferma + ordine del banco ancora `inviato`, non consegnato; pillola blu dal 19/10/2026, come "Da preparare" nello Storico): la scheda d'azione ha il **timer del
   corriere** (`.ric-arrivo`: cerchio da 84px con i minuti a `orders.corriere_arrivo_il` e "ore HH:MM", rosso sotto i 15 minuti come la pillola della home, "In ritardo"
   a zero; `secondi_arrivo` calcolato in SQL dalla route, il JS `[data-ric-arrivo]` lo muove con `Minuteria.durataMinuti`) e **"Preparato"** (stesso POST del
   pulsante della home). **Come sulla home, quell'orario è la consegna dal cliente** (`corriere_arrivo_il`; nel DB non c'è l'arrivo al banco): la pagina lo
   dice ("Consegna dal cliente entro le HH:MM"). Senza orario (modulo spento) niente timer, solo "Preparato". "Avanzamento" mostra conferma e corriere **fatti**
   e "Da preparare" **in corso** (il pallino in corso prende il colore del suo tono: viola dei corrieri, verde del da preparare). Dopo "Preparato" l'ordine è
-  `in_evasione` e la richiesta torna "Confermata", con "Gestisci l'ordine #N".
+  `in_evasione` e la richiesta torna "Confermata" (senza link all'ordine: la sua pagina non c'è più). Un pulsante "Apri l'ordine e la bolla" (`.ric-btn-bolla`) porta alla pagina dell'ordine finché è "Da preparare".
 - **Timer** (`[data-ric-timer]`, blocco "Dettaglio richiesta del banco" di `app.js`): anello da 80px arancio come sulla home, **rosso negli ultimi
   2 minuti** (`SOGLIA_URGENTE_SEC = 120`; la home usa 3 minuti, `BACHECA.urgenteSec`). Come sulla home parte dai secondi rimasti e li trasforma in un
   istante col `Date.now()` del browser; a zero ricarica. "Rispondi entro le HH:MM" è `requests.scade_il` in ora italiana.
@@ -776,6 +816,43 @@ timer, "Elimina dal banco" solo come link di testo in fondo.
   Sul DB vero: richiesta, cliente e utente banco di prova sul **banco AFIS (id 1, disattivato)**, inseriti con SQL (nessuna notifica, nessun banco vero la
   vede), poi cancellati; il timer di 30 s chiude da solo le richieste di prova scadute.
 
+## Pagina dell'ordine del banco (19/10/2026)
+
+`GET /distributore/ordini/:id` (`server.js`, presentazione in `src/ordine_banco.js`) + `views/distributore_ordine.ejs`: la pagina "Ispeziona" di un ordine **da preparare**: **esiste SOLO per quelli**
+(richiesta esplicita del 19/10/2026, "elimina questa pagina": per un ordine "In consegna" o consegnato era una copia di sola lettura che diceva "Nessuna bolla emessa"; la route fa `redirect` a `/distributore/storico` se
+`stato !== 'inviato'` o c'è `consegnato_il`, e la vista non ha più i rami in consegna / consegnato / bolla emessa), **stessa impostazione a due colonne della richiesta** (classi `ric-*` riusate, `ord-*` solo qui; blocco "Pagina dell'ordine del banco" in fondo a `style.css`; `body.pagina-richiesta
+.pagina-ordine`). Come il dettaglio della richiesta include `partials/banco_testa` **senza** `indietro` (la freccia è la sua, `ric-indietro`, e va a `paginaPrecedente`, vedi sopra). **Aprirla non scrive
+niente** (dal 19/10/2026: prima chiamava `prendiInCarico` e portava l'ordine in preparazione; ora lo fa solo "Preparato", `POST /preparazione`); restano `POST /ddt` ed `/elimina`. Richieste esplicite, non rimetterli: le tre righe in alto ("Ricevuto…",
+"Partenza/Consegna dichiarata", "Consegna con mezzo del distributore"), "Cliente ordinante" a 4 righe, "Dove consegnare: posizione non disponibile", l'"Imponibile" col servizio e la consegna.
+- **Materiale a PREZZO DEL BANCO**: cad. = `prezzo_netto_unitario + raee_unitario`, totale riga = `subtotale + raee_riga`, mai `prezzo_unitario_cliente`; piede = `pricing.importi({ ordine }).banco` (Merce, RAEE solo se > 0,
+  IVA con `ivaPctOrdine`, Totale: 64,50 + 14,19 = 78,69 nell'esempio). `ordine_banco.righeMateriale` abbina i `mancanti` (solo con `copertura = 'parziale'`, altrimenti `calcolaOfferta` non si chiama: pesa) per
+  codice: "richiesti N, ne hai confermati M" sotto il codice; un articolo confermato a zero non è una riga dell'ordine e finisce nella riga "Non confermati…" sotto la tabella.
+- **Spunta "preso" salvata sul server**: colonna `order_items.preso_il TIMESTAMP NULL` (blocco "Materiale preso, pagina dell'ordine del banco" in fondo a `schema.sql`, **applicato al DB condiviso il 19/10/2026**) e
+  `POST /distributore/ordini/:id/righe/:rigaId/preso` (JSON, solo per il banco proprietario e per una riga di quell'ordine; `preso` true/false esplicito o, senza, inverte; risponde `{ ok, preso, presi, totale }`, 404 JSON
+  altrimenti). Ogni riga è una `<label class="ord-riga">` con un vero `<input type="checkbox" data-preso>`: si spunta ovunque sulla riga, anche da tastiera. Il blocco "Pagina dell'ordine del banco" di `app.js` salva senza
+  ricaricare, **una richiesta alla volta in coda** (due insieme potrebbero arrivare invertite), con rollback della casella e un avviso se fallisce. L'altro browser vede la spunta al ricaricamento (la pagina **non** ha
+  `data-auto-refresh`: ricaricarla farebbe perdere ciò che si sta scrivendo nelle annotazioni della bolla).
+- **La bolla si emette solo mentre l'ordine è "Da preparare"** (richiesta esplicita del 19/10/2026: durante la consegna non ha senso), cioè solo da questa pagina. `POST /ddt` lo rifiuta lato server
+  (`ordine.stato !== 'inviato'` e senza DDT → pagina d'errore **409** "La bolla si emette quando l'ordine è ancora da preparare…" con il ritorno allo Storico; un secondo invio con la bolla già emessa passa, `emetti` non
+  rinumera). **Gli ordini già "In consegna" senza bolla non possono più averla** (sul DB condiviso al 19/10/2026: 7, vecchie prove). Emessa la bolla l'ordine diventa `evaso` = "In consegna" e si va alla bolla da stampare
+  (`/ddt/:id`, il cui "‹ Torna" per il banco va allo **Storico**, non più all'ordine). Come si **rivede** una bolla: il numero DDT nello Storico (`.sto-ddt-link`) e "Apri la bolla / DDT N ›" nella scheda cliente
+  (`.mc-vedi`) sono link a `/ddt/:id`. Dalla richiesta in "Da preparare" un pulsante "Apri l'ordine e la bolla" porta qui.
+- **Pulsante della bolla**: spento con `aria-disabled="true"` (non `disabled`) finché non è tutto spuntato, così **senza JavaScript funziona** (richiesta esplicita); il clic e l'Invio da tastiera si fermano nel `click` del
+  pulsante (non nel `submit`: il blocco "doppio invio" di `app.js` disabiliterebbe comunque il pulsante anche con `preventDefault`) e portano il fuoco sulla prima casella da spuntare. Senza articoli è attivo. Etichetta
+  "Emetti bolla e consegna al corriere" (con corriere) / "… e segna la merce partita"; trasporto predefinito `vettore` col corriere, altrimenti mittente/destinatario secondo la modalità (`trasportoPredefinito`). **"Aspetto dei beni"
+  è un gruppo di radio veri** (`name="aspetto"`, non un hidden + pulsanti: funziona anche senza JS). Dopo l'emissione si va a `/ddt/:id` (la bolla da stampare), non più a questa pagina.
+- **Riquadro "Ritiro"**: solo con `corriere_arrivo_il`; cerchio verde / rosso sotto `BACHECA.arrivoVicinoMin` (15), "In ritardo" a zero, lo muove il blocco di `app.js` di `[data-ric-arrivo]` (lo stesso
+  del dettaglio della richiesta, ogni secondo). **Attenzione**: `corriere_arrivo_il` per il resto del sito è la **consegna dal cliente** (nel DB non c'è un orario di arrivo del corriere al banco), ma qui, su richiesta esplicita, il testo
+  dice "Il corriere ritira alle HH:MM" e "Ritiro alle HH:MM" come la pillola della home ("ritira Marco · ore HH:MM"). Se si vuole l'orario vero del ritiro serve un dato che oggi non c'è.
+- **Avanzamento** (`passiOrdine`): Confermato da te (ora di `risposto_il`, se no `creato_il`) → Corriere trovato ("{nome} ha accettato alle HH:MM" da `corriere_risposto_il`; **non c'è senza corriere**) → Da preparare (attuale, blu, pallino che pulsa) → In consegna → Consegnato (questi ultimi due ancora da venire: `passiOrdine({ oraConferma, corriere, oraRitiro })`, fisso, perché la pagina c'è solo per "Da preparare"). **Colori** come nello Storico: Da preparare blu, In consegna verde, Consegnato grigio (anche la pillola "Da preparare" del dettaglio richiesta è blu; la colonna "Da preparare" della home è
+  rimasta verde: non toccata).
+- **Lista di prelievo**: `window.print()` con un blocco `.ord-stampa` (nascosto a schermo) e `@media print` che nasconde tutto il resto: ordine, cliente, indirizzo e una tabella con caselle vuote, **senza prezzi**.
+- **Mobile (< 900px)**: una colonna, ordine: testata, Ritiro, Materiale, Bolla, Consegna, Cliente, Avanzamento, Elimina (`display: contents` sulle colonne e sulla coppia Consegna/Cliente + `order`); la tabella diventa una
+  lista (casella, badge, nome e codice con il cad., totale); sotto i 560px e fra 900 e 1100px i campi della bolla stanno uno sotto l'altro (i segmenti di "Aspetto" si accavallavano).
+- **Prove**: `test/ordine_banco.test.js` (parti pure) e, in `test/server.test.js`, "banco: pagina dell'ordine a due colonne…" e "…disponibilità parziale e RAEE…" (DB finto: ordine 1295 come nel disegno). Sul browser vero: Postgres
+  locale usa-e-getta (vedi "App Android e sicurezza"), `node server.js` con `DATABASE_URL` locale e le variabili `STRIPE_*`, `WHATSAPP_ATTIVO`, `PUSH_ATTIVO`… svuotate, un banco, un cliente e due ordini inseriti con SQL;
+  la stampa si simula iniettando lo stile con `@media print` → `@media all`.
+
 ## Storico ordini del banco (14/10/2026)
 
 `GET /distributore/storico` (`server.js`, logica in `src/storico_banco.js`) + `views/distributore_storico.ejs`, classi `sto-*` (blocco
@@ -786,10 +863,13 @@ non rimetterli: niente freccia indietro (è una scheda dell'intestazione, come C
 nota "Flusso del banco: …" in fondo.
 - **Stato di un ordine**: `statoStorico(o)` è l'unico punto (e `CONDIZIONE_STATO` è la stessa regola in SQL: conteggi delle schede e filtro
   della lista non possono divergere). **`consegnato_il` si guarda per primo**: con `/consegnato-prova` un ordine risulta consegnato restando
-  `inviato` (oggi l'ordine #91 è così). Poi `inviato` = Da preparare (verde), `in_evasione` = In preparazione (arancio), `evaso` = Partito (blu),
-  consegnato = grigio.
-- **Filtri nell'URL**, tutti lato server: `?stato=tutti|da_preparare|in_preparazione|partiti|consegnati&periodo=oggi|7|30|tutti&q=&pagina=N`
-  (default tutti e 7 giorni; valori sconosciuti tornano al default). Il periodo ragiona in **ora italiana** sulle colonne `TIMESTAMP` UTC: "oggi" è
+  `inviato` (oggi l'ordine #91 è così). Poi `inviato` = **Da preparare (blu)**, `in_evasione` (Preparato) **e** `evaso` (bolla emessa) = **In consegna (verde)**,
+  consegnato = grigio. **Stati dell'ordine per il banco** (richiesta esplicita del 19/10/2026, valgono in Storico, scheda cliente, CSV del cliente e pagina dell'ordine): non esistono più "In preparazione" né "Partito"
+  (chiavi `da_preparare` / `in_consegna` / `consegnato`, classi `sto-st-*` e `ric-st-*`); "In consegna" è dopo "Preparato" o dopo la bolla, e la bolla si emette prima (vedi "Pagina dell'ordine del banco").
+- **Righe**: solo quella "Da preparare" è un link (`<a class="sto-riga">` alla pagina dell'ordine, con `torna` = lo Storico com'è adesso, e la freccia `›`); le altre (In consegna, Consegnato) sono un
+  `<div class="sto-riga sto-riga-fissa">` senza link né freccia (la pagina dell'ordine per loro non esiste più), e il numero di DDT, se c'è, è un link blu alla bolla (`/ddt/:id`).
+- **Filtri nell'URL**, tutti lato server: `?stato=tutti|da_preparare|in_consegna|consegnati&periodo=oggi|7|30|tutti&q=&pagina=N`
+  (default tutti e 7 giorni; valori sconosciuti tornano al default; i vecchi `in_preparazione` e `partiti` valgono `in_consegna`: `FILTRI_VECCHI`). Il periodo ragiona in **ora italiana** sulle colonne `TIMESTAMP` UTC: "oggi" è
   la mezzanotte di Roma, 7 e 30 sono gli ultimi N giorni da adesso. La ricerca è `ILIKE` su ragione sociale e numero DDT, più `o.id =` se quello che
   si scrive (tolto un `#`) è solo cifre; i `%` e `_` scritti dall'utente valgono per sé; sempre con segnaposto. **I conteggi delle schede** sono una
   query con `COUNT(*) FILTER` con gli stessi filtri di periodo e ricerca ma **senza** lo stato (il numero dice cosa si trova cliccando). Lista: `o.id DESC`,
@@ -800,16 +880,24 @@ nota "Flusso del banco: …" in fondo.
   solo quando i contatori della home cambiano: una consegna (`consegnato_il`) non li cambia, quindi non fa ricaricare lo storico da sola.
 - **Sotto i 900px**: ricerca a tutta larghezza, schede che scorrono di lato senza barra, la tabella diventa una lista di card (quattro righe, senza la
   città). Da 640px in giù il pulsante "Storico ordini" della barra sparisce e resta la voce nella tendina; il menu in basso è sempre Home e Clienti.
+- **La freccia indietro di ordine e richiesta torna da dove si è arrivati** (richiesta esplicita del 19/10/2026; prima era fissa su `/distributore`, la home): chi porta a
+  `/distributore/ordini/:id` o `/distributore/richieste/:id` aggiunge `?torna=<pagina di partenza, codificata>` con `conRitorno` (`src/http.js`, in `app.locals` per le viste): la riga dello Storico
+  "Da preparare" (con i filtri e la pagina: `link({})`; il "Vedi ordine #N ›" della scheda cliente non c'è più). Le due pagine leggono `ritornoBanco(req.query.torna)`: **vale solo una pagina del
+  banco** (home, Storico, elenco e scheda cliente, richiesta; con query e ancora), tutto il resto torna alla home, mai un indirizzo esterno (open redirect). Dalla richiesta il link all'ordine
+  ("Apri l'ordine e la bolla", e "Ordine collegato" in attesa corriere) c'è **solo finché l'ordine è "Da preparare"** (`linkOrdine` null altrimenti: dopo "Preparato" la sua pagina non esiste, e "Gestisci l'ordine" è stato tolto);
+  la freccia dell'ordine riporta alla richiesta, e la richiesta a sua volta a `torna` (annidato). Nelle viste il valore passato alle due pagine si chiama
+  `paginaPrecedente`, **non `indietro`**: `partials/banco_testa` (inclusa) lo leggerebbe e disegnerebbe una seconda freccia. Non passa dai POST: dopo "Emetti bolla" o un errore di risposta la
+  freccia riparte dalla home. Prove: `test/http.test.js` (`ritornoBanco`, `conRitorno`) e "banco: la freccia di ordine e richiesta riporta…" in `test/server.test.js`.
 - Prove: `test/storico_banco.test.js` (parti pure) e i quattro test "banco: Storico ordini…" / "/distributore/ordini porta allo Storico" in
   `test/server.test.js` (DB finto che tiene SQL e parametri delle query). Per provarlo sul DB vero serve un utente `distributore` di prova (non quelli
-  del README: sono persone vere): `INSERT INTO users` con `bcrypt`, poi cancellarlo con le sue `session`. **Non aprire dal browser il dettaglio di un
-  ordine `inviato`**: `prendiInCarico` lo porta in preparazione e avvisa il cliente.
+  del README: sono persone vere): `INSERT INTO users` con `bcrypt`, poi cancellarlo con le sue `session`. Aprire il dettaglio di un
+  ordine `inviato` non lo tocca più (dal 19/10/2026); lo porta "In consegna" solo "Preparato" (POST `/preparazione`, che avvisa il cliente) o la bolla.
 
 ## Clienti del banco (14/10/2026)
 
 `views/distributore_clienti.ejs` e `views/distributore_cliente.ejs` (classi `cli-*`, blocco "Clienti del banco" in
-fondo a `style.css`); logica di approvazione, rifiuto e sconti **invariata** (`POST .../decidi` e `.../sconti`, stessi
-campi `codice_cliente`, `note`, `azione`, `sconto<n>_<ambito>_<chiave>`). Richieste esplicite, non rimetterli:
+fondo a `style.css`); logica di approvazione e rifiuto **invariata** (`POST .../decidi`, stessi campi `codice_cliente`, `note`, `azione`). La rotta
+`POST .../sconti` (campi `sconto<n>_<ambito>_<chiave>`) c'è ancora, **ma la pagina non ha più il modulo** (vedi "Pagina del cliente approvato"). Richieste esplicite, non rimetterli:
 - **Niente freccia indietro né riga titolo** in cima all'elenco: "Clienti" è una scheda dell'intestazione, quindi le due
   pagine includono `partials/banco_testa` **senza** `intestazione`/`indietro` (non passare da `appbar.ejs`). Titolo
   "Clienti" + campo di ricerca `[data-cerca-clienti]` (non `[data-ricerca]`: quello è la ricerca del catalogo).
@@ -827,14 +915,34 @@ campi `codice_cliente`, `note`, `azione`, `sconto<n>_<ambito>_<chiave>`). Richie
   rifiutato, nessuno = blu/approvato).
 - Pagina del cliente: colonna sinistra = dati (fatturazione in 3 colonne, "Controlla su VIES ↗" in una nuova scheda,
   sede legale e consegna abituale, contatti `tel:`/`mailto:`), destra = decisione. Per i **da verificare e i rifiutati**
-  la decisione va sopra i dati sotto i 900px; per gli approvati (codice, note, sconti) no. **Una voce senza dato non si
+  la decisione va sopra i dati sotto i 900px (l'approvato ha un altro layout, vedi sotto). **Una voce senza dato non si
   disegna** (PEC, consegna, referente, telefono, email). La consegna abituale è una stringa sola
   ("Via X 1, 16131 Genova (GE)"): la via è ciò che sta prima della prima virgola. La città si mostra com'è salvata
   (un cliente ha "Génova" con l'accento nel DB: richiesta esplicita di non correggere i dati).
 - Il riquadro "È un tuo cliente?" è `sticky` con `top: 80px` (64px dell'intestazione, anch'essa sticky, + 16px): con
   `top: 16px` finirebbe sotto la barra. La conferma sul rifiuto è un `onclick="return confirm(...)"` sul solo pulsante
   "rifiuta" (il form è uno, con i due pulsanti `name="azione"`).
-- La barra "Salva gli sconti" (`.barra-azione`) da 900px in su sta a `bottom: 0` (il menu in basso non c'è).
+- **Pagina del cliente approvato** (richiesta esplicita del 18/10/2026; al posto dei blocchi "Da incassare" e "Sconti concordati", non rimetterli): testata con freccia
+  tonda (`.cli-indietro-tondo`, niente riga "← Clienti") e pallino "● Approvato" (`.cli-intesta-app`); `.cli-layout-approvato` = colonna da 360px (fatturazione,
+  contatti, "Cliente approvato": le schede di prima, spostate) + `partials/materiale_cliente.ejs` (classi `mc-*`, col contesto scritto in testa: in app l'installatore
+  paga SOLO il servizio, il materiale lo paga dopo al banco, che qui ha tutto ciò che deve incassare, IVA inclusa; il servizio non compare mai). Contenitore
+  allargato da 900px (`.cli-pagina-larga`, 1600px). Sotto i 900px colonne impilate con il materiale **prima** dei dati; da 900px la scheda ha
+  `max-height: calc(100vh − 180px)` e scorre solo `.mc-elenco` (testata, filtri e riepilogo fissi), sotto scorre la pagina (niente scroll annidato su telefono).
+  Le regole di layout dell'approvato stanno in `@media (min-width: 900px)`: il blocco è in fondo al file e senza quella guardia vincerebbe sulla regola dei 900px (a 768px
+  le colonne restavano affiancate). **Un solo calcolo**: `materiale.materialeCliente(distributorId, clienteId, { mese, vista, ditta })` sta sopra `materialeOrdini` e non rifà
+  conti. Differenze volute dallo Storico dell'installatore: stato = `storico_banco.statoStorico` (Da preparare / In consegna / Consegnato, pillole `sto-pillola
+  sto-st-*`); totale ordine = `pricing.importiOrdine` (come l'installatore: con le righe arrotondate una per una può differire di 1-2 centesimi dalla somma delle righe) e IVA
+  quella **salvata nell'ordine** (`ivaPctOrdine`), non `getIvaPct()` di oggi; "di cui IVA" = totale − somma dei netti di riga; "Articoli · pezzi" = articoli **distinti**
+  (codice + nome) e somma delle quantità; ordine per `creato_il` decrescente, a parità l'id. La vista per articolo somma per (codice, nome) anche con prezzi diversi ("prezzi diversi",
+  `cad` null; sotto i 640px "Negli ordini" passa sotto il nome); lo Storico dell'installatore invece divide per prezzo. Filtri: al massimo 2 mesi in segmenti + "Tutto", gli
+  altri in una `<select name="mese" onchange="this.form.submit()">` ("Altri mesi", con `<noscript>` "Vai"); sono tutti GET, con `#materiale`; i primi 2 ordini sono aperti.
+  **Niente più "Vedi ordine #N ›"** (richiesta esplicita del 19/10/2026; `linkOrdineBanco` e `href` degli ordini sono spariti da `materialeCliente`): la pagina dell'ordine c'è solo per quelli "Da preparare" e ci si arriva dalla home
+  ("Ispeziona") o dallo Storico. Al suo posto, se l'ordine ha il DDT, "Apri la bolla / DDT N ›" (`/ddt/:id`, stessa classe `mc-vedi`). **CSV** `GET /distributore/clienti/:id/materiale.csv?mese=` (404 se il cliente non è approvato): `;`, BOM, dal più vecchio, Data;Ordine;DDT;Stato;
+  Codice;Articolo;Quantità;Prezzo cad. IVA incl.;Totale IVA incl., ultima riga il totale, **senza servizio**; file `materiale_<ragione-sociale>_<AAAA-MM|tutto>.csv` (`nomeFileCsvCliente`,
+  slug ASCII). `Response.text()` toglie il BOM: nei test si leggono i byte. **Sconti**: la rotta `POST .../sconti` e le regole salvate (`client_discount_rules`) restano, ma senza
+  modulo; il partial `riga_sconti.ejs` e i suoi stili (`.cli-sotto-titolo`, `.cli-elenco-sconti`) restano finché non si decide se eliminarli del tutto. Prove: test
+  "banco: \"Materiale ordinato\"..." in `server.test.js` e, in `materiale.test.js`, `materialeCliente`, il CSV del banco e il partial (stato vuoto, "Altri mesi"). Verifica
+  visiva senza toccare il DB vero: pagina usa-e-getta con partial veri, `style.css` vera e DB finto (come in `test/server.test.js`), su più larghezze (1440, 768, 375).
 - Prova: `test/server.test.js` ("banco: elenco clienti..." e "banco: pagina del cliente..."). Nel browser, per provare
   approvazione e rifiuto non usare i clienti veri (un "da approvare" è una persona reale): creare due clienti di prova,
   provare, **cancellarli per id** (users, client_distributors, notifications, client_discount_rules).
@@ -850,11 +958,18 @@ tempo che saltava le schede nascoste. Le risposte hanno `Cache-Control: private,
 ## Gruppo WhatsApp dei corrieri (`src/whatsapp.js`)
 
 Flusso e variabili in README. Qui solo ciò che non si deduce dal codice.
-- **Mai acceso in locale**: `WHATSAPP_ATTIVO=1` solo sulla VPS, mai nel `.env` locale. Il `.env` locale
-  punta al DB di produzione: un ordine fatto in locale, con il modulo acceso, scriverebbe nel gruppo
-  vero; e due istanze accese leggono lo stesso gruppo (risposte doppie, coda inviata due volte: lo
-  svuotamento non "prenota" le righe). Spento, `accodaRitiroConsegna` non scrive nemmeno in coda. Per
-  provare dal PC c'è `scripts/prova_whatsapp.js`, che si accende da solo e usa una richiesta finta.
+- **Interruttore 0/1 nel `.env`** (richiesta esplicita del 19/10/2026, prima era "mai acceso in locale"): `WHATSAPP_ATTIVO=1` acceso, `0` o niente spento (riavviare il server). Nel `.env` **locale**
+  ci sono già `WHATSAPP_ATTIVO=0`, `WHATSAPP_ISTANZA=locale`, `WHATSAPP_AUTH_DIR=whatsapp_auth_locale` e `WHATSAPP_GRUPPO=` (vuoto: da riempire, a quel punto il server stampa i gruppi del numero). Il locale
+  punta al DB di produzione e al gruppo vero: **acceso, ogni ordine di prova scrive ai corrieri veri**. Spento, `accodaRitiroConsegna` non scrive nemmeno in coda. Per provare dal PC senza ordini veri c'è
+  `scripts/prova_whatsapp.js`, che si accende da solo e usa una richiesta finta.
+  - **Sessione propria**: il locale NON deve usare `whatsapp_auth` (la sessione del 2 ottobre, copiata sulla VPS): le stesse credenziali da due macchine si scollegano a vicenda (440) e rovinano le chiavi
+    di cifratura. Per questo `WHATSAPP_AUTH_DIR=whatsapp_auth_locale`: un secondo dispositivo sul numero, da collegare una volta con un QR (il server lo stampa nel terminale). Cartelle `whatsapp_auth*/` fuori da git.
+  - **Istanza proprietaria dei messaggi** (colonna `whatsapp_messaggi.istanza`, blocco "WhatsApp: istanza proprietaria dei messaggi", **applicato al DB condiviso il 19/10/2026**): ogni riga in coda ha il nome
+    dell'istanza che l'ha creata (`WHATSAPP_ISTANZA`, o `os.hostname()`) e **solo lei** la invia, la elimina (`da_eliminare`) e ne legge le risposte (`gestisciMessaggio` ignora il corriere che risponde a un
+    messaggio di un'altra istanza: la riceve anche lei nello stesso gruppo). Con un nome scritto nel `.env` si trattano SOLO le righe con quel nome; senza, anche quelle senza nome (di prima o di un server
+    non aggiornato: la VPS). `ritiraRichiesta` scrive solo righe, e l'avviso di annullo va all'istanza del "nuova consegna" di quella richiesta. **Aggiornare la VPS prima di accendere il locale**: il codice vecchio
+    invia tutte le righe in coda, anche quelle del locale. Se il proprietario è spento un messaggio scaduto non viene eliminato dal gruppo finché non torna acceso. Prove: `test/whatsapp_istanza.test.js`.
+  - Con `FINESTRA_CONFERMA_SEC` nel `.env` il corriere ha solo quei secondi per rispondere (all'avvio, con WhatsApp acceso, il server lo scrive nel log): togliere la riga quando si prova con WhatsApp.
 - Baileys è **7.0.0-rc14** (l'ultima; la 6.x è il tag `legacy`), ESM: caricato con `import()` dentro
   `collega()`. Non ufficiale: il numero può essere bloccato. Logger muto finto (passare pino non serve).
 - L'orario d'arrivo del corriere sta in colonne `TIMESTAMPTZ` (`corriere_arrivo_il`), a differenza
@@ -887,7 +1002,7 @@ Flusso e variabili in README. Qui solo ciò che non si deduce dal codice.
 Panoramica e avvio in README. Qui solo ciò che non si deduce dal codice.
 
 - React Native + Expo (Expo Router in `mobile/src/app/`), **niente WebView** per scelta
-  esplicita. Fase 1 solo installatore, poi banco "leggero", l'agente resta web. Le API Expo
+  esplicita. Fase 1 solo installatore, poi banco "leggero", l'agente resta web. Dal 19/10/2026 l'app ha registrazione, pagamento con Stripe, push, profilo ed eliminazione account: vedi "App Android e sicurezza". Le API Expo
   cambiano a ogni SDK: guida e regole in `mobile/AGENTS.md`, doc versionata prima di scrivere.
 - `src/api_v1.js` è montata in `server.js` **prima** di controllo origine, sessione e middleware
   `res.locals`: solo token Bearer (`src/token_app.js`), CORS aperto (nessun cookie in gioco).
@@ -1025,7 +1140,7 @@ Solo sito/PWA (`mobile/` non toccata, schema DB e logica di business invariati).
 - **CSS**: `overflow-x: clip` su `body` come rete di sicurezza *in più* delle cause vere (testi lunghi senza spazi
   con `overflow-wrap: anywhere`; `.carrello-layout > * { min-width: 0 }`; `.art-azioni` che va a capo a 320px;
   appbar a tutta larghezza da ≥720px senza il vecchio `width: 100vw`, che partiva 15px fuori dallo schermo con la
-  barra di scorrimento). `.barra-azione` (banco, "Salva gli sconti") sta **sopra** la navbar (prima la copriva).
+  barra di scorrimento). `.barra-azione` (barra fissa di salvataggio; il banco non la usa più nella pagina cliente) sta **sopra** la navbar (prima la copriva).
   Campi `email`/`tel` ora stilizzati (erano quelli del browser, 13px); `select` e campi sconto ≥16px (iPhone zoomava);
   aree di tocco ≥44px su ricerca, quantità digitata, chip, paginazione, schede login, "Vedi tutti gli ordini",
   "togli dalla lista" (cerchio da 28px con area estesa da `::after`). Safe area (`env(safe-area-inset-*)`) su
@@ -1040,6 +1155,50 @@ Solo sito/PWA (`mobile/` non toccata, schema DB e logica di business invariati).
   usato (`.offerta*`, `.stepper-3`, `.card-richiesta*`, `.tessera-marchio`...); funzioni senza chiamanti ma
   pensate per flussi futuri (`anagrafiche.distributoriApprovati`, `catalogo.misureDisponibili`,
   `notifiche.spostaInOrdini`/`aggiornaStatoOrdine`: quest'ultima servirà all'evento "consegnato").
+
+## App Android e sicurezza (19/10/2026)
+
+Test di sicurezza + correzioni + app Android finita. Il cosa-fare per pubblicare sta in **`mobile/ANDROID.md`**; qui solo ciò che non si deduce dal codice.
+- **Come si è provato (rifarlo così, MAI sul DB di produzione)**: Postgres 18 è installato sul PC (utente `postgres`/`postgres`, servizio `postgresql-x64-18`). Si crea un DB usa-e-getta
+  (`CREATE DATABASE minuteria_pentest`), `DATABASE_URL=postgres://postgres:postgres@localhost:5432/minuteria_pentest node scripts/apply_schema_pg.js` (col superutente **l'intero schema si applica**,
+  anche `ricerca_simili`), `node db/seed.js` e qualche prodotto con SQL; poi `node server.js` con `PORT=3100`, `DATABASE_URL` locale e le variabili `STRIPE_*`, `APP_URL`, `PAGAMENTO_SIMULATO`,
+  `FINESTRA_CONFERMA_SEC` **svuotate** (dotenv non sovrascrive quelle già definite, nemmeno se vuote). Per provare Stripe in modalità prova si lasciano le chiavi del `.env` (`sk_test_`): le righe
+  di `stripe_pagamenti` usano la chiave di idempotenza `pi-test-<id>`, quindi **dopo un reset del DB gli id non vanno riazzerati** (`TRUNCATE ... CONTINUE IDENTITY`, o `setval` molto avanti):
+  un id riusato riporta un PaymentIntent vecchio già incassato e il pagamento sembra "annullato". Spegnere i server (`Stop-Process` sulla porta) e `DROP DATABASE` a fine prova.
+- **Corretto**: open redirect in `POST /carrello` (`ritorno`, ora `http.percorsoInterno`); `%00` nella query/percorso/corpo (Postgres lo rifiuta → 500: ora tolto da `leggiQuery`/`corpoSempreOggetto`,
+  400 nel percorso, e gli errori Postgres di "valore non valido" 22021/22P05/22003/22P02/22007/22008 sono 400 in `gestoreErrori` e nell'API); `partenza_ore`/`consegna_ore` di `rispondi` scritte a mano
+  (numero enorme → colonna intera → 500: la route non le legge più, `rispondi` le tronca a 720); `GET /distributore/ordini/:id` non prende più in carico se `Sec-Fetch-Site: cross-site`
+  (era una GET che scrive; dal 19/10/2026 non lo prende più in carico da nessuna parte); **il banco che elimina un ordine o una richiesta ora fa tornare il pagamento** (`pagamenti.rimborsa` dentro la transazione) e avvisa il cliente (prima restava addebitato);
+  **lavoro differito dentro una transazione**: `richiediElaborazione` (timer di 2 s dopo l'incasso) ereditava il client della transazione già chiusa (AsyncLocalStorage) e girava su una connessione
+  ormai nel pool (avviso di pg "client.query() ... already executing a query"): ora passa da `db.fuoriDallaTransazione`, come l'invio push; qualsiasi nuovo `setTimeout`/promessa "senza aspettare" avviato
+  da dentro `db.transaction` deve fare lo stesso; `npm audit fix` (proxy-addr critica: spoofing di `req.ip`, che conta i tentativi di accesso; qs).
+- **Limiti** (`src/limite_login.js`, in memoria): login 8 errori in 10 min per utente+indirizzo **e** 60 per solo indirizzo (password spraying; soglia alta perché un proxy mal configurato fa condividere
+  l'indirizzo), registrazioni 12 all'ora per indirizzo (la registrazione è pubblica e approva da sola). Contano sull'indirizzo vero: serve `X-Forwarded-For` dal proxy (README). Intestazioni: CSP
+  **senza** `script-src` (le pagine hanno script in linea) ma con `frame-ancestors`, `base-uri`, `object-src`, `form-action`; `Permissions-Policy`; HSTS solo se `req.secure`. Niente COOP: romperebbe le
+  finestre di Google Pay/Link.
+- **Da sapere / non toccato**: `db/minuteria.db` (SQLite legacy) è **tracciato in git** nonostante il `.gitignore` (togliere con `git rm --cached`, serve un commit); `xlsx` ha vulnerabilità senza correzione ma
+  si usa solo negli script di importazione; `/ordini/:id/consegnato-prova` e la registrazione con approvazione automatica restano (scelte esplicite); `trust proxy` è 1 (un proxy solo).
+- **API dell'app** (`src/api_v1.js`, tutta riscritta; provata contro Postgres e Stripe prova): `POST /richieste` e `/richieste/:id/reinvia` con Stripe → `{ pagamento: { id, client_secret, chiave_pubblica,
+  importo, modo } }`, la richiesta nasce da `GET /pagamenti/:id` (stessa `stripe_pagamenti.preparaPagina`/`completaRiga` del sito; senza Stripe → `{ id }` come prima); `POST /registrazione` (token subito, errori per
+  campo in `errori`), `GET /profilo`, `DELETE /account` (password; `src/account.js`: anonimizza e disattiva, **non** cancella ordini/ricevute/dati dell'impresa; 409 se c'è una richiesta in attesa, un
+  ordine non consegnato da meno di 24 h o un pagamento aperto), `POST/DELETE /dispositivi` (token push), `GET /stato-ordini` → `{ attivo, voci }` (tutte le attività, come la striscia del sito),
+  `GET /materiale?mese=&vista=` (lo Storico di `materialeOrdini`), `POST /ordini/:id/ricevuta` → indirizzo firmato HMAC di 5 minuti per `GET /ricevute/:id.pdf` (il telefono non può mandare
+  `Authorization` quando apre un PDF), `GET /ordini/:id/riordina`; `/ordini/:id` e `/richieste/:id` portano `importi` (consegna/materiale divisi), `stato_pagamento`, `eta_sec`/`durata_sec`/`in_arrivo`,
+  righe a prezzo del banco. `POST /ordini/:id/consegnato` usa la conferma provvisoria se l'ordine non è `evaso` (come il sito). Notifiche push: `notifiche.notifica()` chiama `push.inviaAUtente`
+  (Expo Push Service, `PUSH_ATTIVO=0` per spegnere); tabella `dispositivi_push` nel blocco "Notifiche push dell'app Android" in fondo a `schema.sql`, **applicato solo al DB locale di prova, NON al
+  DB condiviso** (senza, le push restano spente e il server lo scrive una volta nel log).
+- **App** (`mobile/`): schermate nuove `registrati`, profilo con anagrafica ed "Elimina account", Storico per mese (`useMateriale`), Stato ordini con striscia per più attività, `componenti/Pagamenti.tsx`
+  (stessi quattro stati del sito), carrello con "Paghi ora / Paghi dopo". **Il modulo nativo di Stripe sta in `src/foglioStripe.ts`, con `foglioStripe.web.ts` al suo posto sul web**: un `require`
+  in una funzione non basta, Metro lo risolve comunque e il bundle web si rompe. `expo-notifications` si carica con `require` tardivo solo su Android fuori da Expo Go (`src/notifiche.ts`). Il plugin
+  `@stripe/stripe-react-native` **vuole un oggetto di opzioni** (senza, `expo config` va in errore). `eas.json` ha il segnaposto `https://INSERISCI-IL-DOMINIO.invalid`: l'app installata mostra "App non
+  configurata" finché non si scrive il dominio (`erroreConfigurazione` in `src/api.ts`). Icone e avvio sono segnaposto generati da `scripts/genera_icone_android.js`.
+- **Verifiche dell'app**: `node node_modules/typescript/bin/tsc --noEmit` in `mobile/` (**non** `npx tsc`: in `mobile/` pesca un pacchetto sbagliato), `npx expo export --platform android` (bundle Hermes),
+  `npx expo prebuild --platform android --no-install` (poi cancellare `mobile/android` e rimettere gli script `android`/`ios` di `package.json`, che prebuild cambia in `expo run:*`), `npx expo-doctor`.
+  `expo lint` ha ancora 6 errori **già presenti** (ref/`Date.now` in render, `setState` in un effect, un apostrofo). Nel browser incorporato i clic reali a volte non arrivano a un `Pressable` dentro il
+  carrello (tastiera/focus del campo nota): `elemento.click()` da `javascript_tool` sì; lo screenshot esce troncato a destra a larghezze da telefono (artefatto).
+- **Non verificato** (niente telefono né SDK Android qui): il foglio di Stripe e Google Pay su un dispositivo vero, la ricezione delle push (serve `google-services.json` + chiave FCM v1 su EAS), la
+  compilazione Gradle (la fa EAS). Il testo di `/privacy` e `/elimina-account` (`src/testi_legali.js`) è una **bozza** da far rileggere. Il nome del pacchetto `it.minuteria.ordini` è una scelta mia da
+  confermare prima della prima pubblicazione (poi non si cambia).
 
 ## Script e file temporanei
 

@@ -42,6 +42,11 @@ async function notifica(userId, { titolo, testo, link = null, categoria = 'gener
     `INSERT INTO notifications (user_id, titolo, testo, link, categoria, sottostato, order_id)
      VALUES (?, ?, ?, ?, ?, ?, ?)`
   ).run(userId, titolo, testo, link, CATEGORIE[categoria] ? categoria : 'generale', sottostato, order_id);
+  // Se l'utente ha l'app Android installata, la notifica arriva anche sul telefono (src/push.js). Senza aspettare e senza mai far fallire
+  // chi ha generato la notifica: un guasto di Expo o della rete finisce nel log e basta.
+  // (Fuori da un'eventuale transazione in corso: il lavoro differito non deve ereditarne la connessione, vedi db.fuoriDallaTransazione.)
+  const fuori = typeof db.fuoriDallaTransazione === 'function' ? db.fuoriDallaTransazione : (fn) => fn();
+  fuori(() => require('./push').inviaAUtente(userId, { titolo, testo, link, orderId: order_id }).catch(() => {}));
 }
 
 async function notificaDistributore(distributorId, payload) {

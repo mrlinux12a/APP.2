@@ -112,7 +112,7 @@
         </div>
 
         <%# 4. Pagamenti: la consegna (pagata in app) e il materiale (da pagare a BOREA), divisi come nel carrello, mai sommati. %>
-        <%- include('partials/pagamenti', { importi, stato: 'ordine', ditta: fmt.nomeCommerciale(distributore ? distributore.nome : '') }) %>
+        <%- include('partials/pagamenti', { importi, stato: 'ordine', ditta: fmt.nomeCommerciale(distributore ? distributore.nome : ''), statoPag, ordineId: ordine.id }) %>
 
         <%# "Consegnato": si segna da qui, non dalla home. Con l'ordine evaso vale la rotta vera (/consegnato); negli
             altri stati la rotta PROVVISORIA (/consegnato-prova, vale per qualunque stato), da togliere quando la
@@ -127,12 +127,8 @@
           </form>
         <% } %>
 
-        <%# 6. Annulla: stessa azione e stessa conferma di prima %>
-        <% if (annullabile) { %>
-          <form method="POST" action="/ordini/<%= ordine.id %>/elimina" onsubmit="return confirm('Annullare questo ordine? Il distributore verrà avvisato.')">
-            <button class="att-annulla" type="submit">Annulla ordine</button>
-          </form>
-        <% } %>
+        <%# Niente "Annulla ordine": il banco ha già confermato e la carta è stata incassata, quindi l'ordine non si annulla più (la rotta lo rifiuta
+            comunque). Per un problema si contatta l'assistenza. %>
 
       <% } else if (consegnato) { %>
         <%
@@ -188,7 +184,7 @@
         </div>
 
         <%# 4. Pagamenti: stessa scheda dell'ordine in consegna (la consegna pagata in app, il materiale da pagare a BOREA). %>
-        <%- include('partials/pagamenti', { importi, stato: 'consegnato', ditta: fmt.nomeCommerciale(distributore ? distributore.nome : '') }) %>
+        <%- include('partials/pagamenti', { importi, stato: 'consegnato', ditta: fmt.nomeCommerciale(distributore ? distributore.nome : ''), statoPag, ordineId: ordine.id }) %>
 
         <%# Niente "Annulla ordine": un ordine consegnato non si annulla (e la rotta lo rifiuta). %>
 
@@ -231,7 +227,7 @@
           </div>
         </div>
 
-        <%- include('partials/pagamenti', { importi, stato: 'ordine', ditta: fmt.nomeCommerciale(distributore ? distributore.nome : '') }) %>
+        <%- include('partials/pagamenti', { importi, stato: 'ordine', ditta: fmt.nomeCommerciale(distributore ? distributore.nome : ''), statoPag, ordineId: ordine.id }) %>
 
         <details class="altre-categorie">
           <summary>Dettagli consegna e documenti</summary>
@@ -294,11 +290,6 @@
         <% if (ordine.stato === 'evaso' && !ordine.consegnato_il) { %>
           <form method="POST" action="/ordini/<%= ordine.id %>/consegnato">
             <button class="btn btn-primary btn-blocco" type="submit">Ho ricevuto il materiale</button>
-          </form>
-        <% } %>
-        <% if (annullabile) { %>
-          <form method="POST" action="/ordini/<%= ordine.id %>/elimina" onsubmit="return confirm('Annullare questo ordine? Il distributore verrà avvisato.')">
-            <button class="link-discreto" type="submit">Annulla ordine</button>
           </form>
         <% } %>
 

@@ -15,17 +15,81 @@ function leggiQuery(testo) {
   const query = Object.create(null);
   for (const chiave of Object.keys(grezzo)) {
     const valore = grezzo[chiave];
-    query[chiave] = Array.isArray(valore) ? valore[0] || '' : valore;
+    query[chiave] = senzaNul(Array.isArray(valore) ? valore[0] || '' : valore);
   }
   return query;
 }
 
+// ---------- Caratteri che Postgres non accetta ----------
+
+// Un carattere NUL (%00, \u0000) dentro un testo non è un testo valido per Postgres: la query falliva con "invalid byte
+// sequence for encoding UTF8: 0x00" e chi lo mandava (anche senza nessuna ragione, basta un `?q=a%00b`) otteneva un 500 e una
+// riga di errore nel log. Non serve a nessuno: si toglie da query, corpo e percorso prima che arrivi a una query.
+const RE_NUL = /\u0000/g;
+function senzaNul(valore) {
+  return typeof valore === 'string' ? valore.replace(RE_NUL, '') : valore;
+}
+
+// Toglie i NUL da un valore qualunque letto dal corpo (testo, array, oggetti annidati: `extended` e JSON li permettono). La
+// profondità è limitata: un corpo annidato all'infinito non deve fermare il processo.
+function ripulisciNul(valore, profondita = 0) {
+  if (typeof valore === 'string') return valore.replace(RE_NUL, '');
+  if (profondita > 8 || valore === null || typeof valore !== 'object') return valore;
+  if (Array.isArray(valore)) {
+    for (let i = 0; i < valore.length; i++) valore[i] = ripulisciNul(valore[i], profondita + 1);
+    return valore;
+  }
+  for (const chiave of Object.keys(valore)) {
+    const pulita = chiave.replace(RE_NUL, '');
+    const v = ripulisciNul(valore[chiave], profondita + 1);
+    if (pulita !== chiave) delete valore[chiave];
+    valore[pulita] = v;
+  }
+  return valore;
+}
+
+// Un %00 nel percorso (`/categoria/a%00b`) arriva ai parametri delle route: lo si respinge subito con un 400.
+function rifiutaNulNelPercorso(req, res, next) {
+  if (/%00/i.test(String(req.originalUrl || req.url || '').split('?')[0])) return rispondiErrore(req, res, 400);
+  next();
+}
+
 // Express 5 lascia req.body undefined quando nessun parser ha letto il corpo (POST senza corpo o con un
 // tipo non gestito): ogni `req.body.campo` in una route diventava un TypeError e un 500. Va montato
-// subito dopo i parser del corpo.
+// subito dopo i parser del corpo. Toglie anche i NUL (vedi sopra).
 function corpoSempreOggetto(req, res, next) {
   if (req.body === undefined || req.body === null) req.body = {};
+  else req.body = ripulisciNul(req.body);
   next();
+}
+
+// ---------- Redirect interni ----------
+
+// Un indirizzo in cui rimandare l'utente, preso da un campo che scrive il browser (`ritorno`): vale solo se è un PERCORSO di questo
+// sito ("/carrello", "/categoria/x?p=2"). Un indirizzo assoluto ("https://altro.it"), senza schema ("//altro.it"), con la barra
+// rovesciata ("/\altro.it", che alcuni browser leggono come "//") o con caratteri di controllo manderebbe l'utente su un sito
+// scelto da chi ha costruito il modulo (open redirect, comodo al phishing). Il ripiego è `ripiego`.
+function percorsoInterno(valore, ripiego = '/') {
+  const testo = typeof valore === 'string' ? valore.trim() : '';
+  if (!testo.startsWith('/') || testo.startsWith('//')) return ripiego;
+  if (/[\u0000-\u001f\u007f\\]/.test(testo)) return ripiego;
+  return testo;
+}
+
+// Dove riporta la freccia "indietro" delle pagine interne del banco (ordine, richiesta): la pagina da cui si è arrivati, che i link
+// che portano lì scrivono nel parametro `torna` (conRitorno). Come `ritorno`, lo scrive chi costruisce l'indirizzo: vale solo un percorso
+// di questo sito (percorsoInterno) E solo una delle pagine del banco da cui si arriva (Storico con i suoi filtri, elenco e scheda
+// cliente, dettaglio di una richiesta, home), con query e ancora; il resto vale `ripiego`.
+const PAGINE_DI_RITORNO_BANCO = /^\/distributore(?:\/storico|\/clienti(?:\/\d+)?|\/richieste\/\d+)?(?:[?#].*)?$/;
+function ritornoBanco(valore, ripiego = '/distributore') {
+  const percorso = percorsoInterno(valore, '');
+  return percorso && percorso.length <= 1000 && PAGINE_DI_RITORNO_BANCO.test(percorso) ? percorso : ripiego;
+}
+
+// `href` con il parametro `torna` = la pagina a cui far tornare la freccia (senza `ritorno` l'indirizzo resta com'è).
+function conRitorno(href, ritorno) {
+  if (!ritorno) return href;
+  return href + (href.includes('?') ? '&' : '?') + 'torna=' + encodeURIComponent(ritorno);
 }
 
 // ---------- Sessione e redirect ----------
@@ -148,9 +212,16 @@ function gestoreNonTrovato(req, res) {
   rispondiErrore(req, res, 404, vuoleJson(req) ? { messaggio: 'Risorsa non trovata.' } : {});
 }
 
+// Errori di Postgres che dicono "il valore che mi hai dato non è valido" (testo con un NUL, numero fuori misura, formato sbagliato): vengono da
+// un input, non da un guasto del sito, quindi per chi chiama sono un 400 e non un 500. Restano nel log (come avviso) per accorgersi di un campo
+// che a qualcuno dovrebbe essere già validato.
+const CODICI_INPUT_NON_VALIDO = new Set(['22021', '22P05', '22003', '22P02', '22007', '22008']);
+
 function statoDaErrore(err) {
   const stato = Number(err && (err.status || err.statusCode));
-  return Number.isInteger(stato) && stato >= 400 && stato <= 599 ? stato : 500;
+  if (Number.isInteger(stato) && stato >= 400 && stato <= 599) return stato;
+  if (err && CODICI_INPUT_NON_VALIDO.has(err.code)) return 400;
+  return 500;
 }
 
 // Da registrare per ultimo. Gli errori del client (JSON malformato, corpo troppo grande...) tengono il
@@ -158,6 +229,9 @@ function statoDaErrore(err) {
 // messaggio pulito, mai lo stack.
 function gestoreErrori(err, req, res, next) {
   const stato = statoDaErrore(err);
+  if (stato === 400 && err && CODICI_INPUT_NON_VALIDO.has(err.code)) {
+    console.warn('Valore non valido (' + err.code + ') nella richiesta', req.method, req.originalUrl, ':', err.message);
+  }
   if (stato >= 500) {
     // Database irraggiungibile: una riga sola per richiesta (lo stack dice solo "Connection terminated" e il perché sta nel log di avvio).
     if (err && err.dbNonRaggiungibile) console.error('Database non raggiungibile nella richiesta', req.method, req.originalUrl);
@@ -169,6 +243,12 @@ function gestoreErrori(err, req, res, next) {
 
 module.exports = {
   leggiQuery,
+  senzaNul,
+  ripulisciNul,
+  rifiutaNulNelPercorso,
+  percorsoInterno,
+  ritornoBanco,
+  conRitorno,
   corpoSempreOggetto,
   salvaSessionePrimaDelRedirect,
   idNumerico,

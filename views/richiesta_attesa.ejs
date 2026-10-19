@@ -67,11 +67,13 @@
       <%# 4. Pagamenti: in app si paga solo la consegna (corriere + servizio + IVA); il materiale lo si paga a BOREA solo se un banco conferma (in sospeso).
           Stessa scheda della pagina dell'ordine e di "Nessuna risposta", con lo stato 'attesa'. Una richiesta del vecchio flusso (mai pagata) non l'ha. %>
       <% if (importi.app.conPagamento) { %>
-        <%- include('partials/pagamenti', { importi, stato: 'attesa', ditta }) %>
+        <%- include('partials/pagamenti', { importi, stato: 'attesa', ditta, statoPag }) %>
       <% } %>
 
-      <%# 5. Annulla. "Elimina definitivamente" non c'è più: mentre si aspetta il banco si annulla soltanto (l'eliminazione sta nella pagina della richiesta chiusa). %>
-      <form method="POST" action="/richieste/<%= richiesta.id %>/annulla">
+      <%# 5. Annulla, SOLO in fase 1: richiesta in attesa e nessun banco ha ancora accettato (`annullabile`). Sparisce appena un banco conferma: al
+          ricaricamento, o prima, dal polling di app.js (`data-annulla-richiesta`). "Elimina definitivamente" non c'è più: mentre si aspetta il banco si
+          annulla soltanto (l'eliminazione sta nella pagina della richiesta chiusa). %>
+      <form method="POST" action="/richieste/<%= richiesta.id %>/annulla" data-annulla-richiesta<%= annullabile ? '' : ' hidden' %>>
         <button class="att-annulla" type="submit">Annulla la richiesta</button>
       </form>
     </div>

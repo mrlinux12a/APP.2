@@ -6,17 +6,30 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "scheme": "minuteria",
+    "backgroundColor": "#f3f1ec",
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "it.minuteria.ordini"
     },
     "android": {
+      "package": "it.minuteria.ordini",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#12181f",
+        "backgroundColor": "#245a8f",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": ["android.permission.POST_NOTIFICATIONS"],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
+      "allowBackup": false
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -26,9 +39,29 @@
       "expo-status-bar",
       "expo-secure-store",
       "expo-image",
-      "expo-font"
-    ],
-    "scheme": "minuteria",
-    "backgroundColor": "#f3f1ec"
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#245a8f",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#245a8f",
+          "defaultChannel": "default"
+        }
+      ],
+      [
+        "@stripe/stripe-react-native",
+        {
+          "enableGooglePay": true
+        }
+      ]
+    ]
   }
 }

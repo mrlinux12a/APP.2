@@ -1,4 +1,5 @@
 import * as Linking from 'expo-linking';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
@@ -47,8 +48,7 @@ export default function Login() {
         <ScrollView contentContainerStyle={stili.pagina} keyboardShouldPersistTaps="handled">
           <Text style={[stili.marchio, { color: c.accento }]}>Ordini Minuteria</Text>
           <Text style={[stili.sottotitolo, { color: c.grigio }]}>
-            Materiale termoidraulico dai distributori della tua zona: chiedi la disponibilità al banco, confronta
-            tempi e prezzi, ordina.
+            Il pezzo che ti manca, in cantiere. Chiedi la disponibilità al banco e ricevi il materiale dove lavori.
           </Text>
 
           <View style={[stili.card, { backgroundColor: c.superficie, borderColor: c.bordo }]}>
@@ -92,14 +92,18 @@ export default function Login() {
               )}
             </Pressable>
 
-            {/* La registrazione per ora resta sul sito: è un modulo lungo (dati fiscali,
-                distributori di riferimento) che arriverà nell'app in un passo successivo. */}
-            <Text style={[stili.nota, { color: c.grigio }]}>
-              Non hai ancora un'anagrafica?{' '}
-              <Text style={{ color: c.accento }} onPress={() => Linking.openURL(SERVER + '/registrati')}>
-                Registra la tua impresa sul sito
-              </Text>
-              : i distributori che indichi dovranno confermare che sei loro cliente.
+            <Text style={[stili.nota, { color: c.grigio }]}>Non hai ancora un account?</Text>
+            <Pressable
+              onPress={() => router.push('/registrati')}
+              accessibilityRole="button"
+              style={[stili.bottoneChiaro, { borderColor: c.bordo, backgroundColor: c.superficie }]}
+            >
+              <Text style={[stili.bottoneTesto, { color: c.accento }]}>Registra la tua impresa</Text>
+            </Pressable>
+            <Text style={[stili.nota, { color: c.grigio, textAlign: 'center' }]}>
+              <Text onPress={() => Linking.openURL(SERVER + '/privacy')}>Privacy</Text>
+              {' · '}
+              <Text onPress={() => Linking.openURL(SERVER + '/elimina-account')}>Elimina il tuo account</Text>
             </Text>
           </View>
         </ScrollView>
@@ -119,4 +123,5 @@ const stili = StyleSheet.create({
   bottone: { borderRadius: 999, paddingVertical: 15, alignItems: 'center', marginTop: 20 },
   bottoneTesto: { fontFamily: FONT.testoForte, fontSize: 16 },
   nota: { fontFamily: FONT.testo, fontSize: 14, lineHeight: 20, marginTop: 16 },
+  bottoneChiaro: { borderWidth: 1, borderRadius: 999, paddingVertical: 14, alignItems: 'center', marginTop: 10, minHeight: 50, justifyContent: 'center' },
 });

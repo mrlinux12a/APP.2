@@ -66,9 +66,12 @@ function assegnazioni(testo) {
 }
 
 const sqlViste = [];
+let guastoColonne = false; // lo schema nuovo non è ancora applicato: ricevuta e carta non si possono scrivere
 function esegui(sql, params, modo) {
   const s = sql.replace(/\s+/g, ' ').trim();
   sqlViste.push(s);
+  if (guastoColonne && /receipt_url|carta_ultime4|incassato_il/.test(s)) throw new Error('column "receipt_url" of relation "stripe_pagamenti" does not exist');
+  if (/^SELECT id FROM orders WHERE request_id = \?/.test(s)) return { id: 500 + Number(params[0]) };
 
   if (/^INSERT INTO stripe_pagamenti/.test(s)) {
     const [cliente_id, tipo, modoRiga, importo_cent, righeJson, destinazione, note, request_id, chiave_invio] = params;
@@ -158,7 +161,12 @@ function stripeFinto() {
         intenti.set(id, pi);
         return { ...pi };
       },
-      retrieve: async (id) => ({ ...intenti.get(id) }),
+      retrieve: async (id, params) => {
+        if (finto.erroreDati && params && params.expand) throw new Error('rete');
+        const pi = { ...intenti.get(id) };
+        if (params && params.expand && params.expand.includes('latest_charge') && finto.addebito && pi.status === 'succeeded') pi.latest_charge = finto.addebito;
+        return pi;
+      },
       capture: async (id, params, opzioni) => {
         chiamate.push(['capture', id, params, opzioni]);
         if (finto.fallimenti > 0) { finto.fallimenti--; throw new Error('Stripe non risponde'); }
@@ -891,4 +899,152 @@ test('PAGAMENTO_SIMULATO: salta Stripe solo con chiave di prova e fuori da NODE_
   } finally {
     imposta(salvati);
   }
+});
+
+// ---------------- Ricevuta, carta ed email all'incasso ----------------
+// Dopo l'incasso (la capture non cambia: stessi parametri e stessa chiave) si salvano ricevuta di Stripe, marca e ultime 4 cifre della carta e
+// l'istante; poi si assegna il numero della ricevuta nostra e parte l'email. Tutto "best effort": niente può far fallire né ripetere l'incasso.
+const ricevuteChiamate = [];
+const emailInviate = [];
+const ricevute = require('../src/ricevute');
+const email = require('../src/email');
+function preparaRicevute() {
+  ricevuteChiamate.length = 0;
+  emailInviate.length = 0;
+  guastoColonne = false;
+  ricevute.datiRicevuta = async (ordineId, opzioni) => {
+    ricevuteChiamate.push([ordineId, opzioni]);
+    return { ordineId, numero: 'R-2026-000001', cliente: { email: 'info@rossi.it' } };
+  };
+  email.inviaPagamentoRicevuto = async (dati) => {
+    emailInviate.push(dati);
+    return { inviata: true };
+  };
+}
+async function incassa(importo = 66.9) {
+  const { intentoId } = await avviaEPaga();
+  await stripePagamenti.completaDaIntento(intentoId);
+  await pagamenti.segnaDaIncassare(righe[0].request_id, importo);
+  return intentoId;
+}
+const senzaLog = async (f) => {
+  const log = console.error;
+  console.error = () => {};
+  try { return await f(); } finally { console.error = log; }
+};
+
+test('incasso: si salvano ricevuta di Stripe, marca e ultime 4 cifre della carta e l\'istante; poi ricevuta numerata ed email, UNA volta sola', async () => {
+  preparati();
+  preparaRicevute();
+  stripe.addebito = { receipt_url: 'https://pay.stripe.com/receipts/r_1', payment_method_details: { type: 'card', card: { brand: 'visa', last4: '4242' } } };
+  const intentoId = await incassa();
+  const requestId = righe[0].request_id;
+  await stripePagamenti.elabora();
+
+  assert.equal(righe[0].stato, 'incassato');
+  assert.deepEqual([righe[0].receipt_url, righe[0].carta_marca, righe[0].carta_ultime4], ['https://pay.stripe.com/receipts/r_1', 'visa', '4242']);
+  assert.ok(sqlViste.some((q) => /^UPDATE stripe_pagamenti SET receipt_url = \?, carta_marca = \?, carta_ultime4 = \?, incassato_il = NOW\(\) WHERE id = \?/.test(q)), "l'istante dell'incasso si scrive con NOW()");
+  // la capture è quella di prima: stessi parametri e stessa chiave di idempotenza (nessun `expand`, che con la stessa chiave darebbe un errore di Stripe)
+  const capture = stripe.chiamate.find((c) => c[0] === 'capture');
+  assert.equal(capture[1], intentoId);
+  assert.deepEqual(capture[2], { amount_to_capture: 6690 });
+  assert.equal(capture[3].idempotencyKey, 'cap-1');
+  // numero di ricevuta (all'ordine di quella richiesta) ed email al cliente
+  assert.deepEqual(ricevuteChiamate, [[500 + requestId, { tipo: 'pagamento' }]]);
+  assert.equal(emailInviate.length, 1);
+  assert.equal(emailInviate[0].numero, 'R-2026-000001');
+
+  // un secondo giro non rifà niente: né incasso, né ricevuta, né una seconda email
+  await stripePagamenti.elabora();
+  assert.equal(stripe.chiamate.filter((c) => c[0] === 'capture').length, 1);
+  assert.equal(ricevuteChiamate.length, 1);
+  assert.equal(emailInviate.length, 1);
+});
+
+test('incasso con un pagamento non a carta (nessun dettaglio della carta): la riga si incassa lo stesso, senza marca né cifre', async () => {
+  preparati();
+  preparaRicevute();
+  stripe.addebito = { receipt_url: 'https://pay.stripe.com/receipts/r_2', payment_method_details: { type: 'link' } };
+  await incassa();
+  await stripePagamenti.elabora();
+  assert.equal(righe[0].stato, 'incassato');
+  assert.equal(righe[0].receipt_url, 'https://pay.stripe.com/receipts/r_2');
+  assert.equal(righe[0].carta_marca, null);
+  assert.equal(righe[0].carta_ultime4, null);
+});
+
+test('incasso: se i dati della carta non si leggono, o lo schema non è aggiornato, o la ricevuta o l\'email vanno male, l\'incasso resta fatto e non si ripete', async () => {
+  // 1) Stripe non risponde alla lettura dei dati della carta (l'incasso invece è andato)
+  preparati();
+  preparaRicevute();
+  stripe.addebito = { receipt_url: 'x', payment_method_details: { card: { brand: 'visa', last4: '4242' } } };
+  stripe.erroreDati = true;
+  await incassa();
+  await senzaLog(() => stripePagamenti.elabora());
+  assert.equal(righe[0].stato, 'incassato');
+  assert.equal(righe[0].tentativi, 0, 'non è un tentativo fallito: l\'incasso è riuscito');
+  assert.equal(righe[0].carta_ultime4, null);
+  assert.equal(ricevuteChiamate.length, 1, 'la ricevuta nostra si prepara lo stesso');
+
+  // 2) lo schema nuovo non è ancora applicato (colonne mancanti): la UPDATE dei dati fallisce, l'incasso no
+  preparati();
+  preparaRicevute();
+  guastoColonne = true;
+  await incassa();
+  await senzaLog(() => stripePagamenti.elabora());
+  assert.equal(righe[0].stato, 'incassato');
+  assert.equal(righe[0].tentativi, 0);
+  assert.equal(stripe.chiamate.filter((c) => c[0] === 'capture').length, 1);
+  guastoColonne = false;
+
+  // 3) la ricevuta non si prepara (tabella mancante, errore): nessuna email, l'incasso resta
+  preparati();
+  preparaRicevute();
+  ricevute.datiRicevuta = async () => { throw new Error('tabella ricevute mancante'); };
+  await incassa();
+  await senzaLog(() => stripePagamenti.elabora());
+  assert.equal(righe[0].stato, 'incassato');
+  assert.equal(righe[0].tentativi, 0);
+  assert.equal(emailInviate.length, 0);
+
+  // 4) niente da mandare (nessun incasso vero da ricevuta): nessuna email e nessun errore
+  preparati();
+  preparaRicevute();
+  ricevute.datiRicevuta = async () => null;
+  await incassa();
+  await stripePagamenti.elabora();
+  assert.equal(righe[0].stato, 'incassato');
+  assert.equal(emailInviate.length, 0);
+
+  // 5) l'invio dell'email fallisce con un errore: non viene aspettato e non rompe il giro
+  preparati();
+  preparaRicevute();
+  email.inviaPagamentoRicevuto = async () => { throw new Error('SMTP giù'); };
+  await incassa();
+  const rifiuti = [];
+  const gestore = (e) => rifiuti.push(e);
+  process.on('unhandledRejection', gestore);
+  await senzaLog(() => stripePagamenti.elabora());
+  await new Promise((r) => setTimeout(r, 20));
+  process.off('unhandledRejection', gestore);
+  assert.equal(righe[0].stato, 'incassato');
+  assert.equal(righe[0].tentativi, 0);
+  // (inviaPagamentoRicevuto vero non lancia mai: qui il finto sì, per provare che nemmeno così un errore sfugge al giro dei pagamenti)
+  assert.deepEqual(rifiuti, [], 'nessuna promessa rifiutata senza chi la raccolga');
+});
+
+test('blocco rilasciato (richiesta annullata o senza risposta): nessuna ricevuta, nessuna email, nessun rimborso', async () => {
+  preparati();
+  preparaRicevute();
+  const { intentoId } = await avviaEPaga();
+  await stripePagamenti.completaDaIntento(intentoId);
+  const requestId = righe[0].request_id;
+  assert.equal(await pagamenti.rimborsa(requestId), true);
+  assert.equal(righe[0].stato, 'da_rilasciare');
+  await stripePagamenti.elabora();
+  assert.equal(righe[0].stato, 'rilasciato');
+  assert.equal(stripe.chiamate.some((c) => c[0] === 'capture' || c[0] === 'refund'), false, 'mai incassato, mai rimborsato');
+  assert.equal(stripe.chiamate.filter((c) => c[0] === 'cancel').length, 1);
+  assert.equal(ricevuteChiamate.length, 0);
+  assert.equal(emailInviate.length, 0);
 });

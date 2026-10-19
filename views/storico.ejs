@@ -4,7 +4,7 @@
   // CONTESTO: nell'app l'installatore paga SOLO il servizio (il 10% sopra il prezzo del banco) e la consegna, IVA inclusa. Il materiale lo
   // paga dopo a BOREA. Questa pagina mostra quanto materiale ha ordinato e quanto deve a BOREA, mese per mese, con i prezzi IVA inclusa
   // (prezzo del banco + RAEE, mai il prezzo con il servizio) e gli stessi numeri che il banco vede nella pagina del cliente: il calcolo è
-  // UNO (src/materiale.js, materialeOrdini). "Servizio già pagato in app" NON è dentro il totale: è l'importo realmente addebitato
+  // UNO (src/materiale.js, materialeOrdini). "Consegne pagate in app" NON è dentro il totale: è l'importo realmente addebitato
   // (requests.pagamento_importo), o, se non c'è o non torna, servizio + consegna calcolati sull'ordine (vedi il commento di materiale.js).
   //
   // Filtri nell'URL: ?mese=AAAA-MM|tutto (default il mese corrente, o il più recente con ordini) e ?vista=ordine|articolo.
@@ -14,7 +14,6 @@
     return '/storico?' + Object.keys(q).map(function (k) { return k + '=' + encodeURIComponent(q[k]); }).join('&');
   };
   const nessunOrdineMai = !m.mesi.length;
-  let primoAperto = true; // è aperto solo il primo ordine della pagina
   const gruppi = m.gruppi.length ? m.gruppi : [{ nome: m.ditte[0] || 'BOREA', riepilogo: m.riepilogo, ordini: [], articoli: [] }];
 %>
 <!DOCTYPE html>
@@ -49,24 +48,16 @@
         <% if (m.vuoto) { %>
           <div class="vuoto"><span class="emoji"><%- iconaVuotoScatola %></span>Nessun ordine in questo mese.</div>
         <% } else if (m.vista === 'ordine') { %>
-          <%# c) una scheda per ordine, con <details>: aperto solo il primo %>
-          <% m.gruppi.forEach(function (g) { %>
-            <% if (m.gruppi.length > 1) { %><h2 class="st-titolo"><%= g.nome %></h2><% } %>
-            <% g.ordini.forEach(function (o) { %>
-              <%- include('partials/storico_ordine', { o, aperto: primoAperto }) %>
-              <% primoAperto = false; %>
-            <% }); %>
+          <%# c) UN solo elenco, dal più recente (richiesta esplicita del 19/10/2026: niente sezione "Senza ordine"): una scheda per ordine, con <details>
+              (tutte chiuse, si aprono al tocco, 18/10/2026), e fra gli ordini, alla loro data, le richieste chiuse senza ordine. %>
+          <% m.elenco.forEach(function (v) { %>
+            <% if (v.tipo === 'ordine') { %>
+              <%- include('partials/storico_ordine', { o: v.ordine }) %>
+            <% } else { %>
+              <%# Stessa scheda dell'ordine; la richiesta annullata (senza `href`) non si apre e non porta da nessuna parte. %>
+              <%- include('partials/storico_richiesta', { r: v.richiesta }) %>
+            <% } %>
           <% }); %>
-          <% if (m.senzaOrdine.length) { %>
-            <h2 class="st-titolo">Senza ordine</h2>
-            <% m.senzaOrdine.forEach(function (r) { %>
-              <a class="sm-senza" href="<%= r.href %>">
-                <span class="st-stato st-<%= r.tono %>"><%= r.etichetta %></span>
-                <span class="sm-senza-testo">Richiesta #<%= r.id %> · <%= r.data %></span>
-                <span class="sm-senza-costo">Nessun costo</span>
-              </a>
-            <% }); %>
-          <% } %>
         <% } else { %>
           <%# d) per articolo: righe sommate, dal totale più alto %>
           <% m.gruppi.forEach(function (g) { %>

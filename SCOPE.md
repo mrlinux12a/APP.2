@@ -1,6 +1,6 @@
 # Cosa c'è dentro / cosa è volutamente fuori
 
-Aggiornato al 04/10/2026 (sito in produzione su una VPS, app nativa per l'installatore).
+Aggiornato al 19/10/2026 (app Android completata; il resto com'era al 04/10/2026) (sito in produzione su una VPS, app nativa per l'installatore).
 
 ## Dentro (oggi funzionante)
 
@@ -32,8 +32,9 @@ Aggiornato al 04/10/2026 (sito in produzione su una VPS, app nativa per l'instal
 - **Stato ordini** (una sola attività, la più rilevante, con l'icona della barra in basso che segue
   la fase) e **Storico**; il cliente conferma la consegna. Per ora può ancora annullare un ordine
   finché è *Da preparare* (rimborso): lasciato per la fase di prova.
-- **App nativa** (React Native / Expo, `mobile/`): login, catalogo, ricerca, categorie, elementi
-  con foto, carrello con pagamento simulato, richiesta, ordine, stato ordini e storico. Stesso
+- **App nativa** (React Native / Expo, `mobile/`): login e registrazione, catalogo, ricerca, categorie, elementi
+  con foto, carrello con pagamento con carta (Stripe; di prova senza chiavi), richiesta, ordine, stato ordini
+  (più attività insieme), storico per mese con ricevute, profilo ed eliminazione account, notifiche push. Stesso
   database e stesse regole del sito (`src/flusso_cliente.js`). Solo tema chiaro; categorie e
   sottocategorie si aprono già piene e l'app entra senza aspettare la rete.
 
@@ -77,14 +78,12 @@ Aggiornato al 04/10/2026 (sito in produzione su una VPS, app nativa per l'instal
 
 ## Da costruire (prossimi passi)
 
-**App nativa**
-- Notifiche **push** native (tabella dei token di dispositivo, invio da `src/notifiche.js`).
-- Registrazione in app (oggi rimanda al sito) e **cancellazione dell'account** dall'app, richiesta
-  da Apple; privacy policy pubblicata, anche per la posizione.
+**App nativa** (Android pronta il 19/10/2026: vedi `mobile/ANDROID.md`)
+- Fatti: notifiche **push** (server e app; servono Firebase e il blocco di schema "Notifiche push" sul DB condiviso), **registrazione** in app, **eliminazione dell'account** (richiesta da Google Play e Apple),
+  pagamento con carta (foglio di Stripe), pagine pubbliche `/privacy` e `/elimina-account` (bozza da far rileggere).
+- Da fare: **dominio HTTPS** (senza, la build non parla col server), account Expo/EAS e Firebase, **logo e splash veri** (oggi la "M" su blu), prova su un telefono vero (foglio di pagamento, Google Pay, push),
+  scheda su Google Play (account di prova per chi controlla, modulo "sicurezza dei dati"), versione iPhone (TestFlight: non fatta, il codice è lo stesso).
 - Versione "leggera" per il **banco**: push, accetta/rifiuta, elenco ordini con cambio stato.
-- Build per i clienti pilota (TestFlight / test interno di Google Play), con `EXPO_PUBLIC_API_URL`
-  su un indirizzo **HTTPS**: le build bloccano il traffico `http://` verso un IP.
-- **Logo e splash** dell'app: `icon.png` e `splash-icon.png` sono ancora i segnaposto di Expo.
 
 **Produzione (VPS)**
 - **HTTPS con un dominio** davanti al sito (reverse proxy con certificato): necessario anche per
@@ -97,7 +96,7 @@ Aggiornato al 04/10/2026 (sito in produzione su una VPS, app nativa per l'instal
   nasce da solo (nessuna scelta dell'offerta). Il **sito** ha Stripe (14/10/2026, `src/stripe_pagamenti.js`, vedi
   README "Pagamenti con Stripe"): carta autorizzata all'invio, incassata alla nascita dell'ordine per il suo
   totale, rilasciata se la richiesta si chiude senza ordine. Mancano: **l'HTTPS con un dominio** (obbligatorio
-  per il webhook in produzione), **l'app nativa** (resta simulata: chi ordina da lì non paga), il **regolamento
+  per il webhook in produzione), il **regolamento
   con Borea** (un solo conto Stripe, nessuno split) e la **fattura**.
 - **Caricamento del catalogo e dei listini da interfaccia** (CSV o form): oggi si fa con script.
 - **Responsabile di ditta**: le filiali Borea esistono (una ditta, più filiali, più dipendenti), ma

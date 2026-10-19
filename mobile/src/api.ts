@@ -12,6 +12,16 @@ function indirizzoServer(): string {
 }
 
 export const SERVER = indirizzoServer();
+
+// In un'app installata (non in sviluppo) si parla solo con un indirizzo HTTPS vero: Android blocca il traffico non cifrato, e un indirizzo di
+// segnaposto (".invalid", quello di eas.json prima di scrivere il dominio) o rimasto da una prova su rete locale farebbe un'app che non funziona.
+// Ritorna il motivo per cui l'app non è configurata, o null.
+export function erroreConfigurazione(): string | null {
+  if (__DEV__) return null;
+  if (!/^https:\/\//i.test(SERVER)) return 'L’app non è configurata: l’indirizzo del server deve essere HTTPS (EXPO_PUBLIC_API_URL).';
+  if (/\.invalid(\/|:|$)/i.test(SERVER)) return 'L’app non è configurata: manca l’indirizzo del server (EXPO_PUBLIC_API_URL in eas.json).';
+  return null;
+}
 const TIMEOUT_MS = 20000;
 const BASE = SERVER + '/api/v1';
 
@@ -120,6 +130,27 @@ export type Pagina = { risultati: Prodotto[]; pagina: number; pagine: number; to
 
 // ---------- Flusso richiesta pagata -> ordine ----------
 
+// Le voci del riepilogo come testo già pronto (euro all'italiana): le stesse chiavi del carrello del sito (flusso.vistaRiepilogo).
+export type VistaRiepilogo = {
+  app_corriere: string;
+  app_servizio: string;
+  app_imponibile: string;
+  app_iva: string;
+  app_totale: string;
+  servizio_pct: string;
+  iva_pct: string;
+  banco_merce: string;
+  banco_raee: string;
+  banco_imponibile: string;
+  banco_iva: string;
+  banco_totale: string;
+  articoli: string;
+  con_raee: boolean;
+  spesa: string;
+  raggiunto: boolean;
+  manca: string;
+};
+
 export type RiepilogoCarrello = {
   merce: string;
   raee: string | null;
@@ -127,8 +158,16 @@ export type RiepilogoCarrello = {
   imponibile: string;
   iva: string;
   iva_pct: number;
-  // Quello che l'installatore paga all'invio della richiesta (pagamento simulato per ora).
+  // La spesa complessiva (consegna + materiale).
   totale_ivato: string;
+  // Quello che l'installatore paga ORA in app (consegna in cantiere: corriere + servizio + IVA) e quello che paga DOPO al banco (materiale + IVA).
+  da_pagare_ora: string;
+  da_pagare_al_banco: string;
+  riepilogo: VistaRiepilogo;
+  // Nome della ditta a cui si paga il materiale ("BOREA"), se c'è.
+  ditta: string | null;
+  // true = carta vera (Stripe); false = pagamento di prova, nessun addebito.
+  pagamento_reale: boolean;
   // Destinazione di partenza: l'indirizzo di consegna abituale.
   indirizzo_consegna: string;
   minimo: string;
@@ -139,12 +178,12 @@ export type RiepilogoCarrello = {
 };
 
 // in_attesa: banchi e corrieri stanno rispondendo; ordinata: l'ordine è nato (c'è order_id);
-// nessuna_offerta: chiusa senza ordine (pagamento rimborsato); annullata: l'ha annullata l'installatore.
+// nessuna_offerta: chiusa senza ordine (blocco sulla carta tolto); annullata: l'ha annullata l'installatore.
 export type StatoRichiesta = 'in_attesa' | 'nessuna_offerta' | 'ordinata' | 'annullata';
 
 export type RigaSemplice = { quantita: number; nome: string; codice: string };
 
-// Il pagamento fatto all'invio della richiesta. null per le richieste del vecchio flusso.
+// Il pagamento fatto all'invio della richiesta (forma storica). null per le richieste del vecchio flusso.
 export type Pagamento = {
   stato: 'pagato' | 'rimborsato';
   stato_testo: string;
@@ -152,6 +191,27 @@ export type Pagamento = {
   simulato: boolean;
   pagato_il: string | null;
 };
+
+// Cosa dice la carta: bloccata, pagata, annullata (nessun addebito) o rimborsata. null per le richieste del vecchio flusso.
+export type StatoPagamento = {
+  chiave: 'bloccato' | 'pagato' | 'annullato' | 'rimborsato';
+  testo: string;
+  importo: string | null;
+  data: string | null;
+  carta: string | null;
+  ricevuta: boolean;
+  ricevuta_rimborso: boolean;
+  prova: boolean;
+};
+
+// Le due parti di quello che si paga: la consegna in app, il materiale dopo al banco.
+export type Importi = {
+  consegna: { totale: string; corriere: string; servizio: string; servizio_pct: number; imponibile: string; iva: string; iva_pct: number };
+  materiale: { totale: string; merce: string; raee: string | null; imponibile: string; iva: string };
+  spesa: string;
+};
+
+export type RigaPrezzo = { quantita: number; nome: string; codice: string; cad: string; totale: string };
 
 export type Richiesta = {
   id: number;
@@ -161,8 +221,14 @@ export type Richiesta = {
   secondi: number;
   minuti_risposta: number;
   righe: RigaSemplice[];
-  risposte: { distributore: string; filiale: string; esito: string; esito_testo: string }[];
+  righe_prezzi: RigaPrezzo[];
+  importi: Importi;
+  ditta: string | null;
+  rinvio: { consegna: string; materiale: string };
+  risposte: { distributore: string; filiale: string; esito: string; esito_testo: string; banco_confermato: boolean }[];
   pagamento: Pagamento | null;
+  stato_pagamento: StatoPagamento | null;
+  annullabile: boolean;
 };
 
 export type Ordine = {
@@ -171,18 +237,25 @@ export type Ordine = {
   stato_testo: string;
   consegnato: boolean;
   tempo_testo: string;
+  // Secondi all'arrivo alla risposta del server (negativi se l'orario è passato) e durata totale: servono al conto alla rovescia locale.
+  eta_sec: number | null;
+  durata_sec: number | null;
+  in_arrivo: boolean;
+  corriere: string | null;
   creato_il: string;
+  consegnato_il: string | null;
   distributore: { nome: string; filiale: string } | null;
+  ditta: string;
   modalita: string;
-  modalita_testo: string;
-  tempi_testo: string;
   destinazione: string | null;
   note: string | null;
   ddt: { numero: string; data: string } | null;
-  righe: (RigaSemplice & { subtotale: string })[];
-  totali: { merce: string; raee: string | null; consegna: string | null; iva: string; totale: string };
+  righe: { quantita: number; nome: string; codice: string; cad: string; subtotale: string }[];
+  importi: Importi;
+  totali: { merce: string; raee: string | null; consegna: string; iva: string; totale: string };
   iva_pct: number;
   pagamento: Pagamento | null;
+  stato_pagamento: StatoPagamento | null;
   annullabile: boolean;
   da_confermare_consegna: boolean;
 };
@@ -197,3 +270,97 @@ export type VoceStorico = {
 };
 
 export type Attivita = { tipo: 'ordine' | 'richiesta'; id: number } | null;
+
+// Un'attività in corso di "Stato ordini": richiesta in attesa (secondi, durata), ordine in consegna (eta_sec, durata_sec) o richiesta scaduta da rinviare.
+export type VoceAttivita = {
+  tipo: 'ordine' | 'richiesta';
+  id: number;
+  fase: 'richiesta' | 'consegna' | 'scaduta';
+  richiesta_id: number;
+  breve: string;
+  secondi: number | null;
+  durata: number | null;
+  eta_sec: number | null;
+  durata_sec: number | null;
+  in_arrivo: boolean;
+  minuti: number | null;
+  corriere: string;
+};
+
+// Il pagamento con carta da fare con il foglio di Stripe (POST /richieste o /richieste/:id/reinvia con Stripe attivo).
+export type PagamentoDaFare = {
+  esito: 'da_pagare';
+  id: number;
+  client_secret: string;
+  chiave_pubblica: string;
+  importo: string;
+  modo: 'test' | 'live';
+};
+
+export type EsitoPagamento =
+  | { esito: 'ok'; id: number; request_id: number; tipo: string }
+  | PagamentoDaFare
+  | { esito: 'in_corso' }
+  | { esito: 'rifiutato'; titolo: string; messaggio: string }
+  | { esito: 'annullato' }
+  | { esito: 'non_configurato' };
+
+// Lo Storico come sul sito: il materiale ordinato mese per mese, con i prezzi IVA inclusa e quanto si deve al banco.
+export type VoceMateriale =
+  | {
+      tipo: 'ordine';
+      id: number;
+      data: string;
+      stato: string;
+      consegnato: boolean;
+      totale: string;
+      servizio: string;
+      primo: string;
+      altri: number;
+      ditta: string;
+      ddt: string | null;
+      ricevuta: boolean;
+      righe: { quantita: number; nome: string; codice: string; cad: string; totale: string }[];
+    }
+  | {
+      tipo: 'richiesta';
+      id: number;
+      data: string;
+      etichetta: string;
+      tono: 'annullata' | 'nessuna';
+      primo: string;
+      altri: number;
+      apribile: boolean;
+      righe: { quantita: number; nome: string }[];
+    };
+
+export type Materiale = {
+  mese: string;
+  vista: 'ordine' | 'articolo';
+  mesi: { chiave: string; titolo: string }[];
+  ditte: string[];
+  riepilogo: { totale: string; servizio: string; n_ordini: number };
+  elenco: VoceMateriale[];
+  articoli: { codice: string; nome: string; cad: string | null; quantita: number; totale: string; n_ordini: number }[];
+  vuoto: boolean;
+};
+
+export type Profilo = {
+  utente: Utente & {
+    tipo_soggetto: string;
+    tipo_testo: string;
+    referente: string;
+    partita_iva: string;
+    codice_fiscale: string;
+    indirizzo: string;
+    cap: string;
+    citta: string;
+    provincia: string;
+    sdi_pec: string;
+    email: string;
+    telefono: string;
+    indirizzo_consegna: string;
+  };
+  distributore: string | null;
+  assistenza: string | null;
+};

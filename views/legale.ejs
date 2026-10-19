@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo: pagina.titolo }) %>
+</head>
+<body data-loggato="<%= currentUser ? '1' : '0' %>">
+  <main class="legale">
+    <a class="legale-indietro" href="<%= currentUser ? '/' : '/login' %>">← Torna al sito</a>
+    <h1 class="legale-titolo"><%= pagina.titolo %></h1>
+    <p class="legale-data">Aggiornata il <%= pagina.aggiornata %></p>
+    <% pagina.sezioni.forEach(function (s) { %>
+      <section class="legale-sezione">
+        <h2><%= s.titolo %></h2>
+        <% (s.paragrafi || []).forEach(function (p) { %><p><%= p %></p><% }); %>
+        <% if (s.elenco && s.elenco.length) { %>
+          <ul>
+            <% s.elenco.forEach(function (voce) { %><li><%= voce %></li><% }); %>
+          </ul>
+        <% } %>
+      </section>
+    <% }); %>
+    <nav class="legale-link" aria-label="Altre pagine">
+      <a href="/privacy">Privacy</a> · <a href="/elimina-account">Eliminazione dell’account</a>
+    </nav>
+  </main>
+</body>
+</html>

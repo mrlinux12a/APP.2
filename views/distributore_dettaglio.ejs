@@ -22,7 +22,7 @@
 
   <main class="ric-pagina">
     <div class="ric-testata">
-      <a class="ric-indietro" href="/distributore" aria-label="Torna alle richieste del banco"><%- iconaIndietro %></a>
+      <a class="ric-indietro" href="<%= paginaPrecedente %>" aria-label="<%= paginaPrecedente === '/distributore' ? 'Torna alle richieste del banco' : 'Indietro' %>"><%- iconaIndietro %></a>
       <h1 class="ric-titolo">Richiesta #<%= richiesta.id %></h1>
       <span class="ric-stato ric-st-<%= stato.chiave %>"><span class="ric-punto<%= stato.chiave === 'attesa_corriere' ? ' pulse' : '' %>" aria-hidden="true"></span><%= stato.etichetta %></span>
       <span class="ric-ricevuta">Ricevuta <%= ricevuta %><% if (oraConferma) { %> · confermata alle <%= oraConferma %><% } %></span>
@@ -145,8 +145,8 @@
             </div>
             <p class="ric-attesa-nota">Il cliente vede la tua conferma quando un corriere prende la consegna.</p>
             <% if (risposta.copertura === 'parziale') { %><p class="ric-attesa-parziale">Hai confermato <strong>solo una parte</strong> del materiale.<% if (risposta.note) { %> Note: <%= risposta.note %><% } %></p><% } %>
-            <% if (ordineMio) { %>
-              <div class="ric-attesa-ordine"><span>Ordine collegato</span><a href="/distributore/ordini/<%= ordine.id %>">Ordine #<%= ordine.id %> <span aria-hidden="true">›</span></a></div>
+            <% if (linkOrdine) { %>
+              <div class="ric-attesa-ordine"><span>Ordine collegato</span><a href="<%= linkOrdine %>">Ordine #<%= ordine.id %> <span aria-hidden="true">›</span></a></div>
             <% } %>
           </section>
 
@@ -179,7 +179,9 @@
               <input type="hidden" name="torna" value="home">
               <button class="ric-btn ric-btn-ordine" type="submit"><%- iconaSpunta %>Preparato</button>
             </form>
-            <p class="ric-arrivo-nota">Con "Preparato" l'ordine esce da "Da preparare". Lo ritrovi nello Storico ordini.</p>
+            <%# La bolla si emette dalla pagina dell'ordine, finché è "Da preparare": dopo "Preparato" è "In consegna" e non si può più. %>
+            <a class="ric-btn ric-btn-neutro ric-btn-bolla" href="<%= linkOrdine %>"><%- iconaDocumento %>Apri l'ordine e la bolla</a>
+            <p class="ric-arrivo-nota">Con "Preparato" l'ordine esce da "Da preparare" e passa "In consegna". Lo ritrovi nello Storico ordini.</p>
           </section>
 
         <% } else if (stato.chiave === 'confermata') { %>
@@ -194,8 +196,8 @@
               <% } %>
               <% if (risposta.note) { %><p class="ric-esito-nota">Note: <%= risposta.note %></p><% } %>
             </div>
-            <% if (ordineMio) { %>
-              <a class="ric-btn ric-btn-ordine" href="/distributore/ordini/<%= ordine.id %>">Gestisci l'ordine #<%= ordine.id %></a>
+            <% if (linkOrdine) { %>
+              <a class="ric-btn ric-btn-ordine" href="<%= linkOrdine %>">Gestisci l'ordine #<%= ordine.id %></a>
             <% } %>
           </section>
 

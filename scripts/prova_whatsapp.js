@@ -15,8 +15,8 @@
 // banco o cliente vero riceve notifiche. Il messaggio nel gruppo porta la scritta PROVA.
 //
 // Attenzione: se il bot è il numero di chi prova, la risposta si può scrivere anche dal suo telefono;
-// altrimenti serve un altro numero del gruppo. Non lanciarlo mentre la VPS è collegata con
-// WHATSAPP_ATTIVO=1: due istanze leggerebbero lo stesso gruppo e risponderebbero due volte.
+// altrimenti serve un altro numero del gruppo. Usa WHATSAPP_AUTH_DIR e WHATSAPP_ISTANZA del .env (nel .env locale sono una sessione e un nome
+// SUOI): con le stesse credenziali della VPS le due si scollegherebbero a vicenda.
 //
 // Uso:  node scripts/prova_whatsapp.js [--gruppo="Nome del gruppo" | id@g.us] [--numero=39333...]
 //                                       [--finestra=3]
@@ -31,7 +31,7 @@ const arg = (nome) => {
   return trovato ? trovato.slice(nome.length + 3) : null;
 };
 
-// Il modulo si accende da solo per questa prova: nel .env locale WHATSAPP_ATTIVO non va mai messo.
+// Il modulo si accende da solo per questa prova, qualunque cosa dica WHATSAPP_ATTIVO nel .env.
 process.env.WHATSAPP_ATTIVO = '1';
 if (arg('gruppo')) process.env.WHATSAPP_GRUPPO = arg('gruppo');
 if (arg('numero')) process.env.WHATSAPP_NUMERO = arg('numero');

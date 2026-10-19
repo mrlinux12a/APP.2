@@ -1,0 +1,51 @@
+<%
+  // Una richiesta chiusa senza ordine (nessuna risposta, annullata) nello Storico, nello STESSO formato di una scheda ordine (richiesta esplicita del
+  // 19/10/2026): "Richiesta #N" e data, a destra "Nessun costo" al posto dell'importo, sotto lo stato e il primo articolo con "+altri".
+  // `r` viene da materialeOrdini (senzaOrdine / elenco). Le richieste non salvano i prezzi: nel dettaglio ci sono solo quantità e nome, nessun importo.
+  // Con `href` (nessuna risposta) è un <details> come l'ordine, chiuso all'arrivo; aperto porta a "Dettagli ›", la pagina della richiesta dove si rinvia.
+  // Senza `href` (annullata) la scheda c'è ma non si apre e non porta da nessuna parte: un <div>, senza freccia.
+%>
+<% if (r.href) { %>
+<details class="sm-ordine">
+  <summary>
+    <span class="sm-riga1">
+      <span class="sm-nome"><strong>Richiesta #<%= r.id %></strong> <span class="sm-data"><%= r.data %></span></span>
+      <span class="sm-tot sm-tot-zero">Nessun costo</span>
+    </span>
+    <span class="sm-riga2">
+      <span class="st-stato st-<%= r.tono %>"><%= r.etichetta %></span>
+      <span class="sm-primo"><%= r.primo %></span>
+      <% if (r.altri) { %><span class="sm-altri">+<%= r.altri %></span><% } %>
+      <span class="sm-freccia" aria-hidden="true">▸</span>
+    </span>
+  </summary>
+  <div class="sm-dettaglio">
+    <% r.righe.forEach(function (x) { %>
+      <div class="sm-riga">
+        <span class="sm-qta"><%= x.quantita %>×</span>
+        <div class="sm-riga-corpo">
+          <div class="sm-riga-nome"><%= x.nome %></div>
+        </div>
+      </div>
+    <% }); %>
+    <div class="sm-servizio"><span>Nessun addebito sulla carta</span><span>€ 0,00</span></div>
+    <div class="sm-azioni">
+      <span class="sm-destra"><a class="sm-dettagli" href="<%= r.href %>">Dettagli ›</a></span>
+    </div>
+  </div>
+</details>
+<% } else { %>
+<div class="sm-ordine sm-ordine-chiusa">
+  <div class="sm-fissa">
+    <span class="sm-riga1">
+      <span class="sm-nome"><strong>Richiesta #<%= r.id %></strong> <span class="sm-data"><%= r.data %></span></span>
+      <span class="sm-tot sm-tot-zero">Nessun costo</span>
+    </span>
+    <span class="sm-riga2">
+      <span class="st-stato st-<%= r.tono %>"><%= r.etichetta %></span>
+      <span class="sm-primo"><%= r.primo %></span>
+      <% if (r.altri) { %><span class="sm-altri">+<%= r.altri %></span><% } %>
+    </span>
+  </div>
+</div>
+<% } %>

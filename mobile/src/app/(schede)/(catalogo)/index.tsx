@@ -73,7 +73,7 @@ export default function Home() {
             />
           </View>
           <Text style={[stili.nota, { color: c.grigio, marginTop: 14 }]}>
-            I prezzi in app sono IVA esclusa. Paghi quando mandi la richiesta: se nessun banco conferma, il pagamento ti viene rimborsato.
+            Prezzi del banco, IVA esclusa. Quando mandi la richiesta paghi solo la consegna: la carta viene bloccata e addebitata solo se il banco conferma.
           </Text>
         </>
       )}

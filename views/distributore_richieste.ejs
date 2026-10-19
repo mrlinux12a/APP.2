@@ -147,13 +147,11 @@
 
             <%- include('partials/banco_articoli', { articoli: o.anteprima, altre: o.altre }) %>
 
-            <%# "Ispeziona" apre il dettaglio della richiesta con il timer del corriere (non tocca l'ordine: resta in colonna).
-                "Preparato" lo toglie da qui: lo porta in preparazione e avvisa il cliente (POST .../preparazione, torna alla home). %>
+            <%# "Ispeziona" apre la pagina dell'ordine (non lo tocca: resta in colonna): lì si spunta il materiale e si emette la bolla, che lo porta "In consegna".
+                "Preparato" lo toglie da qui senza bolla: lo porta "In consegna" e avvisa il cliente (POST .../preparazione, torna alla home). %>
             <div class="scheda-azioni">
               <div class="scheda-azioni-ordine">
-                <% if (o.request_id) { %>
-                  <a class="btn-banco btn-banco-secondario btn-banco-piccolo" href="/distributore/richieste/<%= o.request_id %>"><%- iconaOcchio %>Ispeziona</a>
-                <% } %>
+                <a class="btn-banco btn-banco-secondario btn-banco-piccolo" href="/distributore/ordini/<%= o.id %>"><%- iconaOcchio %>Ispeziona</a>
                 <form method="POST" action="/distributore/ordini/<%= o.id %>/preparazione">
                   <input type="hidden" name="torna" value="home">
                   <button class="btn-banco btn-banco-prepara btn-banco-piccolo" type="submit"><%- iconaSpunta %>Preparato</button>

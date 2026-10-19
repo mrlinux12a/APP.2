@@ -72,8 +72,10 @@
             <strong><%= g.etichetta %></strong>
             <span><%= unOrdine(g.ordini.length) %></span>
           </div>
-          <% g.ordini.forEach(function (o) { %>
-            <a class="sto-riga" href="/distributore/ordini/<%= o.id %>">
+          <% g.ordini.forEach(function (o) {
+               // La pagina dell'ordine c'è solo per un ordine "Da preparare" (spunta del materiale e bolla): le altre righe non si aprono. La bolla, se c'è, è un link al DDT.
+               const apribile = o.statoStorico.chiave === 'da_preparare'; %>
+            <% if (apribile) { %><a class="sto-riga" href="<%= conRitorno('/distributore/ordini/' + o.id, link({})) %>"><% } else { %><div class="sto-riga sto-riga-fissa"><% } %>
               <span class="sto-c-ordine">#<%= o.id %></span>
               <span class="sto-c-ora"><%= o.ora %></span>
               <span class="sto-c-cliente">
@@ -89,13 +91,15 @@
               </span>
               <span class="sto-c-totale">€ <%= euro(totaleOrdine(o)) %></span>
               <span class="sto-c-ddt<%= o.ddt_numero ? '' : ' sto-senza' %>">
-                <% if (o.ddt_numero) { %><span class="sto-ddt-sigla">DDT </span><%= o.ddt_numero %><% } else { %><span class="sto-nessuno">—</span><% } %>
+                <% if (o.ddt_numero && !apribile) { %><a class="sto-ddt-link" href="/ddt/<%= o.id %>" aria-label="Apri la bolla n. <%= o.ddt_numero %>"><span class="sto-ddt-sigla">DDT </span><%= o.ddt_numero %></a>
+                <% } else if (o.ddt_numero) { %><span class="sto-ddt-sigla">DDT </span><%= o.ddt_numero %>
+                <% } else { %><span class="sto-nessuno">—</span><% } %>
               </span>
               <span class="sto-c-stato">
                 <span class="sto-pillola sto-st-<%= o.statoStorico.chiave %>"><span class="sto-punto" aria-hidden="true"></span><%= o.statoStorico.etichetta %></span>
               </span>
-              <span class="sto-c-freccia" aria-hidden="true"><%- iconaAvanti %></span>
-            </a>
+              <span class="sto-c-freccia" aria-hidden="true"><% if (apribile) { %><%- iconaAvanti %><% } %></span>
+            <% if (apribile) { %></a><% } else { %></div><% } %>
           <% }); %>
         <% }); %>
       </div>
