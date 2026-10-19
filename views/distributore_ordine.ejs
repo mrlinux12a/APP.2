@@ -1,14 +1,20 @@
 <%
-  // Pagina dell'ordine vista dal banco (GET /distributore/ordini/:id), la pagina "Ispeziona" di un ordine DA PREPARARE (per gli altri non esiste). Stessa
-  // impostazione a due colonne del dettaglio della richiesta (classi ric-*, e ord-* per quello che è solo di questa pagina; blocco "Pagina dell'ordine del
-  // banco" di style.css). I dati li prepara la route con src/ordine_banco.js: righe a PREZZO DEL BANCO (mai il prezzo col servizio), passi, indirizzo.
-  // Aprirla NON cambia lo stato dell'ordine. Qui si spunta il materiale e si emette la bolla, che lo porta "In consegna": da lì in poi la pagina non c'è più (la route
-  // rimanda allo Storico). La spunta "preso" di una riga si salva sul server (POST
-  // .../righe/:rigaId/preso, public/app.js) e il pulsante della bolla si attiva solo con tutto spuntato: il controllo è solo nell'interfaccia (aria-disabled,
-  // senza JavaScript il pulsante funziona).
+  // Pagina dell'ordine vista dal banco (GET /distributore/ordini/:id): "Apri ordine completo" dello Storico e "Ispeziona" della home portano qui, e la pagina si
+  // adatta allo stato dell'ordine (`stato.chiave`: da_preparare | in_consegna | consegnato). Stessa impostazione a due colonne del dettaglio della richiesta
+  // (classi ric-*, e ord-* per quello che è solo di questa pagina; blocco "Pagina dell'ordine del banco" di style.css). I dati li prepara la route con
+  // src/ordine_banco.js: righe a PREZZO DEL BANCO (mai il prezzo col servizio), passi, indirizzo. Aprirla NON cambia lo stato dell'ordine, in nessuno stato.
+  //  · Da preparare: il ritiro del corriere e il modulo della bolla, SEMPRE su tutto il materiale (niente scelta degli articoli, niente spunte); "Elimina ordine".
+  //  · In consegna: la scheda azzurra "In consegna" e la bolla emessa (da aprire e stampare); niente modulo, niente "Elimina".
+  //  · Consegnato: la scheda verde "Consegnato" (quando e in quanto tempo) e la bolla; niente modulo, niente "Elimina".
   const nRighe = materiale.righe.length;
   const ivaTesto = String(ivaPct).replace('.', ',');
-  const urlPreso = (r) => '/distributore/ordini/' + ordine.id + '/righe/' + r.id + '/preso';
+  const daPreparare = stato.chiave === 'da_preparare';
+  const inConsegnaOra = stato.chiave === 'in_consegna';
+  const eConsegnato = stato.chiave === 'consegnato';
+  const titoloMateriale = daPreparare ? 'Materiale da preparare' : inConsegnaOra ? 'Materiale partito' : 'Materiale consegnato';
+  const notaIncasso = eConsegnato
+    ? 'Da incassare dal cliente con la tua fattura. Prezzi del banco.'
+    : 'Il materiale lo incassi tu dal cliente, con la tua fattura. Prezzi del banco.';
 %>
 <!DOCTYPE html>
 <html lang="it">
@@ -24,7 +30,7 @@
     <div class="ric-testata">
       <a class="ric-indietro" href="<%= paginaPrecedente %>" aria-label="<%= paginaPrecedente === '/distributore' ? 'Torna alle richieste del banco' : 'Indietro' %>"><%- iconaIndietro %></a>
       <h1 class="ric-titolo">Ordine #<%= ordine.id %></h1>
-      <span class="ric-stato ric-st-da_preparare"><span class="ric-punto pulse" aria-hidden="true"></span>Da preparare</span>
+      <span class="ric-stato ric-st-<%= stato.chiave %>"><span class="ric-punto<%= daPreparare ? ' pulse' : '' %>" aria-hidden="true"></span><%= stato.etichetta %></span>
       <span class="ord-cliente-nome"><%= cliente.ragione_sociale %></span>
       <span class="ric-ricevuta">Ricevuto <%= ricevuto %><% if (ordine.request_id) { %> · da richiesta #<%= ordine.request_id %><% } %></span>
     </div>
@@ -38,22 +44,22 @@
 
         <section class="ric-scheda ord-materiale" aria-labelledby="ord-mat-titolo">
           <div class="ric-mat-testa">
-            <h2 class="ric-h2" id="ord-mat-titolo">Materiale da preparare</h2>
-            <div class="ord-mat-azioni">
-              <% if (nRighe) { %><span class="ord-presi<%= materiale.tutti ? ' completa' : '' %>" data-presi-pillola role="status"><%= materiale.presi %> di <%= nRighe %> presi</span><% } %>
-              <button class="ord-stampa-btn" type="button" data-stampa><%- iconaStampante %>Lista di prelievo</button>
-            </div>
+            <h2 class="ric-h2" id="ord-mat-titolo"><%= titoloMateriale %></h2>
+            <% if (!daPreparare) { %>
+              <%# Dopo la partenza: quanti articoli e pezzi, e "Stampa" (la pagina in stampa mostra solo testata e materiale, vedi @media print). %>
+              <div class="ord-mat-azioni">
+                <span class="ric-conta"><%= conta %></span>
+                <button class="ord-stampa-btn" type="button" data-stampa><%- iconaStampante %>Stampa</button>
+              </div>
+            <% } %>
           </div>
 
-          <p class="ord-preso-errore" data-preso-errore role="alert" hidden></p>
-
           <div class="ord-tab-testa" aria-hidden="true">
-            <span>Preso</span><span>Q.tà</span><span>Articolo</span><span class="ric-num">Prezzo cad.</span><span class="ric-num">Totale</span>
+            <span>Q.tà</span><span>Articolo</span><span class="ric-num">Prezzo cad.</span><span class="ric-num">Totale</span>
           </div>
           <% if (!nRighe) { %><p class="ord-nessuna-riga">Nessun articolo in questo ordine.</p><% } %>
           <% materiale.righe.forEach(function (r) { %>
-            <label class="ord-riga<%= r.preso ? ' preso' : '' %>" data-riga>
-              <input class="ord-check" type="checkbox" data-preso data-url="<%= urlPreso(r) %>"<%= r.preso ? ' checked' : '' %> aria-label="Preso: <%= r.nome %>">
+            <div class="ord-riga">
               <span class="ric-qta"><%= r.quantita %>×</span>
               <span class="ric-articolo">
                 <strong class="ric-nome"><%= r.nome %></strong>
@@ -62,7 +68,7 @@
               </span>
               <span class="ric-num ord-cad">€ <%= euro(r.cad) %></span>
               <span class="ric-num ric-tot">€ <%= euro(r.totale) %></span>
-            </label>
+            </div>
           <% }); %>
 
           <% if (materiale.fuori.length) { %>
@@ -71,7 +77,7 @@
           <% } %>
 
           <div class="ord-piede">
-            <p class="ord-piede-nota">Il materiale lo incassi tu dal cliente, con la tua fattura. Prezzi del banco.</p>
+            <p class="ord-piede-nota"><%= notaIncasso %></p>
             <dl class="ord-totali">
               <div><dt>Merce</dt><dd>€ <%= euro(banco.merce) %></dd></div>
               <% if (banco.raee > 0) { %><div><dt>RAEE</dt><dd>€ <%= euro(banco.raee) %></dd></div><% } %>
@@ -98,12 +104,11 @@
             <% } else { %>
               <p class="ord-nessun-dato">Indirizzo di consegna non indicato.</p>
             <% } %>
-            <div class="ord-furgone">
-              <span class="ric-dato-icona" aria-hidden="true"><%- iconaFurgone %></span>
-              <span><%= descrizioneConsegna %></span>
-            </div>
-            <% if (mappa) { %>
-              <a class="ric-apri-cliente" href="<%= mappa %>" target="_blank" rel="noopener">Apri in Maps <span aria-hidden="true">›</span></a>
+            <% if (descrizioneConsegna) { %>
+              <div class="ord-furgone">
+                <span class="ric-dato-icona" aria-hidden="true"><%- iconaFurgone %></span>
+                <span><%= descrizioneConsegna %></span>
+              </div>
             <% } %>
           </section>
 
@@ -143,14 +148,73 @@
           </ol>
         </section>
 
-        <%# Decisione ancora aperta: resta com'era, un link piccolo in fondo con la sua conferma. %>
+        <%# Decisione ancora aperta (solo da preparare): resta com'era, un link piccolo in fondo con la sua conferma. Un ordine già partito o consegnato non si elimina da qui. %>
+        <% if (daPreparare) { %>
         <form class="ric-elimina-riga" method="POST" action="/distributore/ordini/<%= ordine.id %>/elimina" onsubmit="return confirm('Eliminare definitivamente questo ordine?')">
           <button class="ric-elimina" type="submit"><%- iconaCestino %>Elimina ordine</button>
         </form>
+        <% } %>
       </div>
 
-      <%# ---------- Colonna destra: ritiro del corriere e bolla ---------- %>
+      <%# ---------- Colonna destra: da preparare = ritiro del corriere e modulo della bolla; in consegna e consegnato = lo stato e la bolla emessa ---------- %>
       <div class="ric-colonna ric-colonna-destra">
+
+        <% if (inConsegnaOra) { %>
+          <%# In consegna: azzurra. Quando è partito, quando è previsto l'arrivo (corriere_arrivo_il) e chi consegna. %>
+          <section class="ric-scheda ord-stato ord-stato-consegna" aria-label="Stato dell'ordine">
+            <div class="ord-stato-testa">
+              <span class="ord-stato-cerchio" aria-hidden="true"><%- iconaFurgone %></span>
+              <div class="ord-stato-testi">
+                <h2 class="ord-stato-titolo">In consegna</h2>
+                <p><%= inConsegna.testo %></p>
+                <% if (corriereNome) { %><p class="ord-stato-corriere">Corriere <%= corriereNome %></p><% } %>
+              </div>
+            </div>
+          </section>
+        <% } %>
+
+        <% if (eConsegnato) { %>
+          <%# Consegnato: verde. Quando, e (se si sa quando è partito) da quando e in quanto tempo. %>
+          <section class="ric-scheda ord-stato ord-stato-consegnato" aria-label="Stato dell'ordine">
+            <div class="ord-stato-testa">
+              <span class="ord-stato-cerchio" aria-hidden="true"><%- iconaSpunta %></span>
+              <div class="ord-stato-testi">
+                <h2 class="ord-stato-titolo">Consegnato</h2>
+                <p><%= consegnato.testo %></p>
+              </div>
+            </div>
+            <% if (consegnato.partito || consegnato.durata) { %>
+              <div class="ord-stato-mini">
+                <% if (consegnato.partito) { %><div><span>Partito</span><strong><%= consegnato.partito %></strong></div><% } %>
+                <% if (consegnato.durata) { %><div><span>Tempo di consegna</span><strong><%= consegnato.durata %></strong></div><% } %>
+              </div>
+            <% } %>
+          </section>
+        <% } %>
+
+        <% if (!daPreparare) { %>
+          <%# La bolla emessa: numero e dettagli, e il pulsante per aprirla e stamparla. Senza bolla (l'ordine è passato "Preparato", o è stato segnato consegnato prima) lo si dice. %>
+          <section class="ric-scheda ord-bolla-emessa" aria-label="Bolla">
+            <% if (bollaEmessa) { %>
+              <div class="ord-bolla-emessa-testa">
+                <span class="ord-bolla-emessa-ico" aria-hidden="true"><%- iconaDocumento %></span>
+                <div>
+                  <h2 class="ord-bolla-emessa-titolo">Bolla n. <%= bollaEmessa.numero %></h2>
+                  <% if (bollaEmessa.dettagli) { %><p><%= bollaEmessa.dettagli %></p><% } %>
+                </div>
+              </div>
+              <a class="ord-bolla-apri" href="/ddt/<%= ordine.id %>"><%- iconaStampante %>Apri e stampa la bolla / DDT</a>
+            <% } else { %>
+              <div class="ord-bolla-emessa-testa">
+                <span class="ord-bolla-emessa-ico" aria-hidden="true"><%- iconaDocumento %></span>
+                <div>
+                  <h2 class="ord-bolla-emessa-titolo ord-bolla-emessa-no">Bolla non emessa</h2>
+                  <p>Per questo ordine non c'è una bolla.</p>
+                </div>
+              </div>
+            <% } %>
+          </section>
+        <% } %>
 
         <% if (ritiro) { %>
           <%# Ritiro: minuti all'orario del corriere (rosso sotto la soglia della home, "In ritardo" a zero). Li muove public/app.js ([data-ric-arrivo]). %>
@@ -170,11 +234,11 @@
           </section>
         <% } %>
 
-        <%# Bolla / DDT: lo stesso POST /ddt di prima, più compatto. Il pulsante resta "spento" (aria-disabled) finché non è spuntato tutto il materiale.
-            Emessa la bolla l'ordine passa "In consegna" (e questa pagina non c'è più). %>
+        <% if (daPreparare) { %>
+        <%# Bolla / DDT: lo stesso POST /ddt di prima, più compatto, su tutto il materiale dell'ordine. Emessa la bolla l'ordine passa "In consegna" (e questa scheda diventa quella della bolla emessa). %>
         <section class="ric-scheda ord-bolla" aria-labelledby="ord-bolla-titolo">
           <h2 class="ric-h2 ord-bolla-titolo" id="ord-bolla-titolo"><span class="ric-dato-icona" aria-hidden="true"><%- iconaDocumento %></span>Bolla / DDT</h2>
-          <form method="POST" action="/distributore/ordini/<%= ordine.id %>/ddt" data-bolla-form>
+          <form method="POST" action="/distributore/ordini/<%= ordine.id %>/ddt">
             <div class="ord-bolla-griglia">
               <div class="ord-campo">
                 <label class="ord-etichetta" for="ord-colli">Colli</label>
@@ -216,32 +280,16 @@
               <textarea id="ord-note" name="note" rows="2" maxlength="500" placeholder="Es. citofonare al capocantiere"></textarea>
             </div>
 
-            <button class="ord-bolla-btn" type="submit" data-bolla-invia<%- materiale.tutti ? '' : ' aria-disabled="true"' %>>
+            <button class="ord-bolla-btn" type="submit">
               <%- iconaSpunta %><%= conCorriere ? 'Emetti bolla e consegna al corriere' : 'Emetti bolla e segna la merce partita' %>
             </button>
-            <p class="ord-bolla-nota" data-bolla-nota="bloccata"<%- materiale.tutti ? ' hidden' : '' %>>Spunta tutto il materiale per emettere la bolla.</p>
-            <p class="ord-bolla-nota" data-bolla-nota="pronta"<%- materiale.tutti ? '' : ' hidden' %>>Segna la merce come partita e avvisa il cliente.</p>
+            <p class="ord-bolla-nota">Segna la merce come partita e avvisa il cliente.</p>
           </form>
         </section>
+        <% } %>
       </div>
     </div>
   </main>
-
-  <%# Lista di prelievo: si vede solo in stampa (window.print dal pulsante). Ordine, cliente e indirizzo, poi la tabella con le caselle vuote da spuntare
-      a penna e senza prezzi. In stampa tutto il resto della pagina sparisce (blocco "Pagina dell'ordine del banco" di style.css). %>
-  <div class="ord-stampa" aria-hidden="true">
-    <h1>Lista di prelievo · Ordine #<%= ordine.id %></h1>
-    <p><strong>Cliente:</strong> <%= cliente.ragione_sociale %></p>
-    <p><strong>Indirizzo:</strong> <%= destinazione || '—' %></p>
-    <table>
-      <thead><tr><th class="ord-stampa-preso">Preso</th><th class="ord-stampa-qta">Q.tà</th><th>Articolo</th><th>Codice</th></tr></thead>
-      <tbody>
-        <% materiale.righe.forEach(function (r) { %>
-          <tr><td class="ord-stampa-preso"><span class="ord-stampa-casella"></span></td><td class="ord-stampa-qta"><%= r.quantita %>×</td><td><%= r.nome %></td><td><%= r.codice %></td></tr>
-        <% }); %>
-      </tbody>
-    </table>
-  </div>
 
   <%- include('partials/nav_distributore', { attivo: 'storico' }) %>
   <script src="<%= asset('/app.js') %>" defer></script>

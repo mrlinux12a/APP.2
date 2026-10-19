@@ -65,7 +65,7 @@
           </div>
         </section>
 
-        <% if (mostraPassi && (stato.chiave === 'attesa_corriere' || stato.chiave === 'da_preparare')) { %>
+        <% if (mostraPassi && stato.chiave === 'attesa_corriere') { %>
           <%# Avanzamento: a che punto siamo. Fatto = spunta verde, in corso = pallino viola che pulsa, da fare = cerchio tratteggiato.
               "da N min" lo tiene aggiornato app.js (data-da), come sulla home. %>
           <section class="ric-scheda ric-passi ric-avanzamento" aria-labelledby="ric-passi-titolo">
@@ -145,43 +145,6 @@
             </div>
             <p class="ric-attesa-nota">Il cliente vede la tua conferma quando un corriere prende la consegna.</p>
             <% if (risposta.copertura === 'parziale') { %><p class="ric-attesa-parziale">Hai confermato <strong>solo una parte</strong> del materiale.<% if (risposta.note) { %> Note: <%= risposta.note %><% } %></p><% } %>
-            <% if (linkOrdine) { %>
-              <div class="ric-attesa-ordine"><span>Ordine collegato</span><a href="<%= linkOrdine %>">Ordine #<%= ordine.id %> <span aria-hidden="true">›</span></a></div>
-            <% } %>
-          </section>
-
-        <% } else if (stato.chiave === 'da_preparare') { %>
-          <%# Da preparare: il timer del corriere (minuti all'arrivo, ora; rosso sotto la soglia della home: lo muove app.js) e "Preparato",
-              che toglie l'ordine dalla colonna "Da preparare" della home (come il pulsante della scheda). %>
-          <% const minutiArrivo = arrivo ? Math.ceil(arrivo.secondi / 60) : 0; %>
-          <section class="ric-scheda ric-azione ric-arrivo" aria-label="Da preparare">
-            <% if (arrivo) { %>
-              <div class="ric-arrivo-testa<%= minutiArrivo <= arrivo.sogliaMin ? ' vicino' : '' %>" data-ric-arrivo
-                   data-secondi="<%= arrivo.secondi %>" data-soglia-arrivo="<%= arrivo.sogliaMin %>">
-                <div class="ric-arrivo-cerchio">
-                  <span class="ric-arrivo-min" data-arrivo-min><%= minutiArrivo <= 0 ? 'In ritardo' : fmt.durataMinuti(minutiArrivo) %></span>
-                  <span class="ric-arrivo-sotto">ore <%= arrivo.ora %></span>
-                </div>
-                <div class="ric-arrivo-testi">
-                  <h2 class="ric-arrivo-titolo">Corriere<%= arrivo.nome ? ' ' + arrivo.nome : '' %></h2>
-                  <p>Consegna dal cliente entro le <%= arrivo.ora %>. Prepara il materiale.</p>
-                </div>
-              </div>
-            <% } else { %>
-              <div class="ric-arrivo-testa">
-                <div class="ric-arrivo-testi">
-                  <h2 class="ric-arrivo-titolo">Da preparare</h2>
-                  <p>L'ordine è nato: prepara il materiale.</p>
-                </div>
-              </div>
-            <% } %>
-            <form class="ric-pulsanti" method="POST" action="/distributore/ordini/<%= ordine.id %>/preparazione">
-              <input type="hidden" name="torna" value="home">
-              <button class="ric-btn ric-btn-ordine" type="submit"><%- iconaSpunta %>Preparato</button>
-            </form>
-            <%# La bolla si emette dalla pagina dell'ordine, finché è "Da preparare": dopo "Preparato" è "In consegna" e non si può più. %>
-            <a class="ric-btn ric-btn-neutro ric-btn-bolla" href="<%= linkOrdine %>"><%- iconaDocumento %>Apri l'ordine e la bolla</a>
-            <p class="ric-arrivo-nota">Con "Preparato" l'ordine esce da "Da preparare" e passa "In consegna". Lo ritrovi nello Storico ordini.</p>
           </section>
 
         <% } else if (stato.chiave === 'confermata') { %>
@@ -196,9 +159,6 @@
               <% } %>
               <% if (risposta.note) { %><p class="ric-esito-nota">Note: <%= risposta.note %></p><% } %>
             </div>
-            <% if (linkOrdine) { %>
-              <a class="ric-btn ric-btn-ordine" href="<%= linkOrdine %>">Gestisci l'ordine #<%= ordine.id %></a>
-            <% } %>
           </section>
 
         <% } else if (stato.chiave === 'senza_corriere') { %>

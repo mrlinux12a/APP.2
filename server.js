@@ -44,6 +44,7 @@ const anagrafiche = require('./src/anagrafiche');
 const { conCache } = require('./src/memo');
 const flusso = require('./src/flusso_cliente');
 const storicoBanco = require('./src/storico_banco');
+const storicoDettaglio = require('./src/storico_dettaglio');
 const richiestaBanco = require('./src/richiesta_banco');
 const ordineBanco = require('./src/ordine_banco');
 const stripePagamenti = require('./src/stripe_pagamenti');
@@ -1333,7 +1334,7 @@ async function contatoriBanco(distributorId) {
   const [ordini, daRispondereRow, daApprovareRow] = await Promise.all([
     db.prepare(
       `SELECT
-         COUNT(*) FILTER (WHERE stato = 'inviato') AS da_preparare,
+         COUNT(*) FILTER (WHERE stato = 'inviato' AND consegnato_il IS NULL) AS da_preparare,
          COUNT(*) FILTER (WHERE stato = 'in_evasione') AS in_preparazione,
          COALESCE(MAX(id), 0) AS ultimo
          FROM orders WHERE distributor_id = ?`
@@ -1420,13 +1421,14 @@ app.get('/distributore', requireRole('distributore'), async (req, res) => {
       )
       .all(distributorId),
     // corriere_arrivo_il è TIMESTAMPTZ (un istante vero): i secondi che mancano si calcolano in SQL.
+    // Un ordine segnato consegnato (rotta provvisoria) può restare 'inviato': non è "Da preparare" (come nello Storico) e la sua pagina rimanda allo Storico.
     db
       .prepare(
         `SELECT o.id, o.request_id, o.corriere_nome, o.corriere_arrivo_il, u.ragione_sociale AS cliente_nome,
                 EXTRACT(EPOCH FROM (o.corriere_arrivo_il - NOW()))::int AS secondi_arrivo
            FROM orders o
            JOIN users u ON u.id = o.cliente_id
-          WHERE o.distributor_id = ? AND o.stato = 'inviato'
+          WHERE o.distributor_id = ? AND o.stato = 'inviato' AND o.consegnato_il IS NULL
           ORDER BY o.corriere_arrivo_il ASC NULLS LAST, o.id ASC
           LIMIT 100`
       )
@@ -1520,6 +1522,19 @@ app.get('/distributore/storico', requireRole('distributore'), async (req, res) =
   });
 });
 
+// Il dettaglio di una riga dello Storico: un frammento HTML (views/partials/storico_dettaglio.ejs) che la pagina carica al primo clic sulla riga e mette
+// sotto di essa (public/app.js, "Storico ordini: righe che si aprono"): materiale a prezzo del banco, "Come è andata" e la bolla. Solo ordini del banco loggato.
+// SOLA LETTURA: non chiama prendiInCarico né scrive niente, qualunque sia lo stato dell'ordine (aprire il dettaglio non lo cambia). `torna` (la pagina dello
+// Storico com'è adesso, scritta dallo script) vale solo se è una pagina del banco (ritornoBanco): il pulsante "Apri ordine completo" la porta con sé,
+// con l'ancora #o<id> della riga, così la freccia della pagina dell'ordine riporta allo Storico con la stessa voce aperta.
+app.get('/distributore/storico/:id/dettaglio', requireRole('distributore'), async (req, res) => {
+  const ordine = await ordineDelBanco(req);
+  if (!ordine) return res.status(404).type('text/plain').send('Ordine non trovato.');
+  const dettaglio = await storicoDettaglio.leggiDettaglio(ordine);
+  const torna = ritornoBanco(req.query.torna, '/distributore/storico').split('#')[0];
+  res.render('partials/storico_dettaglio', { ...dettaglio, tornaStorico: torna + '#o' + ordine.id });
+});
+
 // Dettaglio di una richiesta al banco: a sinistra il materiale (tabella con listino, prezzo cliente e totale) e i passi dopo la
 // conferma, a destra cosa fare (timer e pulsanti, oppure lo stato dopo la risposta), il cliente e "Elimina dal banco".
 // Lo stato, la tabella e i passi si preparano in src/richiesta_banco.js; la vista (views/distributore_dettaglio.ejs) disegna.
@@ -1545,15 +1560,7 @@ app.get('/distributore/richieste/:id', requireRole('distributore'), async (req, 
     db.prepare('SELECT * FROM users WHERE id = ?').get(richiesta.cliente_id),
     richieste.calcolaOfferta(richiesta.id, distributorId),
     db.prepare('SELECT * FROM distributors WHERE id = ?').get(distributorId),
-    // `secondi_arrivo`: quanti ne mancano a corriere_arrivo_il (un istante vero, TIMESTAMPTZ): il timer del corriere, come sulla home.
-    richiesta.order_id
-      ? db
-          .prepare(
-            `SELECT o.*, EXTRACT(EPOCH FROM (o.corriere_arrivo_il - NOW()))::int AS secondi_arrivo
-               FROM orders o WHERE o.id = ?`
-          )
-          .get(richiesta.order_id)
-      : null,
+    richiesta.order_id ? db.prepare('SELECT * FROM orders WHERE id = ?').get(richiesta.order_id) : null,
     richieste.secondiRimasti(richiesta),
     pricing.getFinestraMinuti(),
     // La scheda del cliente si apre solo se il cliente ha indicato questo banco (altrimenti la pagina risponde 404).
@@ -1570,21 +1577,23 @@ app.get('/distributore/richieste/:id', requireRole('distributore'), async (req, 
   // L'ordine è nella colonna "Da preparare" della home finché è 'inviato' (e non segnato consegnato).
   const ordineDaPreparare = ordineMio && ordine.stato === 'inviato' && !ordine.consegnato_il;
   const stato = richiestaBanco.statoRichiestaBanco({ richiesta, risposta, apribile, ordineMio, ordineDaPreparare });
-  const conCorriere = whatsapp.attivo();
-  // "confermata alle 21:05" (ora italiana): solo se il banco ha confermato.
-  const oraConferma = risposta.esito === 'confermato' && risposta.risposto_il ? format.oraSolaRoma(risposta.risposto_il) : null;
 
   // La freccia riporta alla pagina da cui si è arrivati (`torna`: Storico, scheda cliente...), altrimenti alla home.
   const daDove = ritornoBanco(req.query.torna, '');
+
+  // Quando l'ordine è "Da preparare" (un corriere ha accettato, o non ce n'è bisogno) la richiesta non ha più una sua pagina: si va dritti a quella dell'ordine
+  // (materiale, ritiro del corriere, bolla). Anche la pagina in attesa del corriere, che si ricarica da sola, arriva qui. La freccia dell'ordine riporta da dove
+  // si era partiti (`daDove`: la home se non c'è), non alla richiesta.
+  if (stato.chiave === 'da_preparare') return res.redirect(conRitorno('/distributore/ordini/' + ordine.id, daDove));
+
+  const conCorriere = whatsapp.attivo();
+  // "confermata alle 21:05" (ora italiana): solo se il banco ha confermato.
+  const oraConferma = risposta.esito === 'confermato' && risposta.risposto_il ? format.oraSolaRoma(risposta.risposto_il) : null;
 
   res.render('distributore_dettaglio', {
     titolo: 'Richiesta #' + richiesta.id,
     // Non si chiama `indietro`: l'intestazione del banco (partials/banco_testa), inclusa dalla vista, ne disegnerebbe un'altra freccia.
     paginaPrecedente: daDove || '/distributore',
-    // L'ordine collegato, solo finché è "Da preparare" (poi la sua pagina non c'è più): da lì la freccia riporta a questa richiesta, che a sua volta riporta a `daDove`.
-    linkOrdine: ordineDaPreparare
-      ? conRitorno('/distributore/ordini/' + ordine.id, conRitorno('/distributore/richieste/' + richiesta.id, daDove))
-      : null,
     minutiRisposta,
     richiesta,
     risposta,
@@ -1608,31 +1617,10 @@ app.get('/distributore/richieste/:id', requireRole('distributore'), async (req, 
     // conferma fatta e, se il modulo WhatsApp è acceso, il passo dei corrieri in corso.
     passi: richiestaBanco.passiDopoConferma({
       conCorriere,
-      corrente: stato.chiave === 'da_confermare' ? 'conferma' : stato.chiave === 'da_preparare' ? 'prepara' : conCorriere ? 'corrieri' : 'prepara',
-      avanzamento:
-        stato.chiave === 'attesa_corriere' || stato.chiave === 'da_preparare'
-          ? {
-              conCorriere,
-              oraConferma,
-              daPreparare: stato.chiave === 'da_preparare',
-              corriere:
-                stato.chiave === 'da_preparare' && ordine.corriere_arrivo_il
-                  ? { nome: ordine.corriere_nome || '', oraConsegna: format.oraRoma(ordine.corriere_arrivo_il) }
-                  : null,
-            }
-          : null,
+      corrente: stato.chiave === 'da_confermare' ? 'conferma' : conCorriere ? 'corrieri' : 'prepara',
+      avanzamento: stato.chiave === 'attesa_corriere' ? { conCorriere, oraConferma } : null,
     }),
-    mostraPassi: ['da_confermare', 'attesa_corriere', 'da_preparare'].includes(stato.chiave),
-    // Da preparare con un corriere: il suo timer (minuti all'arrivo, ora, rosso sotto la soglia della home), come la pillola della scheda.
-    arrivo:
-      stato.chiave === 'da_preparare' && ordine.corriere_arrivo_il
-        ? {
-            secondi: Number(ordine.secondi_arrivo) || 0,
-            ora: format.oraRoma(ordine.corriere_arrivo_il),
-            nome: ordine.corriere_nome || '',
-            sogliaMin: BACHECA.arrivoVicinoMin,
-          }
-        : null,
+    mostraPassi: ['da_confermare', 'attesa_corriere'].includes(stato.chiave),
     oraConferma,
     // Secondi da quando il banco ha confermato: il cerchio dell'attesa e "da N min" partono da qui (data-trascorsi) e salgono.
     trascorsi: Math.max(0, Number(risposta.secondi_da_risposta) || 0),
@@ -1792,7 +1780,8 @@ async function ordineDelBanco(req) {
 
 // Segna l'ordine come preparato dal banco (stato 'inviato' -> 'in_evasione': per il banco passa da "Da preparare" a "In consegna") e avvisa il
 // cliente. Scatta SOLO con "Preparato" (POST .../preparazione, dalla card in home e dal dettaglio della richiesta): dal 19/10/2026 aprire la pagina
-// dell'ordine non lo prende più in carico, perché è lì, mentre è ancora "Da preparare", che si spunta il materiale e si emette la bolla.
+// dell'ordine non lo prende più in carico, perché è lì, mentre è ancora "Da preparare", che si emette la bolla. Agisce solo su 'inviato': un ordine
+// già partito (in_evasione, evaso) o consegnato resta com'è, anche se qualcuno chiama di nuovo "Preparato" da una pagina rimasta aperta.
 async function prendiInCarico(ordine) {
   if (ordine.stato !== 'inviato') return ordine;
   await db.prepare(
@@ -1809,16 +1798,20 @@ async function prendiInCarico(ordine) {
   return { ...ordine, stato: 'in_evasione', in_evasione_il: new Date(), preso_in_carico_il: new Date() };
 }
 
-// La pagina dell'ordine vista dal banco (views/distributore_ordine.ejs, src/ordine_banco.js): materiale da preparare con la spunta "preso" (salvata sul
-// server), consegna, cliente, avanzamento e a destra il ritiro del corriere e la bolla. Aprirla NON cambia lo stato dell'ordine (vedi prendiInCarico).
-// C'è SOLO per un ordine "Da preparare" (richiesta esplicita del 19/10/2026): è lì che si spunta il materiale e si emette la bolla. Dopo "Preparato" o la
-// bolla l'ordine è "In consegna" (e poi "Consegnato") e la pagina non esiste più: chi ci arriva (un segnalibro, una notifica vecchia) va allo Storico.
+// La pagina dell'ordine vista dal banco (views/distributore_ordine.ejs, src/ordine_banco.js): materiale, consegna, cliente, avanzamento e, a destra, quello che serve
+// in quello stato. Si adatta allo stato (storicoBanco.statoStorico, lo stesso della lista dello Storico), e "Apri ordine completo" dello Storico funziona per tutti:
+//  · Da preparare: il ritiro del corriere con il conto alla rovescia e il modulo della bolla (sempre su tutto il materiale), "Elimina ordine";
+//  · In consegna (dopo "Preparato" o la bolla): la scheda "In consegna" (partito, arrivo previsto, corriere) e la bolla emessa, da aprire e stampare;
+//  · Consegnato: la scheda "Consegnato" (quando, tempo di consegna) e la bolla.
+// SOLA LETTURA in ogni stato: aprirla non cambia l'ordine. In particolare un ordine già partito o consegnato non si tocca: prendiInCarico (che lo porterebbe
+// a 'in_evasione') non si chiama da qui, e comunque agisce solo su 'inviato' (vedi sotto). Prova: test "banco: pagina dell'ordine in consegna e consegnato...".
 app.get('/distributore/ordini/:id', requireRole('distributore'), async (req, res) => {
   const ordine = await ordineDelBanco(req);
   if (!ordine) {
     return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Ordine non trovato.' });
   }
-  if (ordine.stato !== 'inviato' || ordine.consegnato_il) return res.redirect('/distributore/storico');
+  const stato = storicoBanco.statoStorico(ordine);
+  const daPreparare = stato.chiave === 'da_preparare';
 
   const distributorId = req.session.user.distributor_id;
   // Letture indipendenti: partono insieme (ogni query in sequenza costa un giro di rete). `secondi`: quanti ne mancano al corriere, calcolati dal DB.
@@ -1828,7 +1821,8 @@ app.get('/distributore/ordini/:id', requireRole('distributore'), async (req, res
     db.prepare('SELECT * FROM order_items WHERE order_id = ? ORDER BY id').all(ordine.id),
     ordine.request_id ? richieste.getRisposta(ordine.request_id, ordine.distributor_id) : null,
     pricing.getIvaPct(),
-    ordine.corriere_arrivo_il
+    // Il conto alla rovescia del ritiro c'è solo finché l'ordine è da preparare.
+    daPreparare && ordine.corriere_arrivo_il
       ? db.prepare('SELECT EXTRACT(EPOCH FROM (corriere_arrivo_il - NOW()))::int AS secondi FROM orders WHERE id = ?').get(ordine.id)
       : null,
     // "Apri scheda cliente" solo se il cliente ha indicato questo banco (altrimenti la pagina risponde 404).
@@ -1846,6 +1840,9 @@ app.get('/distributore/ordini/:id', requireRole('distributore'), async (req, res
   const destinazione = ordine.destinazione || cliente.indirizzo_consegna || ddt.indirizzoCompleto(cliente) || '';
   const corriereNome = ordine.corriere_nome || (risposta && risposta.corriere_nome) || '';
   const oraRitiro = ordine.corriere_arrivo_il ? format.oraRoma(ordine.corriere_arrivo_il) : '';
+  // Quando è partita la merce (la bolla, o il "Preparato") e la bolla emessa: le vedono "In consegna" e "Consegnato".
+  const partenza = ordineBanco.partenza(ordine);
+  const consegnato = stato.chiave === 'consegnato';
 
   res.render('distributore_ordine', {
     titolo: 'Ordine #' + ordine.id,
@@ -1853,14 +1850,29 @@ app.get('/distributore/ordini/:id', requireRole('distributore'), async (req, res
     paginaPrecedente: ritornoBanco(req.query.torna),
     ordine,
     cliente,
-    ricevuto: richiestaBanco.quandoRicevuta(format.giornoRoma(ordine.creato_il), format.oraSolaRoma(ordine.creato_il)),
+    stato,
+    // Un ordine consegnato non è più "di oggi": la testata dice il giorno ("il 19/10 alle 09:28").
+    ricevuto: consegnato
+      ? ordineBanco.ricevutoIl(ordine)
+      : richiestaBanco.quandoRicevuta(format.giornoRoma(ordine.creato_il), format.oraSolaRoma(ordine.creato_il)),
     materiale,
+    conta: storicoDettaglio.contaMateriale(materiale.righe),
     banco: importi.banco,
     ivaPct: importi.ivaPct,
     conCorriere,
     corriereNome,
-    // Il riquadro "Ritiro": c'è l'orario del corriere. I secondi si muovono nel browser (app.js, data-ric-arrivo).
-    ritiro: oraRitiro
+    // La scheda "In consegna": quando è partito e quando è previsto l'arrivo. La scheda "Consegnato": quando, da quando è partito e in quanto tempo.
+    inConsegna: stato.chiave === 'in_consegna' ? { testo: ordineBanco.testoInConsegna(ordine) } : null,
+    consegnato: consegnato
+      ? {
+          testo: ordineBanco.consegnatoTesto(ordine),
+          partito: partenza ? `${format.giornoMeseRoma(partenza)} · ${format.oraSolaRoma(partenza)}` : '',
+          durata: ordineBanco.tempoDiConsegna(ordine) || '',
+        }
+      : null,
+    bollaEmessa: ordineBanco.bollaOrdine(ordine),
+    // Il riquadro "Ritiro": c'è l'orario del corriere, e solo finché l'ordine è da preparare. I secondi si muovono nel browser (app.js, data-ric-arrivo).
+    ritiro: daPreparare && oraRitiro
       ? {
           secondi: Number(arrivo && arrivo.secondi) || 0,
           ora: oraRitiro,
@@ -1869,15 +1881,17 @@ app.get('/distributore/ordini/:id', requireRole('distributore'), async (req, res
         }
       : null,
     passi: ordineBanco.passiOrdine({
+      stato: stato.chiave,
       oraConferma: format.oraSolaRoma((risposta && risposta.risposto_il) || ordine.creato_il),
       corriere: conCorriere
         ? { nome: corriereNome, ora: ordine.corriere_risposto_il ? format.oraRoma(ordine.corriere_risposto_il) : '' }
         : null,
       oraRitiro,
+      partito: { quando: ordineBanco.momento(partenza, ordine.creato_il), bolla: ordine.ddt_numero || '' },
+      consegnato: { quando: ordineBanco.momento(ordine.consegnato_il, ordine.creato_il) },
     }),
     destinazione,
     indirizzo: ordineBanco.indirizzoDiviso(destinazione),
-    mappa: destinazione ? ordineBanco.linkMaps(destinazione) : '',
     distanza: distanzaClienteBanco(cliente, distributore),
     descrizioneConsegna: ordineBanco.descrizioneConsegna({ modalita: ordine.modalita, conCorriere, corriereNome }),
     sottotitoloCliente: ordineBanco.sottotitoloCliente(cliente),
@@ -1889,33 +1903,6 @@ app.get('/distributore/ordini/:id', requireRole('distributore'), async (req, res
     },
     errore: req.query.errore || null,
   });
-});
-
-// La spunta "preso" di una riga del materiale (pagina dell'ordine). Si salva sul server, così chi è al banco con un altro telefono o computer vede lo
-// stesso stato. `preso` (true/false, nel corpo JSON o del modulo) la imposta o la toglie; senza, la inverte. Risponde in JSON, con quante righe
-// sono prese sul totale. Solo per il banco proprietario dell'ordine, e solo per una riga di quell'ordine.
-function leggiBooleano(valore) {
-  if (valore === true || valore === 1 || valore === '1' || valore === 'true' || valore === 'on') return true;
-  if (valore === false || valore === 0 || valore === '0' || valore === 'false') return false;
-  return null;
-}
-app.post('/distributore/ordini/:id/righe/:rigaId/preso', requireRole('distributore'), async (req, res) => {
-  const ordine = await ordineDelBanco(req);
-  const rigaId = leggiId(req.params.rigaId);
-  if (!ordine || !rigaId) return res.status(404).json({ ok: false, errore: 'Riga non trovata.' });
-  const voluto = leggiBooleano(req.body.preso);
-  const scrittura = voluto === null
-    ? 'UPDATE order_items SET preso_il = CASE WHEN preso_il IS NULL THEN NOW() ELSE NULL END WHERE id = ? AND order_id = ?'
-    : voluto
-      ? 'UPDATE order_items SET preso_il = COALESCE(preso_il, NOW()) WHERE id = ? AND order_id = ?'
-      : 'UPDATE order_items SET preso_il = NULL WHERE id = ? AND order_id = ?';
-  const esito = await db.prepare(scrittura).run(rigaId, ordine.id);
-  if (!esito || !esito.changes) return res.status(404).json({ ok: false, errore: 'Riga non trovata.' });
-  const [riga, conteggio] = await Promise.all([
-    db.prepare('SELECT preso_il FROM order_items WHERE id = ?').get(rigaId),
-    db.prepare('SELECT COUNT(*) AS totale, COUNT(preso_il) AS presi FROM order_items WHERE order_id = ?').get(ordine.id),
-  ]);
-  res.json({ ok: true, preso: !!(riga && riga.preso_il), presi: Number(conteggio.presi), totale: Number(conteggio.totale) });
 });
 
 // Usata dal tasto di rimozione sulla card "Ordini da preparare" in home: la fa sparire da

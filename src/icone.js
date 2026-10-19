@@ -297,7 +297,8 @@ const iconaEsterno = svg('<path d="M9 5.5H6.5A1.5 1.5 0 0 0 5 7v10.5A1.5 1.5 0 0
 const iconaScontrino = svg('<path d="M6.5 3.5h11V20l-2.75-1.7L12 20l-2.75-1.7L6.5 20Z"/><path d="M9.5 8.5h5M9.5 12h5"/>');
 const iconaLucchetto = svg('<rect x="5.5" y="10.5" width="13" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>');
 
-// Pagina dell'ordine del banco: stampante ("Lista di prelievo").
+// Storico e pagina dell'ordine del banco: chevron verso il basso (riga che si apre) e stampante (pulsanti "Stampa" e "Apri e stampa la bolla").
+const iconaGiu = svg('<path d="M5.5 9.5 12 16l6.5-6.5"/>');
 const iconaStampante = svg('<path d="M7.5 9V4h9v5"/><rect x="4" y="9" width="16" height="8" rx="2"/><path d="M7.5 14h9v6h-9Z"/><path d="M16.5 12h.01"/>');
 
 module.exports = {
@@ -356,5 +357,6 @@ module.exports = {
   iconaEsterno,
   iconaScontrino,
   iconaLucchetto,
+  iconaGiu,
   iconaStampante,
 };

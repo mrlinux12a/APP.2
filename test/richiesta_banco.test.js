@@ -114,7 +114,7 @@ test('passiDopoConferma con avanzamento: gli stessi passi con i testi di "Avanza
   assert.equal(rb.passiDopoConferma({ conCorriere: true, corrente: 'conferma' })[0].titolo, 'Confermi la disponibilità');
 });
 
-test('statoRichiestaBanco: Da preparare quando l\'ordine è nato e non è ancora stato preparato', () => {
+test('statoRichiestaBanco: Da preparare quando l\'ordine è nato e non è ancora stato preparato (la route porta alla pagina dell\'ordine)', () => {
   const base = { richiesta: { id: 177, stato: 'ordinata' }, risposta: { esito: 'confermato', corriere_stato: 'preso' }, apribile: false };
   assert.deepEqual(rb.statoRichiestaBanco({ ...base, ordineMio: true, ordineDaPreparare: true }), { chiave: 'da_preparare', etichetta: 'Da preparare' });
   // già preso in carico (o non suo): Confermata (o Chiusa), come prima
@@ -126,22 +126,3 @@ test('statoRichiestaBanco: Da preparare quando l\'ordine è nato e non è ancora
   assert.equal(rb.statoRichiestaBanco({ ...base, richiesta: { id: 177, stato: 'in_attesa' }, risposta: { esito: 'confermato', corriere_stato: 'in_attesa' } }).chiave, 'attesa_corriere');
 });
 
-test('passiDopoConferma con avanzamento da preparare: consegna presa fatta, "Da preparare" in corso', () => {
-  const p = rb.passiDopoConferma({
-    conCorriere: true, corrente: 'prepara',
-    avanzamento: { conCorriere: true, oraConferma: '21:05', daPreparare: true, corriere: { nome: 'Marco', oraConsegna: '21:30' } },
-  });
-  assert.deepEqual(p.map((x) => [x.chiave, x.fase, x.titolo, x.testo]), [
-    ['conferma', 'fatto', 'Disponibilità confermata', 'Fatto alle 21:05'],
-    ['corrieri', 'fatto', 'Consegna presa da Marco', 'Dal cliente entro le 21:30.'],
-    ['prepara', 'corrente', 'Da preparare', 'Quando hai finito, premi "Preparato".'],
-  ]);
-  assert.deepEqual(p.map((x) => !!x.conTempo), [false, false, false]); // il passo dei corrieri è fatto: niente "da N min"
-  // il corriere senza nome né ora: testi neutri
-  const senza = rb.passiDopoConferma({ conCorriere: true, corrente: 'prepara', avanzamento: { conCorriere: true, oraConferma: '21:05', daPreparare: true, corriere: { nome: '', oraConsegna: '' } } });
-  assert.equal(senza[1].titolo, 'Consegna presa');
-  assert.equal(senza[1].testo, 'Il corriere è in arrivo.');
-  // senza modulo WhatsApp: due passi, conferma fatta e "Da preparare" in corso
-  const due = rb.passiDopoConferma({ conCorriere: false, corrente: 'prepara', avanzamento: { conCorriere: false, oraConferma: '21:05', daPreparare: true, corriere: null } });
-  assert.deepEqual(due.map((x) => [x.chiave, x.fase, x.testo]), [['conferma', 'fatto', 'Fatto alle 21:05'], ['prepara', 'corrente', 'Quando hai finito, premi "Preparato".']]);
-});

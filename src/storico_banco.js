@@ -41,6 +41,13 @@ function statoStorico(o) {
   return { chiave: 'da_preparare', etichetta: 'Da preparare' }; // 'inviato' (il CHECK del DB non ammette altro)
 }
 
+// Le colonne di orders che servono a pricing.importi (importiOrdine + ivaPctOrdine): le salvate alla nascita dell'ordine e, per quelli vecchi, i valori da cui si ricalcola.
+// Testo fisso. "Da incassare" è `banco.totale` = merce a prezzo del banco + RAEE + IVA: NON il totale col servizio e la consegna, che sono soldi della piattaforma.
+const COLONNE_IMPORTI = [
+  'totale_netto', 'totale_finale', 'contributo_raee', 'costo_consegna', 'iva', 'servizio',
+  'imponibile_app', 'iva_app', 'da_pagare_app', 'imponibile_banco', 'iva_banco', 'materiale_banco',
+].map((c) => 'o.' + c).join(', ');
+
 // I vecchi indirizzi (segnalibri) con ?stato=in_preparazione o ?stato=partiti portano ora a "In consegna", che li ha assorbiti.
 const FILTRI_VECCHI = { in_preparazione: 'in_consegna', partiti: 'in_consegna' };
 
@@ -132,6 +139,7 @@ function raggruppaPerGiorno(ordini) {
 // numero di una scheda dice cosa si trova cliccandola), la pagina di ordini e, per quelli, il materiale.
 async function storicoOrdini(distributorId, filtri) {
   const db = require('../db'); // qui e non in testa: le funzioni pure di sopra si provano senza toccare il DB
+  const pricing = require('./pricing');
   const { dove, parametri } = condizioni(distributorId, filtri);
 
   const sqlConteggi =
@@ -147,7 +155,9 @@ async function storicoOrdini(distributorId, filtri) {
   const leggiPagina = (pagina) =>
     db
       .prepare(
-        `SELECT o.id, o.creato_il, o.stato, o.consegnato_il, o.totale_finale, o.totale_ivato, o.ddt_numero,
+        // Le colonne degli importi servono a pricing.importi (il "Da incassare" di ogni riga): vedi COLONNE_IMPORTI.
+        `SELECT o.id, o.creato_il, o.stato, o.consegnato_il, o.ddt_numero,
+                ${COLONNE_IMPORTI},
                 u.ragione_sociale AS cliente_nome, u.citta AS cliente_citta
            FROM orders o
            JOIN users u ON u.id = o.cliente_id
@@ -158,7 +168,8 @@ async function storicoOrdini(distributorId, filtri) {
       .all(...parametri, PER_PAGINA, (pagina - 1) * PER_PAGINA);
 
   let pagina = filtri.pagina;
-  const [riga, primaPagina] = await Promise.all([db.prepare(sqlConteggi).get(...parametri), leggiPagina(pagina)]);
+  // L'IVA di oggi serve solo come ripiego per gli ordini senza IVA salvata (vedi ivaPctOrdine); è in cache, quindi di norma non costa una query.
+  const [riga, primaPagina, ivaConfig] = await Promise.all([db.prepare(sqlConteggi).get(...parametri), leggiPagina(pagina), pricing.getIvaPct()]);
   const conteggi = {
     tutti: Number(riga.tutti),
     da_preparare: Number(riga.da_preparare),
@@ -184,6 +195,7 @@ async function storicoOrdini(distributorId, filtri) {
 
   const ordini = righe.map((o) => ({
     ...o,
+    daIncassare: pricing.importi({ ordine: o, pagamento: null, ivaPct: pricing.ivaPctOrdine(o, ivaConfig) }).banco.totale,
     statoStorico: statoStorico(o),
     giorno: format.giornoRoma(o.creato_il),
     ora: format.oraSolaRoma(o.creato_il),
@@ -214,6 +226,7 @@ module.exports = {
   SCHEDE,
   PERIODI,
   CONDIZIONE_STATO,
+  COLONNE_IMPORTI,
   statoStorico,
   leggiFiltri,
   urlStorico,

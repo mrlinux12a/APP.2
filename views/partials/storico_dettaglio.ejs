@@ -1,0 +1,85 @@
+<%
+  // Il dettaglio che si apre sotto una riga dello Storico ordini del banco (GET /distributore/storico/:id/dettaglio, src/storico_dettaglio.js): un frammento,
+  // non una pagina. Tre colonne: Materiale (prezzo del banco e quanto incassare dal cliente) | Come è andata | Bolla e pulsanti. Classi sto-d-* (blocco
+  // "Storico ordini del banco" di style.css). I dati sono già pronti: qui si disegna e basta.
+  const ivaTesto = String(ivaPct).replace('.', ',');
+  const paginaOrdine = conRitorno('/distributore/ordini/' + id, tornaStorico);
+%>
+<div class="sto-d-griglia">
+
+  <%# ---------- Materiale: a prezzo del banco; il piede dice quanto si incassa dal cliente ---------- %>
+  <section class="sto-d-scheda sto-d-materiale" aria-label="Materiale">
+    <div class="sto-d-testa">
+      <h3 class="sto-d-occhiello">Materiale</h3>
+      <span class="sto-d-conta"><%= conta %></span>
+    </div>
+    <% if (!materiale.righe.length) { %><p class="sto-d-vuoto">Nessun articolo in questo ordine.</p><% } %>
+    <% materiale.righe.forEach(function (r) { %>
+      <div class="sto-d-riga">
+        <span class="sto-d-qta"><%= r.quantita %>×</span>
+        <span class="sto-d-articolo">
+          <strong class="sto-d-nome"><%= r.nome %></strong>
+          <small class="sto-d-cod">Cod. <%= r.codice %><span class="sto-d-cad-sub"> · € <%= euro(r.cad) %> cad.</span></small>
+          <% if (r.richiesti !== null) { %><small class="sto-d-mancano">richiesti <%= r.richiesti %>, confermati <%= r.confermati %></small><% } %>
+        </span>
+        <span class="sto-d-cad">€ <%= euro(r.cad) %></span>
+        <span class="sto-d-tot">€ <%= euro(r.totale) %></span>
+      </div>
+    <% }); %>
+    <% if (materiale.fuori.length) { %>
+      <p class="sto-d-fuori">Non confermati, quindi non in questo ordine:
+        <% materiale.fuori.forEach(function (m, i) { %><%= i ? ', ' : '' %><%= m.mancano %> pz di <%= m.nome %><% }); %>.</p>
+    <% } %>
+    <div class="sto-d-piede">
+      <span>Merce <strong>€ <%= euro(banco.merce) %></strong></span>
+      <% if (banco.raee > 0) { %><span>RAEE <strong>€ <%= euro(banco.raee) %></strong></span><% } %>
+      <span>IVA <%= ivaTesto %>% <strong>€ <%= euro(banco.iva) %></strong></span>
+      <span class="sto-d-incasso">Da incassare dal cliente <strong>€ <%= euro(banco.totale) %></strong></span>
+    </div>
+  </section>
+
+  <%# ---------- Come è andata: i momenti dell'ordine; un passo senza dati non c'è ---------- %>
+  <section class="sto-d-scheda sto-d-tempi" aria-label="Come è andata">
+    <h3 class="sto-d-occhiello">Come è andata</h3>
+    <ol class="sto-d-passi">
+      <% passi.forEach(function (p) { %>
+        <li class="sto-d-passo sto-d-<%= p.fase %>"<%- p.fase === 'corrente' ? ' aria-current="step"' : '' %>>
+          <span class="sto-d-pallino" aria-hidden="true"></span>
+          <span class="sto-d-ora"<% if (p.completo) { %> title="<%= p.completo %>"<% } %>><%= p.ora || '—' %><% if (p.giorno) { %><small><%= p.giorno %></small><% } %></span>
+          <span class="sto-d-testo"><%= p.testo %></span>
+        </li>
+      <% }); %>
+    </ol>
+    <% if (destinazione || corriere) { %>
+      <div class="sto-d-dove">
+        <% if (destinazione) { %>
+          <p><span class="sto-d-icona" aria-hidden="true"><%- iconaPosizione %></span><span><%= destinazione %></span></p>
+        <% } %>
+        <% if (corriere) { %>
+          <p><span class="sto-d-icona" aria-hidden="true"><%- iconaFurgone %></span><span><%= corriere %></span></p>
+        <% } %>
+      </div>
+    <% } %>
+  </section>
+
+  <%# ---------- Bolla e pulsanti ---------- %>
+  <div class="sto-d-destra">
+    <section class="sto-d-scheda sto-d-bolla" aria-label="Bolla">
+      <span class="sto-d-bolla-ico" aria-hidden="true"><%- iconaDocumento %></span>
+      <div class="sto-d-bolla-testi">
+        <span class="sto-d-occhiello">Bolla / DDT</span>
+        <% if (bolla) { %>
+          <strong class="sto-d-bolla-num">N. <%= bolla.numero %></strong>
+        <% } else { %>
+          <strong class="sto-d-bolla-num sto-d-bolla-no">Non emessa</strong>
+        <% } %>
+      </div>
+      <% if (bolla) { %><a class="sto-d-bolla-apri" href="/ddt/<%= id %>" aria-label="Apri la bolla n. <%= bolla.numero %>">Apri <span aria-hidden="true">›</span></a><% } %>
+    </section>
+    <a class="sto-d-vai" href="<%= paginaOrdine %>">Apri ordine completo <span aria-hidden="true">›</span></a>
+    <% if (schedaClienteAperta) { %>
+      <a class="sto-d-sec" href="/distributore/clienti/<%= clienteId %>">Scheda cliente <span aria-hidden="true">›</span></a>
+    <% } %>
+  </div>
+
+</div>

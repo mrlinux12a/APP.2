@@ -64,7 +64,7 @@
       <div class="sto-tabella">
         <div class="sto-testa">
           <span>Ordine</span><span>Ora</span><span>Cliente</span><span>Materiale</span>
-          <span class="sto-c-totale">Totale</span><span>DDT</span><span>Stato</span><span></span>
+          <span class="sto-c-totale">Da incassare</span><span>DDT</span><span>Stato</span><span></span>
         </div>
 
         <% gruppi.forEach(function (g) { %>
@@ -73,9 +73,12 @@
             <span><%= unOrdine(g.ordini.length) %></span>
           </div>
           <% g.ordini.forEach(function (o) {
-               // La pagina dell'ordine c'è solo per un ordine "Da preparare" (spunta del materiale e bolla): le altre righe non si aprono. La bolla, se c'è, è un link al DDT.
-               const apribile = o.statoStorico.chiave === 'da_preparare'; %>
-            <% if (apribile) { %><a class="sto-riga" href="<%= conRitorno('/distributore/ordini/' + o.id, link({})) %>"><% } else { %><div class="sto-riga sto-riga-fissa"><% } %>
+               // OGNI riga si apre qui, nella stessa pagina (public/app.js, "Storico ordini: righe che si aprono"): un <button> che, al primo clic, carica il
+               // dettaglio (GET /distributore/storico/:id/dettaglio) e lo mette nel pannello sotto di sé. L'id aperto sta nell'ancora dell'indirizzo (#o149),
+               // così dopo una ricarica, o tornando indietro dalla pagina dell'ordine, la stessa voce si riapre. Il pannello c'è già (vuoto, nascosto).
+               // La bolla, qui, è solo un testo: il link per aprirla sta nel pannello. "Da incassare" = materiale + RAEE + IVA, non il totale con la consegna. %>
+            <div class="sto-voce" id="o<%= o.id %>" data-voce="<%= o.id %>">
+            <button type="button" class="sto-riga" aria-expanded="false" aria-controls="dett-<%= o.id %>" data-sto-apri>
               <span class="sto-c-ordine">#<%= o.id %></span>
               <span class="sto-c-ora"><%= o.ora %></span>
               <span class="sto-c-cliente">
@@ -89,17 +92,19 @@
                   <span class="sto-nessuno">—</span>
                 <% } %>
               </span>
-              <span class="sto-c-totale">€ <%= euro(totaleOrdine(o)) %></span>
+              <span class="sto-c-totale">€ <%= euro(o.daIncassare) %></span>
               <span class="sto-c-ddt<%= o.ddt_numero ? '' : ' sto-senza' %>">
-                <% if (o.ddt_numero && !apribile) { %><a class="sto-ddt-link" href="/ddt/<%= o.id %>" aria-label="Apri la bolla n. <%= o.ddt_numero %>"><span class="sto-ddt-sigla">DDT </span><%= o.ddt_numero %></a>
-                <% } else if (o.ddt_numero) { %><span class="sto-ddt-sigla">DDT </span><%= o.ddt_numero %>
+                <% if (o.ddt_numero) { %><span class="sto-ddt-sigla">DDT </span><%= o.ddt_numero %>
                 <% } else { %><span class="sto-nessuno">—</span><% } %>
               </span>
               <span class="sto-c-stato">
                 <span class="sto-pillola sto-st-<%= o.statoStorico.chiave %>"><span class="sto-punto" aria-hidden="true"></span><%= o.statoStorico.etichetta %></span>
               </span>
-              <span class="sto-c-freccia" aria-hidden="true"><% if (apribile) { %><%- iconaAvanti %><% } %></span>
-            <% if (apribile) { %></a><% } else { %></div><% } %>
+              <span class="sto-c-freccia" aria-hidden="true"><%- iconaGiu %></span>
+            </button>
+            <div class="sto-dettaglio" id="dett-<%= o.id %>" role="region" aria-label="Dettagli dell'ordine #<%= o.id %>"
+                 data-url="/distributore/storico/<%= o.id %>/dettaglio" hidden></div>
+            </div>
           <% }); %>
         <% }); %>
       </div>

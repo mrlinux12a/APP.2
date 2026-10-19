@@ -11,7 +11,8 @@ const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 // Lo stato della richiesta per il banco: { chiave, etichetta }. La chiave sceglie il colore (classe ric-st-<chiave>).
 //   da_confermare   la finestra è aperta e il banco non ha ancora risposto
 //   attesa_corriere il banco ha confermato, nel gruppo WhatsApp nessun corriere ha ancora preso la consegna
-//   da_preparare    l'ordine è nato (consegna presa, o senza corriere) e il banco non l'ha ancora preparato
+//   da_preparare    l'ordine è nato (consegna presa, o senza corriere) e il banco non l'ha ancora preparato: la richiesta non ha una pagina per questo stato, la route
+//                   porta a quella dell'ordine
 //   confermata      confermata e consegna presa (o senza corriere), ordine già preparato o in arrivo
 //   senza_corriere  confermata ma nessun corriere ha preso la consegna in tempo
 //   non_disponibile il banco ha rifiutato
@@ -74,9 +75,7 @@ function tabellaMateriale(righe, prezzoClienteDi, { confermata = false } = {}) {
 // Col modulo WhatsApp spento l'ordine nasce subito alla conferma e non c'è il passo dei corrieri (sarebbe falso): restano due passi.
 // `corrente` è la chiave del passo in cui si è ('conferma', 'corrieri', 'prepara'). Ogni passo ha anche `fase`, rispetto a quello
 // corrente: 'fatto' (viene prima), 'corrente' o 'futuro' (viene dopo). Se `corrente` non è fra i passi, sono tutti 'futuro'.
-// `avanzamento` = { conCorriere, oraConferma, corriere, daPreparare }: cambia i testi (e solo quelli) come li vuole la scheda "Avanzamento".
-// `corriere` ({ nome, oraConsegna }, se un corriere ha preso la consegna) e `daPreparare` (l'ordine è nato e aspetta il banco) servono quando
-// il passo dei corrieri è già fatto.
+// `avanzamento` = { conCorriere, oraConferma }: cambia i testi (e solo quelli) come li vuole la scheda "Avanzamento".
 function passiDopoConferma({ conCorriere, corrente, avanzamento = null }) {
   const passi = conCorriere
     ? [
@@ -99,21 +98,13 @@ function passiDopoConferma({ conCorriere, corrente, avanzamento = null }) {
 
 // I testi dei passi nella scheda "Avanzamento". Il passo dei corrieri porta `conTempo`: la vista scrive "· da N min" dopo il titolo
 // (e lo script lo tiene aggiornato).
-function testiAvanzamento(chiave, { conCorriere, oraConferma, corriere = null, daPreparare = false }) {
+function testiAvanzamento(chiave, { conCorriere, oraConferma }) {
   if (chiave === 'conferma') {
     return { titolo: 'Disponibilità confermata', testo: oraConferma && oraConferma !== '—' ? `Fatto alle ${oraConferma}` : 'Fatto' };
   }
   if (chiave === 'corrieri') {
-    // Un corriere ha accettato: il passo è fatto. L'ora è quella entro cui consegna dal cliente (orders.corriere_arrivo_il).
-    if (corriere) {
-      return {
-        titolo: corriere.nome ? `Consegna presa da ${corriere.nome}` : 'Consegna presa',
-        testo: corriere.oraConsegna ? `Dal cliente entro le ${corriere.oraConsegna}.` : 'Il corriere è in arrivo.',
-      };
-    }
     return { titolo: 'Corriere avvisato', conTempo: true, testo: 'Aspettiamo che un corriere accetti la consegna.' };
   }
-  if (daPreparare) return { titolo: 'Da preparare', testo: 'Quando hai finito, premi "Preparato".' };
   return {
     titolo: 'Da preparare',
     testo: conCorriere

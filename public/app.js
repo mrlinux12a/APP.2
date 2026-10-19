@@ -1529,96 +1529,12 @@ const Minuteria = (function () {
   setInterval(tick, 1000);
 })();
 
-/* Pagina dell'ordine del banco (views/distributore_ordine.ejs). La spunta "preso" di ogni riga si salva sul server (POST .../righe/:id/preso, con il valore
-   esplicito: l'ultimo vince) senza ricaricare la pagina. Le richieste partono una alla volta, nell'ordine dei tocchi: due insieme potrebbero arrivare
-   invertite. Se il salvataggio non riesce la casella torna com'era e compare un avviso. Si aggiornano anche la pillola "N di M presi" e il pulsante della
-   bolla, che resta "spento" (aria-disabled) finché non è tutto spuntato: il controllo è solo qui, senza JavaScript il pulsante funziona.
-   Qui anche: "Lista di prelievo" (window.print, la pagina in stampa mostra solo la lista) e i + e - dei colli. */
+/* Pagina dell'ordine del banco (views/distributore_ordine.ejs): i + e - dei colli della bolla e "Stampa" (in stampa la pagina mostra solo testata e materiale,
+   vedi @media print di style.css; c'è solo dopo la partenza dell'ordine). */
 (function () {
   'use strict';
   const pagina = document.querySelector('[data-ordine-banco]');
   if (!pagina) return;
-
-  const caselle = Array.prototype.slice.call(pagina.querySelectorAll('[data-preso]'));
-  const pillola = pagina.querySelector('[data-presi-pillola]');
-  const avviso = pagina.querySelector('[data-preso-errore]');
-  const bottone = pagina.querySelector('[data-bolla-invia]');
-  const notaBloccata = pagina.querySelector('[data-bolla-nota="bloccata"]');
-  const notaPronta = pagina.querySelector('[data-bolla-nota="pronta"]');
-
-  function segnaRiga(casella) {
-    const riga = casella.closest('[data-riga]');
-    if (riga) riga.classList.toggle('preso', casella.checked);
-  }
-
-  function aggiorna() {
-    const presi = caselle.filter(function (c) { return c.checked; }).length;
-    const tutti = presi === caselle.length;
-    if (pillola) {
-      const testo = presi + ' di ' + caselle.length + ' presi';
-      if (pillola.textContent !== testo) pillola.textContent = testo;
-      pillola.classList.toggle('completa', tutti);
-    }
-    if (bottone) {
-      if (tutti) bottone.removeAttribute('aria-disabled');
-      else bottone.setAttribute('aria-disabled', 'true');
-    }
-    if (notaBloccata) notaBloccata.hidden = tutti;
-    if (notaPronta) notaPronta.hidden = !tutti;
-  }
-
-  function mostraErrore(testo) {
-    if (!avviso) return;
-    avviso.textContent = testo;
-    avviso.hidden = !testo;
-  }
-
-  let coda = Promise.resolve();
-  function salva(casella, preso) {
-    coda = coda
-      .then(function () {
-        return fetch(casella.getAttribute('data-url'), {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: JSON.stringify({ preso: preso }),
-        });
-      })
-      .then(Minuteria.leggiJson)
-      .then(function (dati) {
-        if (!dati || !dati.ok) throw new Error((dati && dati.errore) || 'non salvata');
-        mostraErrore('');
-      })
-      .catch(function (err) {
-        if (err && err.sessioneScaduta) return; // si sta tornando al login
-        // La casella torna com'era, a meno che nel frattempo non sia stata toccata di nuovo (quel tocco ha la sua richiesta in coda).
-        if (casella.checked === preso) {
-          casella.checked = !preso;
-          segnaRiga(casella);
-          aggiorna();
-        }
-        mostraErrore('Non sono riuscito a salvare la spunta. Controlla la connessione e riprova.');
-      });
-  }
-
-  caselle.forEach(function (casella) {
-    casella.addEventListener('change', function () {
-      segnaRiga(casella);
-      aggiorna();
-      salva(casella, casella.checked);
-    });
-  });
-  aggiorna();
-
-  if (bottone) {
-    bottone.addEventListener('click', function (e) {
-      if (bottone.getAttribute('aria-disabled') !== 'true') return;
-      // Blocca anche l'invio da tastiera (Invio in un campo = clic sul pulsante) e porta alla prima riga da spuntare.
-      e.preventDefault();
-      const prima = caselle.filter(function (c) { return !c.checked; })[0];
-      if (prima) prima.focus();
-    });
-  }
 
   const stampa = pagina.querySelector('[data-stampa]');
   if (stampa) stampa.addEventListener('click', function () { window.print(); });
@@ -1751,6 +1667,104 @@ window.addEventListener('pageshow', function (e) {
   const svuota = document.querySelector('[data-storico-svuota]');
   if (!campo || !svuota) return;
   campo.addEventListener('input', function () { svuota.hidden = !campo.value; });
+})();
+
+/* Storico ordini del banco: OGNI riga si apre nella stessa pagina e mostra il dettaglio sotto di sé (views/distributore_storico.ejs). La riga è un <button>
+   (aria-expanded, Invio e Spazio); il pannello sotto è vuoto e nascosto, e al primo clic si riempie con il frammento di GET /distributore/storico/:id/dettaglio
+   (la lista resta leggera). Una voce aperta alla volta: aprirne un'altra chiude la prima, un secondo clic la richiude. L'id aperto sta nell'ancora dell'indirizzo
+   (#o149, scritta con replaceState: non sporca la cronologia), così dopo una ricarica o tornando indietro dalla pagina dell'ordine la stessa voce si riapre. */
+(function () {
+  'use strict';
+  const voci = document.querySelectorAll('.sto-voce[data-voce]');
+  if (!voci.length) return;
+
+  let aperta = null;
+
+  function scriviAncora(id) {
+    try { history.replaceState(null, '', window.location.pathname + window.location.search + (id ? '#o' + id : '')); } catch (e) { /* l'indirizzo resta com'è */ }
+  }
+
+  function carica(voce) {
+    const pannello = voce.querySelector('.sto-dettaglio');
+    if (pannello.getAttribute('data-stato') === 'in-corso' || pannello.getAttribute('data-stato') === 'caricato') return;
+    pannello.setAttribute('data-stato', 'in-corso');
+    pannello.innerHTML = '<p class="sto-d-attesa" role="status">Caricamento…</p>';
+    // `torna`: la pagina com'è adesso (con i suoi filtri): il pulsante "Apri ordine completo" la porta con sé, e la freccia della pagina dell'ordine ci riporta.
+    const url = pannello.getAttribute('data-url') + '?torna=' + encodeURIComponent(window.location.pathname + window.location.search);
+    fetch(url, { cache: 'no-store', credentials: 'same-origin', headers: { Accept: 'text/html' } })
+      .then(function (r) {
+        // Sessione scaduta: il server rimanda al login (una pagina intera, non il frammento): si ricarica per andarci.
+        if (r.redirected) { window.location.reload(); throw Object.assign(new Error('sessione'), { sessioneScaduta: true }); }
+        if (!r.ok) throw new Error('http');
+        return r.text();
+      })
+      .then(function (html) {
+        pannello.innerHTML = html;
+        pannello.setAttribute('data-stato', 'caricato');
+      })
+      .catch(function (err) {
+        if (err && err.sessioneScaduta) return;
+        pannello.setAttribute('data-stato', 'errore');
+        pannello.innerHTML = '<p class="sto-d-errore" role="alert">Non riesco a caricare i dettagli. <button type="button" data-sto-riprova>Riprova</button></p>';
+      });
+  }
+
+  function chiudi(voce) {
+    voce.classList.remove('aperta');
+    voce.querySelector('[data-sto-apri]').setAttribute('aria-expanded', 'false');
+    voce.querySelector('.sto-dettaglio').hidden = true;
+    if (aperta === voce) aperta = null;
+  }
+
+  function apri(voce) {
+    if (aperta === voce) return;
+    // Se la voce che si chiude sta sopra, la pagina si accorcia e la riga cliccata salterebbe in su: si riporta dov'era sotto il dito.
+    const prima = voce.getBoundingClientRect().top;
+    if (aperta) chiudi(aperta);
+    voce.classList.add('aperta');
+    voce.querySelector('[data-sto-apri]').setAttribute('aria-expanded', 'true');
+    voce.querySelector('.sto-dettaglio').hidden = false;
+    aperta = voce;
+    carica(voce);
+    const spostamento = voce.getBoundingClientRect().top - prima;
+    if (spostamento) window.scrollBy(0, spostamento);
+  }
+
+  // Dall'ancora dell'indirizzo (#o149): apre quella voce se è in pagina; se la riga è fuori dallo schermo (la barra in cima è fissa) la porta in vista.
+  function daAncora() {
+    const m = /^#o(\d+)$/.exec(window.location.hash);
+    const voce = m ? document.getElementById('o' + m[1]) : null;
+    if (!voce || !voce.classList.contains('sto-voce')) {
+      if (!m && aperta) chiudi(aperta);
+      return;
+    }
+    apri(voce);
+    const r = voce.getBoundingClientRect();
+    if (r.top < 80 || r.top > window.innerHeight - 80) voce.scrollIntoView({ block: 'center' });
+  }
+
+  document.addEventListener('click', function (e) {
+    const riprova = e.target.closest('[data-sto-riprova]');
+    if (riprova) {
+      const voce = riprova.closest('.sto-voce');
+      voce.querySelector('.sto-dettaglio').removeAttribute('data-stato');
+      carica(voce);
+      return;
+    }
+    const riga = e.target.closest('[data-sto-apri]');
+    if (!riga) return;
+    const voce = riga.closest('.sto-voce');
+    if (voce.classList.contains('aperta')) {
+      chiudi(voce);
+      scriviAncora(null);
+    } else {
+      apri(voce);
+      scriviAncora(voce.getAttribute('data-voce'));
+    }
+  });
+
+  window.addEventListener('hashchange', daAncora);
+  daAncora();
 })();
 
 /* Foto prodotto a schermo intero: un tap sulla miniatura la apre ingrandita. Delegato su
