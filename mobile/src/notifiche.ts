@@ -27,7 +27,7 @@ function modulo(): typeof import('expo-notifications') {
 // Dove porta una notifica: `link` è il percorso del sito ("/ordini/12", "/richieste/7") che il server mette nei dati della push.
 export function apriDaLink(link: unknown) {
   const l = typeof link === 'string' ? link : '';
-  let m = /^\/(?:ordini|ddt)\/(\d+)/.exec(l);
+  let m = /^\/ordini\/(\d+)/.exec(l);
   if (m) return router.push({ pathname: '/ordini/ordine/[id]', params: { id: m[1] } });
   m = /^\/richieste\/(\d+)/.exec(l);
   if (m) return router.push({ pathname: '/ordini/richiesta/[id]', params: { id: m[1] } });

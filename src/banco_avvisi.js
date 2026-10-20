@@ -1,4 +1,5 @@
 const db = require('../db');
+const corriere = require('./corriere');
 const format = require('./format');
 const pricing = require('./pricing');
 
@@ -80,7 +81,7 @@ async function arricchisciPush(distributorId, notifiche) {
     idOrdini.length
       ? db
           .prepare(
-            `SELECT o.id, o.stato, o.consegnato_il, o.corriere_nome, o.corriere_arrivo_il, u.ragione_sociale AS cliente_nome
+            `SELECT o.id, o.stato, o.consegnato_il, o.corriere_nome, o.corriere_risposto_il, o.corriere_minuti, u.ragione_sociale AS cliente_nome
                FROM orders o JOIN users u ON u.id = o.cliente_id
               WHERE o.distributor_id = ? AND o.id = ANY(?::int[])`
           )
@@ -100,8 +101,9 @@ async function arricchisciPush(distributorId, notifiche) {
         fuori.ordine = {
           id: Number(o.id),
           corriere: o.corriere_nome || '',
-          // corriere_arrivo_il è TIMESTAMPTZ (un istante vero): oraRoma lo scrive in ora italiana.
-          ritiroAlle: o.corriere_arrivo_il ? format.oraRoma(o.corriere_arrivo_il) : null,
+          // Il banco vede solo il tempo scritto dal corriere su WhatsApp: quando arriva da lui (src/corriere.js). È un istante vero (TIMESTAMPTZ + minuti):
+          // oraRoma lo scrive in ora italiana.
+          ritiroAlle: corriere.ritiro(o) ? format.oraRoma(corriere.ritiro(o)) : null,
           // L'ordine può essere già partito (o consegnato) quando l'avviso arriva: allora non c'è più niente da preparare.
           daPreparare: o.stato === 'inviato' && !o.consegnato_il,
         };

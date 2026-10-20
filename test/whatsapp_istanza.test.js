@@ -233,7 +233,9 @@ test('risposta "preso 30": la gestisce l\'istanza proprietaria del messaggio, l\
   await wa.gestisciMessaggio(rispostaCorriere('WA_L'));
   assert.deepEqual(chiamatePreso, [{ responseId: 50, minuti: 30, nome: 'Marco' }]);
   assert.equal(sock.mandati.length, 1);
-  assert.match(sock.mandati[0].contenuto.text, /✅ Preso! Richiesta #5: 30 minuti in totale/);
+  // i minuti sono il tempo per arrivare dal venditore, non quello fino alla consegna
+  assert.match(sock.mandati[0].contenuto.text, /✅ Preso! Richiesta #5: arrivi dal venditore in 30 minuti, ritiro entro le \d\d:\d\d\./);
+  assert.doesNotMatch(sock.mandati[0].contenuto.text, /in totale|consegna entro/);
   assert.ok(righe[0].preso_il, 'segnato come preso');
 
   // lo stesso con le risposte ai messaggi della VPS (o di prima): il locale non fa niente
@@ -268,10 +270,26 @@ test('la risposta del bot di un\'altra istanza ("✅ Preso!", che arriva come me
   wa._prova.impostaSocket(sock, 'gruppo@g.us');
   const eco = {
     key: { id: 'ECO1', remoteJid: 'gruppo@g.us', fromMe: true },
-    message: { extendedTextMessage: { text: '✅ Preso! Richiesta #6: 30 minuti in totale, consegna entro le 10:30.', contextInfo: { stanzaId: 'WA_V' } } },
+    message: { extendedTextMessage: { text: '✅ Preso! Richiesta #6: arrivi dal venditore in 30 minuti, ritiro entro le 10:30.', contextInfo: { stanzaId: 'WA_V' } } },
   };
   await wa.gestisciMessaggio(eco);
   assert.equal(chiamatePreso.length, 0);
   assert.equal(sock.mandati.length, 0);
   wa._prova.impostaSocket(null);
+});
+
+test('il messaggio nel gruppo: i minuti sono il tempo per arrivare dal venditore (tappa 1), non il tempo fino alla consegna', () => {
+  ambiente({ WHATSAPP_ATTIVO: '1', WHATSAPP_ISTANZA: 'locale' });
+  const testo = wa.testoRitiroConsegna({
+    richiestaId: 12,
+    banco: { nome: 'BOREA SRL — Fegino', indirizzo: 'Via Castel Morrone 1', lat: 44.44, lng: 8.93 },
+    consegnaA: { indirizzo: 'Via Puggia 22/3, 16131 Genova (GE)', lat: 44.43, lng: 8.95 },
+  });
+  // le due tappe ci sono ancora (il corriere deve sapere dove portare la merce)
+  assert.match(testo, /Richiesta #12: nuova consegna/);
+  assert.match(testo, /1️⃣ PRELIEVO MERCI\nBOREA SRL — Fegino/);
+  assert.match(testo, /2️⃣ CONSEGNA MERCE\nVia Puggia 22\/3/);
+  // ma i minuti da scrivere sono quelli per arrivare dal venditore
+  assert.match(testo, /«preso <minuti>» \(es\. preso 30\)\. I minuti sono il tempo che ci metti ad arrivare dal venditore \(tappa 1, prelievo merci\)\./);
+  assert.doesNotMatch(testo, /tempo totale|dal ritiro alla consegna/);
 });

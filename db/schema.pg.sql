@@ -155,13 +155,6 @@ CREATE TABLE IF NOT EXISTS request_response_items (
   UNIQUE (response_id, product_id)
 );
 
-CREATE TABLE IF NOT EXISTS ddt_counters (
-  distributor_id INTEGER NOT NULL REFERENCES distributors(id),
-  anno INTEGER NOT NULL,
-  ultimo INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (distributor_id, anno)
-);
-
 CREATE INDEX IF NOT EXISTS idx_response_items ON request_response_items(response_id);
 
 CREATE TABLE IF NOT EXISTS brands (
@@ -282,13 +275,6 @@ ALTER TABLE request_responses ADD COLUMN IF NOT EXISTS consegna_minuti_stimati I
 ALTER TABLE request_response_items ADD COLUMN IF NOT EXISTS sconto_riga_pct DOUBLE PRECISION;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS partenza_ore INTEGER;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS destinazione TEXT NOT NULL DEFAULT '';
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS ddt_numero TEXT;
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS ddt_data TIMESTAMP;
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS ddt_colli INTEGER;
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS ddt_aspetto TEXT NOT NULL DEFAULT 'Colli';
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS ddt_trasporto TEXT NOT NULL DEFAULT 'mittente';
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS ddt_causale TEXT NOT NULL DEFAULT 'Vendita';
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS ddt_note TEXT NOT NULL DEFAULT '';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS preso_in_carico_il TIMESTAMP;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS contributo_raee DOUBLE PRECISION NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS geo_consenso INTEGER NOT NULL DEFAULT 0;

@@ -63,7 +63,7 @@ sua filiale (una sola) e `nome`/`cognome`. Login, token app, sessioni e notifich
   migrazione una tantum: prova a secco di default (transazione + ROLLBACK), `--applica` conferma.
 - L'installatore vede **solo la ditta** ("Borea"): mai la filiale (`flusso_cliente.senzaFiliale`,
   `raggruppaRisposteDitta`, `anagrafiche.legamiDelCliente`; l'app nasconde `filiale` se vuota). La
-  filiale la vedono banchi e agente (DDT, pannello banco). Il blanking sta nei punti **solo cliente**:
+  filiale la vedono banchi e agente (pannello banco). Il blanking sta nei punti **solo cliente**:
   `/ordini/:id` è condivisa fra ruoli, per questo lì si fa per ruolo e non in `dettaglioOrdine`.
   `legamiDelCliente` (anagrafica del cliente, "Distributori di riferimento") esclude i banchi disattivati: i
   legami con AFIS, Cambielli e Fidra restano in `client_distributors` (lo storico li referenzia) ma non si vedono.
@@ -76,8 +76,8 @@ sua filiale (una sola) e `nome`/`cognome`. Login, token app, sessioni e notifich
   = la filiale che ha accettato: da lì parte il pacco e solo i suoi dipendenti lo vedono.
 - Prezzi uguali: listino (`distributor_products`, 27.676 righe) e legami cliente
   (`client_distributors`) di Staglieno sono **copie** di Fegino. Un nuovo import di listino va
-  scritto su tutte le filiali della ditta. Sconti (`client_discount_rules`) e numerazione DDT
-  (`ddt_counters`) sono per filiale, non per ditta.
+  scritto su tutte le filiali della ditta. Gli sconti (`client_discount_rules`)
+  sono per filiale, non per ditta.
 - Un `distributors` senza `ditta_id` (per esempio creato dal seed) funziona: ogni riga è una ditta a
   sé. Il seed (`db/postgres/seed.js`) non crea ditte.
 - Coordinate (Nominatim/OSM): Fegino = civico 1/7 rosso di Via Castel Morrone; Staglieno
@@ -168,7 +168,7 @@ di query in sequenza**, non la loro complessità. Mai query dentro un ciclo (N+1
 
 **Solo tema chiaro** (richiesta esplicita del 02/10/2026: tolta la modalità scura "Cantiere Notte",
 l'interruttore e lo script `data-tema`; non rimetterli). Icone SVG in `src/icone.js` (13 icone categoria
-provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
+provvisorie). Variabili CSS in cima a `public/style.css`.
 - Verde/arancio/rosso sono scuriti per portare i badge a 4.5:1 (stessi valori in
   `mobile/src/tema.tsx`).
 - I `<button>` non ereditano il font (`button { font-family: inherit }`); campi input ≥16px, sotto
@@ -177,7 +177,7 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   ricerca; ripristino focus dopo il redraw risultati (altrimenti la tastiera si chiude); tutte le
   barre di ricerca usano lo stesso `[data-ricerca]`, mai una navigazione mentre si scrive.
 - **Carrello web** (richieste esplicite del 04/10/2026, non rimetterli): niente frasi di spiegazione
-  (pezzi nel carrello, minimo raggiunto, "indirizzo che finisce sulla bolla", "paghi ora / pagamento di
+  (pezzi nel carrello, minimo raggiunto, "paghi ora / pagamento di
   prova"), niente codice/categoria sotto l'articolo, **niente scritta "N articoli · M pezzi"** (in cima c'è
   solo "+ Aggiungi pezzi"), niente riga "Imponibile" e niente "2 × € … → €…": la scheda articolo ha prezzo
   `cad. · IVA esclusa`, cestino, stepper e totale riga. Ordine pagina: articoli → "Consegna in cantiere"
@@ -305,7 +305,7 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   alle altre, e hanno solo quantità e nome perché le richieste non salvano prezzi). Un riquadro blu per **ditta** (oggi una, BOREA; mai la filiale; con più ditte i chip del mese stanno
   nel primo). Per ordine: `<details>` **tutti chiusi all'arrivo** (richiesta esplicita del 18/10/2026: non riaprire il primo); "Riordina" (solo consegnati) è un form `POST /storico/:id/riordina` fuori dal `<summary>`,
   "Dettagli ›" va a `/ordini/:id`. Per articolo: righe sommate per (codice, nome, prezzo cad.), dal totale più alto. **CSV** `GET /storico/materiale.csv?mese=`: `;`, BOM UTF-8, una riga per articolo, servizio sulla prima riga di ogni
-  ordine, totali in fondo, celle che cominciano per `= + - @` con un apice (nomi come "- Materiale di montaggio" esistono nel catalogo). Il banco ha un suo CSV, senza servizio e col DDT
+  ordine, totali in fondo, celle che cominciano per `= + - @` con un apice (nomi come "- Materiale di montaggio" esistono nel catalogo). Il banco ha un suo CSV, senza servizio
   (vedi "Clienti del banco"). Prove: `test/materiale.test.js` e i test "storico: ..." di `test/server.test.js`. Il fondo pagina è 96px (`.app-storico`).
 - **Verifica disponibilità** (`views/richiesta_attesa.ejs`, richiesta esplicita del 04/10/2026, non rimettere
   paragrafi di spiegazione, "Hai pagato…", pulsante notifiche): timer con anello da 148px che si **svuota**,
@@ -450,7 +450,7 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   **Le righe mostrano il PREZZO DEL BANCO** (`pricing.prezzoNetto`, locals `prezzoBanco`/`totaleRigaBanco`): catalogo, categoria, ricerca live, varianti
   (`data-varianti`), carrello, `prodotto_json.js` e API dell'app (`prezzo`, `prezzo_valore`) dicono lo stesso prezzo, e la somma delle righe è la "Merce". Il 10% sta **solo**
   nella voce Servizio. **Non toccati**: `order_items.prezzo_unitario_cliente`/`subtotale_cliente` e `orders.totale_finale` si scrivono come prima (col 10%), quindi **la pagina
-  dell'ordine del banco e dell'agente e la bolla (DDT) mostrano ancora il prezzo col 10%** (quella dell'**installatore** è già divisa: vedi "Importi dell'ordine"): da allineare. **Ordine minimo** (config `ordine_minimo`, 33) misurato su `totale_netto`
+  dell'ordine vista dall'agente (e la vecchia `/ordini/:id` del banco) mostrano ancora il prezzo col 10%** (quella dell'**installatore** è già divisa: vedi "Importi dell'ordine"): da allineare. **Ordine minimo** (config `ordine_minimo`, 33) misurato su `totale_netto`
   (merce a prezzo del banco; `validaRichiesta` e `riepilogoCarrello`). **Banco**: la tabella del materiale nel dettaglio richiesta usa `prezzoNetto` (prima prezzo col servizio).
   **Carrello web**: card "Cosa paghi e a chi" (`views/carrello.ejs`, classi `cp-*`): riquadro azzurro "Consegna in cantiere" (PAGHI ORA: Corriere, Servizio, IVA, Totale da pagare ora) e
   riquadro "Materiale" (PAGHI DOPO A {ditta}, nome da `profiloCliente.distributore` senza forma giuridica, `fmt.nomeCommerciale`; Merce, RAEE solo se > 0, IVA, Totale materiale), sotto
@@ -469,11 +469,10 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   `app.totale` = `requests.pagamento_importo` (l'incassato, con Stripe) **solo se non supera il calcolo di più di un centesimo**: gli ordini di prima pagati INTERI in app
   (98,76) mostrano il calcolo (20,07), non 98,76 (scelta mia: altrimenti "Consegna 98,76" accanto a "Materiale 78,69"). **Pagina dell'ordine dell'installatore**
   (`ordine_dettaglio.ejs`, in consegna, consegnato e il ritiro del vecchio flusso; la parte alta con anello, "Te lo porta…" e barra non è cambiata): scheda "Materiale in
-  arrivo" / "Materiale consegnato" (`partials/ordine_righe.ejs`: righe `Cod. X · € cad.` a prezzo del banco + RAEE, "Merce · IVA esclusa", riga "Documenti · DDT n° N ›" solo se
-  c'è il DDT) e scheda "Pagamenti" (`partials/pagamenti.ejs`, UNA per ordine e richieste, classi `pg-*`, parametri `{ importi, stato: 'attesa'|'ordine'|'consegnato'|'chiusa', ditta }`:
+  arrivo" / "Materiale consegnato" (`partials/ordine_righe.ejs`: righe `Cod. X · € cad.` a prezzo del banco + RAEE, "Merce · IVA esclusa") e scheda "Pagamenti" (`partials/pagamenti.ejs`, UNA per ordine e richieste, classi `pg-*`, parametri `{ importi, stato: 'attesa'|'ordine'|'consegnato'|'chiusa', ditta }`:
   riga verde "Consegna in cantiere · Pagata il gg/mm · Visa •••• 4242" con il link "Ricevuta", riga grigia "Materiale · Lo paghi a {ditta} con la sua fattura", `<details>` "Vedi il dettaglio degli importi"
   con i due riquadri; i quattro stati (bloccato/pagato/annullato/rimborsato) e il parametro `statoPag` sono descritti in "Pagamenti lato installatore"). **Mai un "Totale" unico** né Consegna/IVA/Totale sotto le righe. **Tolti su richiesta esplicita**: la sezione chiusa "Dettagli consegna e
-  pagamento/documenti" (resta solo il DDT: **destinazione e note della richiesta non si vedono più** nella pagina dell'ordine) e la nota "Prezzo definitivo, con eventuale sconto
+  pagamento/documenti" (**destinazione e note della richiesta non si vedono più** nella pagina dell'ordine) e la nota "Prezzo definitivo, con eventuale sconto
   aggiuntivo…". Il pulsante "Ordine consegnato" ora è "Ho ricevuto il materiale" (stessa azione). **Banco e agente vedono ancora il markup vecchio** (`subtotale_cliente`,
   `totale_finale`, `totale_ivato`; commento sopra il loro ramo in `ordine_dettaglio.ejs`). Prove:
   `test/pricing.test.js` (`importiOrdine`, `ivaPctOrdine`), `test/materiale.test.js` ("Storico e pagina del banco…"), test "ordine in consegna/consegnato/VECCHIO/rimborsato…"
@@ -689,18 +688,18 @@ Attesa corriere → Da preparare, senza numeri d'ordine delle fasi. Convenzioni 
   **"Ispeziona"** (link al dettaglio, con l'occhio) e **"Non disponibile"** (`rispondi` con `rifiuta` e `torna=home`, subito, senza conferma). Nelle
   schede "Attesa corriere" **"Ispeziona"** è una pillola da 38px in cima a destra (`.btn-ispeziona`; sotto ~300px di scheda va a capo) e il nome del
   cliente non è più un link. **"Da preparare" (richiesta esplicita del 14/10/2026, non rimettere "Prepara")**: due pulsanti uguali affiancati (42px,
-  `.scheda-azioni-ordine`): **"Ispeziona"** apre `/distributore/ordini/<id>` (dal 19/10/2026: la pagina dell'ordine, dove si emette la bolla; prima
+  `.scheda-azioni-ordine`): **"Ispeziona"** apre `/distributore/ordini/<id>` (dal 19/10/2026: la pagina dell'ordine; prima
   apriva il dettaglio della richiesta) e **non tocca l'ordine**, che resta in colonna: la pagina non lo prende più in carico; c'è anche per un ordine **senza `request_id`**.
   **"Preparato"** (blu) è un form `POST /distributore/ordini/:id/preparazione` con `torna=home`: `prendiInCarico` porta l'ordine in `in_evasione` (esce dalla colonna: per il
   banco è **"In consegna"**) e avvisa il cliente. L'occhio è `iconaOcchio` (già c'era, per la password; stroke 1.9 dal CSS dei pulsanti).
 - **Tempi**: soglie in `BACHECA` (`server.js`) → `data-soglia-*` sulla bacheca → blocco "Home del banco" di `app.js`: il
   server disegna le classi iniziali, lo script le aggiorna ogni secondo dagli istanti (secondi mancanti + `Date.now()`,
   non un contatore che decrementa). Rosso negli ultimi 180 s, "Nuova" per i primi 180 s, pillola dell'ordine rossa sotto
-  15 min. A zero la scheda si spegne e la pagina si ricarica. La pillola dell'ordine conta fino a
-  **`orders.corriere_arrivo_il`**, che per il resto del sito è la consegna al cliente (minuti totali dal ritiro alla
-  consegna): non c'è nel DB un orario di arrivo del corriere al banco. Senza corriere non c'è pillola.
+  15 min. A zero la scheda si spegne e la pagina si ricarica. La pillola dell'ordine conta fino al **ritiro del corriere**
+  (`corriere_risposto_il` + `corriere_minuti`, in SQL `corriere.ritiroSql('o')`): è il tempo che il corriere ha scritto su WhatsApp, l'unico orario del
+  corriere che il banco vede (vedi "Orari del corriere"). Senza corriere non c'è pillola.
 - Il ritardo/`secondi_da_risposta`/`secondi_arrivo` si calcolano **in SQL** (`NOW()`), mai con un `Date` di JS sulle colonne
-  `TIMESTAMP` (vedi sopra); `corriere_arrivo_il` è `TIMESTAMPTZ`. Tre articoli al massimo per scheda, poi "+N altri
+  `TIMESTAMP` (vedi sopra); `corriere_risposto_il` e `corriere_arrivo_il` sono `TIMESTAMPTZ`. Tre articoli al massimo per scheda, poi "+N altri
   articoli". Prova: `test/server.test.js` ("home del banco...") con il DB finto.
 
 ## Più ordini insieme in Stato ordini (15/10/2026)
@@ -833,7 +832,7 @@ timer, "Elimina dal banco" solo come link di testo in fondo.
 - **"Da preparare" non ha una pagina della richiesta** (richiesta esplicita del 19/10/2026: dopo che un corriere accetta, "Ispeziona" da "Attesa corriere" finiva in una pagina con timer del corriere e "Preparato", che non ci deve essere):
   `statoRichiestaBanco` dà ancora `da_preparare` (conferma + ordine del banco `inviato`, non consegnato) ma la route, appena lo vede, fa `redirect` a `/distributore/ordini/<id>` e passa `torna` così com'è (`conRitorno(ordine, daDove)`):
   la freccia dell'ordine riporta **da dove si era partiti** (la home se la richiesta si era aperta senza `torna`), **non** alla richiesta, che non è un passaggio. Il redirect vale anche quando la pagina in attesa del
-  corriere si ricarica da sola. Sono spariti dalla vista e dalla route: il ramo "Da preparare" (timer `.ric-arrivo`, "Preparato", "Apri l'ordine e la bolla"), `linkOrdine` ("Ordine collegato", "Gestisci l'ordine"), `arrivo`
+  corriere si ricarica da sola. Sono spariti dalla vista e dalla route: il ramo "Da preparare" (timer `.ric-arrivo`, "Preparato", "Apri l'ordine"), `linkOrdine` ("Ordine collegato", "Gestisci l'ordine"), `arrivo`
   e il `secondi_arrivo` della lettura dell'ordine; `passiDopoConferma` non conosce più `corriere`/`daPreparare`. Il CSS `.ric-arrivo-*` resta perché lo usa il riquadro "Ritiro" della pagina dell'ordine. Dopo "Preparato" l'ordine è
   `in_evasione` e la richiesta torna "Confermata". Prova: "banco: la richiesta con l'ordine "Da preparare" non ha una pagina…" e "banco: la freccia di ordine e richiesta riporta…" in `test/server.test.js`.
 - **Timer** (`[data-ric-timer]`, blocco "Dettaglio richiesta del banco" di `app.js`): anello da 80px arancio come sulla home, **rosso negli ultimi
@@ -851,48 +850,61 @@ timer, "Elimina dal banco" solo come link di testo in fondo.
   Sul DB vero: richiesta, cliente e utente banco di prova sul **banco AFIS (id 1, disattivato)**, inseriti con SQL (nessuna notifica, nessun banco vero la
   vede), poi cancellati; il timer di 30 s chiude da solo le richieste di prova scadute.
 
-## Pagina dell'ordine del banco (19/10/2026)
+## Pagina dell'ordine del banco (19/10/2026, senza bolla dal 20/10/2026)
 
 `GET /distributore/ordini/:id` (`server.js`, presentazione in `src/ordine_banco.js`) + `views/distributore_ordine.ejs`: la pagina di un ordine del banco, **che si adatta allo stato** (`storicoBanco.statoStorico`, lo stesso dello Storico):
-**da preparare**, **in consegna** e **consegnato** (richiesta esplicita del 19/10/2026 sera, "Apri ordine completo" dello Storico deve funzionare per tutti). Prima, nella stessa giornata, la pagina esisteva solo per "Da preparare" (la route rimandava
-allo Storico gli altri): **non è più così**, la route non fa più redirect e la vista ha di nuovo i rami in consegna / consegnato. **Stessa impostazione a due colonne della richiesta** (classi `ric-*` riusate, `ord-*` solo qui; blocco "Pagina dell'ordine del banco" in fondo a `style.css`; `body.pagina-richiesta
-.pagina-ordine`). Come il dettaglio della richiesta include `partials/banco_testa` **senza** `indietro` (la freccia è la sua, `ric-indietro`, e va a `paginaPrecedente`, vedi sopra). **Aprirla non scrive
-niente, in nessuno stato** (dal 19/10/2026: prima chiamava `prendiInCarico` e portava l'ordine in preparazione; ora lo fa solo "Preparato", `POST /preparazione`, e `prendiInCarico` agisce comunque solo su `inviato`: un ordine già partito o consegnato non si tocca); restano `POST /ddt` ed `/elimina`. Richieste esplicite, non rimetterli: le tre righe in alto ("Ricevuto…",
-"Partenza/Consegna dichiarata", "Consegna con mezzo del distributore"), "Cliente ordinante" a 4 righe, "Dove consegnare: posizione non disponibile", l'"Imponibile" col servizio e la consegna.
-- **Le tre versioni** (`stato.chiave`; materiale, consegna e cliente sono uguali in tutte): **Da preparare** = com'era (pillola blu che pulsa, "Materiale da preparare", riquadro Ritiro, modulo della bolla, "Elimina ordine").
-  **In consegna** (dopo "Preparato" o la bolla): pillola azzurra `#E3EDF7`/`#1A4468` (`.ric-st-in_consegna`, senza pulsare), "Materiale **partito**" con "N articoli · M pezzi" e **"Stampa"** (`[data-stampa]` → `window.print()`; `@media print` mostra solo testata e
-  materiale), a destra la scheda azzurra `.ord-stato-consegna` (furgone, "In consegna", `ordineBanco.testoInConsegna`: "Partito alle HH:MM · arrivo previsto alle HH:MM" da `evaso_il`/`in_evasione_il` e `corriere_arrivo_il`, "Corriere X") e la scheda della bolla emessa
-  (`.ord-bolla-emessa`: "Bolla n. N", `ordineBanco.bollaOrdine` = "del gg/mm/aaaa · N colli · causale · trasporto a cura del vettore", pulsante blu "Apri e stampa la bolla / DDT" → `/ddt/:id`); niente modulo della bolla, niente "Elimina ordine".
+**da preparare**, **in consegna** e **consegnato** ("Apri ordine completo" dello Storico funziona per tutti). **Stessa impostazione a due colonne della richiesta** (classi `ric-*` riusate, `ord-*` solo qui; blocco "Pagina dell'ordine del banco" in fondo a `style.css`;
+`body.pagina-richiesta .pagina-ordine`). Come il dettaglio della richiesta include `partials/banco_testa` **senza** `indietro` (la freccia è la sua, `ric-indietro`, e va a `paginaPrecedente`, vedi sopra). **Aprirla non scrive
+niente, in nessuno stato**: l'ordine passa "In consegna" solo con "Preparato" (`POST /distributore/ordini/:id/preparazione`, `prendiInCarico`, che agisce comunque solo su `inviato`: un ordine già partito o consegnato non si tocca); resta `POST /elimina`.
+Richieste esplicite, non rimetterli: le tre righe in alto ("Ricevuto…", "Partenza/Consegna dichiarata", "Consegna con mezzo del distributore"), "Cliente ordinante" a 4 righe, "Dove consegnare: posizione non disponibile", l'"Imponibile" col servizio e la consegna.
+- **La bolla (DDT) non esiste più** (richiesta esplicita del 20/10/2026: la piattaforma non la gestisce): via la rotta `POST .../ddt`, la pagina `/ddt/:id` (`views/ddt.ejs`, `src/ddt.js`), il modulo con colli/aspetto/causale/trasporto, la scheda della bolla emessa, la
+  colonna DDT dello Storico (e la ricerca per numero di DDT), la scheda "Bolla / DDT" del pannello dello Storico, "Apri la bolla" nella scheda cliente, il DDT nel CSV del banco, la riga "Documenti · DDT" dell'installatore, `ddt` nell'API dell'app e le sue stringhe nell'app
+  mobile. **Non toccato nel DB condiviso**: le colonne `orders.ddt_*` e la tabella `ddt_counters` restano (ci sono le bolle già emesse e la loro numerazione: non si cancellano da qui) ma nessuno le legge né le scrive, e `schema.sql` non le crea più.
+  Gli ordini `evaso` (partiti con la bolla) restano "In consegna" per il banco. `format.indirizzoCompleto` è il vecchio `ddt.indirizzoCompleto`.
+- **Le tre versioni** (`stato.chiave`; materiale, consegna e cliente sono uguali in tutte): **Da preparare** = pillola blu che pulsa, "Materiale da preparare", riquadro Ritiro, scheda **"Materiale pronto? · Preparato"** (`.ord-prepara`: un form con `torna` = la pagina da cui si è arrivati; dopo il
+  clic si resta sull'ordine, che diventa "In consegna", e la freccia riporta ancora lì), "Elimina ordine".
+  **In consegna** (dopo "Preparato"): pillola azzurra `#E3EDF7`/`#1A4468` (`.ric-st-in_consegna`, senza pulsare), "Materiale **partito**" con "N articoli · M pezzi" e **"Stampa"** (`[data-stampa]` → `window.print()`; `@media print` mostra solo testata e
+  materiale; è la lista del materiale, non una bolla), a destra la scheda azzurra `.ord-stato-consegna` (furgone, "In consegna", `ordineBanco.testoInConsegna`: "Partito alle HH:MM · ritiro alle HH:MM" da `in_evasione_il` (o `evaso_il` negli ordini vecchi) e dal ritiro del corriere, "Corriere X");
+  niente "Elimina ordine". **Il banco non vede mai l'arrivo dal cliente** (`corriere_arrivo_il`): solo il ritiro.
   **Consegnato**: pillola grigia `#ECE9E2`/`#3F3E38`, testata "Ricevuto il gg/mm alle HH:MM" (`ordineBanco.ricevutoIl`, non più "oggi"), "Materiale consegnato", nota "Da incassare dal cliente con la tua fattura. Prezzi del banco.", scheda verde `.ord-stato-consegnato` (cerchio con la spunta,
-  "Consegnato", "Il gg/mm alle HH:MM · confermato dal cliente", e due mini riquadri "Partito gg/mm · HH:MM" e "Tempo di consegna" = `consegnato_il − evaso_il`, "34 min" / "1 h 05"), poi la bolla; Avanzamento tutto verde con le ore; niente "Elimina ordine".
-  **Senza bolla** (ordine passato "Preparato", o segnato consegnato con la rotta provvisoria senza essere mai partito) la scheda dice "Bolla non emessa" e non c'è il pulsante; un "Partito" senza un momento noto non si scrive e "Tempo di consegna" non c'è.
+  "Consegnato", "Il gg/mm alle HH:MM · confermato dal cliente", e due mini riquadri "Partito gg/mm · HH:MM" e "Tempo di consegna" = `consegnato_il − (evaso_il || in_evasione_il)`, "34 min" / "1 h 05"); Avanzamento tutto verde con le ore; niente "Elimina ordine".
+  Un "Partito" senza un momento noto (consegna provvisoria su un ordine mai partito) non si scrive e "Tempo di consegna" non c'è.
   **Da sapere**: la pillola "In consegna" della pagina è azzurra (come da richiesta) mentre nella lista dello Storico "In consegna" è verde, e "Da preparare" è blu quasi uguale all'azzurro: sulla pagina i due stati si distinguono poco dal colore (la pagina vuole l'azzurro, lo Storico il verde).
 - **Materiale a PREZZO DEL BANCO**: cad. = `prezzo_netto_unitario + raee_unitario`, totale riga = `subtotale + raee_riga`, mai `prezzo_unitario_cliente`; piede = `pricing.importi({ ordine }).banco` (Merce, RAEE solo se > 0,
   IVA con `ivaPctOrdine`, Totale: 64,50 + 14,19 = 78,69 nell'esempio). `ordine_banco.righeMateriale` abbina i `mancanti` (solo con `copertura = 'parziale'`, altrimenti `calcolaOfferta` non si chiama: pesa) per
   codice: "richiesti N, ne hai confermati M" sotto il codice; un articolo confermato a zero non è una riga dell'ordine e finisce nella riga "Non confermati…" sotto la tabella.
-- **Niente spunte "preso" né "Lista di prelievo"** (richiesta esplicita del 19/10/2026, non rimetterli): la bolla si emette **sempre su tutto il materiale**, senza scegliere gli articoli. Sono spariti la colonna "Preso" (la riga è un `<div class="ord-riga">`,
-  tabella a 4 colonne: Q.tà, articolo, prezzo cad., totale), la pillola "N di M presi", il pulsante "Lista di prelievo" (`window.print`, `.ord-stampa`, `@media print`, `iconaStampante`), la rotta `POST /distributore/ordini/:id/righe/:rigaId/preso`
-  (ora 404) e `preso`/`presi`/`tutti` di `righeMateriale`. **La colonna `order_items.preso_il` resta nel DB e in `schema.sql`** (blocco "Materiale preso…", applicato al DB condiviso il 19/10/2026) ma nessuno la legge né la scrive: si può togliere con un `DROP COLUMN`.
+- **Niente spunte "preso" né "Lista di prelievo"** (richiesta esplicita del 19/10/2026, non rimetterli). La riga è un `<div class="ord-riga">`, tabella a 4 colonne: Q.tà, articolo, prezzo cad., totale; la rotta `POST /distributore/ordini/:id/righe/:rigaId/preso` è 404.
+  **La colonna `order_items.preso_il` resta nel DB e in `schema.sql`** (blocco "Materiale preso…", applicato al DB condiviso il 19/10/2026) ma nessuno la legge né la scrive: si può togliere con un `DROP COLUMN`.
   Sempre su richiesta: **niente link "Apri in Maps"** (`linkMaps` e `mappa` tolti) e **niente riga "Consegna con mezzo del banco"** nella scheda Consegna: `descrizioneConsegna` ritorna `''` col mezzo del banco e la vista non disegna la riga (restano "Corriere X · ritiro al banco" e "Ritiro al banco da parte del cliente").
-  `app.js` di questa pagina fa solo i + e - dei colli.
-- **La bolla si emette solo mentre l'ordine è "Da preparare"** (richiesta esplicita del 19/10/2026: durante la consegna non ha senso), cioè solo da questa pagina. `POST /ddt` lo rifiuta lato server
-  (`ordine.stato !== 'inviato'` e senza DDT → pagina d'errore **409** "La bolla si emette quando l'ordine è ancora da preparare…" con il ritorno allo Storico; un secondo invio con la bolla già emessa passa, `emetti` non
-  rinumera). **Gli ordini già "In consegna" senza bolla non possono più averla** (sul DB condiviso al 19/10/2026: 7, vecchie prove). Emessa la bolla l'ordine diventa `evaso` = "In consegna" e si va alla bolla da stampare
-  (`/ddt/:id`, il cui "‹ Torna" per il banco va **da dove si è emessa la bolla**: il modulo manda `torna` (la pagina di partenza, di norma la home: "Torna al banco", richiesta del 20/10/2026), e senza `?torna=` valido, per esempio aprendo la bolla dallo Storico, resta lo **Storico**; mai all'ordine). Come si **rivede** una bolla: "Apri ›" nel pannello della riga dello Storico (`.sto-d-bolla-apri`; nella lista il numero DDT è solo un testo), "Apri e stampa la bolla / DDT" nella pagina
-  dell'ordine in consegna o consegnato e "Apri la bolla / DDT N ›" nella scheda cliente (`.mc-vedi`): tutti link a `/ddt/:id`. Dalla richiesta con l'ordine "Da preparare" si arriva qui da soli (redirect).
-- **Pulsante della bolla**: sempre attivo (prima era "spento" con `aria-disabled` finché non si spuntava tutto). Etichetta "Emetti bolla e consegna al corriere" (con corriere) / "… e segna la merce partita"; trasporto predefinito `vettore` col corriere,
-  altrimenti mittente/destinatario secondo la modalità (`trasportoPredefinito`). **"Aspetto dei beni" è un gruppo di radio veri** (`name="aspetto"`, non un hidden + pulsanti: funziona anche senza JS). Dopo l'emissione si va a `/ddt/:id` (la bolla da stampare), non più a questa pagina.
-- **Riquadro "Ritiro"**: solo con `corriere_arrivo_il`; cerchio verde / rosso sotto `BACHECA.arrivoVicinoMin` (15), "In ritardo" a zero, lo muove il blocco di `app.js` di `[data-ric-arrivo]` (lo stesso
-  del dettaglio della richiesta, ogni secondo). **Attenzione**: `corriere_arrivo_il` per il resto del sito è la **consegna dal cliente** (nel DB non c'è un orario di arrivo del corriere al banco), ma qui, su richiesta esplicita, il testo
-  dice "Il corriere ritira alle HH:MM" e "Ritiro alle HH:MM" come la pillola della home ("ritira Marco · ore HH:MM"). Se si vuole l'orario vero del ritiro serve un dato che oggi non c'è.
-- **Avanzamento** (`passiOrdine({ stato, oraConferma, corriere, oraRitiro, partito, consegnato })`): Confermato da te (ora di `risposto_il`, se no `creato_il`) → Corriere trovato ("{nome} ha accettato alle HH:MM" da `corriere_risposto_il`; **non c'è senza corriere**) → **da preparare**: Da preparare (attuale, blu, pallino che pulsa) → In consegna → Consegnato (ultimi due da venire);
-  **in consegna**: Partito fatto ("Bolla n. N alle HH:MM", o solo "Alle HH:MM" senza bolla) → Consegnato da venire ("Lo conferma il cliente"); **consegnato**: tutto fatto ("Confermato dal cliente alle HH:MM"). **Non c'è un passo "Preparato"** distinto da "Partito": nel DB "Preparato" (`in_evasione_il`) e la bolla (`evaso_il`) sono due modi
-  alternativi di far partire la merce, e il mockup con cinque passi (Preparato "Ritirato dal corriere" + Partito) avrebbe dovuto inventarsi un momento di ritiro che non c'è. Un momento di un altro giorno rispetto alla nascita dell'ordine si scrive "il gg/mm alle HH:MM" (`ordineBanco.momento`/`quando`).
+  `app.js` di questa pagina fa solo "Stampa".
+- **Riquadro "Ritiro"**: solo con i minuti del corriere (`corriere.ritiro(ordine)` = `corriere_risposto_il` + `corriere_minuti`, **il tempo scritto su WhatsApp**: dal 20/10/2026 è davvero l'orario del ritiro, prima era l'arrivo dal cliente spacciato per ritiro); cerchio verde / rosso sotto
+  `BACHECA.arrivoVicinoMin` (15), "In ritardo" a zero, lo muove il blocco di `app.js` di `[data-ric-arrivo]` (lo stesso del dettaglio della richiesta, ogni secondo). Il testo dice "Il corriere ritira alle HH:MM" e "Ritiro alle HH:MM" come la pillola della home ("ritira Marco · ore HH:MM").
+- **Avanzamento** (`passiOrdine({ stato, oraConferma, corriere, oraRitiro, partito, consegnato })`): Confermato da te (ora di `risposto_il`, se no `creato_il`) → Corriere trovato ("{nome} ha accettato alle HH:MM" da `corriere_risposto_il`; **non c'è senza corriere**) → **da preparare**: Da preparare (attuale, blu, pallino che pulsa, "Ritiro alle HH:MM") → In consegna → Consegnato (ultimi due da venire);
+  **in consegna**: Partito fatto ("Alle HH:MM") → Consegnato da venire ("Lo conferma il cliente"); **consegnato**: tutto fatto ("Confermato dal cliente alle HH:MM"). **Non c'è un passo "Preparato"** distinto da "Partito": il momento del "Preparato" (`in_evasione_il`) è quello della partenza.
+  Un momento di un altro giorno rispetto alla nascita dell'ordine si scrive "il gg/mm alle HH:MM" (`ordineBanco.momento`/`quando`).
   **Colori** come nello Storico (salvo la pillola della pagina, vedi sopra): Da preparare blu, In consegna verde, Consegnato grigio (anche la pillola "Da preparare" del dettaglio richiesta è blu; la colonna "Da preparare" della home è rimasta verde: non toccata).
-- **Mobile (< 900px)**: una colonna, ordine: testata, Ritiro (o la scheda dello stato in consegna/consegnato), Materiale, Bolla (modulo o bolla emessa), Consegna, Cliente, Avanzamento, Elimina (`display: contents` sulle colonne e sulla coppia Consegna/Cliente + `order`); la tabella diventa una
-  lista (badge, nome e codice con il cad., totale); sotto i 560px e fra 900 e 1100px i campi della bolla stanno uno sotto l'altro (i segmenti di "Aspetto" si accavallavano).
-- **Prove**: `test/ordine_banco.test.js` (parti pure: momenti, bolla, tempo di consegna, passi per stato) e, in `test/server.test.js`, "banco: pagina dell'ordine a due colonne…", "…disponibilità parziale e RAEE…" e "banco: pagina dell'ordine "In consegna" e "Consegnato"…" (DB finto: ordine 1295; istanti fissi `alle(h, m)` così non dipendono dall'ora; controlla anche che nessuna query scriva, `scrittureDa`). Per vedere la pagina senza DB: view e partial veri con `ejs.renderFile`, `style.css` vera e un piccolo server statico (dati finti, anche con e senza corriere). Sul browser vero: Postgres
-  locale usa-e-getta (vedi "App Android e sicurezza"), il vero `server.js` lanciato da uno script in una cartella **senza `.env`** che imposta a mano `DATABASE_URL` locale, `STRIPE_*`, `WHATSAPP_ATTIVO=0`, `PUSH_ATTIVO=0`… (e `preview_start` con una voce di `.claude/launch.json` che lancia quello script), un banco (`borea`/`banco123` dal seed), un cliente e cinque ordini inseriti con SQL (uno per stato, più uno senza bolla e uno del giorno prima). Dopo ogni `navigate` il pannello perde il ridimensionamento: `tabs_select` e `resize_window` prima dello screenshot.
+- **Mobile (< 900px)**: una colonna, ordine: testata, Ritiro (o la scheda dello stato in consegna/consegnato), Materiale, Preparato, Consegna, Cliente, Avanzamento, Elimina (`display: contents` sulle colonne e sulla coppia Consegna/Cliente + `order`); la tabella diventa una
+  lista (badge, nome e codice con il cad., totale).
+- **Prove**: `test/ordine_banco.test.js` (parti pure: momenti, tempo di consegna, passi per stato) e, in `test/server.test.js`, "banco: pagina dell'ordine a due colonne…", "…disponibilità parziale e RAEE…", "banco: pagina dell'ordine "In consegna" e "Consegnato"…" e "banco: "Preparato" dalla pagina dell'ordine…" (DB finto: ordine 1295; istanti fissi `alle(h, m)` così non dipendono dall'ora; `ritiroTra(minuti)` fa arrivare il corriere fra N minuti; controlla anche che nessuna query scriva, `scrittureDa`). Per vedere la pagina senza DB: view e partial veri con `ejs.renderFile`, `style.css` vera e un piccolo server statico (dati finti, anche con e senza corriere). Sul browser vero: Postgres
+  locale usa-e-getta (vedi "App Android e sicurezza"), il vero `server.js` lanciato da uno script in una cartella **senza `.env`** che imposta a mano `DATABASE_URL` locale, `STRIPE_*`, `WHATSAPP_ATTIVO=0`, `PUSH_ATTIVO=0`… (e `preview_start` con una voce di `.claude/launch.json` che lancia quello script), un banco (`borea`/`banco123` dal seed), un cliente e un ordine creato con `flusso.nuovaRichiesta` + `richieste.rispondi` + `richieste.corriereHaPreso` (con `WHATSAPP_ATTIVO=1` in quello script, mai collegato). Sul Postgres locale le colonne `TIMESTAMP` sono ora di Roma e non UTC: orari e giorni di quelle colonne risultano sfalsati di 2 ore (non lo sono sul DB di produzione in UTC), le `TIMESTAMPTZ` no. Dopo ogni `navigate` il pannello perde il ridimensionamento: `tabs_select` e `resize_window` prima dello screenshot.
+
+## Orari del corriere e tragitto sulla mappa (20/10/2026)
+
+Richiesta esplicita: il banco vede **esattamente il tempo scritto dal corriere su WhatsApp**; l'installatore vede **quel tempo + il tragitto sulla mappa dal banco che ha accettato alla sua posizione**. Il messaggio nel gruppo (`whatsapp.testoRitiroConsegna`) dice che i minuti
+sono "il tempo che ci metti ad arrivare dal venditore (tappa 1, prelievo merci)"; la risposta del bot è "✅ Preso! Richiesta #N: arrivi dal venditore in X, ritiro entro le HH:MM". **Dove questa sezione contraddice frasi più vecchie qui sotto (minuti "totali", "dal ritiro alla consegna", `corriere_arrivo_il` come ritiro), vale questa.**
+- **Cosa vuol dire ogni colonna** (nessuna colonna nuova, nessuna modifica di schema): `request_responses.corriere_minuti` / `orders.corriere_minuti` = i minuti scritti dal corriere (verso il banco); `orders.corriere_risposto_il` = quando ha risposto (`corriere_preso_il` sulla risposta); **ritiro = `corriere_risposto_il` + `corriere_minuti`**
+  (`src/corriere.js`: `ritiro(ordine)` in JS, `ritiroSql('o')` nelle query; non c'è una colonna apposta); `request_responses.consegna_minuti_stimati` = prima del "preso" il solo tragitto banco → installatore, dopo il "preso" corriere + tragitto (`richieste.corriereHaPreso` ci somma i minuti in SQL, `COALESCE(consegna_minuti_stimati, 0) + ?`);
+  **`orders.corriere_arrivo_il` = `corriere_preso_il` + `consegna_minuti_stimati`** (`flusso.creaOrdineDaRisposta`, con `minutiConsegna` che non scende mai sotto i minuti del corriere): è l'arrivo dall'installatore e lo leggono invariati card, icona, striscia, pagina dell'ordine e API dell'app. Contare dall'istante della risposta e non da `NOW()` tiene il ritiro promesso al banco
+  e l'arrivo promesso all'installatore sullo stesso orologio anche se l'ordine nasce un po' dopo (riprova del timer).
+- **Chi vede cosa**: il banco **solo** il ritiro (pillola della home "29 min · ore HH:MM", riquadro "Ritiro" e Avanzamento della pagina dell'ordine, "ritira alle HH:MM" nel dettaglio dello Storico e nella card "In consegna", avviso a comparsa "Corriere trovato", notifica "Nuovo ordine da preparare: Il corriere ritira alle HH:MM",
+  "Consegna presa da Marco: arriva da te in N minuti" nel dettaglio della richiesta); l'installatore **solo** l'arrivo (notifica "Consegna prevista entro le HH:MM (…)", "Arriva entro le HH:MM", conti alla rovescia). Il vecchio `/ordini/:id` visto da banco e agente: il banco vede il ritiro, l'agente l'arrivo.
+  **Ordini nati prima di questa regola** hanno in `corriere_minuti` il tempo TOTALE: per loro il ritiro ricavato coincide con l'arrivo dal cliente (com'era mostrato al banco prima), nessuna migrazione.
+- **Il tragitto** (`src/percorso.js`, `src/consegna.js`): `consegna.minutiStimati(banco, cliente, partenzaOre)` lo calcola quando il banco CONFERMA (`richieste.rispondi`, fuori da ogni transazione; con il corriere la partenza passata è 0) dal punto vendita più vicino alla posizione dell'installatore (`users.geo_*` con consenso: oggi Via Puggia per tutti)
+  con **OSRM su OpenStreetMap** (`https://router.project-osrm.org`, senza chiave, limite d'attesa 4 s, **non lancia mai**: se non risponde o manca una posizione si ripiega sulla stima in linea d'aria × 1,35 a `velocita_media_kmh`, e senza posizioni resta 0). `fonte: 'mappa' | 'stima'` dice quale. Variabili: `ROUTING_URL` (server proprio) e `ROUTING_ATTIVO=0` (spento; **`test/server.test.js` lo spegne**: le prove
+  non fanno chiamate di rete). Il server pubblico di OSRM è di prova e va usato con moderazione: con molte richieste serve un OSRM proprio o un servizio a pagamento con lo stesso formato (non è Google Maps: con una chiave Google andrebbe scritto un secondo fornitore). Le coordinate di banco e installatore vanno a quel servizio.
+  La chiamata sta nella conferma del banco: costa ~150-300 ms (misurato), al massimo 4 s se il servizio non risponde.
+- **Senza WhatsApp** (modulo spento, nessun corriere) non cambia niente: l'ordine nasce alla conferma e l'installatore vede "Arriva entro N ore" dalla stima del banco (`consegna_ore`); `consegna_minuti_stimati` ora è il tragitto della mappa invece della stima in linea d'aria, ma lo usano solo il testo della notifica e l'ordinamento delle offerte.
+- **Provato** su un Postgres locale usa-e-getta (schema + seed): richiesta → conferma (tragitto 21 min da OSRM) → "preso 30" → banco ritiro = risposta + 30 min, installatore arrivo = risposta + 51 min, SQL e JS coincidono; pagine banco (home, ordine, Storico) e installatore lette nel browser. Test: `test/orari_corriere.test.js` (corriere, percorso, consegna, `corriereHaPreso`, con DB e servizio finti).
 
 ## Storico ordini del banco (14/10/2026)
 
@@ -904,23 +916,23 @@ non rimetterli: niente freccia indietro (è una scheda dell'intestazione, come C
 nota "Flusso del banco: …" in fondo.
 - **Stato di un ordine**: `statoStorico(o)` è l'unico punto (e `CONDIZIONE_STATO` è la stessa regola in SQL: conteggi delle schede e filtro
   della lista non possono divergere). **`consegnato_il` si guarda per primo**: con `/consegnato-prova` un ordine risulta consegnato restando
-  `inviato` (oggi l'ordine #91 è così). Poi `inviato` = **Da preparare (blu)**, `in_evasione` (Preparato) **e** `evaso` (bolla emessa) = **In consegna (verde)**,
+  `inviato` (oggi l'ordine #91 è così). Poi `inviato` = **Da preparare (blu)**, `in_evasione` (Preparato) **e** `evaso` (stato degli ordini vecchi, partiti con la bolla: ora non lo scrive più nessuno) = **In consegna (verde)**,
   consegnato = grigio. **Stati dell'ordine per il banco** (richiesta esplicita del 19/10/2026, valgono in Storico, scheda cliente, CSV del cliente e pagina dell'ordine): non esistono più "In preparazione" né "Partito"
-  (chiavi `da_preparare` / `in_consegna` / `consegnato`, classi `sto-st-*` e `ric-st-*`); "In consegna" è dopo "Preparato" o dopo la bolla, e la bolla si emette prima (vedi "Pagina dell'ordine del banco").
+  (chiavi `da_preparare` / `in_consegna` / `consegnato`, classi `sto-st-*` e `ric-st-*`); "In consegna" è dopo "Preparato" (vedi "Pagina dell'ordine del banco").
 - **Righe apribili** (richiesta esplicita del 19/10/2026 sera; prima solo "Da preparare" era un link e le altre "righe fisse", **non rimetterle**): OGNI riga è un `<button type="button" class="sto-riga" aria-expanded aria-controls="dett-N" data-sto-apri>` dentro `<div class="sto-voce" id="oN" data-voce="N">`, con sotto il
   pannello `<div class="sto-dettaglio" id="dett-N" data-url="/distributore/storico/N/dettaglio" hidden>`, vuoto. Il blocco "Storico ordini: righe che si aprono" di `public/app.js` al primo clic carica il frammento (`fetch`, "Caricamento…", errore con "Riprova", un `redirect` = sessione scaduta → ricarica per andare al login),
   **una voce aperta alla volta** (aprirne un'altra chiude la prima; un secondo clic la richiude; se la voce chiusa sta sopra, `scrollBy` tiene ferma la riga cliccata), il chevron (`iconaGiu`) gira di 180° (0,15 s) e la voce aperta ha sfondo `#F7FAFD` col pannello a barra blu a sinistra. **L'id aperto sta nell'ancora** (`#o149`, con `replaceState`: non sporca la cronologia):
-  dopo una ricarica (anche quella automatica della pagina), o tornando dalla pagina dell'ordine con la freccia, la stessa voce si riapre (`daAncora`, anche su `hashchange`). Il numero di DDT, nella lista, è solo un testo (il link alla bolla sta nel pannello). Sotto i 900px la card è la voce (riga + pannello) e il pannello è a una colonna.
+  dopo una ricarica (anche quella automatica della pagina), o tornando dalla pagina dell'ordine con la freccia, la stessa voce si riapre (`daAncora`, anche su `hashchange`). Sotto i 900px la card è la voce (riga + pannello) e il pannello è a una colonna.
 - **"Da incassare"** (ex "Totale"): `pricing.importi({ ordine }).banco.totale` = materiale + RAEE + IVA (78,69), **non** `totaleOrdine` (98,76: comprende la consegna e il servizio pagati in app, soldi della piattaforma). La lista legge le colonne di `COLONNE_IMPORTI` (`src/storico_banco.js`); una prova (`test/storico_dettaglio.test.js`) controlla che ci siano
   tutte quelle che `importiOrdine` e `ivaPctOrdine` leggono: se il calcolo ne usa una nuova va aggiunta lì, o la lista dà un importo sbagliato in silenzio. L'IVA di oggi (`getIvaPct`, in cache) è solo il ripiego per gli ordini senza IVA salvata.
 - **Il pannello** (`GET /distributore/storico/:id/dettaglio` → `views/partials/storico_dettaglio.ejs`, dati da `src/storico_dettaglio.js`; classi `sto-d-*`): un **frammento** HTML (non una pagina), solo ordini del banco loggato (404 testo semplice altrimenti), **sola lettura** (non chiama `prendiInCarico`: aprire il dettaglio non cambia l'ordine; provato con `scrittureDa`).
-  Tre colonne (1,55fr | 1fr | 260px): **Materiale** (righe a prezzo del banco, "N articoli · M pezzi", piede "Merce · RAEE se > 0 · IVA · Da incassare dal cliente", "richiesti N, confermati M" in arancio con la risposta parziale), **Come è andata** (`cronologia`: Ricevuto, Confermato da te, Corriere X ha accettato, Partito · DDT n / Partito · in viaggio, arrivo previsto HH:MM (passo in corso, pallino
-  bianco col bordo verde), Consegnato · confermato dal cliente; passi futuri tratteggiati con ora "—"; **un passo senza dati non c'è**; sotto l'indirizzo e "Corriere X") e **Bolla / DDT** ("N. 12/2026" con "Apri ›", o "Non emessa") più "Apri ordine completo ›" e "Scheda cliente ›" (solo se il cliente ha indicato questo banco: `anagrafiche.legame`). Una query per le righe e una per la risposta, più
+  Tre colonne (1,55fr | 1fr | 260px): **Materiale** (righe a prezzo del banco, "N articoli · M pezzi", piede "Merce · RAEE se > 0 · IVA · Da incassare dal cliente", "richiesti N, confermati M" in arancio con la risposta parziale), **Come è andata** (`cronologia`: Ricevuto, Confermato da te, Corriere X ha accettato (con ", ritira alle HH:MM": il tempo scritto su WhatsApp), Partito / Partito · in viaggio (passo in corso, pallino
+  bianco col bordo verde), Consegnato · confermato dal cliente; passi futuri tratteggiati con ora "—"; **un passo senza dati non c'è**; sotto l'indirizzo e "Corriere X") e i pulsanti "Apri ordine completo ›" e "Scheda cliente ›" (solo se il cliente ha indicato questo banco: `anagrafiche.legame`). Una query per le righe e una per la risposta, più
   (in parallelo) il legame, l'indirizzo del cliente solo se l'ordine non ha la destinazione e l'IVA in cache. `?torna=` (la pagina dello Storico com'è, scritta dallo script) vale solo se è una pagina del banco (`ritornoBanco`); "Apri ordine completo" porta `torna` + `#oN`, così la freccia della pagina dell'ordine riporta allo Storico con la voce aperta.
   Prove: `test/storico_dettaglio.test.js` (parti pure + guardia sulle colonne), "banco: dettaglio di una riga dello Storico (frammento)…" e "banco: Storico ordini con schede…" in `test/server.test.js`.
 - **Filtri nell'URL**, tutti lato server: `?stato=tutti|da_preparare|in_consegna|consegnati&periodo=oggi|7|30|tutti&q=&pagina=N`
   (default tutti e 7 giorni; valori sconosciuti tornano al default; i vecchi `in_preparazione` e `partiti` valgono `in_consegna`: `FILTRI_VECCHI`). Il periodo ragiona in **ora italiana** sulle colonne `TIMESTAMP` UTC: "oggi" è
-  la mezzanotte di Roma, 7 e 30 sono gli ultimi N giorni da adesso. La ricerca è `ILIKE` su ragione sociale e numero DDT, più `o.id =` se quello che
+  la mezzanotte di Roma, 7 e 30 sono gli ultimi N giorni da adesso. La ricerca è `ILIKE` sulla ragione sociale, più `o.id =` se quello che
   si scrive (tolto un `#`) è solo cifre; i `%` e `_` scritti dall'utente valgono per sé; sempre con segnaposto. **I conteggi delle schede** sono una
   query con `COUNT(*) FILTER` con gli stessi filtri di periodo e ricerca ma **senza** lo stato (il numero dice cosa si trova cliccando). Lista: `o.id DESC`,
   50 per pagina (`partials/paginazione.ejs`, con `parametro: 'pagina'` e `unita: 'ordini'`; una pagina oltre l'ultima mostra l'ultima), materiale con una
@@ -935,12 +947,12 @@ nota "Flusso del banco: …" in fondo.
   "Da preparare" (con i filtri e la pagina: `link({})`; il "Vedi ordine #N ›" della scheda cliente non c'è più). Le due pagine leggono `ritornoBanco(req.query.torna)`: **vale solo una pagina del
   banco** (home, Storico, elenco e scheda cliente, richiesta; con query e ancora), tutto il resto torna alla home, mai un indirizzo esterno (open redirect). Dalla richiesta si va all'ordine solo col redirect (l'ordine "Da preparare" non ha un link dalla richiesta: la route la rimanda da sola, passando `torna` com'è);
   la freccia dell'ordine riporta quindi alla pagina di partenza (la home, lo Storico...), non alla richiesta. Nelle viste il valore passato alle due pagine si chiama
-  `paginaPrecedente`, **non `indietro`**: `partials/banco_testa` (inclusa) lo leggerebbe e disegnerebbe una seconda freccia. Non passa dai POST: dopo "Emetti bolla" o un errore di risposta la
+  `paginaPrecedente`, **non `indietro`**: `partials/banco_testa` (inclusa) lo leggerebbe e disegnerebbe una seconda freccia. Non passa dai POST (tranne "Preparato" dalla pagina dell'ordine, che manda `torna` e lo restituisce): dopo un errore di risposta la
   freccia riparte dalla home. Prove: `test/http.test.js` (`ritornoBanco`, `conRitorno`) e "banco: la freccia di ordine e richiesta riporta…" in `test/server.test.js`.
 - Prove: `test/storico_banco.test.js` (parti pure) e i quattro test "banco: Storico ordini…" / "/distributore/ordini porta allo Storico" in
   `test/server.test.js` (DB finto che tiene SQL e parametri delle query). Per provarlo sul DB vero serve un utente `distributore` di prova (non quelli
   del README: sono persone vere): `INSERT INTO users` con `bcrypt`, poi cancellarlo con le sue `session`. Aprire il dettaglio di un
-  ordine `inviato` non lo tocca più (dal 19/10/2026); lo porta "In consegna" solo "Preparato" (POST `/preparazione`, che avvisa il cliente) o la bolla.
+  ordine `inviato` non lo tocca più (dal 19/10/2026); lo porta "In consegna" solo "Preparato" (POST `/preparazione`, che avvisa il cliente).
 
 ## Clienti del banco (14/10/2026)
 
@@ -986,7 +998,7 @@ fondo a `style.css`); logica di approvazione e rifiuto **invariata** (`POST .../
   `cad` null; sotto i 640px "Negli ordini" passa sotto il nome); lo Storico dell'installatore invece divide per prezzo. Filtri: al massimo 2 mesi in segmenti + "Tutto", gli
   altri in una `<select name="mese" onchange="this.form.submit()">` ("Altri mesi", con `<noscript>` "Vai"); sono tutti GET, con `#materiale`; i primi 2 ordini sono aperti.
   **Niente più "Vedi ordine #N ›"** (richiesta esplicita del 19/10/2026; `linkOrdineBanco` e `href` degli ordini sono spariti da `materialeCliente`): la pagina dell'ordine c'è per tutti gli stati ma qui non c'è più un link: ci si arriva dalla home
-  ("Ispeziona") o dallo Storico. Al suo posto, se l'ordine ha il DDT, "Apri la bolla / DDT N ›" (`/ddt/:id`, stessa classe `mc-vedi`). **CSV** `GET /distributore/clienti/:id/materiale.csv?mese=` (404 se il cliente non è approvato): `;`, BOM, dal più vecchio, Data;Ordine;DDT;Stato;
+  ("Ispeziona") o dallo Storico. **CSV** `GET /distributore/clienti/:id/materiale.csv?mese=` (404 se il cliente non è approvato): `;`, BOM, dal più vecchio, Data;Ordine;Stato;
   Codice;Articolo;Quantità;Prezzo cad. IVA incl.;Totale IVA incl., ultima riga il totale, **senza servizio**; file `materiale_<ragione-sociale>_<AAAA-MM|tutto>.csv` (`nomeFileCsvCliente`,
   slug ASCII). `Response.text()` toglie il BOM: nei test si leggono i byte. **Sconti**: la rotta `POST .../sconti` e le regole salvate (`client_discount_rules`) restano, ma senza
   modulo; il partial `riga_sconti.ejs` e i suoi stili (`.cli-sotto-titolo`, `.cli-elenco-sconti`) restano finché non si decide se eliminarli del tutto. Prove: test
@@ -1013,7 +1025,7 @@ Richiesta esplicita ("fai 1 e 2" dopo l'elenco di cosa mancava). Solo **clienti*
 - **Cambio password dal profilo** (`POST /profilo/password`, scheda "Accesso" di `views/profilo.ejs`, `<details>` che con errori resta aperto): stessa logica del banco, **estratta in `src/password_account.js`** (`cambiaPassword`,
   `controllaCambioPassword`, `chiudiAltreSessioni`, `revocaAccessiApp`, `scriviNuovaPassword`; `anagrafica_banco.js` la importa): attuale giusta (`passwordValida`), nuova 8–72 caratteri e DIVERSA, chiude le ALTRE
   sessioni e **da ora revoca anche gli accessi dell'app** (anche per il banco: `UPDATE app_tokens … revocato_il`), limite tentativi del login (chiave `cambio-password:<utente>`, 8 in 10 minuti → 429).
-- **Elimina account dal sito** (`GET/POST /profilo/elimina`, `views/profilo_elimina.ejs`, scheda "Elimina account" nel profilo): usa lo STESSO `src/account.js` dell'app (anonimizza e disattiva, non cancella: ordini, bolle,
+- **Elimina account dal sito** (`GET/POST /profilo/elimina`, `views/profilo_elimina.ejs`, scheda "Elimina account" nel profilo): usa lo STESSO `src/account.js` dell'app (anonimizza e disattiva, non cancella: ordini,
   ricevute e pagamenti restano). La pagina spiega cosa si cancella e cosa resta e chiede la password; **se c'è qualcosa in corso** (richiesta in attesa, ordine non consegnato nelle ultime 24 h, pagamento a metà) lo dice
   subito e il modulo non c'è (anche un POST a mano riceve 409); a buon fine `tokenApp.dimenticaUtente`, sessione distrutta, `/login?avviso=eliminato`. Le frasi del login (`?avviso=`) sono solo `AVVISI_LOGIN` in `server.js`.
   `/elimina-account` (pagina pubblica per Google Play, `src/testi_legali.js`) ora ha anche la sezione "Dal sito".
@@ -1029,7 +1041,7 @@ Richiesta esplicita ("fai 1 e 2" dopo l'elenco di cosa mancava). Solo **clienti*
 
 `GET /distributore/anagrafica` (`server.js`, "Anagrafica del banco") + `views/distributore_anagrafica.ejs` + `views/partials/ab_campo.ejs`, classi `ab-*` (blocco in fondo a `style.css`), logica in
 **`src/anagrafica_banco.js`** (controlli, lettura, salvataggi) e **`src/orari.js`** (orari, pura). Mockup in `docs/mockup/anagrafica-banco*.png` (la loro intestazione è vecchia: bottone "Storico ordini" e campanella
-non ci sono più, vale quella unica di `banco_testa`). **Un solo profilo con tutti i permessi**: niente ruoli, colleghi, inviti né sezione Bolla/DDT (richiesta esplicita, non aggiungerli). Prove: `test/orari.test.js`,
+non ci sono più, vale quella unica di `banco_testa`). **Un solo profilo con tutti i permessi**: niente ruoli, colleghi, inviti (richiesta esplicita, non aggiungerli). Prove: `test/orari.test.js`,
 `test/anagrafica_banco.test.js` (controlli, salvataggi con DB finto, geocodifica con `fetch` finto), "banco: anagrafica…" e "carrello: con TUTTI i banchi chiusi…" in `test/server.test.js`, "orari" in `test/richieste_importi.test.js`.
 - **Dove si apre**: voce "Anagrafica del banco" in cima alla tendina del cerchio (`banco_testa.ejs`); sulla pagina il cerchio ha la classe `.attivo` (anello blu pieno `#245A8F`) e nessuna scheda del menu è accesa
   (`sezione` vuota per quel percorso). **Dalla tendina sono spariti "Suoni notifiche" e "Attiva le notifiche del computer"**: gli interruttori stanno nella scheda Notifiche della pagina.
@@ -1131,7 +1143,7 @@ Flusso e variabili in README. Qui solo ciò che non si deduce dal codice.
   - Con `FINESTRA_CONFERMA_SEC` nel `.env` il corriere ha solo quei secondi per rispondere (all'avvio, con WhatsApp acceso, il server lo scrive nel log): togliere la riga quando si prova con WhatsApp.
 - Baileys è **7.0.0-rc14** (l'ultima; la 6.x è il tag `legacy`), ESM: caricato con `import()` dentro
   `collega()`. Non ufficiale: il numero può essere bloccato. Logger muto finto (passare pino non serve).
-- L'orario d'arrivo del corriere sta in colonne `TIMESTAMPTZ` (`corriere_arrivo_il`), a differenza
+- Gli orari del corriere stanno in colonne `TIMESTAMPTZ` (`corriere_risposto_il`, `corriere_arrivo_il`), a differenza
   del resto dello schema (TIMESTAMP UTC senza fuso): si mostra con `format.oraRoma`, ora italiana
   fissa perché la VPS può essere in UTC.
 - Il bot è il numero personale dell'utente, quindi ciò che scrive dal telefono arriva come messaggio
@@ -1253,9 +1265,6 @@ Solo sito/PWA (`mobile/` non toccata, schema DB e logica di business invariati).
   `tipo_soggetto` sia una chiave vera (`Object.hasOwn`, non `constructor`) e che i campi siano testo; l'`INSERT`
   che incappa nel vincolo unico del nome utente (23505, corsa fra controllo e inserimento) rimostra il modulo
   con l'errore invece di un 500.
-- **Bolla (DDT)**: `ddt.emetti` ora ritorna `{ numero, nuovo }` e **ricontrolla dentro la transazione**, con la
-  riga dell'ordine bloccata (`FOR UPDATE`): un doppio invio assegnava due numeri e lasciava un buco nella
-  numerazione. La notifica "Merce in partenza" parte solo se `nuovo`.
 - **Fusi orari**: `flusso.eta()` usa `format.istanteUtc` per le finestre di 3 e 24 ore di `attivitaCorrente` e
   `statoIconaOrdini` (prima `new Date(colonna)` sbagliava dell'offset del fuso sul PC; sulla VPS in UTC nessuna
   differenza). Regola già scritta sopra, applicata a due punti rimasti.

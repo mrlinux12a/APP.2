@@ -35,7 +35,7 @@ function privacy() {
         elenco: [
           'Dati dell’impresa e del referente che inserisci registrandoti: ragione sociale, tipo di soggetto, partita IVA, codice fiscale, indirizzo della sede, referente, email, telefono, PEC o codice SDI.',
           'Credenziali di accesso: nome utente e password (la password è conservata solo in forma cifrata e non la leggiamo).',
-          'Dati d’uso del servizio: richieste di disponibilità, ordini, materiale richiesto, indirizzo e note di consegna, bolle e ricevute, notifiche.',
+          'Dati d’uso del servizio: richieste di disponibilità, ordini, materiale richiesto, indirizzo e note di consegna, ricevute, notifiche.',
           'Dati dei pagamenti: l’importo, la data e l’esito. I dati della carta sono gestiti direttamente da Stripe e non passano dai nostri server: noi conserviamo solo la marca e le ultime quattro cifre.',
           'Dati tecnici dell’app: l’identificativo che serve a inviare le notifiche al tuo telefono e il tipo di dispositivo.',
         ],
@@ -45,7 +45,7 @@ function privacy() {
         titolo: 'Perché li usiamo',
         elenco: [
           'Per dare il servizio che hai richiesto: creare e gestire il tuo account, inoltrare le richieste ai distributori, organizzare la consegna e i pagamenti (esecuzione del contratto).',
-          'Per adempiere agli obblighi di legge, in particolare fiscali e contabili (bolle di trasporto, ricevute, fatture).',
+          'Per adempiere agli obblighi di legge, in particolare fiscali e contabili (ricevute, fatture).',
           'Per la sicurezza del servizio e per prevenire abusi e frodi (legittimo interesse).',
           'Per inviarti le notifiche sullo stato di richieste e ordini, che puoi disattivare dalle impostazioni del telefono.',
         ],
@@ -63,7 +63,7 @@ function privacy() {
       {
         titolo: 'Per quanto tempo li conserviamo',
         paragrafi: [
-          'Finché il tuo account è attivo. Se lo elimini, i dati personali di contatto (referente, email, telefono, PEC/SDI), le credenziali e le notifiche vengono cancellati subito. I dati dell’impresa e degli ordini che compaiono su bolle, ricevute e documenti fiscali restano per il tempo previsto dalla legge (di norma dieci anni).',
+          'Finché il tuo account è attivo. Se lo elimini, i dati personali di contatto (referente, email, telefono, PEC/SDI), le credenziali e le notifiche vengono cancellati subito. I dati dell’impresa e degli ordini che compaiono su ricevute e documenti fiscali restano per il tempo previsto dalla legge (di norma dieci anni).',
         ],
       },
       {
@@ -111,7 +111,7 @@ function eliminazione() {
         titolo: 'Cosa viene cancellato e cosa resta',
         elenco: [
           'Vengono cancellati: referente, email, telefono, PEC o codice SDI, nome utente, password, notifiche e i telefoni collegati alle notifiche. Dopo l’eliminazione non è più possibile entrare.',
-          'Restano, per obbligo di legge: ragione sociale, partita IVA, codice fiscale e indirizzo dell’impresa, insieme a ordini, bolle di trasporto, ricevute e pagamenti già emessi, perché fanno parte della contabilità tua e del distributore.',
+          'Restano, per obbligo di legge: ragione sociale, partita IVA, codice fiscale e indirizzo dell’impresa, insieme a ordini, ricevute e pagamenti già emessi, perché fanno parte della contabilità tua e del distributore.',
         ],
       },
     ],

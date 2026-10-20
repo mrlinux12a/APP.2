@@ -1,10 +1,10 @@
 // Eliminazione dell'account di un installatore (richiesta dell'app: Google Play e Apple vogliono che chi si iscrive dall'app possa anche
 // cancellarsi dall'app).
 //
-// "Eliminare" qui vuol dire disattivare e anonimizzare, non cancellare le righe: ordini, bolle (DDT), ricevute e pagamenti devono
+// "Eliminare" qui vuol dire disattivare e anonimizzare, non cancellare le righe: ordini, ricevute e pagamenti devono
 // restare, per obblighi fiscali e contabili e perché i banchi li referenziano. Quindi:
 //  · RESTANO i dati dell'impresa che servono a quei documenti: ragione sociale, partita IVA, codice fiscale, indirizzo della sede e di
-//    consegna (sono dati di un'impresa, non di una persona, e compaiono su bolle e ricevute già emesse);
+//    consegna (sono dati di un'impresa, non di una persona, e compaiono sulle ricevute già emesse);
 //  · SPARISCONO i dati personali di contatto (referente, email, telefono, PEC/SDI), il nome utente (diventa "eliminato-<id>", liberando
 //    quello vecchio) e la password; l'account non può più entrare (attivo = 0);
 //  · si cancellano gli accessi (token dell'app, sessioni web), i telefoni registrati per le push e le notifiche in-app.

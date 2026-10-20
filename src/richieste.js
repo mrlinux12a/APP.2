@@ -500,8 +500,10 @@ async function chiudiFinestraRisposte(richiesta) {
 }
 
 // Un corriere ha preso la consegna nel gruppo WhatsApp: la risposta del banco diventa valida e
-// l'ordine nasce subito, con il tempo scritto dal corriere come tempo di consegna. Vale solo finché la
-// finestra della richiesta è aperta (la condizione è dentro la UPDATE, atomica come in rispondi).
+// l'ordine nasce subito. I `minuti` scritti dal corriere sono il tempo che ci mette ad arrivare DAL BANCO (src/corriere.js): sono quelli che vede il banco
+// (corriere_minuti). All'installatore si dice la somma di quei minuti e del tragitto dal banco a lui, già calcolato quando il banco ha confermato e rimasto
+// in consegna_minuti_stimati (rispondi): qui ci si sommano i minuti del corriere, e il totale è il tempo di consegna dell'ordine.
+// Vale solo finché la finestra della richiesta è aperta (la condizione è dentro la UPDATE, atomica come in rispondi).
 // Esiti:
 //   { esito: 'preso' }              l'ordine è partito (o parte al prossimo giro del timer)
 //   { esito: 'gia_preso', nome }    un altro l'aveva già presa
@@ -511,7 +513,7 @@ async function corriereHaPreso(responseId, minuti, nome) {
     .prepare(
       `UPDATE request_responses
           SET corriere_stato = 'preso', corriere_minuti = ?, corriere_nome = ?, corriere_preso_il = NOW(),
-              consegna_minuti_stimati = ?
+              consegna_minuti_stimati = COALESCE(consegna_minuti_stimati, 0) + ?
         WHERE id = ? AND esito = 'confermato' AND corriere_stato = 'in_attesa'
           AND request_id IN (SELECT id FROM requests WHERE scade_il > NOW() AND stato = 'in_attesa')`
     )
@@ -754,8 +756,9 @@ async function rispondi(
   const consegna = require('./consegna');
 
   if (esito === 'confermato') {
-    // Il tempo di consegna vero è partenza dichiarata + tragitto fino al cliente.
-    const stima = await consegna.minutiStimati(distributorId, richiesta.cliente_id, partenza);
+    // Il tempo di consegna vero è partenza dichiarata + tragitto fino al cliente (calcolato sulla mappa dal banco che ha confermato). Con il corriere la
+    // partenza non la dichiara il banco: la scrive il corriere su WhatsApp e corriereHaPreso la somma a questo tragitto, che qui resta da solo.
+    const stima = await consegna.minutiStimati(distributorId, richiesta.cliente_id, attesaCorriere ? 0 : partenza);
     await db.prepare('UPDATE request_responses SET consegna_minuti_stimati = ? WHERE id = ?').run(
       stima.minuti,
       risposta.id

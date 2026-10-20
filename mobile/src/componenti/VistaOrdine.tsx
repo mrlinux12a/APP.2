@@ -90,7 +90,6 @@ export function VistaOrdine({ id, nuovo = false }: { id: number; nuovo?: boolean
   const dettagli = [
     o.destinazione ? { etichetta: 'Consegna in cantiere', dettaglio: o.destinazione } : null,
     o.note ? { etichetta: 'Note', dettaglio: o.note } : null,
-    o.ddt ? { etichetta: 'Documenti · DDT n° ' + o.ddt.numero, dettaglio: 'Bolla del ' + o.ddt.data } : null,
   ].filter(Boolean) as { etichetta: string; dettaglio: string }[];
 
   return (

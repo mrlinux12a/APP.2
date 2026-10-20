@@ -25,7 +25,7 @@ const tables = [
   'orders','requests','request_items','request_responses','request_response_items',
   'order_items','notifications','brands','brand_families',
   'client_discounts','store_locations','client_distributors','client_discount_rules',
-  'sottocategorie','ddt_counters','session'
+  'sottocategorie','session'
 ];
 
 for (const t of tables) {
@@ -47,7 +47,7 @@ for (const t of tables) {
 
 out += 'COMMIT;\n';
 out += `\n-- reset sequence per SERIAL\n`;
-for (const t of ['users','products','orders','order_items','distributors','distributor_products','requests','request_items','request_responses','request_response_items','notifications','ddt_counters','brands','brand_families','client_discounts','store_locations','client_distributors','client_discount_rules','sottocategorie']) {
+for (const t of ['users','products','orders','order_items','distributors','distributor_products','requests','request_items','request_responses','request_response_items','notifications','brands','brand_families','client_discounts','store_locations','client_distributors','client_discount_rules','sottocategorie']) {
   try{
     const max = db.prepare(`SELECT MAX(id) as m FROM "${t}"`).get();
     if (max && max.m !== null) out += `SELECT setval('"${t}_id_seq"', ${max.m}, true);\n`;

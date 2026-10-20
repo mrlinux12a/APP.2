@@ -3,18 +3,19 @@ const os = require('os');
 const db = require('../db');
 const consegna = require('./consegna');
 const format = require('./format');
-const ddt = require('./ddt');
 
 // Gruppo WhatsApp dei corrieri.
 //
 // L'installatore paga quando manda la richiesta. Quando un banco la accetta, nel gruppo parte un
 // messaggio con le due tappe: prelievo merci (la filiale che ha accettato) e consegna (l'installatore).
 // L'installatore non sa niente finché qualcuno nel gruppo non risponde al messaggio con la parola
-// chiave e i minuti totali ("preso 30"): solo allora l'ordine nasce da solo e all'installatore arriva
-// la conferma con quel tempo di consegna. Dopo il "preso" il bot non scrive più nel gruppo (a parte
-// la risposta al "preso" stesso). Se la finestra della richiesta scade senza che nessuno risponda, il
-// messaggio viene eliminato dal gruppo e per l'installatore è come se nessun banco avesse accettato
-// (e il pagamento gli torna).
+// chiave e i minuti ("preso 30"): solo allora l'ordine nasce da solo. I minuti sono il tempo che il
+// corriere ci mette ad ARRIVARE DAL VENDITORE (la tappa 1): il banco vede esattamente quelli (ritiro alle
+// HH:MM), all'installatore si dice quando arriva la merce da lui = quei minuti + il tragitto dal banco
+// che ha accettato alla sua posizione, calcolato sulla mappa (src/corriere.js, src/consegna.js). Dopo il
+// "preso" il bot non scrive più nel gruppo (a parte la risposta al "preso" stesso). Se la finestra della
+// richiesta scade senza che nessuno risponda, il messaggio viene eliminato dal gruppo e per
+// l'installatore è come se nessun banco avesse accettato (e il pagamento gli torna).
 //
 // La logica di stato ("preso", scadenza, ordine) sta in richieste.js: qui solo il gruppo, cioè
 // messaggi in uscita, risposte in ingresso e la connessione.
@@ -41,7 +42,7 @@ const ddt = require('./ddt');
 //   WHATSAPP_PAROLA_CHIAVE   parola con cui si risponde, default "preso"
 //   WHATSAPP_AUTH_DIR        cartella della sessione, default "whatsapp_auth" (fuori da git)
 
-const MINUTI_MAX = 600; // oltre 10 ore non è un tempo di consegna: probabile errore di battitura
+const MINUTI_MAX = 600; // oltre 10 ore non è un tempo per arrivare dal venditore: probabile errore di battitura
 const TENTATIVI_MAX = 5;
 
 function attivo() {
@@ -157,7 +158,7 @@ function testoRitiroConsegna({ richiestaId, banco, consegnaA }) {
     '',
     tappa('2️⃣ CONSEGNA MERCE', null, consegnaA.indirizzo, consegnaA.lat, consegnaA.lng),
     '',
-    `Per prenderla rispondi a questo messaggio con «${p} <minuti>» (es. ${p} 30). I minuti sono il tempo totale, dal ritiro alla consegna.`,
+    `Per prenderla rispondi a questo messaggio con «${p} <minuti>» (es. ${p} 30). I minuti sono il tempo che ci metti ad arrivare dal venditore (tappa 1, prelievo merci).`,
   ].join('\n');
 }
 
@@ -185,7 +186,7 @@ async function datiRitiro(distributorId) {
 async function datiConsegna(clienteId) {
   const c = await db.prepare('SELECT * FROM users WHERE id = ?').get(clienteId);
   return {
-    indirizzo: (c.indirizzo_consegna || '').trim() || ddt.indirizzoCompleto(c),
+    indirizzo: (c.indirizzo_consegna || '').trim() || format.indirizzoCompleto(c),
     lat: c.geo_lat,
     lng: c.geo_lng,
   };
@@ -425,7 +426,7 @@ async function gestisciMessaggio(msg) {
     const entro = format.oraRoma(new Date(Date.now() + letta.minuti * 60 * 1000));
     await rispondi(
       msg,
-      `✅ Preso! Richiesta #${riga.request_id}: ${consegna.inParole(letta.minuti)} in totale, consegna entro le ${entro}.`
+      `✅ Preso! Richiesta #${riga.request_id}: arrivi dal venditore in ${consegna.inParole(letta.minuti)}, ritiro entro le ${entro}.`
     );
   } else if (esito.esito === 'gia_preso') {
     const da = esito.nome ? ` da ${esito.nome}` : '';

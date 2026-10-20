@@ -373,9 +373,9 @@ disattivati) sono solo in `db/punti_vendita.js`: lo script che li carica,
    proprio listino) o **Rifiuta: merce non disponibile**. Partenza (2 ore) e consegna stimata
    (6 ore) sono valori fissi finché non arriva un corriere collegato via API. Chi non risponde
    entro la finestra risulta "non risposta", che **non** vale come disponibilità.
-3. **Ordini** — l'ordine entra in *Da preparare* → *Prendi in preparazione* → *Emetti bolla e
-   segna la merce partita*. Il cliente può annullare solo finché resta *Da preparare*, e il
-   banco riceve una notifica.
+3. **Ordini** — l'ordine entra in *Da preparare* → *Preparato* (la merce è pronta per il
+   corriere: l'ordine passa *In consegna* e il cliente è avvisato). Il banco vede l'orario in cui il
+   corriere arriva da lui (il tempo scritto su WhatsApp). Il cliente non annulla un ordine già confermato.
 4. **Dati del cliente** — su richiesta e ordine l'anagrafica completa dell'ordinante.
 
 **Agente** — login → lista di tutti gli ordini (cliente, distributore, data, importi, stato) →
@@ -452,22 +452,14 @@ con tutti i permessi.
   e l'app deve rifare l'accesso. **Serve l'invio email**: nel `.env` della VPS `SMTP_HOST` (e `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_DA`, vedi `src/email.js`) e `APP_URL=https://tuodominio.it` (il link
   si costruisce da lì, mai dall'indirizzo con cui arriva la richiesta). Senza, in produzione non parte niente. In locale, senza SMTP, il link compare nel log del server.
 - **La mia anagrafica → Accesso**: cambio della password da dentro (con quella attuale). **Elimina account**: pagina di conferma con la password; si disattiva e si anonimizzano i dati personali, restano
-  ordini, bolle e ricevute. Con una richiesta o un ordine in corso non si può.
+  ordini e ricevute. Con una richiesta o un ordine in corso non si può.
 - **Schema**: tabella `recupero_password` (blocco "Recupero della password dell'installatore" in fondo a `db/postgres/schema.sql`): applicarla sul DB condiviso **prima** di riavviare, con
   `node scripts/applica_blocco_schema.js "-- Recupero della password dell'installatore"` (a secco) e poi con `--applica`.
 
 ## Contributo RAEE
 
 I listini dichiarano i prezzi IVA, trasporto e RAEE esclusi. Il contributo RAEE per articolo si
-importa insieme al prodotto e compare come **voce separata** in riepilogo, ordine e bolla.
-
-## Bolla / DDT
-
-All'emissione l'app assegna un **numero progressivo per distributore e per anno** (es. `1/2026`)
-e genera il documento di trasporto **intestato al cliente ordinante**, con anagrafica di
-mittente e destinatario, destinazione della merce, righe, causale, colli, data e ora di
-partenza, totali e spazi per le firme. `/ddt/:ordine` è ottimizzata per la stampa e la vedono il
-banco che l'ha emessa, il cliente intestatario e l'agente (link nel dettaglio dell'ordine).
+importa insieme al prodotto e compare come **voce separata** in riepilogo e ordine.
 
 ## Posizione
 
@@ -504,17 +496,24 @@ spento arriveranno con l'app nativa.
 L'installatore ha già pagato quando manda la richiesta. Quando un banco **accetta**, nel gruppo
 WhatsApp parte un messaggio con le due tappe: **prelievo merci** (nome, indirizzo e link alla mappa
 della filiale che ha accettato) e **consegna** (indirizzo e mappa dell'installatore). Chi la prende
-risponde **al messaggio** con la parola chiave e i minuti **totali** (dal ritiro alla consegna), per
-esempio `preso 30` (anche `preso 1 ora e 15`, `preso 1h30`, `preso mezz'ora`).
+risponde **al messaggio** con la parola chiave e i minuti che ci mette **ad arrivare dal venditore** (la tappa 1,
+prelievo merci), per esempio `preso 30` (anche `preso 1 ora e 15`, `preso 1h30`, `preso mezz'ora`).
+
+**Due orari, ognuno per chi deve vederlo:** il **banco** vede esattamente il tempo scritto dal corriere ("Il corriere ritira alle HH:MM" =
+momento della risposta + quei minuti: `orders.corriere_risposto_il` + `orders.corriere_minuti`, vedi `src/corriere.js`); l'**installatore** vede
+quando arriva la merce da lui = quei minuti **+ il tragitto dal banco che ha accettato alla sua posizione**, che il server calcola sulla mappa
+quando il banco conferma (`src/percorso.js`: OSRM su OpenStreetMap, senza chiave; `ROUTING_URL` per un server proprio, `ROUTING_ATTIVO=0` per
+spegnerlo; se non risponde si ripiega sulla stima in linea d'aria) e sta in `orders.corriere_arrivo_il`.
+Il server pubblico di OSRM è di prova: con molte richieste conviene un OSRM proprio o un servizio a pagamento con lo stesso formato.
 
 - **Finché nessuno risponde** l'installatore non sa niente: la richiesta resta "in attesa" con il
   timer che scorre, come se nessun banco avesse accettato (`request_responses.corriere_stato =
   'in_attesa'`: la risposta del banco non vale come offerta in nessuna query dell'installatore).
-- **Se qualcuno risponde entro il timer** l'**ordine nasce subito**, da solo, con il tempo scritto
-  nel messaggio come tempo di consegna (`corriere_minuti`, `corriere_arrivo_il` = da adesso), e
+- **Se qualcuno risponde entro il timer** l'**ordine nasce subito**, da solo, con i minuti del corriere
+  (`corriere_minuti`) e l'arrivo dall'installatore (`corriere_arrivo_il` = risposta + minuti + tragitto), e
   all'installatore arriva "Ordine confermato". Vale la **prima** risposta, chi arriva dopo trova
   scritto che è già presa. **Dopo il "preso" il bot non scrive più nel gruppo**: solo la risposta al
-  "preso" ("✅ Preso! ... consegna entro le HH:MM"). L'unico altro messaggio possibile è l'avviso di
+  "preso" ("✅ Preso! ... arrivi dal venditore in N minuti, ritiro entro le HH:MM"). L'unico altro messaggio possibile è l'avviso di
   annullo, se l'installatore annulla un ordine che aveva già un corriere (annullo lasciato per la
   fase di prova).
 - **Se il timer scade senza risposta** la richiesta si chiude senza ordine, il pagamento torna
@@ -568,7 +567,7 @@ WHATSAPP_GRUPPO=...                     # nome esatto o id (xxx@g.us); se è vuo
   le risposte solo lui, così VPS e locale accesi insieme nello stesso gruppo non mandano messaggi doppi né rispondono due volte al corriere. La VPS, senza
   `WHATSAPP_ISTANZA`, usa il nome del computer e tratta anche i messaggi senza nome (di prima): **aggiornarla (`git pull` + riavvio) prima di accendere il locale**,
   altrimenti la versione vecchia manda anche i messaggi del locale. Blocco di schema "WhatsApp: istanza proprietaria dei messaggi" (già applicato al DB condiviso il 19/10/2026).
-- Acceso, l'ordine nasce quando un corriere risponde `preso <minuti>` nel gruppo, con quel tempo di consegna; **ogni ordine di prova fatto in locale scrive nel gruppo vero**.
+- Acceso, l'ordine nasce quando un corriere risponde `preso <minuti>` nel gruppo (i minuti per arrivare dal banco); **ogni ordine di prova fatto in locale scrive nel gruppo vero**.
   Con `FINESTRA_CONFERMA_SEC` nel `.env` il corriere ha solo quei secondi per rispondere (all'avvio il server lo scrive): togliere la riga.
 
 **Prova con una richiesta finta**, senza toccare banchi e clienti veri: crea un gruppo di prova (il
@@ -643,8 +642,9 @@ src/pagamenti.js       pagamento dell'installatore: simulato o Stripe, punti di 
 src/stripe_pagamenti.js  Stripe: PaymentIntent, pagina di pagamento, webhook, incassi/rilasci/rimborsi (carta autorizzata e poi incassata)
 src/whatsapp.js        gruppo WhatsApp dei corrieri (Baileys): messaggi, "preso", coda
 src/anagrafiche.js     registrazione cliente, approvazione banco, sconti per ambito
-src/consegna.js        stima del tempo di consegna
-src/ddt.js             numerazione e dati della bolla / DDT
+src/consegna.js        tragitto dal banco all'installatore (mappa, con ripiego sulla stima in linea d'aria)
+src/percorso.js        tempo di guida fra due punti da un servizio di mappe (OSRM / OpenStreetMap)
+src/corriere.js        orari del corriere: il ritiro che vede il banco (risposta su WhatsApp + minuti scritti)
 src/geo.js             lettura della posizione e distanze
 src/notifiche.js       notifiche in-app
 src/prodotto_json.js   formato JSON dei prodotti (ricerca live, scroll infinito, app)

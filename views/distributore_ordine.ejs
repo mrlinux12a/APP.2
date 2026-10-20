@@ -3,9 +3,9 @@
   // adatta allo stato dell'ordine (`stato.chiave`: da_preparare | in_consegna | consegnato). Stessa impostazione a due colonne del dettaglio della richiesta
   // (classi ric-*, e ord-* per quello che è solo di questa pagina; blocco "Pagina dell'ordine del banco" di style.css). I dati li prepara la route con
   // src/ordine_banco.js: righe a PREZZO DEL BANCO (mai il prezzo col servizio), passi, indirizzo. Aprirla NON cambia lo stato dell'ordine, in nessuno stato.
-  //  · Da preparare: il ritiro del corriere e il modulo della bolla, SEMPRE su tutto il materiale (niente scelta degli articoli, niente spunte); "Elimina ordine".
-  //  · In consegna: la scheda azzurra "In consegna" e la bolla emessa (da aprire e stampare); niente modulo, niente "Elimina".
-  //  · Consegnato: la scheda verde "Consegnato" (quando e in quanto tempo) e la bolla; niente modulo, niente "Elimina".
+  //  · Da preparare: il ritiro del corriere (il tempo scritto da lui su WhatsApp) e il pulsante "Preparato", che porta l'ordine "In consegna"; "Elimina ordine".
+  //  · In consegna: la scheda azzurra "In consegna" (partito, ritiro del corriere); niente pulsante, niente "Elimina".
+  //  · Consegnato: la scheda verde "Consegnato" (quando e in quanto tempo); niente pulsante, niente "Elimina".
   const nRighe = materiale.righe.length;
   const ivaTesto = String(ivaPct).replace('.', ',');
   const daPreparare = stato.chiave === 'da_preparare';
@@ -156,11 +156,11 @@
         <% } %>
       </div>
 
-      <%# ---------- Colonna destra: da preparare = ritiro del corriere e modulo della bolla; in consegna e consegnato = lo stato e la bolla emessa ---------- %>
+      <%# ---------- Colonna destra: da preparare = ritiro del corriere e "Preparato"; in consegna e consegnato = lo stato ---------- %>
       <div class="ric-colonna ric-colonna-destra">
 
         <% if (inConsegnaOra) { %>
-          <%# In consegna: azzurra. Quando è partito, quando è previsto l'arrivo (corriere_arrivo_il) e chi consegna. %>
+          <%# In consegna: azzurra. Quando è partito, il ritiro del corriere (il tempo scritto da lui su WhatsApp) e chi consegna. %>
           <section class="ric-scheda ord-stato ord-stato-consegna" aria-label="Stato dell'ordine">
             <div class="ord-stato-testa">
               <span class="ord-stato-cerchio" aria-hidden="true"><%- iconaFurgone %></span>
@@ -192,30 +192,6 @@
           </section>
         <% } %>
 
-        <% if (!daPreparare) { %>
-          <%# La bolla emessa: numero e dettagli, e il pulsante per aprirla e stamparla. Senza bolla (l'ordine è passato "Preparato", o è stato segnato consegnato prima) lo si dice. %>
-          <section class="ric-scheda ord-bolla-emessa" aria-label="Bolla">
-            <% if (bollaEmessa) { %>
-              <div class="ord-bolla-emessa-testa">
-                <span class="ord-bolla-emessa-ico" aria-hidden="true"><%- iconaDocumento %></span>
-                <div>
-                  <h2 class="ord-bolla-emessa-titolo">Bolla n. <%= bollaEmessa.numero %></h2>
-                  <% if (bollaEmessa.dettagli) { %><p><%= bollaEmessa.dettagli %></p><% } %>
-                </div>
-              </div>
-              <a class="ord-bolla-apri" href="/ddt/<%= ordine.id %>"><%- iconaStampante %>Apri e stampa la bolla / DDT</a>
-            <% } else { %>
-              <div class="ord-bolla-emessa-testa">
-                <span class="ord-bolla-emessa-ico" aria-hidden="true"><%- iconaDocumento %></span>
-                <div>
-                  <h2 class="ord-bolla-emessa-titolo ord-bolla-emessa-no">Bolla non emessa</h2>
-                  <p>Per questo ordine non c'è una bolla.</p>
-                </div>
-              </div>
-            <% } %>
-          </section>
-        <% } %>
-
         <% if (ritiro) { %>
           <%# Ritiro: minuti all'orario del corriere (rosso sotto la soglia della home, "In ritardo" a zero). Li muove public/app.js ([data-ric-arrivo]). %>
           <% const minutiRitiro = Math.ceil(ritiro.secondi / 60); %>
@@ -228,64 +204,21 @@
               </div>
               <div class="ric-arrivo-testi">
                 <h2 class="ric-arrivo-titolo">Il corriere ritira alle <%= ritiro.ora %></h2>
-                <p><%= corriereNome || 'Il corriere' %> ha accettato<% if (ritiro.oraAccettato) { %> alle <%= ritiro.oraAccettato %><% } %>. Prepara la merce e la bolla.</p>
+                <p><%= corriereNome || 'Il corriere' %> ha accettato<% if (ritiro.oraAccettato) { %> alle <%= ritiro.oraAccettato %><% } %>. Prepara la merce.</p>
               </div>
             </div>
           </section>
         <% } %>
 
         <% if (daPreparare) { %>
-        <%# Bolla / DDT: lo stesso POST /ddt di prima, più compatto, su tutto il materiale dell'ordine. Emessa la bolla l'ordine passa "In consegna" (e questa scheda diventa quella della bolla emessa). %>
-        <section class="ric-scheda ord-bolla" aria-labelledby="ord-bolla-titolo">
-          <h2 class="ric-h2 ord-bolla-titolo" id="ord-bolla-titolo"><span class="ric-dato-icona" aria-hidden="true"><%- iconaDocumento %></span>Bolla / DDT</h2>
-          <form method="POST" action="/distributore/ordini/<%= ordine.id %>/ddt">
-            <%# Da dove si è arrivati (home, Storico...): la bolla emessa ha la sua freccia "Torna" che riporta lì. %>
+        <%# "Preparato": porta l'ordine "In consegna" (POST .../preparazione) e avvisa il cliente. Si resta sulla pagina, che diventa quella dell'ordine in consegna. %>
+        <section class="ric-scheda ord-prepara" aria-labelledby="ord-prepara-titolo">
+          <h2 class="ric-h2 ord-prepara-titolo" id="ord-prepara-titolo">Materiale pronto?</h2>
+          <form method="POST" action="/distributore/ordini/<%= ordine.id %>/preparazione">
+            <%# Da dove si è arrivati (home, Storico...): la freccia di questa pagina riporta lì anche dopo "Preparato". %>
             <input type="hidden" name="torna" value="<%= paginaPrecedente %>">
-            <div class="ord-bolla-griglia">
-              <div class="ord-campo">
-                <label class="ord-etichetta" for="ord-colli">Colli</label>
-                <div class="ord-stepper">
-                  <button class="ord-stepper-btn" type="button" data-colli="-1" aria-label="Un collo in meno">−</button>
-                  <input id="ord-colli" name="colli" type="number" min="1" max="999" step="1" value="1" inputmode="numeric">
-                  <button class="ord-stepper-btn" type="button" data-colli="1" aria-label="Un collo in più">+</button>
-                </div>
-              </div>
-              <fieldset class="ord-campo ord-aspetto">
-                <legend class="ord-etichetta">Aspetto dei beni</legend>
-                <div class="ord-segmenti">
-                  <% bolla.aspetti.forEach(function (a, i) { %>
-                    <label class="ord-seg"><input type="radio" name="aspetto" value="<%= a %>"<%= i === 0 ? ' checked' : '' %>><span><%= a %></span></label>
-                  <% }); %>
-                </div>
-              </fieldset>
-            </div>
-
-            <div class="ord-bolla-griglia">
-              <div class="ord-campo">
-                <label class="ord-etichetta" for="ord-causale">Causale</label>
-                <select id="ord-causale" name="causale">
-                  <% bolla.causali.forEach(function (c) { %><option><%= c %></option><% }); %>
-                </select>
-              </div>
-              <div class="ord-campo">
-                <label class="ord-etichetta" for="ord-trasporto">Trasporto a cura di</label>
-                <select id="ord-trasporto" name="trasporto">
-                  <option value="mittente"<%= bolla.trasporto === 'mittente' ? ' selected' : '' %>>Mittente (banco)</option>
-                  <option value="destinatario"<%= bolla.trasporto === 'destinatario' ? ' selected' : '' %>>Destinatario (cliente)</option>
-                  <option value="vettore"<%= bolla.trasporto === 'vettore' ? ' selected' : '' %>>Vettore (corriere)</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="ord-campo">
-              <label class="ord-etichetta" for="ord-note">Annotazioni in bolla <span class="ord-facoltativo">· facoltative</span></label>
-              <textarea id="ord-note" name="note" rows="2" maxlength="500" placeholder="Es. citofonare al capocantiere"></textarea>
-            </div>
-
-            <button class="ord-bolla-btn" type="submit">
-              <%- iconaSpunta %><%= conCorriere ? 'Emetti bolla e consegna al corriere' : 'Emetti bolla e segna la merce partita' %>
-            </button>
-            <p class="ord-bolla-nota">Segna la merce come partita e avvisa il cliente.</p>
+            <button class="ord-prepara-btn" type="submit"><%- iconaSpunta %>Preparato</button>
+            <p class="ord-prepara-nota">Segna la merce come pronta per il corriere e avvisa il cliente.</p>
           </form>
         </section>
         <% } %>

@@ -1,19 +1,11 @@
 // Pagina dell'ordine vista dal banco (GET /distributore/ordini/:id, views/distributore_ordine.ejs): le righe del materiale col PREZZO DEL BANCO,
-// i passi di "Avanzamento", l'indirizzo di consegna e i valori predefiniti della bolla. Solo presentazione, niente DB: la route legge, la vista disegna.
-// Anche il dettaglio che si apre nello Storico (src/storico_dettaglio.js) usa le righe, i momenti e la bolla di qui: le due viste dicono le stesse cose.
+// i passi di "Avanzamento" e l'indirizzo di consegna. Solo presentazione, niente DB: la route legge, la vista disegna.
+// Anche il dettaglio che si apre nello Storico (src/storico_dettaglio.js) usa le righe e i momenti di qui: le due viste dicono le stesse cose.
+// Il solo orario del corriere che il banco vede è quello scritto su WhatsApp (src/corriere.js).
+const orariCorriere = require('./corriere');
 const format = require('./format');
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
-
-// Le scelte della bolla (DDT). Gli stessi testi che il documento stampa (views/ddt.ejs).
-const ASPETTI = ['Colli', 'Bancali', 'Scatole', 'Sfuso'];
-const CAUSALI = ['Vendita', 'Conto visione', 'Reso', 'Conto lavorazione'];
-
-// "Trasporto a cura di": con un corriere è il vettore; senza, come prima: il banco con il suo mezzo (mittente) o il cliente che ritira (destinatario).
-function trasportoPredefinito({ conCorriere, modalita }) {
-  if (conCorriere) return 'vettore';
-  return modalita === 'ritiro' ? 'destinatario' : 'mittente';
-}
 
 // Le righe del materiale, a prezzo del banco: prezzo cad. = prezzo netto + RAEE unitario, totale di riga = subtotale + RAEE di riga (MAI il prezzo
 // col servizio: quello lo paga il cliente in app). `mancanti` (richieste.calcolaOfferta) porta le righe confermate a metà: "richiesti N, ne hai
@@ -63,10 +55,10 @@ function sottotitoloCliente(cliente) {
   return parti.join(' · ');
 }
 
-// ---------- Quando è successo: momenti, partenza, bolla, tempo di consegna ----------
+// ---------- Quando è successo: momenti, partenza, tempo di consegna ----------
 
-// La colonna di una data: orders.creato_il, evaso_il, in_evasione_il, consegnato_il, ddt_data sono TIMESTAMP senza fuso (UTC, vedi format.istanteUtc);
-// corriere_arrivo_il e corriere_risposto_il sono TIMESTAMPTZ (istanti veri: `reale`).
+// La colonna di una data: orders.creato_il, evaso_il, in_evasione_il, consegnato_il sono TIMESTAMP senza fuso (UTC, vedi format.istanteUtc);
+// corriere_risposto_il (e quindi il ritiro del corriere, corriere.ritiro) è TIMESTAMPTZ (un istante vero: `reale`).
 const GIORNO_ROMA = (istante) => istante.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric' });
 
 // Un momento di un ordine, in ora italiana: { ora: '09:47', giorno: '' | '20/10', completo: '20/10/2026 alle 09:47' }, o null se la data manca.
@@ -88,31 +80,20 @@ function quando(m) {
 
 const maiuscola = (testo) => testo.charAt(0).toUpperCase() + testo.slice(1);
 
-// Quando la merce è partita: la bolla (evaso_il) o, per un ordine passato "Preparato" senza bolla, il momento del "Preparato" (in_evasione_il).
+// Quando la merce è partita: il momento del "Preparato" (in_evasione_il) o, negli ordini vecchi (stato `evaso`), evaso_il.
 function partenza(o) {
   return o.evaso_il || o.in_evasione_il || null;
 }
 
-// La bolla di un ordine per le schede: { numero, dettagli: "del 19/10/2026 · 1 collo · Vendita · trasporto a cura del vettore" }, o null se non c'è.
-const TRASPORTO_A_CURA = { vettore: 'vettore', mittente: 'mittente', destinatario: 'destinatario' };
-function bollaOrdine(o) {
-  if (!o.ddt_numero) return null;
-  const colli = Number(o.ddt_colli) > 0 ? Number(o.ddt_colli) : 0;
-  const parti = [];
-  if (o.ddt_data) parti.push('del ' + format.dataSolaRoma(o.ddt_data));
-  if (colli) parti.push(`${colli} ${colli === 1 ? 'collo' : 'colli'}`);
-  if (o.ddt_causale) parti.push(o.ddt_causale);
-  if (TRASPORTO_A_CURA[o.ddt_trasporto]) parti.push('trasporto a cura del ' + TRASPORTO_A_CURA[o.ddt_trasporto]);
-  return { numero: o.ddt_numero, dettagli: parti.join(' · ') };
-}
-
-// "Partito alle 09:47 · arrivo previsto alle 10:21": la riga di un ordine in consegna. Le parti che mancano non si scrivono.
+// "Partito alle 09:47 · ritiro alle 09:40": la riga di un ordine in consegna. Il ritiro è il tempo scritto dal corriere su WhatsApp (arriva dal banco), non
+// l'arrivo dal cliente: quello al banco non si dice. Le parti che mancano non si scrivono.
 function testoInConsegna(o) {
   const parti = [];
   const partito = momento(partenza(o), o.creato_il);
   if (partito) parti.push('Partito ' + quando(partito));
-  const arrivo = o.corriere_arrivo_il ? momento(o.corriere_arrivo_il, o.creato_il, { reale: true }) : null;
-  if (arrivo) parti.push('arrivo previsto ' + quando(arrivo));
+  const istanteRitiro = orariCorriere.ritiro(o);
+  const ritiro = istanteRitiro ? momento(istanteRitiro, o.creato_il, { reale: true }) : null;
+  if (ritiro) parti.push('ritiro ' + quando(ritiro));
   return parti.join(' · ') || 'La merce è in viaggio';
 }
 
@@ -139,13 +120,13 @@ function ricevutoIl(o) {
 }
 
 // "Avanzamento": passi verticali, secondo lo stato dell'ordine (`stato`: 'da_preparare' | 'in_consegna' | 'consegnato', vedi storico_banco.statoStorico).
-//  · da preparare: Confermato da te e Corriere trovato sono fatti, "Da preparare" (blu) è in corso, "In consegna" (dopo "Preparato" o la bolla) e
+//  · da preparare: Confermato da te e Corriere trovato sono fatti, "Da preparare" (blu) è in corso, "In consegna" (dopo "Preparato") e
 //    "Consegnato" (lo conferma il cliente) devono ancora venire;
-//  · in consegna: anche "Partito" è fatto (con la bolla, se c'è), "Consegnato" deve ancora venire;
+//  · in consegna: anche "Partito" è fatto, "Consegnato" deve ancora venire;
 //  · consegnato: tutto fatto, con le ore. Un "Partito" di cui non si sa il momento (consegna provvisoria su un ordine mai partito) non si scrive.
 // Col modulo WhatsApp spento non c'è il passo del corriere (sarebbe falso).
 //   `oraConferma`: quando il banco ha confermato; `corriere`: { nome, ora } di chi ha accettato (ora = quando ha accettato), o null se non c'è;
-//   `oraRitiro`: l'orario del corriere (orders.corriere_arrivo_il, "Ritiro alle HH:MM"); `partito`: { quando: momento | null, bolla: numero | '' };
+//   `oraRitiro`: quando il corriere arriva dal banco (il tempo scritto su WhatsApp, corriere.ritiro, "Ritiro alle HH:MM"); `partito`: { quando: momento | null };
 //   `consegnato`: { quando: momento | null }.
 function passiOrdine({ stato = 'da_preparare', oraConferma = '', corriere = null, oraRitiro = '', partito = null, consegnato = null } = {}) {
   const passi = [
@@ -163,7 +144,7 @@ function passiOrdine({ stato = 'da_preparare', oraConferma = '', corriere = null
   }
   if (stato === 'da_preparare') {
     passi.push(
-      { chiave: 'preparare', fase: 'corrente', tono: 'blu', titolo: 'Da preparare', testo: oraRitiro && oraRitiro !== '—' ? `Ritiro alle ${oraRitiro}` : 'Prepara la merce e la bolla' },
+      { chiave: 'preparare', fase: 'corrente', tono: 'blu', titolo: 'Da preparare', testo: oraRitiro && oraRitiro !== '—' ? `Ritiro alle ${oraRitiro}` : 'Prepara la merce' },
       { chiave: 'consegna', fase: 'futuro', tono: 'verde', titolo: 'In consegna', testo: 'La merce passa al corriere' },
       { chiave: 'consegnato', fase: 'futuro', tono: 'verde', titolo: 'Consegnato', testo: 'Lo conferma il cliente' }
     );
@@ -171,27 +152,22 @@ function passiOrdine({ stato = 'da_preparare', oraConferma = '', corriere = null
   }
 
   const quandoPartito = partito && partito.quando ? quando(partito.quando) : '';
-  const bolla = partito && partito.bolla ? `Bolla n. ${partito.bolla}` : '';
-  const testoPartito = [bolla, quandoPartito].filter(Boolean).join(' ');
   if (stato === 'in_consegna') {
     passi.push(
-      { chiave: 'partito', fase: 'fatto', tono: 'verde', titolo: 'Partito', testo: testoPartito ? maiuscola(testoPartito) : 'Fatto' },
+      { chiave: 'partito', fase: 'fatto', tono: 'verde', titolo: 'Partito', testo: quandoPartito ? maiuscola(quandoPartito) : 'Fatto' },
       { chiave: 'consegnato', fase: 'futuro', tono: 'verde', titolo: 'Consegnato', testo: 'Lo conferma il cliente' }
     );
     return passi;
   }
 
   // consegnato
-  if (quandoPartito || bolla) passi.push({ chiave: 'partito', fase: 'fatto', tono: 'verde', titolo: 'Partito', testo: maiuscola(testoPartito) });
+  if (quandoPartito) passi.push({ chiave: 'partito', fase: 'fatto', tono: 'verde', titolo: 'Partito', testo: maiuscola(quandoPartito) });
   const quandoConsegnato = consegnato && consegnato.quando ? quando(consegnato.quando) : '';
   passi.push({ chiave: 'consegnato', fase: 'fatto', tono: 'verde', titolo: 'Consegnato', testo: quandoConsegnato ? `Confermato dal cliente ${quandoConsegnato}` : 'Confermato dal cliente' });
   return passi;
 }
 
 module.exports = {
-  ASPETTI,
-  CAUSALI,
-  trasportoPredefinito,
   righeMateriale,
   indirizzoDiviso,
   descrizioneConsegna,
@@ -200,7 +176,6 @@ module.exports = {
   momento,
   quando,
   partenza,
-  bollaOrdine,
   testoInConsegna,
   tempoDiConsegna,
   consegnatoTesto,

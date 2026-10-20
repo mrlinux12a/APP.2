@@ -161,7 +161,7 @@ INSERT OR IGNORE INTO config (chiave, valore) VALUES ('finestra_conferma_min', '
 
 -- ============================================================
 -- Blocco 3 — Vista distributore: disponibilità parziale, tempo di partenza,
--- anagrafica completa del cliente e DDT / bolla intestata.
+-- anagrafica completa del cliente.
 -- ============================================================
 
 -- Righe della risposta: quante quantità il banco riesce davvero a coprire.
@@ -174,14 +174,6 @@ CREATE TABLE IF NOT EXISTS request_response_items (
   quantita_richiesta INTEGER NOT NULL,
   quantita_disponibile INTEGER NOT NULL,
   UNIQUE (response_id, product_id)
-);
-
--- Numerazione progressiva del DDT, per distributore e per anno.
-CREATE TABLE IF NOT EXISTS ddt_counters (
-  distributor_id INTEGER NOT NULL REFERENCES distributors(id),
-  anno INTEGER NOT NULL,
-  ultimo INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (distributor_id, anno)
 );
 
 CREATE INDEX IF NOT EXISTS idx_response_items ON request_response_items(response_id);

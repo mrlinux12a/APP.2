@@ -119,7 +119,6 @@ function SchedaOrdine({ v, aperta, apri }: { v: Extract<VoceMateriale, { tipo: '
           <Text style={[stili.rigaMeta, { color: c.grigio, marginTop: 4 }]}>
             Servizio pagato in app (consegna + servizio + IVA): € {v.servizio}. Il servizio non è nel totale del materiale.
           </Text>
-          {v.ddt ? <Text style={[stili.rigaMeta, { color: c.grigio }]}>DDT n° {v.ddt}</Text> : null}
           <View style={stili.azioni}>
             <Pressable onPress={() => router.push({ pathname: '/ordini/ordine/[id]', params: { id: String(v.id) } })} style={stili.azione} hitSlop={6}>
               <Text style={[stili.azioneTesto, { color: c.accento }]}>Dettagli ›</Text>

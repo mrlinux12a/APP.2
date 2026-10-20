@@ -110,7 +110,7 @@
           <summary class="mc-sum">
             <span class="mc-freccia" aria-hidden="true">▸</span>
             <span class="mc-num">Ordine #<%= o.id %></span>
-            <span class="mc-meta"><%= o.data %> · DDT <%= o.ddt || '—' %> · <%= testoArticoli(o.nArticoli) %></span>
+            <span class="mc-meta"><%= o.data %> · <%= testoArticoli(o.nArticoli) %></span>
             <span class="sto-pillola sto-st-<%= o.stato.chiave %> mc-stato"><span class="sto-punto" aria-hidden="true"></span><%= o.stato.etichetta %></span>
             <span class="mc-tot">€ <%= euro(o.totale) %></span>
           </summary>
@@ -140,7 +140,6 @@
               </tbody>
             </table>
             </div>
-            <% if (o.ddt) { %><a class="mc-vedi" href="/ddt/<%= o.id %>">Apri la bolla / DDT <%= o.ddt %> ›</a><% } %>
           </div>
         </details>
       <% }); %>

@@ -23,8 +23,8 @@ const { statoStorico } = require('./storico_banco');
 const arrotonda2 = pricing.round2;
 
 // Stato di un ordine come lo vede chi lo legge qui. `tono` = classe colore (st-<tono>). Due soli stati (richiesta esplicita del
-// 18/10/2026): finché l'installatore non conferma di aver ricevuto il materiale l'ordine è "In preparazione", anche dopo la bolla del
-// banco (`evaso`): dopo il "preso" del corriere su WhatsApp il bot non scrive più e nel DB non c'è nessun evento di ritiro o di partenza
+// 18/10/2026): finché l'installatore non conferma di aver ricevuto il materiale l'ordine è "In preparazione", anche dopo il "Preparato" del
+// banco (`in_evasione`): dopo il "preso" del corriere su WhatsApp il bot non scrive più e nel DB non c'è nessun evento di ritiro o di partenza
 // del corriere da cui ricavare un "In consegna" affidabile.
 function statoOrdine(o) {
   if (o.consegnato_il) return { tono: 'consegnato', etichetta: 'Consegnato' };
@@ -107,7 +107,7 @@ async function materialeOrdini({
       .prepare(
         `SELECT o.id, o.creato_il, o.stato, o.consegnato_il, o.distributor_id, o.costo_consegna, o.contributo_raee, o.iva,
                 o.totale_netto, o.totale_finale, o.servizio, o.imponibile_app, o.iva_app, o.da_pagare_app,
-                o.imponibile_banco, o.iva_banco, o.materiale_banco, o.ddt_numero, o.request_id, d.nome AS distributore_nome,
+                o.imponibile_banco, o.iva_banco, o.materiale_banco, o.request_id, d.nome AS distributore_nome,
                 r.pagamento_importo, r.pagamento_stato, r.pagamento_metodo, r.pagato_il
            FROM orders o
            LEFT JOIN distributors d ON d.id = o.distributor_id
@@ -185,11 +185,10 @@ async function materialeOrdini({
       dataSola: format.dataSolaRoma(o.creato_il),
       stato: statoOrdine(o),
       // Lo stato come lo chiama il banco (Da preparare / In consegna / Consegnato), la colonna `stato` grezza (serve a
-      // sapere se il banco ha già preso in carico l'ordine), il numero di DDT e la richiesta da cui nasce.
+      // sapere se il banco ha già preso in carico l'ordine) e la richiesta da cui nasce.
       statoBanco: statoStorico(o),
       statoDb: o.stato,
       creatoIl: o.creato_il,
-      ddt: String(o.ddt_numero || '').trim(),
       requestId: o.request_id || null,
       // Esiste una ricevuta di pagamento (incassato con Stripe, o pagato in simulato: la sandbox ha la sua ricevuta "di prova"): il link "Ricevuta" e
       // "Ricevute del mese". Solo per l'installatore.
@@ -287,7 +286,7 @@ async function materialeOrdini({
 
 // Il materiale ordinato da un cliente a UN banco, per la scheda "Materiale ordinato" della sua pagina (GET /distributore/clienti/:id).
 // Non rifà nessun conto: prende materialeOrdini (gli stessi numeri dello Storico dell'installatore, e dei suoi due CSV) e li dispone come
-// serve al banco: elenco piatto degli ordini del periodo, stato "del banco", DDT, righe sommate per articolo e riepilogo. Prezzi dai
+// serve al banco: elenco piatto degli ordini del periodo, stato "del banco", righe sommate per articolo e riepilogo. Prezzi dai
 // valori salvati nell'ordine (mai il listino di oggi); niente servizio, che il cliente ha già pagato in app.
 //  · riepilogo.totale = somma dei totali di ordine (pricing.importiOrdine: con le righe arrotondate una per una può differire di un
 //    centesimo o due); riepilogo.iva = totale − somma dei netti di riga; nArticoli = articoli distinti, pezzi = somma delle quantità.
@@ -304,7 +303,6 @@ async function materialeCliente(distributorId, clienteId, { mese = null, vista =
     id: o.id,
     data: o.data,
     dataSola: o.dataSola,
-    ddt: o.ddt,
     nArticoli: o.righe.length,
     stato: o.statoBanco,
     totale: o.totale,
@@ -371,17 +369,17 @@ function nomeFileCsv(materiale) {
 }
 
 // Il CSV del banco (da materialeCliente): ";" e BOM come l'altro, una riga per articolo, dal più vecchio al più recente, SENZA il
-// servizio (il banco non lo incassa) e col DDT; l'ultima riga è il totale del periodo (quello della scheda).
+// servizio (il banco non lo incassa); l'ultima riga è il totale del periodo (quello della scheda).
 function csvMaterialeCliente(mc) {
-  const colonne = ['Data', 'Ordine', 'DDT', 'Stato', 'Codice', 'Articolo', 'Quantità', 'Prezzo cad. IVA incl.', 'Totale IVA incl.'];
+  const colonne = ['Data', 'Ordine', 'Stato', 'Codice', 'Articolo', 'Quantità', 'Prezzo cad. IVA incl.', 'Totale IVA incl.'];
   const righe = [colonne.map(cella).join(';')];
   for (const o of [...mc.ordini].reverse()) { // mc.ordini è dal più recente
 
     for (const r of o.righe) {
-      righe.push([o.dataSola, '#' + o.id, o.ddt, o.stato.etichetta, r.codice, r.nome, r.quantita, numeroCsv(r.cad), numeroCsv(r.totale)].map(cella).join(';'));
+      righe.push([o.dataSola, '#' + o.id, o.stato.etichetta, r.codice, r.nome, r.quantita, numeroCsv(r.cad), numeroCsv(r.totale)].map(cella).join(';'));
     }
   }
-  righe.push(['Totale', '', '', '', '', '', '', '', numeroCsv(mc.riepilogo.totale)].map(cella).join(';'));
+  righe.push(['Totale', '', '', '', '', '', '', numeroCsv(mc.riepilogo.totale)].map(cella).join(';'));
   return '﻿' + righe.join('\r\n') + '\r\n';
 }
 

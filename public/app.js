@@ -1543,8 +1543,8 @@ const Minuteria = (function () {
   setInterval(tick, 1000);
 })();
 
-/* Pagina dell'ordine del banco (views/distributore_ordine.ejs): i + e - dei colli della bolla e "Stampa" (in stampa la pagina mostra solo testata e materiale,
-   vedi @media print di style.css; c'è solo dopo la partenza dell'ordine). */
+/* Pagina dell'ordine del banco (views/distributore_ordine.ejs): "Stampa" (in stampa la pagina mostra solo testata e materiale, vedi @media print di style.css;
+   c'è solo dopo la partenza dell'ordine). */
 (function () {
   'use strict';
   const pagina = document.querySelector('[data-ordine-banco]');
@@ -1552,15 +1552,6 @@ const Minuteria = (function () {
 
   const stampa = pagina.querySelector('[data-stampa]');
   if (stampa) stampa.addEventListener('click', function () { window.print(); });
-
-  const colli = pagina.querySelector('#ord-colli');
-  Array.prototype.forEach.call(pagina.querySelectorAll('[data-colli]'), function (pulsante) {
-    pulsante.addEventListener('click', function () {
-      if (!colli) return;
-      const n = (parseInt(colli.value, 10) || 1) + parseInt(pulsante.getAttribute('data-colli'), 10);
-      colli.value = String(Math.min(999, Math.max(1, n)));
-    });
-  });
 })();
 
 /* Impedisce il doppio invio dei form che cambiano stato (conferma ordine, risposta del

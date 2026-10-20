@@ -1,7 +1,9 @@
 // Il dettaglio che si apre sotto una riga dello Storico ordini del banco (GET /distributore/storico/:id/dettaglio, views/partials/storico_dettaglio.ejs).
-// Tre colonne: il materiale a prezzo del banco con il totale da incassare, "Come è andata" (i momenti dell'ordine) e la bolla con i pulsanti.
+// Tre colonne: il materiale a prezzo del banco con il totale da incassare, "Come è andata" (i momenti dell'ordine) e i pulsanti.
 // Qui sta la preparazione dei dati: `cronologia` e `costruisciDettaglio` sono pure (si provano senza DB), `leggiDettaglio` fa le letture.
 // Aprire il dettaglio NON cambia l'ordine: è una lettura, niente prendiInCarico (vedi server.js).
+const format = require('./format');
+const orariCorriere = require('./corriere');
 const ordineBanco = require('./ordine_banco');
 const pricing = require('./pricing');
 const { statoStorico } = require('./storico_banco');
@@ -11,8 +13,9 @@ const { statoStorico } = require('./storico_banco');
 //  · Ricevuto (creato_il), Confermato da te (risposta.risposto_il), Corriere {nome} ha accettato (corriere_risposto_il): sempre fatti, se c'è il dato.
 //    Un passo senza dati (niente corriere: modulo WhatsApp spento) non si scrive.
 //  · Da preparare: "Partito" e "Consegnato" devono ancora venire.
-//  · In consegna: "Partito · in viaggio, arrivo previsto HH:MM" è il passo in corso; "Consegnato" deve ancora venire.
-//  · Consegnato: "Partito · DDT n" (se c'è un momento di partenza) e "Consegnato · confermato dal cliente", fatti.
+//  · In consegna: "Partito · in viaggio" è il passo in corso; "Consegnato" deve ancora venire. Il banco non vede quando arriva la merce dal cliente: per lui
+//    conta solo il tempo scritto dal corriere su WhatsApp (arriva al banco), che sta già nel passo "Corriere ... ha accettato".
+//  · Consegnato: "Partito" (se c'è un momento di partenza) e "Consegnato · confermato dal cliente", fatti.
 function cronologia(o, { risposta = null, corriereNome = '' } = {}) {
   const passo = (chiave, fase, valore, testo, opzioni) => {
     const m = valore ? ordineBanco.momento(valore, o.creato_il, opzioni) : null;
@@ -22,7 +25,11 @@ function cronologia(o, { risposta = null, corriereNome = '' } = {}) {
   if (risposta && risposta.risposto_il) passi.push(passo('conferma', 'fatto', risposta.risposto_il, 'Confermato da te'));
   if (o.corriere_risposto_il || o.corriere_nome) {
     const nome = corriereNome || o.corriere_nome || '';
-    passi.push(passo('corriere', 'fatto', o.corriere_risposto_il, nome ? `Corriere ${nome} ha accettato` : 'Un corriere ha accettato', { reale: true }));
+    // Il tempo che il corriere ha scritto su WhatsApp: quando arriva dal banco ("ritira alle 09:40", con il giorno se non è quello dell'ordine).
+    const istanteRitiro = orariCorriere.ritiro(o);
+    const ritiro = istanteRitiro ? ordineBanco.momento(istanteRitiro, o.creato_il, { reale: true }) : null;
+    const quandoRitira = ritiro ? `, ritira ${ritiro.giorno ? 'il ' + ritiro.giorno + ' ' : ''}alle ${ritiro.ora}` : '';
+    passi.push(passo('corriere', 'fatto', o.corriere_risposto_il, (nome ? `Corriere ${nome} ha accettato` : 'Un corriere ha accettato') + quandoRitira, { reale: true }));
   }
 
   const stato = statoStorico(o).chiave;
@@ -30,12 +37,9 @@ function cronologia(o, { risposta = null, corriereNome = '' } = {}) {
   if (stato === 'da_preparare') {
     passi.push(passo('partito', 'futuro', null, 'Partito'), passo('consegnato', 'futuro', null, 'Consegnato'));
   } else if (stato === 'in_consegna') {
-    const arrivo = o.corriere_arrivo_il ? ordineBanco.momento(o.corriere_arrivo_il, o.creato_il, { reale: true }) : null;
-    // "arrivo previsto 20:43" (con il giorno, se non è quello dell'ordine: "arrivo previsto 20/10 20:43")
-    const quando = arrivo ? `, arrivo previsto ${arrivo.giorno ? arrivo.giorno + ' ' : ''}${arrivo.ora}` : '';
-    passi.push(passo('partito', 'corrente', partenza, 'Partito · in viaggio' + quando), passo('consegnato', 'futuro', null, 'Consegnato'));
+    passi.push(passo('partito', 'corrente', partenza, 'Partito · in viaggio'), passo('consegnato', 'futuro', null, 'Consegnato'));
   } else {
-    if (partenza) passi.push(passo('partito', 'fatto', partenza, o.ddt_numero ? `Partito · DDT ${o.ddt_numero}` : 'Partito'));
+    if (partenza) passi.push(passo('partito', 'fatto', partenza, 'Partito'));
     passi.push(passo('consegnato', 'fatto', o.consegnato_il, 'Consegnato · confermato dal cliente'));
   }
   return passi;
@@ -52,7 +56,7 @@ function contaMateriale(righe) {
 function rigaCorriere(o, corriereNome) {
   if (o.modalita === 'ritiro') return 'Ritiro al banco da parte del cliente';
   if (corriereNome) return `Corriere ${corriereNome}`;
-  return o.corriere_arrivo_il || o.corriere_risposto_il ? 'Corriere' : '';
+  return o.corriere_risposto_il ? 'Corriere' : '';
 }
 
 // Tutto quello che serve al frammento HTML, già pronto: la vista non fa conti.
@@ -75,7 +79,6 @@ function costruisciDettaglio({ ordine, righe, risposta = null, mancanti = [], de
     passi: cronologia(ordine, { risposta, corriereNome }),
     destinazione,
     corriere: rigaCorriere(ordine, corriereNome),
-    bolla: ordine.ddt_numero ? { numero: ordine.ddt_numero } : null,
   };
 }
 
@@ -94,7 +97,7 @@ async function leggiDettaglio(ordine) {
   ]);
   const mancanti = risposta && risposta.copertura === 'parziale' ? (await richieste.calcolaOfferta(ordine.request_id, ordine.distributor_id)).mancanti : [];
   // Come la pagina dell'ordine: la destinazione dell'ordine, altrimenti l'indirizzo di consegna del cliente (gli ordini più vecchi non l'hanno salvata).
-  const destinazione = ordine.destinazione || (cliente && (cliente.indirizzo_consegna || require('./ddt').indirizzoCompleto(cliente))) || '';
+  const destinazione = ordine.destinazione || (cliente && (cliente.indirizzo_consegna || format.indirizzoCompleto(cliente))) || '';
   return costruisciDettaglio({ ordine, righe, risposta, mancanti, destinazione, ivaConfig, legame });
 }
 

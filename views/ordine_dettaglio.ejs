@@ -104,11 +104,11 @@
           </div>
         <% } %>
 
-        <%# 3. Materiale in arrivo: righe a PREZZO DEL BANCO, "Merce · IVA esclusa" e, se c'è, il DDT. Niente più consegna, IVA e totale qui:
+        <%# 3. Materiale in arrivo: righe a PREZZO DEL BANCO e "Merce · IVA esclusa". Niente più consegna, IVA e totale qui:
             stanno in "Pagamenti". %>
         <div class="card att-card att-materiale">
           <div class="att-occhiello">Materiale in arrivo</div>
-          <%- include('partials/ordine_righe', { righe, importi, ordine }) %>
+          <%- include('partials/ordine_righe', { righe, importi }) %>
         </div>
 
         <%# 4. Pagamenti: la consegna (pagata in app) e il materiale (da pagare a BOREA), divisi come nel carrello, mai sommati. %>
@@ -166,7 +166,7 @@
           <button class="att-rinvia" type="submit"><%- iconaRiprova %><span>Riordina gli stessi pezzi</span></button>
         </form>
 
-        <%# 3. Banco e materiale in una sola scheda: righe a PREZZO DEL BANCO, "Merce · IVA esclusa" e il DDT (se c'è). %>
+        <%# 3. Banco e materiale in una sola scheda: righe a PREZZO DEL BANCO e "Merce · IVA esclusa". %>
         <div class="card att-card att-ordine">
           <div class="att-ordine-testa">
             <% if (distributore) { %>
@@ -180,7 +180,7 @@
             <% } %>
             <span class="att-ordine-id">Ordine #<%= ordine.id %></span>
           </div>
-          <%- include('partials/ordine_righe', { righe, importi, ordine }) %>
+          <%- include('partials/ordine_righe', { righe, importi }) %>
         </div>
 
         <%# 4. Pagamenti: stessa scheda dell'ordine in consegna (la consegna pagata in app, il materiale da pagare a BOREA). %>
@@ -230,7 +230,7 @@
         <%- include('partials/pagamenti', { importi, stato: 'ordine', ditta: fmt.nomeCommerciale(distributore ? distributore.nome : ''), statoPag, ordineId: ordine.id }) %>
 
         <details class="altre-categorie">
-          <summary>Dettagli consegna e documenti</summary>
+          <summary>Dettagli consegna</summary>
           <div class="card card-fitta">
             <% if (distributore) { %>
               <div class="riga-lista">
@@ -264,16 +264,6 @@
                   <span class="dettaglio"><%= ordine.destinazione %></span>
                 </span>
               </div>
-            <% } %>
-            <% if (ordine.ddt_numero) { %>
-              <a class="riga-lista" href="/ddt/<%= ordine.id %>">
-                <span class="icona"><%- iconaFiscale %></span>
-                <span class="corpo">
-                  <span class="etichetta">Bolla / DDT n. <%= ordine.ddt_numero %></span>
-                  <span class="dettaglio">Del <%= fmt.dataSola(ordine.ddt_data) %></span>
-                </span>
-                <span class="freccia">›</span>
-              </a>
             <% } %>
             <% if (ordine.note) { %>
               <div class="riga-lista">
@@ -331,7 +321,9 @@
                 <%= ordine.modalita === 'ritiro' ? 'Ritiro al banco' : 'Consegna con mezzo del distributore' %>
               </span>
               <span class="dettaglio">
-                <% if (ordine.corriere_arrivo_il) { %>Consegna con corriere, prevista entro le <%= fmt.oraRoma(ordine.corriere_arrivo_il) %>
+                <%# Il banco vede solo il tempo scritto dal corriere su WhatsApp (quando arriva da lui); l'agente, quando arriva la merce dal cliente. %>
+                <% if (currentUser.ruolo === 'distributore' && ritiroCorriere) { %>Il corriere ritira alle <%= fmt.oraRoma(ritiroCorriere) %>
+                <% } else if (currentUser.ruolo !== 'distributore' && ordine.corriere_arrivo_il) { %>Consegna con corriere, prevista entro le <%= fmt.oraRoma(ordine.corriere_arrivo_il) %>
                 <% } else { %>
                 <% if (ordine.partenza_ore) { %>Partenza stimata: <%= fmt.tempoConsegna(ordine.partenza_ore) %> · <% } %>
                 <%= ordine.consegna_ore ? 'consegna stimata: ' + fmt.tempoConsegna(ordine.consegna_ore) : 'tempo da concordare' %>
@@ -356,16 +348,6 @@
                 <span class="dettaglio"><%= pagamento.metodo === 'simulato' ? 'Pagamento di prova · ' : '' %>il <%= fmt.dataOra(pagamento.pagato_il) %></span>
               </span>
             </div>
-          <% } %>
-          <% if (ordine.ddt_numero) { %>
-            <a class="riga-lista" href="/ddt/<%= ordine.id %>">
-              <span class="icona"><%- iconaFiscale %></span>
-              <span class="corpo">
-                <span class="etichetta">Bolla / DDT n. <%= ordine.ddt_numero %></span>
-                <span class="dettaglio">Del <%= fmt.dataSola(ordine.ddt_data) %> — intestata a <%= cliente.ragione_sociale %></span>
-              </span>
-              <span class="freccia">›</span>
-            </a>
           <% } %>
           <% if (ordine.note) { %>
             <div class="riga-lista">

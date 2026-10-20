@@ -25,7 +25,7 @@
         <span class="sto-cerca-ico" aria-hidden="true"><%- iconaLente %></span>
         <%# data-non-ricaricare: finché qui c'è del testo non ancora inviato la pagina non si ricarica da sola (app.js). %>
         <input type="search" name="q" value="<%= filtri.q %>" data-storico-cerca data-non-ricaricare
-               placeholder="Cliente, n° ordine o DDT" aria-label="Cerca per cliente, numero d'ordine o DDT"
+               placeholder="Cliente o n° ordine" aria-label="Cerca per cliente o numero d'ordine"
                maxlength="80" enterkeyhint="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
         <a class="sto-cerca-x" href="<%= link({ q: '' }) %>" data-storico-svuota aria-label="Svuota la ricerca"<%- filtri.q ? '' : ' hidden' %>><%- iconaChiudi %></a>
       </form>
@@ -64,7 +64,7 @@
       <div class="sto-tabella">
         <div class="sto-testa">
           <span>Ordine</span><span>Ora</span><span>Cliente</span><span>Materiale</span>
-          <span class="sto-c-totale">Da incassare</span><span>DDT</span><span>Stato</span><span></span>
+          <span class="sto-c-totale">Da incassare</span><span>Stato</span><span></span>
         </div>
 
         <% gruppi.forEach(function (g) { %>
@@ -76,7 +76,7 @@
                // OGNI riga si apre qui, nella stessa pagina (public/app.js, "Storico ordini: righe che si aprono"): un <button> che, al primo clic, carica il
                // dettaglio (GET /distributore/storico/:id/dettaglio) e lo mette nel pannello sotto di sé. L'id aperto sta nell'ancora dell'indirizzo (#o149),
                // così dopo una ricarica, o tornando indietro dalla pagina dell'ordine, la stessa voce si riapre. Il pannello c'è già (vuoto, nascosto).
-               // La bolla, qui, è solo un testo: il link per aprirla sta nel pannello. "Da incassare" = materiale + RAEE + IVA, non il totale con la consegna. %>
+               // "Da incassare" = materiale + RAEE + IVA, non il totale con la consegna. %>
             <div class="sto-voce" id="o<%= o.id %>" data-voce="<%= o.id %>">
             <button type="button" class="sto-riga" aria-expanded="false" aria-controls="dett-<%= o.id %>" data-sto-apri>
               <span class="sto-c-ordine">#<%= o.id %></span>
@@ -93,10 +93,6 @@
                 <% } %>
               </span>
               <span class="sto-c-totale">€ <%= euro(o.daIncassare) %></span>
-              <span class="sto-c-ddt<%= o.ddt_numero ? '' : ' sto-senza' %>">
-                <% if (o.ddt_numero) { %><span class="sto-ddt-sigla">DDT </span><%= o.ddt_numero %>
-                <% } else { %><span class="sto-nessuno">—</span><% } %>
-              </span>
               <span class="sto-c-stato">
                 <span class="sto-pillola sto-st-<%= o.statoStorico.chiave %>"><span class="sto-punto" aria-hidden="true"></span><%= o.statoStorico.etichetta %></span>
               </span>

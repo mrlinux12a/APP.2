@@ -5,8 +5,8 @@
 //   1. crea una richiesta finta (già "pagata", pagamento simulato) e fa "accettare" il banco: nel gruppo
 //      arriva il messaggio con le due tappe (prelievo e consegna);
 //   2. aspetta che qualcuno risponda al messaggio con "preso <minuti>" entro la finestra (--finestra);
-//   3. se risponde: l'ordine nasce da solo e all'installatore arriva la conferma con quel tempo; il bot
-//      risponde al "preso" e nel gruppo non scrive altro;
+//   3. se risponde: l'ordine nasce da solo; i minuti sono il tempo che il corriere ci mette ad arrivare dal banco (quello che vede il banco), all'installatore
+//      si dice quel tempo + il tragitto dal banco a lui; il bot risponde al "preso" e nel gruppo non scrive altro;
 //   4. se nessuno risponde: la finestra scade, la richiesta si chiude senza ordine (pagamento rimborsato)
 //      e il messaggio viene ELIMINATO dal gruppo.
 // Alla fine stampa il risultato e cancella tutto quello che ha creato.
@@ -171,12 +171,13 @@ async function stato() {
         ? await db.prepare(`SELECT titolo, testo FROM notifications WHERE user_id = ? AND order_id = ?`).get(clienteId, orderId)
         : null;
       console.log('\nRISPOSTA LETTA');
-      console.log('  minuti totali:   ', risposta.corriere_minuti);
+      console.log('  minuti dal banco:', risposta.corriere_minuti, '(+ tragitto dal banco al cliente = ' + risposta.consegna_minuti_stimati + ' min in tutto)');
       console.log('  da:              ', risposta.corriere_nome || '(nome non disponibile)');
       console.log('  stato richiesta: ', richiesta.stato, '(atteso ordinata)');
       if (orderId) {
-        const o = await db.prepare('SELECT corriere_minuti, corriere_arrivo_il FROM orders WHERE id = ?').get(orderId);
-        console.log(`  ordine #${orderId} creato da solo: corriere ${o.corriere_minuti} min, arrivo ${new Date(o.corriere_arrivo_il).toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' })}`);
+        const o = await db.prepare('SELECT corriere_minuti, corriere_risposto_il, corriere_arrivo_il FROM orders WHERE id = ?').get(orderId);
+        const ora = (d) => new Date(d).toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' });
+        console.log(`  ordine #${orderId} creato da solo: il corriere arriva dal banco alle ${ora(new Date(o.corriere_risposto_il).getTime() + o.corriere_minuti * 60000)} (banco), la merce arriva dal cliente alle ${ora(o.corriere_arrivo_il)} (installatore)`);
       } else {
         console.error('  ORDINE NON CREATO (il timer lo riproverebbe).');
       }

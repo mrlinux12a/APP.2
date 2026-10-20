@@ -147,7 +147,6 @@ test('inviaAUtente: senza token, spento, con Expo giù o senza tabella non fa ni
 
 test('destinazioneApp: dal percorso del sito alla schermata dell’app', () => {
   assert.deepEqual(push.destinazioneApp('/ordini/12'), { tipo: 'ordine', id: 12 });
-  assert.deepEqual(push.destinazioneApp('/ddt/7'), { tipo: 'ordine', id: 7 });
   assert.deepEqual(push.destinazioneApp('/richieste/3'), { tipo: 'richiesta', id: 3 });
   assert.deepEqual(push.destinazioneApp('/profilo'), { tipo: 'ordini' });
   assert.deepEqual(push.destinazioneApp(null), { tipo: 'ordini' });

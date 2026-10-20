@@ -140,15 +140,15 @@
               <% if (o.arrivo) { %>
                 <div class="pillola-arrivo<%= vicino ? ' vicino' : '' %>" data-arrivo data-secondi="<%= o.arrivo.secondi %>">
                   <span class="pillola-min" data-arrivo-min><%= inRitardo ? 'In ritardo' : durata(minutiArrivo) %></span>
-                  <span class="pillola-ora">ore <%= fmt.oraRoma(o.corriere_arrivo_il) %></span>
+                  <span class="pillola-ora">ore <%= fmt.oraRoma(o.ritiro_il) %></span>
                 </div>
               <% } %>
             </div>
 
             <%- include('partials/banco_articoli', { articoli: o.anteprima, altre: o.altre }) %>
 
-            <%# "Ispeziona" apre la pagina dell'ordine (non lo tocca: resta in colonna): lì si spunta il materiale e si emette la bolla, che lo porta "In consegna".
-                "Preparato" lo toglie da qui senza bolla: lo porta "In consegna" e avvisa il cliente (POST .../preparazione, torna alla home). %>
+            <%# "Ispeziona" apre la pagina dell'ordine (non lo tocca: resta in colonna).
+                "Preparato" lo toglie da qui: lo porta "In consegna" e avvisa il cliente (POST .../preparazione, torna alla home). %>
             <div class="scheda-azioni">
               <div class="scheda-azioni-ordine">
                 <a class="btn-banco btn-banco-secondario btn-banco-piccolo" href="/distributore/ordini/<%= o.id %>"><%- iconaOcchio %>Ispeziona</a>

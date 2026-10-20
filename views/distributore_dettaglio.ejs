@@ -153,7 +153,7 @@
             <div class="ric-esito-testi">
               <h2 class="ric-esito-titolo">Hai confermato <%= risposta.copertura === 'parziale' ? 'una parte del materiale' : 'tutto il materiale' %></h2>
               <% if (risposta.corriere_stato === 'preso') { %>
-                <p>Consegna presa<%= risposta.corriere_nome ? ' da ' + risposta.corriere_nome : '' %>: <strong><%= risposta.corriere_minuti %> minuti</strong> in totale, dal ritiro alla consegna.</p>
+                <p>Consegna presa<%= risposta.corriere_nome ? ' da ' + risposta.corriere_nome : '' %>: arriva da te in <strong><%= risposta.corriere_minuti %> minuti</strong>.</p>
               <% } else if (!ordineMio) { %>
                 <p>L'ordine compare in Da preparare appena nasce.</p>
               <% } %>

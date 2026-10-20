@@ -112,7 +112,7 @@ export default function Profilo() {
             <Text style={[stili.eliminaTitolo, { color: c.rosso }]}>Elimina l’account</Text>
             <Text style={[stili.eliminaTesto, { color: c.testo }]}>
               Non potrai più entrare. Vengono cancellati referente, email, telefono e le notifiche. Restano, per obbligo di legge, i dati dell’impresa e gli
-              ordini, le bolle e le ricevute già emessi.
+              ordini e le ricevute già emessi.
             </Text>
             {errore ? <Avviso tipo="errore">{errore}</Avviso> : null}
             <Campo etichetta="La tua password" valore={password} cambia={setPassword} password autoCapitalize="none" autoComplete="current-password" textContentType="password" />

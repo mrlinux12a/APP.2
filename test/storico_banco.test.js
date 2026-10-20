@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const sb = require('../src/storico_banco');
 const { giornoRoma, oraSolaRoma } = require('../src/format');
 
-test('statoStorico: consegnato_il vale per primo; poi Da preparare (inviato) e In consegna (Preparato o bolla emessa: niente più "In preparazione" né "Partito")', () => {
+test('statoStorico: consegnato_il vale per primo; poi Da preparare (inviato) e In consegna (Preparato, o `evaso` degli ordini vecchi: niente più "In preparazione" né "Partito")', () => {
   assert.deepEqual(sb.statoStorico({ stato: 'inviato', consegnato_il: null }), { chiave: 'da_preparare', etichetta: 'Da preparare' });
   assert.deepEqual(sb.statoStorico({ stato: 'in_evasione', consegnato_il: null }), { chiave: 'in_consegna', etichetta: 'In consegna' });
   assert.deepEqual(sb.statoStorico({ stato: 'evaso', consegnato_il: null }), { chiave: 'in_consegna', etichetta: 'In consegna' });
@@ -73,14 +73,14 @@ test('condizioni: banco, periodo (mezzanotte italiana o ultimi N giorni) e ricer
   }
 });
 
-test('condizioni: la ricerca copre cliente e DDT, il numero d\'ordine solo con sole cifre (anche dopo un #), mai concatenata', () => {
+test('condizioni: la ricerca copre il cliente, il numero d\'ordine solo con sole cifre (anche dopo un #), mai concatenata', () => {
   let c = sb.condizioni(2, { periodo: 'tutti', q: 'Rossi', stato: 'tutti', pagina: 1 });
-  assert.equal(c.dove[1], '(u.ragione_sociale ILIKE ? OR o.ddt_numero ILIKE ?)');
-  assert.deepEqual(c.parametri, [2, '%Rossi%', '%Rossi%']);
+  assert.equal(c.dove[1], '(u.ragione_sociale ILIKE ?)');
+  assert.deepEqual(c.parametri, [2, '%Rossi%']);
 
   for (const q of ['91', '#91', '# 91']) {
     c = sb.condizioni(2, { periodo: 'tutti', q, stato: 'tutti', pagina: 1 });
-    assert.equal(c.dove[1], '(u.ragione_sociale ILIKE ? OR o.ddt_numero ILIKE ? OR o.id = ?)', q);
+    assert.equal(c.dove[1], '(u.ragione_sociale ILIKE ? OR o.id = ?)', q);
     assert.equal(c.parametri[c.parametri.length - 1], 91, q);
   }
   // non è un numero: niente confronto con l'id (e niente errore per numeri più grandi di un int4)
@@ -90,7 +90,7 @@ test('condizioni: la ricerca copre cliente e DDT, il numero d\'ordine solo con s
   }
   // i caratteri jolly di LIKE scritti dall'utente valgono per sé; il testo non finisce mai nell'SQL
   c = sb.condizioni(2, { periodo: 'tutti', q: "50%_\\x'; --", stato: 'tutti', pagina: 1 });
-  assert.deepEqual(c.parametri.slice(1), ["%50\\%\\_\\\\x'; --%", "%50\\%\\_\\\\x'; --%"]);
+  assert.deepEqual(c.parametri.slice(1), ["%50\\%\\_\\\\x'; --%"]);
   assert.doesNotMatch(c.dove.join(' '), /50|DROP|--/);
 });
 

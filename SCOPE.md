@@ -51,8 +51,6 @@ Aggiornato al 19/10/2026 (app Android completata; il resto com'era al 04/10/2026
   generale; vince la regola più precisa), anche **a scalare** su 5 colonne (40+10+5 = 48,7%).
   Oggi solo come riferimento di lettura quando il banco risponde.
 - **Prezzi per distributore**: listino e sconto Base per prodotto e per banco.
-- **Bolla / DDT** intestata al cliente, numerazione progressiva per distributore e per anno,
-  pagina stampabile, link visibile anche al cliente.
 
 **Agente**
 
@@ -113,7 +111,7 @@ Aggiornato al 19/10/2026 (app Android completata; il resto com'era al 04/10/2026
 - **Tasselli della mappa**: si usa il server pubblico di OpenStreetMap, adatto a una demo. Per il
   pilot serve un provider con contratto o un proxy con cache (quando le mappe torneranno visibili).
 - **Presa in carico firmata**: il cliente segna "Ordine consegnato", ma manca la conferma firmata
-  dal destinatario (lo spazio firma è già in bolla, ma su carta).
+  dal destinatario.
 - **Estrazione dati** per le metriche del pilot (clienti attivi/mese, tempo medio
   richiesta→conferma, tasso di conferma per distributore).
 - **Ricerca per foto del pezzo**: richiede un modello di riconoscimento immagini; va deciso se

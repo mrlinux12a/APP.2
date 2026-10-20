@@ -209,8 +209,9 @@ test('statoBanco: i numeri della striscia (dai contatori già letti) e la prima 
 test('arricchisciPush: ogni notifica porta i dati del suo avviso; una richiesta già risposta o un ordine già partito si riconoscono', async () => {
   dati.inAttesa = [{ id: 12, cliente_nome: 'Bianchi', secondi: 95, n_articoli: 1, n_pezzi: 1 }]; // la 99 non c'è più da confermare
   dati.ordini = [
-    { id: 1280, stato: 'inviato', consegnato_il: null, corriere_nome: 'Marco', corriere_arrivo_il: new Date(Date.UTC(2026, 9, 19, 7, 45)), cliente_nome: 'Rossi' },
-    { id: 1281, stato: 'evaso', consegnato_il: '2026-10-19 19:21:00', corriere_nome: '', corriere_arrivo_il: null, cliente_nome: 'Neri Impianti' },
+    // il corriere ha risposto alle 07:15 UTC scrivendo "preso 30": arriva dal banco alle 07:45 UTC (09:45 a Roma). L'arrivo dal CLIENTE (corriere_arrivo_il) il banco non lo vede.
+    { id: 1280, stato: 'inviato', consegnato_il: null, corriere_nome: 'Marco', corriere_risposto_il: new Date(Date.UTC(2026, 9, 19, 7, 15)), corriere_minuti: 30, cliente_nome: 'Rossi' },
+    { id: 1281, stato: 'evaso', consegnato_il: '2026-10-19 19:21:00', corriere_nome: '', corriere_risposto_il: null, corriere_minuti: null, cliente_nome: 'Neri Impianti' },
   ];
   const nuove = [
     { id: 1, titolo: 'a', testo: 'a', link: '/distributore/richieste/12', tipo: 'nuova_richiesta', request_id: 12, order_id: null },
@@ -239,7 +240,7 @@ test('arricchisciPush: ogni notifica porta i dati del suo avviso; una richiesta 
   assert.deepEqual(viste.find((v) => /FROM orders o JOIN/.test(v.s)).p, [2, [1280, 1281, 5000]]);
 
   // un ordine già consegnato o partito non è più "da preparare"
-  dati.ordini = [{ id: 1280, stato: 'in_evasione', consegnato_il: null, corriere_nome: 'Marco', corriere_arrivo_il: null, cliente_nome: 'Rossi' }];
+  dati.ordini = [{ id: 1280, stato: 'in_evasione', consegnato_il: null, corriere_nome: 'Marco', corriere_risposto_il: null, corriere_minuti: null, cliente_nome: 'Rossi' }];
   const partito = await bancoAvvisi.arricchisciPush(2, [nuove[2]]);
   assert.deepEqual(partito[0].ordine, { id: 1280, corriere: 'Marco', ritiroAlle: null, daPreparare: false });
 

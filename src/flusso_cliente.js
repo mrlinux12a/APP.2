@@ -7,7 +7,6 @@ const db = require('../db');
 const pricing = require('./pricing');
 const richieste = require('./richieste');
 const notifiche = require('./notifiche');
-const ddt = require('./ddt');
 const whatsapp = require('./whatsapp');
 const pagamenti = require('./pagamenti');
 const consegna = require('./consegna');
@@ -187,7 +186,7 @@ async function nuovaRichiesta(
 
   try {
     const { requestId } = await richieste.creaRichiesta(cliente, righe, {
-      destinazione: String(destinazione || '').trim().slice(0, 300) || cliente.indirizzo_consegna || ddt.indirizzoCompleto(cliente),
+      destinazione: String(destinazione || '').trim().slice(0, 300) || cliente.indirizzo_consegna || format.indirizzoCompleto(cliente),
       note: String(note || '').trim().slice(0, 500),
       importo: importoPagato === null ? totali.da_pagare_app : importoPagato,
       metodoPagamento,
@@ -381,6 +380,14 @@ async function eliminaRichiesta(requestId) {
 
 // ---------- Ordine ----------
 
+// Minuti dalla risposta del corriere alla consegna dall'installatore: il tempo scritto dal corriere (arriva dal banco) + il tragitto dal banco a lui, che
+// richieste.corriereHaPreso ha già sommato in consegna_minuti_stimati. Mai meno dei minuti del corriere: un dato mancante non deve accorciare l'attesa.
+function minutiConsegna(risposta) {
+  const corriere = Number(risposta.corriere_minuti) || 0;
+  const totale = Number(risposta.consegna_minuti_stimati) || 0;
+  return Math.max(corriere, totale);
+}
+
 // L'installatore non sceglie niente dopo aver pagato: l'ordine nasce da solo quando una risposta del
 // banco diventa valida, cioè quando il corriere prende la consegna nel gruppo WhatsApp (o, a modulo
 // spento, appena il banco accetta). Destinazione e note sono quelle scritte nel carrello, salvate
@@ -390,7 +397,7 @@ async function creaOrdineDaRisposta(richiesta, risposta) {
   const modalita = 'consegna_mezzo_grossista';
   const note = (richiesta.note || '').trim();
   const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(richiesta.cliente_id);
-  const destinazione = (richiesta.destinazione || '').trim() || cliente.indirizzo_consegna || ddt.indirizzoCompleto(cliente);
+  const destinazione = (richiesta.destinazione || '').trim() || cliente.indirizzo_consegna || format.indirizzoCompleto(cliente);
   const { totali } = await richieste.calcolaOfferta(richiesta.id, distributorId);
 
   // Insieme ai totali di sempre l'ordine salva le due parti già calcolate da calcolaOrdine (consegna pagata in app e materiale da pagare a
@@ -453,15 +460,17 @@ async function creaOrdineDaRisposta(richiesta, risposta) {
     // autorizzato). Qui si segna soltanto sul DB, nella stessa transazione dell'ordine: la chiamata a Stripe la
     // fa src/stripe_pagamenti.js subito dopo e, se non riesce, dal timer.
     await pagamenti.segnaDaIncassare(richiesta.id, totali.da_pagare_app);
-    // Con il corriere il tempo di consegna è quello scritto nel gruppo ("preso 30"): conta da adesso,
-    // cioè da quando l'ordine è confermato.
+    // Con il corriere i minuti scritti nel gruppo ("preso 30") sono il tempo che ci mette ad arrivare dal banco: stanno in corriere_minuti e il banco vede
+    // solo quelli (src/corriere.js). All'installatore si dice quando arriva la merce da lui: quei minuti + il tragitto dal banco (già in
+    // consegna_minuti_stimati, vedi richieste.corriereHaPreso), contati da quando il corriere ha risposto, non da adesso: così il ritiro promesso al banco e
+    // l'arrivo promesso all'installatore partono dallo stesso istante, anche se l'ordine nasce un po' dopo (riprova del timer).
     if (risposta.corriere_stato === 'preso') {
       await db.prepare(
         `UPDATE orders
             SET corriere_minuti = ?, corriere_nome = ?, corriere_risposto_il = ?,
-                corriere_arrivo_il = NOW() + (? * INTERVAL '1 minute')
+                corriere_arrivo_il = COALESCE(?::timestamptz, NOW()) + (? * INTERVAL '1 minute')
           WHERE id = ?`
-      ).run(risposta.corriere_minuti, risposta.corriere_nome || '', risposta.corriere_preso_il, risposta.corriere_minuti, orderId);
+      ).run(risposta.corriere_minuti, risposta.corriere_nome || '', risposta.corriere_preso_il, risposta.corriere_preso_il, minutiConsegna(risposta), orderId);
     }
     // Chiuso l'ordine, gli altri banchi non devono più poter rispondere.
     await db.prepare(
@@ -480,12 +489,17 @@ async function creaOrdineDaRisposta(richiesta, risposta) {
 
   const distributore = await db.prepare('SELECT * FROM distributors WHERE id = ?').get(distributorId);
   const conCorriere = risposta.corriere_stato === 'preso' && risposta.corriere_minuti;
-  const arrivo = conCorriere ? format.oraRoma(new Date(Date.now() + risposta.corriere_minuti * 60 * 1000)) : null;
+  // Due orari diversi, ognuno per chi deve vederlo: il banco sa quando arriva il corriere (i minuti scritti su WhatsApp), l'installatore quando arriva la merce
+  // (quei minuti + il tragitto dal banco). Partono entrambi dal momento in cui il corriere ha risposto.
+  const preso = format.toDate(risposta.corriere_preso_il) || new Date();
+  const ritiro = conCorriere ? format.oraRoma(new Date(preso.getTime() + risposta.corriere_minuti * 60 * 1000)) : null;
+  const minutiTotali = conCorriere ? minutiConsegna(risposta) : null;
+  const arrivo = conCorriere ? format.oraRoma(new Date(preso.getTime() + minutiTotali * 60 * 1000)) : null;
 
   // Al banco l'ordine arriva già pagato: deve solo prepararlo.
   await notifiche.notificaDistributore(distributorId, {
     titolo: 'Nuovo ordine da preparare',
-    testo: `${cliente.ragione_sociale} — ordine #${orderId}, già pagato.${arrivo ? ` Consegna prevista entro le ${arrivo}.` : ''}`,
+    testo: `${cliente.ragione_sociale} — ordine #${orderId}, già pagato.${ritiro ? ` Il corriere ritira alle ${ritiro}.` : ''}`,
     link: '/distributore/ordini/' + orderId,
     categoria: 'ordini',
     sottostato: 'in_approvazione',
@@ -500,7 +514,7 @@ async function creaOrdineDaRisposta(richiesta, risposta) {
   await notifiche.notifica(richiesta.cliente_id, {
     titolo: 'Ordine confermato',
     testo: conCorriere
-      ? `${distributore.nome} prepara il tuo ordine #${orderId}. Consegna prevista entro le ${arrivo} (${consegna.inParole(risposta.corriere_minuti)}).`
+      ? `${distributore.nome} prepara il tuo ordine #${orderId}. Consegna prevista entro le ${arrivo} (${consegna.inParole(minutiTotali)}).`
       : `${distributore.nome} prepara il tuo ordine #${orderId}. Consegna stimata in ${consegna.inParole(risposta.consegna_minuti_stimati)}.`,
     link: '/ordini/' + orderId,
     categoria: 'ordini',

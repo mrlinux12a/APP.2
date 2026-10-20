@@ -239,21 +239,22 @@ test('CSV: ";", BOM, una riga per articolo, servizio sulla prima riga dell\'ordi
 
 // ---------- Pagina del cliente lato banco: materialeCliente (stessi numeri di materialeOrdini, disposti per il banco) ----------
 
-test('materialeCliente: TUTTI gli ordini di quel banco, stato del banco, DDT, totali con IVA e RAEE, "di cui IVA", articoli e pezzi', prova(async () => {
+test('materialeCliente: TUTTI gli ordini di quel banco, stato del banco, totali con IVA e RAEE, "di cui IVA", articoli e pezzi', prova(async () => {
   ordine(10, { netto: 100, raee: 2, stato: 'inviato', data: quando(2026, 10, 16) }); // da preparare: (100 + 2) × 1,22 = 124,44
   ordine(11, { netto: 30, qta: 2, raee: 1, stato: 'in_evasione', data: quando(2026, 10, 15) }); // (60 + 2) × 1,22 = 75,64
-  ordine(12, { netto: 50, stato: 'evaso', data: quando(2026, 10, 14) }); // bolla emessa, anche lui "in consegna": 61,00
+  ordine(12, { netto: 50, stato: 'evaso', data: quando(2026, 10, 14) }); // `evaso` (ordine vecchio), anche lui "in consegna": 61,00
   ordine(13, { netto: 50, consegnato: true, data: quando(2026, 10, 13) }); // consegnato: 61,00
   ordine(14, { netto: 999, cliente: 9 }); // di un altro cliente: mai
   ordine(15, { netto: 999, banco: 1, ditta: 'AFIS SPA' }); // dello stesso cliente ma di un altro banco: mai
-  Object.assign(ordini.find((o) => o.id === 10), { ddt_numero: ' 77 ', request_id: 500 });
+  Object.assign(ordini.find((o) => o.id === 10), { request_id: 500 });
   const m = await materiale.materialeCliente(2, 1, { mese: '2026-10', adesso: quando(2026, 10, 20) });
-  assert.deepEqual(m.ordini.map((o) => [o.id, o.stato.chiave, o.stato.etichetta, o.ddt, o.nArticoli, o.totale]), [
-    [10, 'da_preparare', 'Da preparare', '77', 1, 124.44],
-    [11, 'in_consegna', 'In consegna', '', 1, 75.64],
-    [12, 'in_consegna', 'In consegna', '', 1, 61],
-    [13, 'consegnato', 'Consegnato', '', 1, 61],
+  assert.deepEqual(m.ordini.map((o) => [o.id, o.stato.chiave, o.stato.etichetta, o.nArticoli, o.totale]), [
+    [10, 'da_preparare', 'Da preparare', 1, 124.44],
+    [11, 'in_consegna', 'In consegna', 1, 75.64],
+    [12, 'in_consegna', 'In consegna', 1, 61],
+    [13, 'consegnato', 'Consegnato', 1, 61],
   ], 'dal più recente; ci sono anche quelli ancora da preparare');
+  assert.ok(m.ordini.every((o) => !('ddt' in o)), 'nessun numero di bolla');
   // totale = somma dei totali di ordine (già IVA inclusa, RAEE dentro); IVA = totale − netti di riga (102 + 62 + 50 + 50 = 264)
   assert.deepEqual(m.riepilogo, { nOrdini: 4, nArticoli: 4, pezzi: 5, totale: 322.08, iva: 58.08 });
   // righe: prezzo cad. e totale di riga dai valori salvati, il servizio non c'è
@@ -323,19 +324,18 @@ test('materialeCliente, per articolo: somma per codice e nome, "prezzi diversi" 
   assert.deepEqual(mio.gruppi[0].articoli.filter((a) => a.nome === 'Articolo 20').map((a) => [a.quantita, a.cad]), [[4, 122], [1, 97.6]]);
 }));
 
-test('CSV del banco: ";" e BOM, dal più vecchio, DDT e stato del banco, nessun servizio, totale in fondo; nome del file dal cliente e dal mese', prova(async () => {
+test('CSV del banco: ";" e BOM, dal più vecchio, stato del banco (nessuna colonna DDT), nessun servizio, totale in fondo; nome del file dal cliente e dal mese', prova(async () => {
   ordine(100, { netto: 100, data: quando(2026, 10, 15) });
   righe[0].nome_snapshot = '- Materiale; "speciale"'; // comincia per "-" (formula in Excel), ha ";" e virgolette
   ordine(101, { netto: 50, stato: 'inviato', data: quando(2026, 10, 16) });
-  Object.assign(ordini.find((o) => o.id === 100), { ddt_numero: 'A/1' });
   const m = await materiale.materialeCliente(2, 1, { mese: '2026-10' });
   const csv = materiale.csvMaterialeCliente(m);
   assert.equal(csv.charCodeAt(0), 0xfeff);
   assert.deepEqual(csv.slice(1).split('\r\n'), [
-    'Data;Ordine;DDT;Stato;Codice;Articolo;Quantità;Prezzo cad. IVA incl.;Totale IVA incl.',
-    '15/10/2026;#100;A/1;In consegna;C100;"\'- Materiale; ""speciale""";1;122,00;122,00',
-    '16/10/2026;#101;;Da preparare;C101;Articolo 101;1;61,00;61,00',
-    'Totale;;;;;;;;183,00',
+    'Data;Ordine;Stato;Codice;Articolo;Quantità;Prezzo cad. IVA incl.;Totale IVA incl.',
+    '15/10/2026;#100;In consegna;C100;"\'- Materiale; ""speciale""";1;122,00;122,00',
+    '16/10/2026;#101;Da preparare;C101;Articolo 101;1;61,00;61,00',
+    'Totale;;;;;;;183,00',
     '',
   ]);
   assert.equal(/Servizio/i.test(csv), false);

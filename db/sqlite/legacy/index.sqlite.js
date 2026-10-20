@@ -38,7 +38,7 @@ aggiungiColonna('orders', 'totale_ivato', 'REAL NOT NULL DEFAULT 0');
 aggiungiColonna('order_items', 'prezzo_unitario_cliente', 'REAL NOT NULL DEFAULT 0');
 aggiungiColonna('order_items', 'subtotale_cliente', 'REAL NOT NULL DEFAULT 0');
 
-// Anagrafica completa del cliente: serve per intestare la bolla / DDT.
+// Anagrafica completa del cliente.
 aggiungiColonna('users', 'partita_iva', "TEXT NOT NULL DEFAULT ''");
 aggiungiColonna('users', 'codice_fiscale', "TEXT NOT NULL DEFAULT ''");
 aggiungiColonna('users', 'indirizzo', "TEXT NOT NULL DEFAULT ''");
@@ -49,7 +49,7 @@ aggiungiColonna('users', 'sdi_pec', "TEXT NOT NULL DEFAULT ''");
 aggiungiColonna('users', 'indirizzo_consegna', "TEXT NOT NULL DEFAULT ''");
 aggiungiColonna('users', 'referente', "TEXT NOT NULL DEFAULT ''");
 
-// Anagrafica del distributore: mittente del DDT.
+// Anagrafica del distributore.
 aggiungiColonna('distributors', 'ragione_sociale', "TEXT NOT NULL DEFAULT ''");
 aggiungiColonna('distributors', 'partita_iva', "TEXT NOT NULL DEFAULT ''");
 aggiungiColonna('distributors', 'indirizzo', "TEXT NOT NULL DEFAULT ''");
@@ -63,16 +63,9 @@ aggiungiColonna('distributors', 'email', "TEXT NOT NULL DEFAULT ''");
 aggiungiColonna('request_responses', 'partenza_ore', 'INTEGER');
 aggiungiColonna('request_responses', 'copertura', "TEXT NOT NULL DEFAULT 'totale'");
 
-// Ordine: partenza stimata, destinazione merce e dati della bolla / DDT.
+// Ordine: partenza stimata e destinazione merce.
 aggiungiColonna('orders', 'partenza_ore', 'INTEGER');
 aggiungiColonna('orders', 'destinazione', "TEXT NOT NULL DEFAULT ''");
-aggiungiColonna('orders', 'ddt_numero', 'TEXT');
-aggiungiColonna('orders', 'ddt_data', 'TEXT');
-aggiungiColonna('orders', 'ddt_colli', 'INTEGER');
-aggiungiColonna('orders', 'ddt_aspetto', "TEXT NOT NULL DEFAULT 'Colli'");
-aggiungiColonna('orders', 'ddt_trasporto', "TEXT NOT NULL DEFAULT 'mittente'");
-aggiungiColonna('orders', 'ddt_causale', "TEXT NOT NULL DEFAULT 'Vendita'");
-aggiungiColonna('orders', 'ddt_note', "TEXT NOT NULL DEFAULT ''");
 aggiungiColonna('orders', 'preso_in_carico_il', 'TEXT');
 
 // Geolocalizzazione: attiva solo con consenso esplicito, revocabile in qualsiasi momento.

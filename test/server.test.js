@@ -103,7 +103,7 @@ function eseguiStorico(s, p, modo) {
   return undefined; // non è una query dello storico
 }
 
-// Pagina dell'ordine (cliente 1): 70 consegnato dal banco (stato evaso, con bolla e pagamento di prova), 71 "consegnato"
+// Pagina dell'ordine (cliente 1): 70 consegnato dal banco (stato evaso, con pagamento di prova), 71 "consegnato"
 // con la rotta provvisoria ma rimasto 'inviato' (il caso che prima si poteva annullare), 72 ancora in consegna e annullabile.
 // Si accende solo nelle prove che la usano.
 const ordiniProva = {
@@ -111,13 +111,13 @@ const ordiniProva = {
   base: {
     cliente_id: 1, modalita: 'consegna_mezzo_grossista', note: null, totale_netto: 112.53, totale_finale: 112.53, request_id: 80, distributor_id: 2,
     consegna_ore: 6, costo_consegna: 10, iva: 26.96, totale_ivato: 149.49, destinazione: 'Via Puggia 22/3, 16131 Genova (GE)',
-    partenza_ore: null, ddt_numero: null, ddt_data: null, corriere_arrivo_il: null, corriere_nome: '', contributo_raee: 0,
+    partenza_ore: null, corriere_arrivo_il: null, corriere_nome: '', contributo_raee: 0,
   },
 };
 // 13 ottobre 2026, 18:10 UTC = mercoledì 14 ottobre 2026, 20:10 a Roma
 const consegnatoIl = naive(new Date(Date.UTC(2026, 9, 14, 18, 10)));
 ordiniProva.ordini = {
-  70: { ...ordiniProva.base, id: 70, stato: 'evaso', creato_il: fa(3 * 86400000), consegnato_il: consegnatoIl, ddt_numero: 'A/12', ddt_data: fa(3 * 86400000) },
+  70: { ...ordiniProva.base, id: 70, stato: 'evaso', creato_il: fa(3 * 86400000), consegnato_il: consegnatoIl },
   71: { ...ordiniProva.base, id: 71, stato: 'inviato', creato_il: fa(3600000), consegnato_il: consegnatoIl },
   72: { ...ordiniProva.base, id: 72, stato: 'inviato', creato_il: fa(3600000), consegnato_il: null },
   // l'ordine 50 dello storico (richiesta 5, in consegna, senza orario del corriere): la sua pagina per la prova della striscia
@@ -133,7 +133,7 @@ const importiNuovi = {
   servizio: 6.45, imponibile_app: 16.45, iva_app: 3.62, da_pagare_app: 20.07, imponibile_banco: 64.5, iva_banco: 14.19, materiale_banco: 78.69,
 };
 Object.assign(ordiniProva.ordini, {
-  73: { ...ordiniProva.base, ...importiNuovi, id: 73, request_id: 81, stato: 'evaso', creato_il: fa(3 * 86400000), consegnato_il: consegnatoIl, ddt_numero: 'A/12', ddt_data: fa(3 * 86400000) },
+  73: { ...ordiniProva.base, ...importiNuovi, id: 73, request_id: 81, stato: 'evaso', creato_il: fa(3 * 86400000), consegnato_il: consegnatoIl },
   74: { ...ordiniProva.base, ...importiNuovi, id: 74, request_id: 81, stato: 'inviato', creato_il: fa(3600000), consegnato_il: null },
   75: { ...ordiniProva.base, ...importiNuovi, id: 75, request_id: 82, stato: 'inviato', creato_il: fa(3600000), consegnato_il: null },
   // gli stessi ordini 97 e 91 della fixture del materiale (Storico di ottobre), per la ricevuta in PDF del singolo ordine e di "Ricevute del mese"
@@ -301,8 +301,8 @@ const righeRichiesteBanco = {
   21: [{ quantita: 1, nome: 'Adattatore Ø80/100mm', codice: '12514597' }],
 };
 const ordiniBanco = [
-  { id: 1280, request_id: 177, cliente_nome: 'Rossi Impianti S.r.l.', corriere_nome: 'Marco', corriere_arrivo_il: new Date(Date.now() + 8 * 60000), secondi_arrivo: 480 },
-  { id: 1281, cliente_nome: 'Neri Impianti', corriere_nome: '', corriere_arrivo_il: null, secondi_arrivo: null },
+  { id: 1280, request_id: 177, cliente_nome: 'Rossi Impianti S.r.l.', corriere_nome: 'Marco', ritiro_il: new Date(Date.now() + 8 * 60000), secondi_arrivo: 480 },
+  { id: 1281, cliente_nome: 'Neri Impianti', corriere_nome: '', ritiro_il: null, secondi_arrivo: null },
 ];
 
 // Storico ordini del banco (filiale 2): quattro ordini in due giorni, uno "consegnato" pur essendo rimasto 'inviato'. Si tengono
@@ -314,10 +314,10 @@ const storicoBanco = {
   // "Da incassare" = il materiale del banco con RAEE e IVA (importiNuovi: 64,50 + 14,19 = 78,69), NON il totale con la consegna pagata in app (98,76).
   // #90 è un ordine vecchio (importi non salvati: si ricalcolano dalla merce 54,00 con l'IVA di oggi: 54 + 11,88 = 65,88).
   righe: [
-    { ...importiNuovi, id: 91, creato_il: fa(5000), stato: 'inviato', consegnato_il: null, ddt_numero: null, cliente_nome: 'Rossi <b>Impianti</b> S.r.l.', cliente_citta: 'Genova' },
-    { id: 90, creato_il: fa(6000), stato: 'in_evasione', consegnato_il: null, totale_netto: 54, totale_finale: 54, costo_consegna: 0, contributo_raee: 0, iva: 0, ddt_numero: null, cliente_nome: 'Termoidraulica Verdi S.r.l.', cliente_citta: null },
-    { ...importiNuovi, id: 89, creato_il: new Date(2025, 2, 12, 10, 40), stato: 'evaso', consegnato_il: null, ddt_numero: 'A/89', cliente_nome: 'Idraulica Bianchi S.n.c.', cliente_citta: 'Savona' },
-    { ...importiNuovi, id: 88, creato_il: new Date(2025, 2, 12, 9, 18), stato: 'inviato', consegnato_il: new Date(2025, 2, 12, 14, 0), ddt_numero: null, cliente_nome: 'Rossi <b>Impianti</b> S.r.l.', cliente_citta: 'Genova' },
+    { ...importiNuovi, id: 91, creato_il: fa(5000), stato: 'inviato', consegnato_il: null, cliente_nome: 'Rossi <b>Impianti</b> S.r.l.', cliente_citta: 'Genova' },
+    { id: 90, creato_il: fa(6000), stato: 'in_evasione', consegnato_il: null, totale_netto: 54, totale_finale: 54, costo_consegna: 0, contributo_raee: 0, iva: 0, cliente_nome: 'Termoidraulica Verdi S.r.l.', cliente_citta: null },
+    { ...importiNuovi, id: 89, creato_il: new Date(2025, 2, 12, 10, 40), stato: 'evaso', consegnato_il: null, cliente_nome: 'Idraulica Bianchi S.n.c.', cliente_citta: 'Savona' },
+    { ...importiNuovi, id: 88, creato_il: new Date(2025, 2, 12, 9, 18), stato: 'inviato', consegnato_il: new Date(2025, 2, 12, 14, 0), cliente_nome: 'Rossi <b>Impianti</b> S.r.l.', cliente_citta: 'Genova' },
   ],
   materiale: {
     91: [{ quantita: 1, nome_snapshot: '87 Elemento A "t" 87gr Diam. 100' }],
@@ -336,12 +336,14 @@ const ordiniDelBanco = {
 const scrittureOrdini = [];
 
 // L'ordine 1295 della pagina dell'ordine del banco (come nel disegno), "Da preparare": Rossi Impianti, due articoli da 54,50 + 10,00 (merce 64,50, IVA 14,19,
-// totale 78,69; il prezzo col servizio sarebbe 59,95 + 11,00) e il corriere Marco che ritira fra 22 minuti. Le scritture della bolla stanno in scrittureBolla.
+// totale 78,69; il prezzo col servizio sarebbe 59,95 + 11,00) e il corriere Marco che ritira fra 22 minuti (ha risposto 4 minuti fa scrivendo "preso 26"; l'arrivo dal cliente, 12 minuti di strada dopo, il banco non lo vede).
 const ordine1295 = {
   ...importiNuovi, id: 1295, cliente_id: 1, distributor_id: 2, stato: 'inviato', request_id: 177, modalita: 'consegna_mezzo_grossista', note: null,
-  destinazione: 'Via Castel Morrone 1/7r, 16161 Genova (GE)', creato_il: fa(60000), consegnato_il: null, ddt_numero: null, ddt_data: null, evaso_il: null,
-  corriere_nome: 'Marco', corriere_arrivo_il: new Date(Date.now() + 22 * 60000), corriere_risposto_il: new Date(Date.now() - 4 * 60000),
+  destinazione: 'Via Castel Morrone 1/7r, 16161 Genova (GE)', creato_il: fa(60000), consegnato_il: null, in_evasione_il: null, evaso_il: null,
+  corriere_nome: 'Marco', corriere_risposto_il: new Date(Date.now() - 4 * 60000), corriere_minuti: 26, corriere_arrivo_il: new Date(Date.now() + 34 * 60000),
 };
+// Fa arrivare il corriere dal banco fra `minuti` minuti da adesso (ha risposto 4 minuti fa): i campi dell'ordine che lo dicono.
+const ritiroTra = (minuti) => ({ corriere_risposto_il: new Date(Date.now() - 4 * 60000), corriere_minuti: minuti + 4 });
 ordiniDelBanco[1295] = ordine1295;
 const righeOrdineBanco = {
   1295: [
@@ -349,7 +351,6 @@ const righeOrdineBanco = {
     { id: 12, order_id: 1295, quantita: 1, codice_snapshot: '12697319', nome_snapshot: 'Adattatore Ø80/60mm Sistema Sdoppiato Condensazione', prezzo_netto_unitario: 10, subtotale: 10, raee_unitario: 0, raee_riga: 0, prezzo_unitario_cliente: 11, subtotale_cliente: 11 },
   ],
 };
-const scrittureBolla = [];
 
 function eseguiBanco(s, p, modo) {
   // Anagrafica del banco (src/anagrafica_banco.js)
@@ -363,19 +364,16 @@ function eseguiBanco(s, p, modo) {
   if (/n_articoli/.test(s) && /FROM request_responses rr JOIN requests r ON r\.id = rr\.request_id JOIN users u/.test(s)) { avvisiBanco.viste.push({ s, p }); return avvisiBanco.richieste; }
   if (/FROM notifications WHERE user_id = \? AND notificata = 0/.test(s)) return avvisiBanco.notifiche;
   if (/^SELECT id FROM orders WHERE distributor_id = \? AND stato = 'inviato' AND consegnato_il IS NULL ORDER BY id$/.test(s)) return avvisiBanco.ordiniDaPreparare;
-  if (/o\.corriere_nome, o\.corriere_arrivo_il, u\.ragione_sociale AS cliente_nome/.test(s) && /o\.id = ANY/.test(s)) { avvisiBanco.viste.push({ s, p }); return avvisiBanco.ordini; }
+  if (/o\.corriere_nome, o\.corriere_risposto_il, o\.corriere_minuti, u\.ragione_sociale AS cliente_nome/.test(s) && /o\.id = ANY/.test(s)) { avvisiBanco.viste.push({ s, p }); return avvisiBanco.ordini; }
   if (/^UPDATE notifications SET letta = 1 WHERE user_id = \? AND letta = 0 AND \(id = ANY\(\?::int\[\]\) OR \(tipo = 'nuova_richiesta' AND request_id = ANY\(\?::int\[\]\)\) OR \(tipo = 'corriere_trovato' AND order_id = ANY\(\?::int\[\]\)\)\)$/.test(s)) { avvisiBanco.lette.push(p); return { changes: (p[1] || []).length }; }
   if (/^SELECT \* FROM orders WHERE id = \?/.test(s)) return ordiniDelBanco[p[0]] || null;
   if (/^SELECT \* FROM order_items WHERE order_id = \?/.test(s)) return righeOrdineBanco[p[0]] || [];
-  // La bolla (ddt.emetti): anno, numerazione, e l'UPDATE dell'ordine con i dati del modulo
-  if (/^SELECT EXTRACT\(YEAR FROM NOW\(\)\)::int AS a/.test(s)) return { a: 2026 };
-  if (/^SELECT ddt_numero FROM orders WHERE id = \? FOR UPDATE/.test(s)) return { ddt_numero: (ordiniDelBanco[p[0]] || {}).ddt_numero || null };
-  if (/^INSERT INTO ddt_counters|^UPDATE ddt_counters/.test(s)) return { changes: 1 };
-  if (/^SELECT ultimo FROM ddt_counters/.test(s)) return { ultimo: 7 };
-  if (/^UPDATE orders SET ddt_numero = \?/.test(s)) { scrittureBolla.push({ s, p }); return { changes: 1 }; }
-  if (/^SELECT EXTRACT\(EPOCH FROM \(corriere_arrivo_il - NOW\(\)\)\)::int AS secondi FROM orders WHERE id = \?/.test(s)) {
+  // I secondi che mancano al ritiro del corriere: il momento in cui ha risposto su WhatsApp + i minuti che ha scritto (src/corriere.js)
+  if (/^SELECT EXTRACT\(EPOCH FROM \(\(corriere_risposto_il \+ corriere_minuti \* INTERVAL '1 minute'\) - NOW\(\)\)\)::int AS secondi FROM orders WHERE id = \?/.test(s)) {
     const o = ordiniDelBanco[p[0]];
-    return o && o.corriere_arrivo_il ? { secondi: Math.round((o.corriere_arrivo_il.getTime() - Date.now()) / 1000) } : null;
+    return o && o.corriere_risposto_il && o.corriere_minuti !== null && o.corriere_minuti !== undefined
+      ? { secondi: Math.round((o.corriere_risposto_il.getTime() + o.corriere_minuti * 60000 - Date.now()) / 1000) }
+      : null;
   }
   if (/^UPDATE orders SET stato = 'in_evasione'/.test(s)) { scrittureOrdini.push({ s, p }); return { changes: 1 }; }
   if (/COUNT\(\*\) AS tutti,/.test(s)) { storicoBanco.viste.push({ tipo: 'conteggi', s, p }); return storicoBanco.conteggi; }
@@ -567,6 +565,8 @@ process.env.SESSION_SECRET = 'segreto-di-prova';
 // Spento ESPLICITAMENTE ('0', non cancellata): dotenv non sovrascrive le variabili già definite, ma una cancellata la rimetteva dal .env, e con WHATSAPP_ATTIVO=1
 // nel .env del PC le prove avviavano il vero WhatsApp (sessione locale, rischio di scollegare il bot con un 440) e due prove fallivano.
 process.env.WHATSAPP_ATTIVO = '0';
+// Nessuna chiamata di rete dalle prove: il tragitto sulla mappa (src/percorso.js) è spento, come ogni altro servizio esterno.
+process.env.ROUTING_ATTIVO = '0';
 const percorsoDb = require.resolve(path.join(radice, 'db/index.js'));
 require.cache[percorsoDb] = { id: percorsoDb, filename: percorsoDb, loaded: true, exports: dbFinto };
 
@@ -723,7 +723,6 @@ test('id non numerico: 404 e nessuna query al DB', async () => {
   const prima = registro.length;
   assert.equal((await chiedi('/ordini/abc')).status, 404);
   assert.equal((await chiedi('/richieste/1e3')).status, 404);
-  assert.equal((await chiedi('/ddt/99999999999')).status, 404);
   assert.ok(!registro.slice(prima).some((q) => /FROM orders|FROM requests WHERE id/.test(q)), 'nessuna query con un id non valido');
 });
 
@@ -1221,14 +1220,14 @@ test('banco e installatore vedono le STESSE cifre: totale, servizio e CSV identi
     const totaliBanco = [...latoBanco.matchAll(/<span class="mc-num">Ordine #(\d+)<\/span>[\s\S]*?<span class="mc-tot">€ ([\d.,]+)<\/span>/g)].map((m) => m[1] + '=' + m[2]);
     assert.deepEqual(totaliBanco, totaliInstallatore);
     assert.deepEqual(totaliInstallatore, ['98=61,00', '97=124,44', '91=86,01']);
-    // il CSV: stesse righe (ordine, codice, quantità, prezzo cad., totale), colonne diverse (il banco ha il DDT e NON il servizio)
+    // il CSV: stesse righe (ordine, codice, quantità, prezzo cad., totale), colonne diverse (il banco NON ha il servizio)
     const celle = (csv) => csv.replace(/^\uFEFF/, '').trim().split('\r\n').map((r) => r.split(';'));
     const [testaInst, ...righeInst] = celle(csvInstallatore);
     const [testaBanco, ...righeBanco] = celle(csvBanco);
     assert.equal(testaInst.at(-1), 'Servizio pagato');
-    assert.deepEqual(testaBanco, ['Data', 'Ordine', 'DDT', 'Stato', 'Codice', 'Articolo', 'Quantità', 'Prezzo cad. IVA incl.', 'Totale IVA incl.']);
+    assert.deepEqual(testaBanco, ['Data', 'Ordine', 'Stato', 'Codice', 'Articolo', 'Quantità', 'Prezzo cad. IVA incl.', 'Totale IVA incl.']);
     assert.deepEqual(
-      righeBanco.slice(0, -1).map((r) => [r[1], r[4], r[6], r[7], r[8]]),
+      righeBanco.slice(0, -1).map((r) => [r[1], r[3], r[5], r[6], r[7]]),
       righeInst.slice(0, -1).map((r) => [r[1], r[3], r[5], r[6], r[7]]),
     );
     assert.equal(righeBanco.at(-1).at(-1), '271,45');
@@ -1270,16 +1269,15 @@ test('banco: "Materiale ordinato" del cliente approvato: tutti gli ordini, IVA e
     assert.equal((t.match(/<details class="mc-ordine"/g) || []).length, 3);
     assert.equal((t.match(/<details class="mc-ordine" open>/g) || []).length, 2);
     assert.ok(t.indexOf('Ordine #91') > t.indexOf('<details class="mc-ordine">'), 'il terzo è chiuso');
-    // riga dell'ordine: numero, "data · DDT · articoli", pillola dello stato del banco, totale IVA inclusa
-    assert.match(t, /<span class="mc-num">Ordine #98<\/span>\s*<span class="mc-meta">16 ott, 09:12 · DDT — · 1 articolo<\/span>\s*<span class="sto-pillola sto-st-in_consegna mc-stato"><span class="sto-punto" aria-hidden="true"><\/span>In consegna<\/span>\s*<span class="mc-tot">€ 61,00<\/span>/);
-    assert.match(t, /<span class="mc-num">Ordine #91<\/span>\s*<span class="mc-meta">14 ott, 22:29 · DDT — · 2 articoli<\/span>\s*<span class="sto-pillola sto-st-consegnato mc-stato"><span class="sto-punto" aria-hidden="true"><\/span>Consegnato<\/span>\s*<span class="mc-tot">€ 86,01<\/span>/);
+    // riga dell'ordine: numero, "data · articoli", pillola dello stato del banco, totale IVA inclusa
+    assert.match(t, /<span class="mc-num">Ordine #98<\/span>\s*<span class="mc-meta">16 ott, 09:12 · 1 articolo<\/span>\s*<span class="sto-pillola sto-st-in_consegna mc-stato"><span class="sto-punto" aria-hidden="true"><\/span>In consegna<\/span>\s*<span class="mc-tot">€ 61,00<\/span>/);
+    assert.match(t, /<span class="mc-num">Ordine #91<\/span>\s*<span class="mc-meta">14 ott, 22:29 · 2 articoli<\/span>\s*<span class="sto-pillola sto-st-consegnato mc-stato"><span class="sto-punto" aria-hidden="true"><\/span>Consegnato<\/span>\s*<span class="mc-tot">€ 86,01<\/span>/);
     // righe: prezzo cad. = (netto + RAEE) × 1,22, totale riga = (netto riga + RAEE riga) × 1,22; mai il prezzo col servizio
     assert.match(t, /<span class="mc-qta">1×<\/span>[\s\S]*?87 Elemento A &#34;t&#34; 87gr Diam\. 100<\/div>\s*<div class="mc-cod">Cod\. C97[\s\S]*?<td class="mc-c-num mc-c-cad">€ 124,44<\/td>\s*<td class="mc-c-num mc-c-tot">€ 124,44<\/td>/);
     assert.match(t, /<span class="mc-qta">2×<\/span>[\s\S]*?Bocchettone A 90° Sanpress<\/div>[\s\S]*?<td class="mc-c-num mc-c-cad">€ 36,60<\/td>\s*<td class="mc-c-num mc-c-tot">€ 73,20<\/td>/);
     assert.doesNotMatch(t, /110,00|134,20|€ 55,00|€ 66,00/, 'né subtotale_cliente né il prezzo col servizio');
-    // niente "Vedi ordine #N ›" (richiesta esplicita del 19/10/2026: la pagina dell'ordine c'è solo per quelli "Da preparare", e ci si arriva dalla home); e
-    // senza bolla (nessuno di questi ha il DDT) non c'è nessun link
-    assert.doesNotMatch(t, /Vedi ordine|mc-vedi|\/distributore\/ordini\//);
+    // niente "Vedi ordine #N ›" (richiesta esplicita del 19/10/2026: la pagina dell'ordine si apre dalla home o dallo Storico) e nessuna traccia della bolla
+    assert.doesNotMatch(t, /Vedi ordine|mc-vedi|\/distributore\/ordini\/|DDT|bolla|\/ddt\//i);
     assert.match(t, /<p class="mc-fondo">Totale di ottobre <strong>€ 271,45<\/strong> IVA inclusa<\/p>/);
     // il servizio pagato in app non si vede né come voce né come cifra; niente richieste senza ordine
     assert.doesNotMatch(t, /Servizio (già )?pagat|63,50|18,30|24,40|20,80|Richiesta #|st-riordina/);
@@ -1322,17 +1320,15 @@ test('banco: "Materiale ordinato" del cliente approvato: tutti gli ordini, IVA e
     assert.match(t, /<th class="mc-c-ordini" scope="col">Negli ordini<\/th>/);
     assert.match(t, /<a class="mc-seg-voce attiva" href="[^"]+"[^>]*>Per articolo<\/a>/);
 
-    // ----- la bolla: un ordine con il DDT ha il suo link a "Apri la bolla / DDT" (al posto del vecchio "Vedi ordine"); uno ancora "Da preparare" non ha né l'uno né l'altro -----
+    // ----- la bolla non esiste: nemmeno un ordine vecchio (`evaso`) ha un numero di DDT o un link; uno ancora "Da preparare" nemmeno -----
     const o98 = materialeProva.ordini.find((o) => o.id === 98);
-    const prima = { stato: o98.stato, request_id: o98.request_id, ddt_numero: o98.ddt_numero };
+    const prima = { stato: o98.stato, request_id: o98.request_id };
     try {
-      Object.assign(o98, { stato: 'evaso', request_id: 555, ddt_numero: '123' });
+      Object.assign(o98, { stato: 'evaso', request_id: 555 });
       t = await pagina('/distributore/clienti/32?mese=2026-10');
-      assert.match(t, /<span class="mc-meta">16 ott, 09:12 · DDT 123 · 1 articolo<\/span>\s*<span class="sto-pillola sto-st-in_consegna mc-stato"><span class="sto-punto" aria-hidden="true"><\/span>In consegna<\/span>/);
-      assert.deepEqual([...t.matchAll(/<a class="mc-vedi" href="([^"]+)">([^<]*)<\/a>/g)].map((m) => [m[1], m[2]]), [['/ddt/98', 'Apri la bolla / DDT 123 ›']]);
-      assert.doesNotMatch(t, /Vedi ordine|\/distributore\/ordini\/|\/distributore\/richieste\/555/);
-      // ancora da preparare e senza bolla: nessun link (la pagina dell'ordine si apre dalla home)
-      Object.assign(o98, { stato: 'inviato', ddt_numero: null });
+      assert.match(t, /<span class="mc-meta">16 ott, 09:12 · 1 articolo<\/span>\s*<span class="sto-pillola sto-st-in_consegna mc-stato"><span class="sto-punto" aria-hidden="true"><\/span>In consegna<\/span>/);
+      assert.doesNotMatch(t, /DDT|bolla|\/ddt\/|mc-vedi|Vedi ordine|\/distributore\/ordini\/|\/distributore\/richieste\/555/i);
+      Object.assign(o98, { stato: 'inviato' });
       t = await pagina('/distributore/clienti/32?mese=2026-10');
       assert.match(t, /sto-st-da_preparare mc-stato"><span class="sto-punto" aria-hidden="true"><\/span>Da preparare<\/span>/);
       assert.doesNotMatch(t, /mc-vedi|Vedi ordine|\/distributore\/ordini\//);
@@ -1340,7 +1336,7 @@ test('banco: "Materiale ordinato" del cliente approvato: tutti gli ordini, IVA e
       Object.assign(o98, prima);
     }
 
-    // ----- CSV: ";" e BOM, dal più vecchio, DDT e stato, nessun servizio, totale in fondo, nome del file dal cliente e dal mese -----
+    // ----- CSV: ";" e BOM, dal più vecchio, stato (nessuna colonna DDT), nessun servizio, totale in fondo, nome del file dal cliente e dal mese -----
     const r = await chiedi('/distributore/clienti/32/materiale.csv?mese=2026-10');
     assert.equal(r.status, 200);
     assert.match(r.headers.get('content-type'), /^text\/csv/);
@@ -1351,12 +1347,12 @@ test('banco: "Materiale ordinato" del cliente approvato: tutti gli ordini, IVA e
     const csv = byte.toString('utf8');
     assert.equal(csv.charCodeAt(0), 0xfeff);
     assert.deepEqual(csv.slice(1).trim().split('\r\n'), [
-      'Data;Ordine;DDT;Stato;Codice;Articolo;Quantità;Prezzo cad. IVA incl.;Totale IVA incl.',
-      '14/10/2026;#91;;Consegnato;C91A;Bocchettone A 90° Sanpress;2;36,60;73,20',
-      '14/10/2026;#91;;Consegnato;C91B;Raccordo a T;1;12,81;12,81',
-      '15/10/2026;#97;;Consegnato;C97;"87 Elemento A ""t"" 87gr Diam. 100";1;124,44;124,44',
-      '16/10/2026;#98;;In consegna;C98;Valvola Deviatrice 3vie Per Easy;1;61,00;61,00',
-      'Totale;;;;;;;;271,45',
+      'Data;Ordine;Stato;Codice;Articolo;Quantità;Prezzo cad. IVA incl.;Totale IVA incl.',
+      '14/10/2026;#91;Consegnato;C91A;Bocchettone A 90° Sanpress;2;36,60;73,20',
+      '14/10/2026;#91;Consegnato;C91B;Raccordo a T;1;12,81;12,81',
+      '15/10/2026;#97;Consegnato;C97;"87 Elemento A ""t"" 87gr Diam. 100";1;124,44;124,44',
+      '16/10/2026;#98;In consegna;C98;Valvola Deviatrice 3vie Per Easy;1;61,00;61,00',
+      'Totale;;;;;;;271,45',
     ]);
     // "Tutto" nel nome del file
     assert.match((await chiedi('/distributore/clienti/32/materiale.csv?mese=tutto')).headers.get('content-disposition'), /_tutto\.csv"$/);
@@ -2003,7 +1999,7 @@ test('ordine in consegna: righe a prezzo del banco, "Merce · IVA esclusa", sche
   }
 });
 
-test('ordine consegnato: stessa struttura in verde (materiale consegnato, DDT, Pagamenti), Riordina, niente "Annulla ordine"', async () => {
+test('ordine consegnato: stessa struttura in verde (materiale consegnato, Pagamenti), Riordina, niente "Annulla ordine" né bolla', async () => {
   ordiniProva.attivo = true;
   try {
     const r = await chiedi('/ordini/73');
@@ -2024,8 +2020,8 @@ test('ordine consegnato: stessa struttura in verde (materiale consegnato, DDT, P
     assert.doesNotMatch(t, /Banco Genova Fegino/);
     assert.match(t, /Cod\. 12514597 · € 54,50 cad\.[\s\S]*?<span class="att-prezzo-riga">€ 54,50<\/span>/);
     assert.match(t, /<div class="att-voce"><dt>Merce · IVA esclusa<\/dt><dd>€ 64,50<\/dd><\/div>/);
-    // il DDT (e solo quello) in una riga "Documenti" in fondo alla scheda del materiale
-    assert.match(t, /<a class="att-documenti" href="\/ddt\/73">[\s\S]*?Documenti · DDT n° A\/12<\/span>/);
+    // nessun documento in fondo alla scheda del materiale: la bolla non esiste
+    assert.doesNotMatch(t, /att-documenti|Documenti|DDT|bolla|\/ddt\//i);
     // Pagamenti: come nell'ordine in consegna
     assert.match(t, /Pagata il 15\/10<\/div>\s*<\/div>\s*<div class="pg-importo" data-importo-app>€ 20,07<\/div>/);
     assert.match(t, /data-importo-banco>€ 78,69<\/div>/);
@@ -2052,7 +2048,7 @@ test('ordine VECCHIO (senza le colonne nuove): gli importi si ricalcolano dai va
     assert.match(dettaglio, /Corriere<\/span> <span class="pg-sp">· costo fisso<\/span><\/dt><dd>€ 10,00<\/dd>/);
     assert.match(dettaglio, /IVA 22%<\/span> <span class="pg-sp">· su € 10,00<\/span><\/dt><dd>€ 2,20<\/dd>/);
     assert.match(dettaglio, /IVA 22%<\/span> <span class="pg-sp">· su € 112,53<\/span><\/dt><dd>€ 24,76<\/dd>/);
-    assert.match(t, /<a class="att-documenti" href="\/ddt\/70">/);
+    assert.doesNotMatch(t, /att-documenti|DDT|\/ddt\//i);
   } finally {
     ordiniProva.attivo = false;
   }
@@ -2323,7 +2319,8 @@ test('registrati: un solo modulo in tre passi, senza scelta del distributore né
   assert.match(t, /Almeno 8 caratteri\./);
   assert.match(t, /Facoltativo, se diverso dalla Partita IVA/);
   assert.match(t, /Facoltativo: serve per la fattura elettronica/);
-  assert.match(t, /I dati fiscali servono per intestare bolle e fatture\./);
+  assert.match(t, /I dati fiscali servono per intestare le fatture\./);
+  assert.doesNotMatch(t, /bolle|bolla/i);
   assert.doesNotMatch(t, /<label[^>]*>[^<]*\*/);
   // via le sezioni e le note sui distributori
   assert.doesNotMatch(t, /name="distributori"|I tuoi distributori|Per ora tutte le consegne|ai distributori che indichi/);
@@ -2526,7 +2523,7 @@ test('home del banco: bacheca a tre colonne, senza interruttore né riquadri con
     assert.match(t, /pillola-arrivo vicino/); // 8 minuti: sotto i 15
     assert.match(t, /Ordine #1281\s*<\/div>/); // senza corriere nessun "ritira", nessuna pillola
     assert.equal(t.match(/data-arrivo /g).length, 1);
-    // ... con "Ispeziona" (la pagina dell'ordine: spunta del materiale e bolla, senza prenderlo in carico) e "Preparato" (toglie l'ordine dalla colonna: "In consegna")
+    // ... con "Ispeziona" (la pagina dell'ordine, senza prenderlo in carico) e "Preparato" (toglie l'ordine dalla colonna: "In consegna")
     assert.doesNotMatch(t, /btn-banco-prepara"[^>]*href|>\s*<svg[^>]*>[\s\S]*?<\/svg>Prepara\s*</);
     assert.match(t, /<a class="btn-banco btn-banco-secondario btn-banco-piccolo" href="\/distributore\/ordini\/1280"><svg[\s\S]*?<\/svg>Ispeziona<\/a>\s*<form method="POST" action="\/distributore\/ordini\/1280\/preparazione">\s*<input type="hidden" name="torna" value="home">\s*<button class="btn-banco btn-banco-prepara btn-banco-piccolo" type="submit"><svg[\s\S]*?<\/svg>Preparato<\/button>/);
     // anche l'ordine 1281, che non ha una richiesta, ha il suo Ispeziona (l'ordine c'è sempre)
@@ -2786,7 +2783,8 @@ test('banco: Storico ordini con schede, periodo, righe raggruppate per giorno e 
     assert.match(t, /<title>[^<]*Storico ordini/);
     assert.match(t, /<h1 class="sto-titolo">Storico ordini<\/h1>/);
     assert.match(t, /<form class="sto-cerca" method="get" action="\/distributore\/storico" role="search">\s*<input type="hidden" name="stato" value="tutti">\s*<input type="hidden" name="periodo" value="7">/);
-    assert.match(t, /type="search" name="q" value=""[^>]*data-non-ricaricare[^>]*placeholder="Cliente, n° ordine o DDT"/);
+    assert.match(t, /type="search" name="q" value=""[^>]*data-non-ricaricare[^>]*placeholder="Cliente o n° ordine"/);
+    assert.doesNotMatch(t, /DDT|bolla/i, 'nessuna traccia della bolla nello Storico');
     assert.match(t, /data-storico-svuota aria-label="Svuota la ricerca" hidden>/); // senza testo la "×" non c'è
     assert.deepEqual(
       [...t.matchAll(/<a href="(\/distributore\/storico\?[^"]*)" class="(attivo)?"[^>]*>([^<]*)<\/a>/g)].map((m) => [m[3], m[1], m[2] || '']),
@@ -2809,7 +2807,7 @@ test('banco: Storico ordini con schede, periodo, righe raggruppate per giorno e 
     ]);
 
     // tabella: intestazione, due giorni (Oggi e una data fissa con l'anno), i conteggi del giorno, nessuna "Flusso del banco"
-    assert.match(t, /<span>Ordine<\/span><span>Ora<\/span><span>Cliente<\/span><span>Materiale<\/span>\s*<span class="sto-c-totale">Da incassare<\/span><span>DDT<\/span><span>Stato<\/span>/);
+    assert.match(t, /<span>Ordine<\/span><span>Ora<\/span><span>Cliente<\/span><span>Materiale<\/span>\s*<span class="sto-c-totale">Da incassare<\/span><span>Stato<\/span>/);
     assert.doesNotMatch(t, />Totale</);
     const giorni = [...t.matchAll(/<div class="sto-giorno">\s*<strong>([^<]*)<\/strong>\s*<span>([^<]*)<\/span>/g)].map((m) => [m[1], m[2]]);
     assert.deepEqual(giorni, [['Oggi', '2 ordini'], ['12 marzo 2025', '2 ordini']]);
@@ -2823,10 +2821,9 @@ test('banco: Storico ordini con schede, periodo, righe raggruppate per giorno e 
     assert.deepEqual(trovate.map((m) => [m[1], m[2], m[4], m[5], m[6]]), [91, 90, 89, 88].map((n) => [String(n), String(n), String(n), String(n), '/distributore/storico/' + n + '/dettaglio']));
     assert.doesNotMatch(t, /sto-riga-fissa|class="sto-riga" href|<a class="sto-riga/);
     assert.equal(t.match(/\/distributore\/ordini\//g), null, 'nessun link alla pagina dell\'ordine nella lista: ci si arriva dal pannello ("Apri ordine completo")');
-    assert.doesNotMatch(t, /\/ddt\/\d+/, 'la bolla, nella lista, è solo un testo: il link sta nel pannello');
     for (const riga of righe) assert.match(riga, /<span class="sto-c-freccia" aria-hidden="true"><svg/, 'chevron verso il basso su tutte le righe');
     const [r91, r90, r89, r88] = righe;
-    // #91: da preparare, cliente (con il nome escapato) e città, un solo articolo, totale con IVA, nessun DDT
+    // #91: da preparare, cliente (con il nome escapato) e città, un solo articolo, totale con IVA
     assert.match(r91, /sto-c-ordine">#91</);
     assert.match(r91, /sto-c-ora">\d\d:\d\d</);
     assert.match(r91, /sto-cliente-nome">Rossi &lt;b&gt;Impianti&lt;\/b&gt; S\.r\.l\.<\/strong>\s*<small class="sto-cliente-citta">Genova</);
@@ -2834,19 +2831,16 @@ test('banco: Storico ordini con schede, periodo, righe raggruppate per giorno e 
     assert.doesNotMatch(r91, /sto-mat-altri/);
     assert.match(r91, /sto-c-totale">€ 78,69</, '"Da incassare": materiale del banco + IVA, non il totale con la consegna pagata in app');
     assert.doesNotMatch(t, /98,76|122,53/);
-    assert.match(r91, /sto-c-ddt sto-senza">\s*<span class="sto-nessuno">—<\/span>/);
     assert.match(r91, /<span class="sto-pillola sto-st-da_preparare"><span class="sto-punto" aria-hidden="true"><\/span>Da preparare<\/span>/);
     // #90: in consegna (Preparato), "+ 1 articolo", senza città; ordine vecchio (importi non salvati): "Da incassare" si ricalcola dalla merce, con l'IVA di oggi
     assert.match(r90, /<span class="sto-pillola sto-st-in_consegna">[\s\S]*?In consegna<\/span>/);
     assert.match(r90, /sto-mat-nome">2× Bocchettone A 90°<\/span><span class="sto-mat-altri">\+ 1 articolo<\/span>/);
     assert.doesNotMatch(r90, /sto-cliente-citta/);
     assert.match(r90, /sto-c-totale">€ 65,88</);
-    // #89: bolla emessa, anche lui "In consegna" (non c'è più "Partito"), "+ 2 articoli", DDT, ora italiana (10:40 UTC = 11:40 a Roma d'inverno)
+    // #89: `evaso` (ordine vecchio), anche lui "In consegna" (non c'è più "Partito"), "+ 2 articoli", ora italiana (10:40 UTC = 11:40 a Roma d'inverno)
     assert.match(r89, /sto-st-in_consegna">[\s\S]*?In consegna<\/span>/);
     assert.doesNotMatch(t, /In preparazione|Partito|Partiti|sto-st-partito|sto-st-in_preparazione/);
     assert.match(r89, /sto-mat-altri">\+ 2 articoli</);
-    // il numero di DDT, nella lista, è solo un testo (senza il suo link: la bolla si apre dal pannello)
-    assert.match(r89, /sto-c-ddt">\s*<span class="sto-ddt-sigla">DDT <\/span>A\/89\s*<\/span>/);
     assert.doesNotMatch(r89, /<a /);
     assert.match(r89, /sto-c-ora">11:40</);
     // #88: consegnato_il vale più dello stato: resta 'inviato' ma è Consegnato; senza righe "—"
@@ -2873,7 +2867,7 @@ test('banco: Storico ordini con schede, periodo, righe raggruppate per giorno e 
   }
 });
 
-test('banco: Storico ordini, filtri nell\'URL (stato, periodo, ricerca per nome, #numero, numero e DDT) e pagine', async () => {
+test('banco: Storico ordini, filtri nell\'URL (stato, periodo, ricerca per nome, #numero) e pagine', async () => {
   cookie = '';
   banco.attivo = true;
   const vista = async (percorso) => {
@@ -2923,26 +2917,26 @@ test('banco: Storico ordini, filtri nell\'URL (stato, periodo, ricerca per nome,
     assert.deepEqual(v.conteggi.p, [2]);
     assert.doesNotMatch(dopoWhere(v.conteggi), /creato_il/);
 
-    // ricerca per nome: ILIKE su cliente e DDT, mai concatenata; un % scritto dall'utente vale per sé
+    // ricerca per nome: ILIKE sul cliente, mai concatenata; un % scritto dall'utente vale per sé
     v = await vista('/distributore/storico?q=rossi');
-    assert.match(dopoWhere(v.conteggi), /\(u\.ragione_sociale ILIKE \? OR o\.ddt_numero ILIKE \?\)/);
-    assert.deepEqual(v.conteggi.p, [2, 7, '%rossi%', '%rossi%']);
+    assert.match(dopoWhere(v.conteggi), /\(u\.ragione_sociale ILIKE \?\)/);
+    assert.deepEqual(v.conteggi.p, [2, 7, '%rossi%']);
     assert.doesNotMatch(v.conteggi.s, /rossi/);
     assert.match(v.testo, /name="q" value="rossi"/);
     assert.doesNotMatch(v.testo, /data-storico-svuota[^>]* hidden>/); // con una ricerca la "×" si vede
     assert.match(v.testo, /href="\/distributore\/storico\?stato=tutti&amp;periodo=7" data-storico-svuota/); // e svuota la ricerca
     v = await vista('/distributore/storico?q=' + encodeURIComponent('50%_x'));
-    assert.deepEqual(v.conteggi.p.slice(2), ['%50\\%\\_x%', '%50\\%\\_x%']);
+    assert.deepEqual(v.conteggi.p.slice(2), ['%50\\%\\_x%']);
 
     // ricerca per numero: "#91" e "91" cercano anche l'ordine 91; un testo con le cifre mischiate no; troppe cifre no
     for (const q of ['#91', '91', ' # 91 ']) {
       v = await vista('/distributore/storico?q=' + encodeURIComponent(q));
-      assert.match(dopoWhere(v.conteggi), /\(u\.ragione_sociale ILIKE \? OR o\.ddt_numero ILIKE \? OR o\.id = \?\)/, q);
+      assert.match(dopoWhere(v.conteggi), /\(u\.ragione_sociale ILIKE \? OR o\.id = \?\)/, q);
       assert.equal(v.conteggi.p[v.conteggi.p.length - 1], 91, q);
     }
-    v = await vista('/distributore/storico?q=A%2F89'); // numero di DDT
+    v = await vista('/distributore/storico?q=A%2F89'); // non è un numero d'ordine
     assert.doesNotMatch(dopoWhere(v.conteggi), /o\.id = \?/);
-    assert.deepEqual(v.conteggi.p.slice(2), ['%A/89%', '%A/89%']);
+    assert.deepEqual(v.conteggi.p.slice(2), ['%A/89%']);
     v = await vista('/distributore/storico?q=' + '9'.repeat(20));
     assert.doesNotMatch(dopoWhere(v.conteggi), /o\.id = \?/);
     // con la ricerca i link di stato e periodo la mantengono
@@ -3021,11 +3015,11 @@ test('banco: /distributore/ordini porta allo Storico (301, con i filtri); il det
     // il dettaglio non è una lista: un ordine che non c'è è 404, non un redirect
     assert.equal((await chiedi('/distributore/ordini/999')).status, 404);
     // i POST su un ordine che non è del banco tornano allo Storico (prima alla vecchia lista)
-    for (const azione of ['preparazione', 'ddt']) {
-      r = await chiedi('/distributore/ordini/999/' + azione, form({}));
-      assert.equal(r.status, 302, azione);
-      assert.equal(r.headers.get('location'), '/distributore/storico', azione);
-    }
+    r = await chiedi('/distributore/ordini/999/preparazione', form({}));
+    assert.equal(r.status, 302);
+    assert.equal(r.headers.get('location'), '/distributore/storico');
+    // la bolla non esiste più: non c'è nessuna rotta per emetterla
+    assert.equal((await chiedi('/distributore/ordini/999/ddt', form({}))).status, 404);
     // senza accesso: come ogni pagina del banco, al login
     cookie = '';
     r = await chiedi('/distributore/storico');
@@ -3184,7 +3178,7 @@ test('banco: richiesta dopo la risposta (attesa corriere, confermata, nessun cor
     });
     let t = await (await chiedi('/distributore/richieste/177')).text();
     assert.deepEqual(stati(t), ['confermata', 'Confermata']);
-    assert.match(t, /ric-esito-verde[\s\S]*?Consegna presa da Marco: <strong>25 minuti<\/strong> in totale/);
+    assert.match(t, /ric-esito-verde[\s\S]*?Consegna presa da Marco: arriva da te in <strong>25 minuti<\/strong>\./);
     // l'ordine è già "In consegna" (Preparato): la sua pagina non c'è più, quindi niente "Gestisci l'ordine"
     assert.doesNotMatch(t, /Gestisci l'ordine|\/distributore\/ordini\//);
     assert.doesNotMatch(t, /Cosa succede dopo la conferma/); // a ordine fatto i passi non servono più
@@ -3456,8 +3450,9 @@ test('banco: /api/notifiche/push porta tipo, richiesta, ordine e i dati di ogni 
     assert.equal((await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }))).status, 302);
     avvisiBanco.richieste = [{ id: 12, cliente_nome: 'Bianchi Termoidraulica', secondi: 95, n_articoli: 1, n_pezzi: 1 }];
     avvisiBanco.ordini = [
-      { id: 1280, stato: 'inviato', consegnato_il: null, corriere_nome: 'Marco', corriere_arrivo_il: new Date(Date.UTC(2026, 9, 19, 7, 45)), cliente_nome: 'Rossi' },
-      { id: 1281, stato: 'evaso', consegnato_il: '2026-10-19 19:21:00', corriere_nome: '', corriere_arrivo_il: null, cliente_nome: 'Neri Impianti' },
+      // il corriere ha risposto alle 07:15 UTC scrivendo "preso 30": arriva dal banco alle 07:45 UTC (09:45 a Roma)
+      { id: 1280, stato: 'inviato', consegnato_il: null, corriere_nome: 'Marco', corriere_risposto_il: new Date(Date.UTC(2026, 9, 19, 7, 15)), corriere_minuti: 30, cliente_nome: 'Rossi' },
+      { id: 1281, stato: 'evaso', consegnato_il: '2026-10-19 19:21:00', corriere_nome: '', corriere_risposto_il: null, corriere_minuti: null, cliente_nome: 'Neri Impianti' },
     ];
     avvisiBanco.notifiche = [
       { id: 901, titolo: 'Nuova richiesta di disponibilità', testo: 'x', link: '/distributore/richieste/12', tipo: 'nuova_richiesta', request_id: 12, order_id: null, eta_sec: 2 },
@@ -3654,7 +3649,7 @@ test('banco: la freccia di ordine e richiesta riporta alla pagina da cui si arri
   }
 });
 
-test('banco: pagina dell\'ordine a due colonne: materiale a prezzo del banco, consegna, cliente, avanzamento, ritiro e bolla su tutto il materiale', async () => {
+test('banco: pagina dell\'ordine a due colonne: materiale a prezzo del banco, consegna, cliente, avanzamento, ritiro del corriere e "Preparato"', async () => {
   cookie = '';
   banco.attivo = true;
   richiestaProva.attivo = true;
@@ -3665,13 +3660,13 @@ test('banco: pagina dell\'ordine a due colonne: materiale a prezzo del banco, co
   try {
     assert.equal((await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }))).status, 302);
     // istanti del corriere freschi (il disegno li vuole a 22 minuti dal ritiro: la prova gira qualche secondo dopo il caricamento del file)
-    imposta({ corriere_arrivo_il: new Date(Date.now() + 22 * 60000), corriere_risposto_il: new Date(Date.now() - 4 * 60000) });
+    imposta(ritiroTra(22));
     preparaRichiesta({ secondi: 0, stato: 'ordinata', esito: 'confermato', corriere: 'preso', trascorsi: 900, ordine: ordine1295 });
     const rispostoIl = richiestaProva.risposta.risposto_il; // TIMESTAMP UTC senza fuso, letto come ora locale
     const confermatoAlle = oraRoma(new Date(Date.UTC(rispostoIl.getFullYear(), rispostoIl.getMonth(), rispostoIl.getDate(), rispostoIl.getHours(), rispostoIl.getMinutes(), rispostoIl.getSeconds())));
     scrittureOrdini.length = 0;
     let t = await pagina();
-    assert.equal(scrittureOrdini.length, 0, 'aprire la pagina non scrive niente: l\'ordine resta "Da preparare" finché non si preme Preparato o si emette la bolla');
+    assert.equal(scrittureOrdini.length, 0, 'aprire la pagina non scrive niente: l\'ordine resta "Da preparare" finché non si preme Preparato');
 
     // ----- testata: freccia, titolo, stato (da preparare: blu, col pallino che pulsa), cliente e quando è arrivato -----
     assert.match(t, /<header class="banco-testa"[^>]*>/);
@@ -3682,7 +3677,7 @@ test('banco: pagina dell\'ordine a due colonne: materiale a prezzo del banco, co
     // niente delle vecchie righe: partenza e consegna dichiarate, "Consegna con mezzo del distributore", "Cliente ordinante", imponibile col servizio
     assert.doesNotMatch(t, /Partenza dichiarata|Consegna dichiarata|mezzo del distributore|Cliente ordinante|Dove consegnare|Imponibile|80,95/);
 
-    // ----- materiale da preparare: righe a PREZZO DEL BANCO (mai 59,95 / 11,00); niente spunte né "Lista di prelievo": la bolla è su tutto il materiale -----
+    // ----- materiale da preparare: righe a PREZZO DEL BANCO (mai 59,95 / 11,00); niente spunte né "Lista di prelievo" -----
     assert.match(t, /<h2 class="ric-h2" id="ord-mat-titolo">Materiale da preparare<\/h2>/);
     assert.match(t, /<span>Q\.tà<\/span><span>Articolo<\/span><span class="ric-num">Prezzo cad\.<\/span><span class="ric-num">Totale<\/span>/);
     assert.doesNotMatch(t, /Preso|presi|data-preso|ord-check|ord-presi|Lista di prelievo|ord-stampa|<label class="ord-riga/);
@@ -3698,10 +3693,12 @@ test('banco: pagina dell\'ordine a due colonne: materiale a prezzo del banco, co
     assert.doesNotMatch(t, /<dt>RAEE<\/dt>/);
 
     // ----- ritiro del corriere: verde (22 min, più della soglia di 15), l'ora e chi ha accettato -----
-    const ritira = oraRoma(ordine1295.corriere_arrivo_il);
+    // l'orario che vede il banco è esattamente quello scritto dal corriere su WhatsApp (ha risposto + i suoi minuti), NON corriere_arrivo_il (l'arrivo dal cliente)
+    const ritira = oraRoma(new Date(ordine1295.corriere_risposto_il.getTime() + ordine1295.corriere_minuti * 60000));
+    assert.notEqual(ritira, oraRoma(ordine1295.corriere_arrivo_il), 'ritiro dal banco e arrivo dal cliente sono due orari diversi');
     assert.match(t, /<section class="ric-scheda ord-ritiro" aria-label="Ritiro del corriere">\s*<div class="ric-arrivo-testa" data-ric-arrivo\s+data-secondi="13[12]\d" data-soglia-arrivo="15">/);
     assert.match(t, /<span class="ric-arrivo-min" data-arrivo-min>22 min<\/span>\s*<span class="ric-arrivo-sotto">al ritiro<\/span>/);
-    assert.match(t, new RegExp('<h2 class="ric-arrivo-titolo">Il corriere ritira alle ' + ritira + '</h2>\\s*<p>Marco ha accettato alle ' + oraRoma(ordine1295.corriere_risposto_il) + '\\. Prepara la merce e la bolla\\.</p>'));
+    assert.match(t, new RegExp('<h2 class="ric-arrivo-titolo">Il corriere ritira alle ' + ritira + '</h2>\\s*<p>Marco ha accettato alle ' + oraRoma(ordine1295.corriere_risposto_il) + '\\. Prepara la merce\\.</p>'));
 
     // ----- consegna: via in grassetto, sotto CAP e città; furgone; niente link a Maps. E cliente: iniziali, referente e P. IVA, telefono, scheda -----
     assert.match(t, /<h2 class="ric-occhiello" id="ord-cons-et">Consegna<\/h2>/);
@@ -3722,20 +3719,9 @@ test('banco: pagina dell\'ordine a due colonne: materiale a prezzo del banco, co
       ['Consegnato', 'futuro', 'verde', 'Lo conferma il cliente'],
     ]);
 
-    // ----- bolla: colli con − e +, aspetto a segmenti, causale e trasporto (vettore: c'è il corriere), nota, pulsante sempre attivo (su tutto il materiale) -----
-    assert.match(t, /<h2 class="ric-h2 ord-bolla-titolo" id="ord-bolla-titolo">[\s\S]*?<\/svg><\/span>Bolla \/ DDT<\/h2>/);
-    assert.match(t, /<form method="POST" action="\/distributore\/ordini\/1295\/ddt">/);
-    assert.match(t, /<button class="ord-stepper-btn" type="button" data-colli="-1" aria-label="Un collo in meno">−<\/button>\s*<input id="ord-colli" name="colli" type="number" min="1" max="999" step="1" value="1" inputmode="numeric">\s*<button class="ord-stepper-btn" type="button" data-colli="1"/);
-    assert.deepEqual([...t.matchAll(/<input type="radio" name="aspetto" value="([^"]+)"( checked)?><span>/g)].map((m) => [m[1], !!m[2]]),
-      [['Colli', true], ['Bancali', false], ['Scatole', false], ['Sfuso', false]]);
-    assert.deepEqual([...t.matchAll(/<option>([^<]+)<\/option>/g)].map((m) => m[1]), ['Vendita', 'Conto visione', 'Reso', 'Conto lavorazione']);
-    assert.match(t, /<option value="vettore" selected>Vettore \(corriere\)<\/option>/);
-    assert.doesNotMatch(t, /<option value="(mittente|destinatario)" selected>/);
-    assert.match(t, /<textarea id="ord-note" name="note" rows="2" maxlength="500" placeholder="[^"]*"><\/textarea>/);
-    assert.match(t, /Annotazioni in bolla <span class="ord-facoltativo">· facoltative<\/span>/);
-    assert.match(t, /<button class="ord-bolla-btn" type="submit">\s*<svg[\s\S]*?<\/svg>Emetti bolla e consegna al corriere\s*<\/button>/);
-    assert.match(t, /<p class="ord-bolla-nota">Segna la merce come partita e avvisa il cliente\.<\/p>/);
-    assert.doesNotMatch(t, /aria-disabled|Spunta tutto|data-bolla/);
+    // ----- "Preparato": un form che porta l'ordine "In consegna" e riporta qui (con la pagina da cui si è arrivati); nessuna traccia della bolla -----
+    assert.match(t, /<section class="ric-scheda ord-prepara" aria-labelledby="ord-prepara-titolo">\s*<h2 class="ric-h2 ord-prepara-titolo" id="ord-prepara-titolo">Materiale pronto\?<\/h2>\s*<form method="POST" action="\/distributore\/ordini\/1295\/preparazione">\s*<input type="hidden" name="torna" value="\/distributore">\s*<button class="ord-prepara-btn" type="submit"><svg[\s\S]*?<\/svg>Preparato<\/button>/);
+    assert.doesNotMatch(t, /bolla|DDT|\/ddt|ord-stepper|ord-segmenti|Emetti|Annotazioni/i);
 
     // ----- "Elimina ordine" in fondo, com'era -----
     assert.match(t, /<form class="ric-elimina-riga" method="POST" action="\/distributore\/ordini\/1295\/elimina" onsubmit="return confirm\([^"]*\)">\s*<button class="ric-elimina" type="submit"><svg[\s\S]*?<\/svg>Elimina ordine<\/button>/);
@@ -3748,27 +3734,26 @@ test('banco: pagina dell\'ordine a due colonne: materiale a prezzo del banco, co
     assert.equal(scrittureOrdini.length, 0);
 
     // ----- con il corriere vicino (8 min) il cerchio è rosso; in ritardo, "In ritardo"; poi, partita la merce, il riquadro sparisce -----
-    imposta({ corriere_arrivo_il: new Date(Date.now() + 8 * 60000) });
+    imposta(ritiroTra(8));
     t = await pagina();
     assert.match(t, /<div class="ric-arrivo-testa vicino" data-ric-arrivo\s+data-secondi="4[78]\d"/);
     assert.match(t, /data-arrivo-min>8 min</);
-    imposta({ corriere_arrivo_il: new Date(Date.now() - 2 * 60000) });
+    imposta(ritiroTra(-2));
     t = await pagina();
     assert.match(t, /ric-arrivo-testa vicino/);
     assert.match(t, /data-arrivo-min>In ritardo</);
 
-    // ----- senza corriere (modulo WhatsApp spento): niente riquadro Ritiro né "Corriere trovato"; nessuna riga "Consegna con mezzo del banco"; mittente; pulsante senza corriere -----
-    imposta({ corriere_nome: '', corriere_arrivo_il: null, corriere_risposto_il: null });
+    // ----- senza corriere (modulo WhatsApp spento): niente riquadro Ritiro né "Corriere trovato"; nessuna riga "Consegna con mezzo del banco"; "Preparato" c'è lo stesso -----
+    imposta({ corriere_nome: '', corriere_arrivo_il: null, corriere_risposto_il: null, corriere_minuti: null });
     t = await pagina();
     assert.doesNotMatch(t, /ord-ritiro|data-ric-arrivo|Corriere trovato/);
     assert.doesNotMatch(t, /mezzo del banco|ord-furgone/);
     assert.match(t, /<h2 class="ric-occhiello" id="ord-cons-et">Consegna<\/h2>\s*<div class="ord-indirizzo">/);
     assert.deepEqual(fasi(t).map((f) => [f[0], f[1], f[3]]), [
-      ['Confermato da te', 'fatto', fasi(t)[0][3]], ['Da preparare', 'corrente', 'Prepara la merce e la bolla'], ['In consegna', 'futuro', 'La merce passa al corriere'], ['Consegnato', 'futuro', 'Lo conferma il cliente'],
+      ['Confermato da te', 'fatto', fasi(t)[0][3]], ['Da preparare', 'corrente', 'Prepara la merce'], ['In consegna', 'futuro', 'La merce passa al corriere'], ['Consegnato', 'futuro', 'Lo conferma il cliente'],
     ]);
-    assert.match(t, /<option value="mittente" selected>Mittente \(banco\)<\/option>/);
-    assert.match(t, /Emetti bolla e segna la merce partita/);
-    assert.doesNotMatch(t, /consegna al corriere/);
+    assert.match(t, /action="\/distributore\/ordini\/1295\/preparazione"/);
+    assert.doesNotMatch(t, /bolla|DDT/i);
 
     // (Le versioni "In consegna" e "Consegnato" della stessa pagina: test "banco: pagina dell'ordine in consegna e consegnato...".)
   } finally {
@@ -3789,7 +3774,7 @@ test('banco: pagina dell\'ordine, disponibilità parziale e RAEE, e aprirla non 
     assert.equal((await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }))).status, 302);
 
     // Aprire la pagina NON prende più in carico l'ordine (prima lo portava in preparazione e avvisava il cliente): resta "Da preparare", da qualunque parte
-    // si arrivi (Storico, scheda cliente, home, un altro sito). "In consegna" viene solo da "Preparato" o dalla bolla.
+    // si arrivi (Storico, scheda cliente, home, un altro sito). "In consegna" viene solo da "Preparato".
     preparaRichiesta({ secondi: 0, stato: 'ordinata', esito: 'confermato', corriere: 'preso', trascorsi: 300, ordine: ordine1295 });
     for (const intestazioni of [{}, { 'sec-fetch-site': 'same-origin' }, { 'sec-fetch-site': 'cross-site' }]) {
       scrittureOrdini.length = 0;
@@ -3830,11 +3815,11 @@ test('banco: pagina dell\'ordine, disponibilità parziale e RAEE, e aprirla non 
     }
     preparaRichiesta({ secondi: 0, stato: 'ordinata', esito: 'confermato', corriere: 'preso', trascorsi: 300, ordine: ordine1295 });
 
-    // Senza articoli: la pagina lo dice e il pulsante della bolla c'è lo stesso
+    // Senza articoli: la pagina lo dice e il pulsante "Preparato" c'è lo stesso
     righeOrdineBanco[1295] = [];
     t = await (await chiedi('/distributore/ordini/1295')).text();
     assert.match(t, /Nessun articolo in questo ordine/);
-    assert.match(t, /<button class="ord-bolla-btn" type="submit">\s*<svg/);
+    assert.match(t, /<button class="ord-prepara-btn" type="submit">\s*<svg/);
     righeOrdineBanco[1295] = righeOriginali;
   } finally {
     for (const k of Object.keys(ordine1295)) delete ordine1295[k];
@@ -3849,10 +3834,11 @@ test('banco: pagina dell\'ordine, disponibilità parziale e RAEE, e aprirla non 
 // Istanti fissi (19/10/2026, ora legale: UTC+2) per le prove di "In consegna" e "Consegnato": così nessuna dipende dall'ora o dal giorno in cui gira. Le colonne TIMESTAMP
 // (creato_il, evaso_il, consegnato_il, risposto_il) sono UTC senza fuso, come le legge pg (naive); corriere_risposto_il e corriere_arrivo_il sono TIMESTAMPTZ (istanti veri).
 const alle = (h, m) => new Date(Date.UTC(2026, 9, 19, h, m)); // hh:mm UTC = hh+2:mm a Roma
+// Il corriere ha risposto alle 08:34 UTC (10:34 a Roma) scrivendo "preso 30": arriva dal banco alle 09:04 UTC (11:04). L'arrivo dal cliente (09:21 UTC, 11:21: ritiro + 17 minuti
+// di strada) lo vede solo l'installatore.
 const ordinePartito = (extra = {}) => ({
-  stato: 'evaso', creato_il: naive(alle(8, 28)), evaso_il: naive(alle(8, 47)), consegnato_il: null,
-  ddt_numero: '12/2026', ddt_data: naive(alle(8, 47)), ddt_colli: 1, ddt_causale: 'Vendita', ddt_trasporto: 'vettore',
-  corriere_risposto_il: alle(8, 34), corriere_arrivo_il: alle(9, 21), ...extra,
+  stato: 'in_evasione', creato_il: naive(alle(8, 28)), in_evasione_il: naive(alle(8, 47)), evaso_il: null, consegnato_il: null,
+  corriere_risposto_il: alle(8, 34), corriere_minuti: 30, corriere_arrivo_il: alle(9, 21), ...extra,
 });
 // Le scritture viste dal DB finto (tutto tranne la sessione): una lettura non ne deve produrre nessuna.
 const scrittureDa = (prima) => registro.slice(prima).filter((q) => /^(UPDATE|INSERT|DELETE)/.test(q) && !/session/i.test(q));
@@ -3879,7 +3865,7 @@ test('banco: pagina dell\'ordine "In consegna" e "Consegnato": si adatta allo st
   try {
     assert.equal((await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }))).status, 302);
 
-    // ----- IN CONSEGNA, bolla emessa (evaso) -----
+    // ----- IN CONSEGNA (Preparato premuto: in_evasione) -----
     imposta(ordinePartito());
     prepara();
     let t = await pagina();
@@ -3896,20 +3882,18 @@ test('banco: pagina dell\'ordine "In consegna" e "Consegnato": si adatta allo st
     assert.doesNotMatch(materiale(t), /59,95|11,00/);
     assert.match(t, /<p class="ord-piede-nota">Il materiale lo incassi tu dal cliente, con la tua fattura\. Prezzi del banco\.<\/p>/);
     assert.match(t, /<div class="ord-totale"><dt>Totale<\/dt><dd>€ 78,69<\/dd>/);
-    // scheda azzurra: quando è partito, quando è previsto l'arrivo (corriere_arrivo_il) e il corriere
-    assert.match(t, /<section class="ric-scheda ord-stato ord-stato-consegna" aria-label="Stato dell'ordine">\s*<div class="ord-stato-testa">\s*<span class="ord-stato-cerchio" aria-hidden="true"><svg[\s\S]*?<\/svg><\/span>\s*<div class="ord-stato-testi">\s*<h2 class="ord-stato-titolo">In consegna<\/h2>\s*<p>Partito alle 10:47 · arrivo previsto alle 11:21<\/p>\s*<p class="ord-stato-corriere">Corriere Marco<\/p>/);
-    // la bolla emessa: numero, dettagli e il pulsante per aprirla e stamparla
-    assert.match(t, /<h2 class="ord-bolla-emessa-titolo">Bolla n\. 12\/2026<\/h2>\s*<p>del 19\/10\/2026 · 1 collo · Vendita · trasporto a cura del vettore<\/p>/);
-    assert.match(t, /<a class="ord-bolla-apri" href="\/ddt\/1295"><svg[\s\S]*?<\/svg>Apri e stampa la bolla \/ DDT<\/a>/);
-    // niente di quello che serviva solo da preparare: il ritiro, il modulo della bolla, "Elimina ordine"
-    assert.doesNotMatch(t, /ord-ritiro|data-ric-arrivo|action="\/distributore\/ordini\/1295\/ddt"|ord-bolla-btn|Elimina ordine|ric-elimina|Emetti bolla/);
-    // consegna e cliente come sempre; avanzamento: partito fatto (con la bolla), consegnato ancora da venire
+    // scheda azzurra: quando è partito, il ritiro del corriere (il tempo scritto su WhatsApp: 11:04, NON l'arrivo dal cliente delle 11:21) e il corriere
+    assert.match(t, /<section class="ric-scheda ord-stato ord-stato-consegna" aria-label="Stato dell'ordine">\s*<div class="ord-stato-testa">\s*<span class="ord-stato-cerchio" aria-hidden="true"><svg[\s\S]*?<\/svg><\/span>\s*<div class="ord-stato-testi">\s*<h2 class="ord-stato-titolo">In consegna<\/h2>\s*<p>Partito alle 10:47 · ritiro alle 11:04<\/p>\s*<p class="ord-stato-corriere">Corriere Marco<\/p>/);
+    // nessuna traccia della bolla e di quello che serviva solo da preparare: il ritiro, "Preparato", "Elimina ordine"
+    assert.doesNotMatch(t, /bolla|DDT|\/ddt\/|ord-ritiro|data-ric-arrivo|ord-prepara|Elimina ordine|ric-elimina/i);
+    assert.doesNotMatch(t, /11:21|arrivo previsto/, 'il banco non vede quando la merce arriva dal cliente');
+    // consegna e cliente come sempre; avanzamento: partito fatto, consegnato ancora da venire
     assert.match(t, /<strong>Via Castel Morrone 1\/7r<\/strong>/);
     assert.match(t, /<a class="ric-apri-cliente" href="\/distributore\/clienti\/1">Apri scheda cliente/);
     assert.deepEqual(fasi(t), [
       ['Confermato da te', 'fatto', 'verde', 'Alle 10:29'],
       ['Corriere trovato', 'fatto', 'verde', 'Marco ha accettato alle 10:34'],
-      ['Partito', 'fatto', 'verde', 'Bolla n. 12/2026 alle 10:47'],
+      ['Partito', 'fatto', 'verde', 'Alle 10:47'],
       ['Consegnato', 'futuro', 'verde', 'Lo conferma il cliente'],
     ]);
 
@@ -3918,18 +3902,22 @@ test('banco: pagina dell\'ordine "In consegna" e "Consegnato": si adatta allo st
     t = await pagina('?torna=' + encodeURIComponent(storico));
     assert.match(t, /<a class="ric-indietro" href="\/distributore\/storico\?stato=tutti&amp;periodo=7#o1295"/);
 
-    // ----- IN CONSEGNA senza bolla (Preparato premuto: in_evasione) e senza orario d'arrivo del corriere -----
-    imposta(ordinePartito({ stato: 'in_evasione', in_evasione_il: naive(alle(8, 50)), evaso_il: null, ddt_numero: null, ddt_data: null, ddt_colli: null, corriere_arrivo_il: null }));
+    // ----- IN CONSEGNA, senza i minuti del corriere (niente ritiro da dire) -----
+    imposta(ordinePartito({ in_evasione_il: naive(alle(8, 50)), corriere_minuti: null, corriere_arrivo_il: null }));
     prepara();
     t = await pagina();
     assert.match(t, /ric-st-in_consegna"><span class="ric-punto" aria-hidden="true"><\/span>In consegna/);
-    assert.match(t, /<p>Partito alle 10:50<\/p>/, 'senza orario d\'arrivo, solo quando è partito (il momento del "Preparato")');
-    assert.doesNotMatch(t, /arrivo previsto/);
-    assert.match(t, /<h2 class="ord-bolla-emessa-titolo ord-bolla-emessa-no">Bolla non emessa<\/h2>/);
-    assert.doesNotMatch(t, /ord-bolla-apri|Apri e stampa/);
+    assert.match(t, /<p>Partito alle 10:50<\/p>/, 'senza orario del corriere, solo quando è partito (il momento del "Preparato")');
+    assert.doesNotMatch(t, /arrivo previsto|ritiro alle/);
     assert.deepEqual(fasi(t).map((f) => [f[0], f[1], f[3]]), [
       ['Confermato da te', 'fatto', 'Alle 10:29'], ['Corriere trovato', 'fatto', 'Marco ha accettato alle 10:34'], ['Partito', 'fatto', 'Alle 10:50'], ['Consegnato', 'futuro', 'Lo conferma il cliente'],
     ]);
+    // un ordine vecchio (`evaso`, partito con un momento solo suo) è "In consegna" come gli altri
+    imposta(ordinePartito({ stato: 'evaso', in_evasione_il: null, evaso_il: naive(alle(8, 47)) }));
+    prepara();
+    t = await pagina();
+    assert.match(t, /ric-st-in_consegna"><span class="ric-punto" aria-hidden="true"><\/span>In consegna/);
+    assert.match(t, /<p>Partito alle 10:47 · ritiro alle 11:04<\/p>/);
 
     // ----- CONSEGNATO -----
     imposta(ordinePartito({ consegnato_il: naive(alle(9, 21)) }));
@@ -3947,14 +3935,13 @@ test('banco: pagina dell\'ordine "In consegna" e "Consegnato": si adatta allo st
     // scheda verde: quando, e i due mini riquadri (partito 19/10 · 10:47; consegnato 34 minuti dopo)
     assert.match(t, /<section class="ric-scheda ord-stato ord-stato-consegnato" aria-label="Stato dell'ordine">[\s\S]*?<h2 class="ord-stato-titolo">Consegnato<\/h2>\s*<p>Il 19\/10(?:\/2026)? alle 11:21 · confermato dal cliente<\/p>/);
     assert.match(t, /<div class="ord-stato-mini">\s*<div><span>Partito<\/span><strong>19\/10(?:\/2026)? · 10:47<\/strong><\/div>\s*<div><span>Tempo di consegna<\/span><strong>34 min<\/strong><\/div>\s*<\/div>/);
-    assert.match(t, /<h2 class="ord-bolla-emessa-titolo">Bolla n\. 12\/2026<\/h2>/);
-    assert.match(t, /<a class="ord-bolla-apri" href="\/ddt\/1295">/);
-    assert.doesNotMatch(t, /ord-ritiro|Elimina ordine|ric-elimina|ord-bolla-btn|data-ric-arrivo/);
+    assert.doesNotMatch(t, /bolla|DDT|\/ddt\//i);
+    assert.doesNotMatch(t, /ord-ritiro|Elimina ordine|ric-elimina|ord-prepara|data-ric-arrivo/);
     // avanzamento: tutto fatto, con le ore
     assert.deepEqual(fasi(t), [
       ['Confermato da te', 'fatto', 'verde', 'Alle 10:29'],
       ['Corriere trovato', 'fatto', 'verde', 'Marco ha accettato alle 10:34'],
-      ['Partito', 'fatto', 'verde', 'Bolla n. 12/2026 alle 10:47'],
+      ['Partito', 'fatto', 'verde', 'Alle 10:47'],
       ['Consegnato', 'fatto', 'verde', 'Confermato dal cliente alle 11:21'],
     ]);
 
@@ -3963,25 +3950,24 @@ test('banco: pagina dell\'ordine "In consegna" e "Consegnato": si adatta allo st
     prepara();
     assert.match(await pagina(), /<span>Tempo di consegna<\/span><strong>1 h 05<\/strong>/);
 
-    // consegnato con la conferma provvisoria senza essere mai partito (ancora 'inviato', senza bolla né orario di partenza): la pagina c'è, senza "Partito" né "Tempo"
-    imposta({ stato: 'inviato', creato_il: naive(alle(8, 28)), consegnato_il: naive(alle(9, 21)), evaso_il: null, ddt_numero: null, ddt_data: null, ddt_colli: null, corriere_risposto_il: alle(8, 34), corriere_arrivo_il: alle(9, 21) });
+    // consegnato con la conferma provvisoria senza essere mai partito (ancora 'inviato', senza orario di partenza): la pagina c'è, senza "Partito" né "Tempo"
+    imposta({ stato: 'inviato', creato_il: naive(alle(8, 28)), consegnato_il: naive(alle(9, 21)), in_evasione_il: null, evaso_il: null, corriere_risposto_il: alle(8, 34), corriere_arrivo_il: alle(9, 21) });
     prepara();
     t = await pagina();
     assert.match(t, /ric-st-consegnato"><span class="ric-punto" aria-hidden="true"><\/span>Consegnato/);
-    assert.doesNotMatch(t, /ord-stato-mini|Tempo di consegna|ord-bolla-apri|Elimina ordine/);
-    assert.match(t, /<h2 class="ord-bolla-emessa-titolo ord-bolla-emessa-no">Bolla non emessa<\/h2>/);
+    assert.doesNotMatch(t, /ord-stato-mini|Tempo di consegna|Elimina ordine|bolla/i);
     assert.deepEqual(fasi(t).map((f) => [f[0], f[1]]), [['Confermato da te', 'fatto'], ['Corriere trovato', 'fatto'], ['Consegnato', 'fatto']]);
 
-    // ----- DA PREPARARE: com'era (pillola blu che pulsa, ritiro, modulo della bolla, "Elimina ordine"), e nessun "Stampa" -----
+    // ----- DA PREPARARE: pillola blu che pulsa, ritiro, "Preparato", "Elimina ordine", e nessun "Stampa" -----
     imposta();
     prepara();
     t = await pagina();
     assert.match(t, /ric-st-da_preparare"><span class="ric-punto pulse" aria-hidden="true"><\/span>Da preparare/);
     assert.match(t, /<h2 class="ric-h2" id="ord-mat-titolo">Materiale da preparare<\/h2>/);
     assert.match(t, /ord-ritiro/);
-    assert.match(t, /action="\/distributore\/ordini\/1295\/ddt"/);
+    assert.match(t, /action="\/distributore\/ordini\/1295\/preparazione"/);
     assert.match(t, /Elimina ordine/);
-    assert.doesNotMatch(t, /data-stampa|ord-stato|ord-bolla-emessa/);
+    assert.doesNotMatch(t, /data-stampa|ord-stato/);
 
     // l'ordine di un altro banco, o che non c'è: 404, non una pagina vuota
     assert.equal((await chiedi('/distributore/ordini/1290')).status, 404);
@@ -3994,7 +3980,7 @@ test('banco: pagina dell\'ordine "In consegna" e "Consegnato": si adatta allo st
   }
 });
 
-test('banco: dettaglio di una riga dello Storico (frammento): materiale a prezzo del banco, "Come è andata" per ogni stato, bolla, pulsanti; sola lettura', async () => {
+test('banco: dettaglio di una riga dello Storico (frammento): materiale a prezzo del banco, "Come è andata" per ogni stato, pulsanti; sola lettura', async () => {
   cookie = '';
   banco.attivo = true;
   richiestaProva.attivo = true;
@@ -4006,14 +3992,13 @@ test('banco: dettaglio di una riga dello Storico (frammento): materiale a prezzo
   const dettaglio = async (query = '', id = 1295) => {
     const prima = registro.length;
     scrittureOrdini.length = 0;
-    scrittureBolla.length = 0;
     const r = await chiedi('/distributore/storico/' + id + '/dettaglio' + query);
     assert.equal(r.status, 200);
     assert.match(r.headers.get('content-type'), /text\/html/);
     const t = await r.text();
     assert.doesNotMatch(t, /<html|<body|<head/i, 'è un frammento, non una pagina');
     // SOLA LETTURA: aprire il dettaglio non cambia lo stato dell'ordine (né prende in carico, né scrive altro)
-    assert.equal(scrittureOrdini.length + scrittureBolla.length, 0);
+    assert.equal(scrittureOrdini.length, 0);
     assert.deepEqual(scrittureDa(prima), []);
     return t;
   };
@@ -4021,7 +4006,7 @@ test('banco: dettaglio di una riga dello Storico (frammento): materiale a prezzo
   try {
     assert.equal((await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }))).status, 302);
 
-    // ----- CONSEGNATO: tutto verde, con le ore; la bolla con "Apri" -----
+    // ----- CONSEGNATO: tutto verde, con le ore -----
     imposta(ordinePartito({ consegnato_il: naive(alle(9, 21)) }));
     prepara();
     let t = await dettaglio();
@@ -4039,16 +4024,15 @@ test('banco: dettaglio di una riga dello Storico (frammento): materiale a prezzo
     assert.deepEqual(passi(t), [
       ['Ricevuto', 'fatto', '10:28', ''],
       ['Confermato da te', 'fatto', '10:29', ''],
-      ['Corriere Marco ha accettato', 'fatto', '10:34', ''],
-      ['Partito · DDT 12/2026', 'fatto', '10:47', ''],
+      ['Corriere Marco ha accettato, ritira alle 11:04', 'fatto', '10:34', ''],
+      ['Partito', 'fatto', '10:47', ''],
       ['Consegnato · confermato dal cliente', 'fatto', '11:21', ''],
     ]);
     assert.match(t, /<span class="sto-d-ora" title="19\/10\/2026 alle 10:28">10:28<\/span>/);
     // sotto, la destinazione e il corriere
     assert.match(t, /<div class="sto-d-dove">\s*<p><span class="sto-d-icona" aria-hidden="true"><svg[\s\S]*?<\/svg><\/span><span>Via Castel Morrone 1\/7r, 16161 Genova \(GE\)<\/span><\/p>\s*<p><span class="sto-d-icona" aria-hidden="true"><svg[\s\S]*?<\/svg><\/span><span>Corriere Marco<\/span><\/p>/);
-    // bolla: numero e "Apri ›" alla bolla; pulsanti
-    assert.match(t, /<strong class="sto-d-bolla-num">N\. 12\/2026<\/strong>/);
-    assert.match(t, /<a class="sto-d-bolla-apri" href="\/ddt\/1295" aria-label="Apri la bolla n\. 12\/2026">Apri <span aria-hidden="true">›<\/span><\/a>/);
+    // nessuna bolla; solo i pulsanti
+    assert.doesNotMatch(t, /bolla|DDT|\/ddt\//i);
     assert.match(t, /<a class="sto-d-sec" href="\/distributore\/clienti\/1">Scheda cliente/);
     // "Apri ordine completo": senza `torna` riporta allo Storico con la voce aperta
     assert.equal(href(t, 'sto-d-vai'), '/distributore/ordini/1295?torna=' + encodeURIComponent('/distributore/storico#o1295'));
@@ -4061,33 +4045,31 @@ test('banco: dettaglio di una riga dello Storico (frammento): materiale a prezzo
       assert.equal(href(await dettaglio('?torna=' + encodeURIComponent(no)), 'sto-d-vai'), '/distributore/ordini/1295?torna=' + encodeURIComponent('/distributore/storico#o1295'), no);
     }
 
-    // ----- IN CONSEGNA: "Partito" è il passo in corso, con l'arrivo previsto; "Consegnato" ancora da venire (ora "—") -----
+    // ----- IN CONSEGNA: "Partito" è il passo in corso (il banco non vede l'arrivo dal cliente); "Consegnato" ancora da venire (ora "—") -----
     imposta(ordinePartito());
     prepara();
     t = await dettaglio();
     assert.deepEqual(passi(t), [
       ['Ricevuto', 'fatto', '10:28', ''],
       ['Confermato da te', 'fatto', '10:29', ''],
-      ['Corriere Marco ha accettato', 'fatto', '10:34', ''],
-      ['Partito · in viaggio, arrivo previsto 11:21', 'corrente', '10:47', ''],
+      ['Corriere Marco ha accettato, ritira alle 11:04', 'fatto', '10:34', ''],
+      ['Partito · in viaggio', 'corrente', '10:47', ''],
       ['Consegnato', 'futuro', '—', ''],
     ]);
     assert.match(t, /<li class="sto-d-passo sto-d-corrente" aria-current="step">/);
-    assert.match(t, /<strong class="sto-d-bolla-num">N\. 12\/2026<\/strong>/);
 
-    // ----- DA PREPARARE, senza bolla né corriere: "Partito" e "Consegnato" ancora da venire; la bolla è "Non emessa" (senza link) -----
-    imposta({ corriere_nome: '', corriere_arrivo_il: null, corriere_risposto_il: null });
+    // ----- DA PREPARARE, senza corriere: "Partito" e "Consegnato" ancora da venire -----
+    imposta({ stato: 'inviato', in_evasione_il: null, corriere_nome: '', corriere_arrivo_il: null, corriere_risposto_il: null, corriere_minuti: null });
     prepara();
     t = await dettaglio();
     assert.deepEqual(passi(t).map((p) => [p[0], p[1], p[2]]), [
       ['Ricevuto', 'fatto', passi(t)[0][2]], ['Confermato da te', 'fatto', '10:29'], ['Partito', 'futuro', '—'], ['Consegnato', 'futuro', '—'],
     ]);
-    assert.match(t, /<strong class="sto-d-bolla-num sto-d-bolla-no">Non emessa<\/strong>/);
-    assert.doesNotMatch(t, /sto-d-bolla-apri|\/ddt\//);
+    assert.doesNotMatch(t, /bolla|DDT|\/ddt\//i);
     assert.doesNotMatch(t, /Corriere/, 'senza corriere la riga col furgone non c\'è');
 
     // ----- senza la risposta del banco (ordine senza richiesta) il passo "Confermato da te" non c'è; la scheda cliente solo se il cliente ha indicato questo banco -----
-    imposta({ request_id: null, corriere_nome: '', corriere_arrivo_il: null, corriere_risposto_il: null });
+    imposta({ request_id: null, corriere_nome: '', corriere_arrivo_il: null, corriere_risposto_il: null, corriere_minuti: null });
     richiestaProva.legame = false;
     t = await dettaglio();
     assert.deepEqual(passi(t).map((p) => p[0]), ['Ricevuto', 'Partito', 'Consegnato']);
@@ -4134,60 +4116,45 @@ test('banco: dettaglio di una riga dello Storico (frammento): materiale a prezzo
   }
 });
 
-test('banco: la bolla si emette solo mentre l\'ordine è "Da preparare" (poi "In consegna": il server rifiuta, e la pagina dell\'ordine non ha più il modulo)', async () => {
+test('banco: "Preparato" dalla pagina dell\'ordine lo porta "In consegna" e riporta lì (con la pagina da cui si era arrivati); la bolla non ha più rotte', async () => {
   cookie = '';
   banco.attivo = true;
   richiestaProva.attivo = true;
   const originale = { ...ordine1295 };
   const imposta = (extra = {}) => { for (const k of Object.keys(ordine1295)) delete ordine1295[k]; Object.assign(ordine1295, originale, extra); };
-  const emetti = (corpo = {}) => chiedi('/distributore/ordini/1295/ddt', form({ colli: '2', aspetto: 'Bancali', causale: 'Vendita', trasporto: 'vettore', note: 'Citofonare', ...corpo }));
   try {
     assert.equal((await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }))).status, 302);
     preparaRichiesta({ secondi: 0, stato: 'ordinata', esito: 'confermato', corriere: 'preso', trascorsi: 300, ordine: ordine1295 });
 
-    // Da preparare: la bolla si emette, con i dati del modulo, e porta alla bolla da stampare
-    scrittureBolla.length = 0;
-    let r = await emetti();
+    // dalla pagina dell'ordine: l'ordine passa "In consegna" (UPDATE di orders) e si resta sull'ordine; la freccia riporta ancora da dove si era arrivati
+    scrittureOrdini.length = 0;
+    const storico = '/distributore/storico?stato=da_preparare';
+    let r = await chiedi('/distributore/ordini/1295/preparazione', form({ torna: storico }));
     assert.equal(r.status, 302);
-    assert.equal(r.headers.get('location'), '/ddt/1295?torna=%2Fdistributore', 'senza altra indicazione la bolla riporta al banco (la home)');
-    assert.equal(scrittureBolla.length, 1);
-    assert.deepEqual(scrittureBolla[0].p, ['7/2026', 2, 'Bancali', 'vettore', 'Vendita', 'Citofonare', 1295]);
-    assert.match(scrittureBolla[0].s, /stato = 'evaso'/, 'emessa la bolla l\'ordine non è più da preparare: "In consegna"');
+    assert.equal(r.headers.get('location'), '/distributore/ordini/1295?torna=' + encodeURIComponent(storico));
+    assert.equal(scrittureOrdini.length, 1);
+    assert.match(scrittureOrdini[0].s, /stato = 'in_evasione'/);
+    // senza altra indicazione, o con un indirizzo che non è del banco: si resta sull'ordine, senza ritorno (la freccia va alla home)
+    r = await chiedi('/distributore/ordini/1295/preparazione', form({}));
+    assert.equal(r.headers.get('location'), '/distributore/ordini/1295');
+    r = await chiedi('/distributore/ordini/1295/preparazione', form({ torna: 'https://altro.example/x' }));
+    assert.equal(r.headers.get('location'), '/distributore/ordini/1295', 'mai un indirizzo esterno');
+    // dalla card della home: torna alla home
+    r = await chiedi('/distributore/ordini/1295/preparazione', form({ torna: 'home' }));
+    assert.equal(r.headers.get('location'), '/distributore');
 
-    // "In consegna" senza bolla (Preparato premuto, magari da un'altra scheda rimasta aperta): non si emette; una pagina d'errore con il perché e il ritorno
-    // allo Storico (la pagina dell'ordine in consegna non ha il modulo della bolla)
+    // già in consegna (Preparato premuto da un'altra scheda rimasta aperta): non si riscrive niente
     imposta({ stato: 'in_evasione' });
-    scrittureBolla.length = 0;
-    r = await emetti();
-    assert.equal(r.status, 409);
-    assert.equal(scrittureBolla.length, 0);
-    const t = await r.text();
-    assert.match(t, /La bolla si emette quando l.ordine è ancora da preparare: ora è già in consegna\./);
-    assert.match(t, /href="\/distributore\/storico">\s*Torna allo Storico ordini\s*<\/a>/);
-    // anche "evaso" senza bolla (un ordine rimasto da prima): niente
-    imposta({ stato: 'evaso' });
-    assert.equal((await emetti()).status, 409);
-    assert.equal(scrittureBolla.length, 0);
+    scrittureOrdini.length = 0;
+    r = await chiedi('/distributore/ordini/1295/preparazione', form({ torna: 'home' }));
+    assert.equal(r.status, 302);
+    assert.equal(scrittureOrdini.length, 0);
 
-    // un secondo invio con la bolla già emessa (doppio tocco, pagina riaperta) passa: la bolla c'è, non si rinumera né si riscrive
-    imposta({ stato: 'evaso', ddt_numero: '7/2026', ddt_data: fa(0), evaso_il: fa(0) });
-    r = await emetti();
-    assert.equal(r.headers.get('location'), '/ddt/1295?torna=%2Fdistributore');
-    assert.equal(scrittureBolla.length, 0);
-    // la pagina da cui si è partiti (modulo: campo `torna`) viene ricordata, ma solo se è una pagina del banco
-    r = await emetti({ torna: '/distributore/storico?stato=da_preparare' });
-    assert.equal(r.headers.get('location'), '/ddt/1295?torna=' + encodeURIComponent('/distributore/storico?stato=da_preparare'));
-    r = await emetti({ torna: 'https://altro.example/x' });
-    assert.equal(r.headers.get('location'), '/ddt/1295?torna=%2Fdistributore', 'mai un indirizzo esterno');
-    // la bolla: "Torna al banco" con torna=home; "Torna allo Storico" senza (si arriva dallo Storico)
-    let bolla = await (await chiedi('/ddt/1295?torna=%2Fdistributore')).text();
-    assert.match(bolla, /<a class="link-secondario" href="\/distributore">‹ Torna al banco<\/a>/);
-    bolla = await (await chiedi('/ddt/1295')).text();
-    assert.match(bolla, /href="\/distributore\/storico">‹ Torna allo Storico ordini<\/a>/);
-    bolla = await (await chiedi('/ddt/1295?torna=https%3A%2F%2Faltro.example')).text();
-    assert.match(bolla, /href="\/distributore\/storico">‹ Torna allo Storico ordini<\/a>/, 'un ritorno non valido vale lo Storico');
-    // l'ordine di un altro banco: come prima
-    r = await chiedi('/distributore/ordini/1290/ddt', form({ colli: '1' }));
+    // la bolla non ha più rotte: né per emetterla, né per vederla
+    assert.equal((await chiedi('/distributore/ordini/1295/ddt', form({ colli: '2' }))).status, 404);
+    assert.equal((await chiedi('/ddt/1295')).status, 404);
+    // l'ordine di un altro banco: come sempre, allo Storico
+    r = await chiedi('/distributore/ordini/1290/preparazione', form({}));
     assert.equal(r.headers.get('location'), '/distributore/storico');
   } finally {
     imposta();
@@ -4240,7 +4207,7 @@ test('banco: la richiesta con l\'ordine "Da preparare" non ha una pagina: porta 
       r = await chiedi('/distributore/richieste/177');
       assert.equal(r.status, 200, nome);
       const t = await r.text();
-      assert.doesNotMatch(t, /ric-st-da_preparare|ric-arrivo|\/preparazione|Apri l'ordine e la bolla|Gestisci l'ordine/, nome);
+      assert.doesNotMatch(t, /ric-st-da_preparare|ric-arrivo|\/preparazione|Apri l'ordine|Gestisci l'ordine/, nome);
     }
     prepara(ordine({ stato: 'in_evasione' }));
     assert.match(await (await chiedi('/distributore/richieste/177')).text(), /ric-st-confermata/);
@@ -4498,7 +4465,7 @@ test('banco: "Anagrafica del banco": schede a sinistra e a destra, dati in lettu
     // le cinque schede nell'ordine: Ditta, Questa filiale, Orari | Accesso, Notifiche, e "Esci"
     const ordine = ['id="ditta"', 'id="filiale"', 'id="orari"', 'id="accesso"', 'id="notifiche"', 'class="ab-esci"'].map((x) => t.indexOf(x));
     assert.ok(ordine.every((n, i) => n > 0 && (i === 0 || n > ordine[i - 1])), 'ordine delle schede: ' + ordine);
-    assert.match(t, /<h2 class="ab-titolo">Ditta<\/h2>\s*<p class="ab-spiega">Valgono per tutte le filiali e finiscono in bolla e nelle fatture del materiale\.<\/p>/);
+    assert.match(t, /<h2 class="ab-titolo">Ditta<\/h2>\s*<p class="ab-spiega">Valgono per tutte le filiali e finiscono nelle fatture del materiale\.<\/p>/);
     assert.match(t, /<p class="ab-spiega">È il banco che riceve le richieste e da cui parte il materiale\.<\/p>/);
     assert.match(t, /<p class="ab-spiega">Fuori orario le richieste non arrivano\.<\/p>/);
     assert.match(t, /<p class="ab-spiega">Il profilo del banco: uno solo, con tutti i permessi\.<\/p>/);

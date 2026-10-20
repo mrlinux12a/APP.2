@@ -1,6 +1,6 @@
 <%
   // Il dettaglio che si apre sotto una riga dello Storico ordini del banco (GET /distributore/storico/:id/dettaglio, src/storico_dettaglio.js): un frammento,
-  // non una pagina. Tre colonne: Materiale (prezzo del banco e quanto incassare dal cliente) | Come è andata | Bolla e pulsanti. Classi sto-d-* (blocco
+  // non una pagina. Tre colonne: Materiale (prezzo del banco e quanto incassare dal cliente) | Come è andata | pulsanti. Classi sto-d-* (blocco
   // "Storico ordini del banco" di style.css). I dati sono già pronti: qui si disegna e basta.
   const ivaTesto = String(ivaPct).replace('.', ',');
   const paginaOrdine = conRitorno('/distributore/ordini/' + id, tornaStorico);
@@ -62,20 +62,8 @@
     <% } %>
   </section>
 
-  <%# ---------- Bolla e pulsanti ---------- %>
+  <%# ---------- Pulsanti ---------- %>
   <div class="sto-d-destra">
-    <section class="sto-d-scheda sto-d-bolla" aria-label="Bolla">
-      <span class="sto-d-bolla-ico" aria-hidden="true"><%- iconaDocumento %></span>
-      <div class="sto-d-bolla-testi">
-        <span class="sto-d-occhiello">Bolla / DDT</span>
-        <% if (bolla) { %>
-          <strong class="sto-d-bolla-num">N. <%= bolla.numero %></strong>
-        <% } else { %>
-          <strong class="sto-d-bolla-num sto-d-bolla-no">Non emessa</strong>
-        <% } %>
-      </div>
-      <% if (bolla) { %><a class="sto-d-bolla-apri" href="/ddt/<%= id %>" aria-label="Apri la bolla n. <%= bolla.numero %>">Apri <span aria-hidden="true">›</span></a><% } %>
-    </section>
     <a class="sto-d-vai" href="<%= paginaOrdine %>">Apri ordine completo <span aria-hidden="true">›</span></a>
     <% if (schedaClienteAperta) { %>
       <a class="sto-d-sec" href="/distributore/clienti/<%= clienteId %>">Scheda cliente <span aria-hidden="true">›</span></a>

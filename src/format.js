@@ -226,4 +226,12 @@ function nomeCommerciale(nome) {
   return String(nome || '').trim().replace(/\s+(s\.?\s?r\.?\s?l\.?s?|s\.?\s?p\.?\s?a\.?|s\.?\s?n\.?\s?c\.?|s\.?\s?a\.?\s?s\.?)$/i, '').trim();
 }
 
-module.exports = { giornoMeseRoma, nomeCommerciale, SOGLIA_IN_ARRIVO_SEC, inArrivo, toDate, istanteUtc, dataOra, dataSola, oraSola, oraRoma, dataOraRoma, dataSolaRoma, dataBreveRoma, dataCortaRoma, dataEstesaRoma, oraSolaRoma, giornoRoma, durataMinuti, durataBreve, daMinuti, tempoTrascorso, meseRoma, tempoConsegna, mmss, durataFinestraSec };
+// Indirizzo su una riga sola ("Via Roma 1 — 16100 Genova (GE)"), saltando i pezzi mancanti. Vale per qualunque riga con indirizzo/cap/citta/provincia
+// (un cliente, un banco).
+function indirizzoCompleto(a) {
+  if (!a) return '';
+  const riga2 = [a.cap, a.citta, a.provincia ? `(${a.provincia})` : ''].filter(Boolean).join(' ');
+  return [a.indirizzo, riga2].filter(Boolean).join(' — ');
+}
+
+module.exports = { indirizzoCompleto, giornoMeseRoma, nomeCommerciale, SOGLIA_IN_ARRIVO_SEC, inArrivo, toDate, istanteUtc, dataOra, dataSola, oraSola, oraRoma, dataOraRoma, dataSolaRoma, dataBreveRoma, dataCortaRoma, dataEstesaRoma, oraSolaRoma, giornoRoma, durataMinuti, durataBreve, daMinuti, tempoTrascorso, meseRoma, tempoConsegna, mmss, durataFinestraSec };

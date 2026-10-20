@@ -32,9 +32,9 @@ const CONDIZIONE_STATO = {
 };
 
 // Lo stato di un ordine per il banco: { chiave, etichetta }. L'unico punto dove si decide: lo usano la lista dello Storico, la scheda del cliente
-// e la pagina dell'ordine. Tre stati (richiesta esplicita del 19/10/2026): "Da preparare" (blu: l'ordine aspetta il banco, ed è lì che si emette la
-// bolla), "In consegna" (verde: dopo "Preparato", o dopo la bolla, la merce è del corriere) e "Consegnato". Le colonne `stato` 'in_evasione'
-// (Preparato) ed 'evaso' (bolla emessa) sono la stessa cosa per il banco: non esistono più "In preparazione" e "Partito".
+// e la pagina dell'ordine. Tre stati (richiesta esplicita del 19/10/2026): "Da preparare" (blu: l'ordine aspetta il banco), "In consegna" (verde: dopo
+// "Preparato" la merce è del corriere) e "Consegnato". Le colonne `stato` 'in_evasione' (Preparato) ed 'evaso' (lo stato degli ordini
+// vecchi: ora non lo scrive più nessuno) sono la stessa cosa per il banco: non esistono più "In preparazione" e "Partito".
 function statoStorico(o) {
   if (o.consegnato_il) return { chiave: 'consegnato', etichetta: 'Consegnato' };
   if (o.stato === 'in_evasione' || o.stato === 'evaso') return { chiave: 'in_consegna', etichetta: 'In consegna' };
@@ -84,7 +84,7 @@ function escapeLike(testo) {
 // WHERE di banco, periodo e ricerca (SENZA lo stato) con i suoi parametri, nello stesso ordine dei `?`.
 // Periodo: "oggi" = da mezzanotte di oggi in Italia; 7 e 30 = ultimi N giorni da adesso. `creato_il` è un TIMESTAMP in UTC
 // senza fuso, quindi i limiti si portano in UTC senza fuso prima di confrontarli.
-// Ricerca: ragione sociale e numero di DDT (ILIKE); il numero d'ordine solo se quello che si scrive, tolto un eventuale
+// Ricerca: ragione sociale (ILIKE); il numero d'ordine solo se quello che si scrive, tolto un eventuale
 // "#", è fatto di sole cifre.
 function condizioni(distributorId, filtri) {
   const dove = ['o.distributor_id = ?'];
@@ -97,8 +97,8 @@ function condizioni(distributorId, filtri) {
   }
   if (filtri.q) {
     const come = '%' + escapeLike(filtri.q) + '%';
-    const alternative = ['u.ragione_sociale ILIKE ?', 'o.ddt_numero ILIKE ?'];
-    parametri.push(come, come);
+    const alternative = ['u.ragione_sociale ILIKE ?'];
+    parametri.push(come);
     const numero = filtri.q.replace(/^#/, '').trim();
     if (/^\d{1,9}$/.test(numero)) {
       alternative.push('o.id = ?');
@@ -156,7 +156,7 @@ async function storicoOrdini(distributorId, filtri) {
     db
       .prepare(
         // Le colonne degli importi servono a pricing.importi (il "Da incassare" di ogni riga): vedi COLONNE_IMPORTI.
-        `SELECT o.id, o.creato_il, o.stato, o.consegnato_il, o.ddt_numero,
+        `SELECT o.id, o.creato_il, o.stato, o.consegnato_il,
                 ${COLONNE_IMPORTI},
                 u.ragione_sociale AS cliente_nome, u.citta AS cliente_citta
            FROM orders o

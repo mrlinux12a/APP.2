@@ -610,7 +610,6 @@ router.get('/ordini/:id', richiedeCliente, async (req, res) => {
     modalita: ordine.modalita,
     destinazione: ordine.destinazione || null,
     note: ordine.note || null,
-    ddt: ordine.ddt_numero ? { numero: ordine.ddt_numero, data: format.dataSolaRoma(ordine.ddt_data) } : null,
     // Le righe a PREZZO DEL BANCO (mai quello col 10% di servizio, che si paga in app e sta solo nella voce Servizio).
     righe: d.righe.map((r) => ({
       quantita: r.quantita,
@@ -646,7 +645,7 @@ router.get('/ordini/:id', richiedeCliente, async (req, res) => {
   });
 });
 
-// "Ho ricevuto il materiale". Come sul sito: con la bolla emessa (ordine 'evaso') è la conferma vera; prima della bolla vale quella provvisoria
+// "Ho ricevuto il materiale". Come sul sito: un ordine 'evaso' (stato degli ordini vecchi) ha la conferma vera; per tutti gli altri vale quella provvisoria
 // (flusso.segnaConsegnatoProva), perché la consegna non è ancora segnata da un evento vero.
 router.post('/ordini/:id/consegnato', richiedeCliente, async (req, res) => {
   const ordine = await ordineDelCliente(req, res);
@@ -829,7 +828,6 @@ router.get('/materiale', richiedeCliente, async (req, res) => {
             primo: x.ordine.primo,
             altri: x.ordine.altri,
             ditta: x.ordine.ditta,
-            ddt: x.ordine.ddt || null,
             ricevuta: !!x.ordine.ricevuta,
             righe: righeJsonOrdine(x.ordine),
           }

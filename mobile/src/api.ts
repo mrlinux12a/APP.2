@@ -249,7 +249,6 @@ export type Ordine = {
   modalita: string;
   destinazione: string | null;
   note: string | null;
-  ddt: { numero: string; data: string } | null;
   righe: { quantita: number; nome: string; codice: string; cad: string; subtotale: string }[];
   importi: Importi;
   totali: { merce: string; raee: string | null; consegna: string; iva: string; totale: string };
@@ -318,7 +317,6 @@ export type VoceMateriale =
       primo: string;
       altri: number;
       ditta: string;
-      ddt: string | null;
       ricevuta: boolean;
       righe: { quantita: number; nome: string; codice: string; cad: string; totale: string }[];
     }

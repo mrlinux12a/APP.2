@@ -151,7 +151,7 @@ async function inviaAUtente(userId, { titolo, testo, link = null, orderId = null
 // Ritorna { tipo: 'ordine'|'richiesta'|'ordini', id? }.
 function destinazioneApp(link) {
   const l = String(link || '');
-  let m = /^\/ordini\/(\d+)/.exec(l) || /^\/ddt\/(\d+)/.exec(l);
+  let m = /^\/ordini\/(\d+)/.exec(l);
   if (m) return { tipo: 'ordine', id: Number(m[1]) };
   m = /^\/richieste\/(\d+)/.exec(l);
   if (m) return { tipo: 'richiesta', id: Number(m[1]) };

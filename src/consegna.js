@@ -1,15 +1,14 @@
 const db = require('../db');
 const geo = require('./geo');
+const percorso = require('./percorso');
 
-// Tempo di consegna stimato = quando il mezzo parte dalla filiale + quanto ci mette
-// ad arrivare dal cliente.
+// Quanto ci mette la merce ad arrivare dal banco all'installatore.
 //
-// Il tragitto è calcolato sulla distanza in linea d'aria fra il punto vendita e la
-// posizione del cliente, corretta di un fattore che tiene conto delle strade reali, e
+// Il tragitto vero (banco che ha accettato -> posizione dell'installatore) lo calcola un servizio di mappe (src/percorso.js). Se non risponde, o se
+// manca una delle due posizioni, si ripiega sulla stima di sempre: distanza in linea d'aria corretta di un fattore che tiene conto delle strade reali,
 // divisa per una velocità media urbana (config `velocita_media_kmh`).
-// È una stima volutamente semplice e senza dipendenze esterne: per avere il tempo di
-// percorrenza vero servirebbe un servizio di routing (Google, Mapbox, OSRM), e va deciso
-// se introdurre quella dipendenza.
+//
+// Non è il tempo che vede il banco: quello è solo il tempo scritto dal corriere su WhatsApp (src/corriere.js). All'installatore si mostra la somma dei due.
 
 const FATTORE_STRADA = 1.35; // le strade non vanno in linea d'aria
 
@@ -41,6 +40,8 @@ async function partenzaPiuVicina(distributorId, posizioneCliente) {
 }
 
 // Minuti stimati fra la partenza dichiarata dal banco e l'arrivo dal cliente.
+// `viaggio` è il solo tragitto dal banco (il più vicino al cliente, se la filiale ha più punti vendita) alla posizione dell'installatore; `fonte` dice da dove
+// viene: 'mappa' (servizio di routing) o 'stima' (linea d'aria). Senza le posizioni resta solo il tempo dichiarato dal banco (`stimato: false`).
 async function minutiStimati(distributorId, clienteId, partenzaOre) {
   const partenzaMinuti = Math.max(0, Math.round((parseFloat(partenzaOre) || 0) * 60));
 
@@ -56,6 +57,19 @@ async function minutiStimati(distributorId, clienteId, partenzaOre) {
     return { minuti: partenzaMinuti, km: null, viaggio: null, stimato: false };
   }
 
+  // Il tragitto sulle strade vere. Non lancia mai: se il servizio non risponde si ripiega sulla stima qui sotto.
+  const dallaMappa = await percorso.minutiInAuto(partenza, posizione);
+  if (dallaMappa) {
+    return {
+      minuti: partenzaMinuti + dallaMappa.minuti,
+      km: dallaMappa.km,
+      viaggio: dallaMappa.minuti,
+      stimato: true,
+      fonte: 'mappa',
+      partenzaDa: partenza.nome || '',
+    };
+  }
+
   const kmStrada = km * FATTORE_STRADA;
   const v = await velocitaMedia();
   const viaggio = Math.max(5, Math.round((kmStrada / v) * 60));
@@ -64,6 +78,7 @@ async function minutiStimati(distributorId, clienteId, partenzaOre) {
     km: Math.round(kmStrada * 10) / 10,
     viaggio,
     stimato: true,
+    fonte: 'stima',
     partenzaDa: partenza.nome || '',
   };
 }
