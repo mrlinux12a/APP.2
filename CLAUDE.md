@@ -584,6 +584,17 @@ Stripe (prima era Checkout ospitato: cambiato lo stesso giorno, su richiesta), *
   the script" viene dagli script di Google Pay/Apple Pay, bloccati lì. Non pagare dal browser con un cliente demo: il
   timer farebbe nascere la richiesta e arriverebbe ai banchi veri. Pulire con `DELETE FROM stripe_pagamenti` per id e
   `paymentIntents.cancel`.
+- **Metodi di pagamento in elenco, non a schede (20/10/2026, richiesta esplicita: "le carte in fondo sono buggate, voglio poterle selezionare scorrendo")**: `public/pagamento.js` monta il Payment Element con
+  `layout: { type: 'accordion', defaultCollapsed: true, radios: true, spacedAccordionItems: true, visibleAccordionItemsCount: 10 }`: una riga per metodo (Carta, Satispay, Klarna, Amazon Pay nel conto di prova;
+  quelli veri li decide il Dashboard), tutte chiuse, si tocca quella voluta e si apre sul posto; sono tutte visibili insieme e la pagina scorre normalmente. Prima era `tabs`: Stripe mostrava 3 metodi e metteva gli altri
+  dietro un `<select>` "altro" (logo tagliato, scomodo sul telefono). Se si preme "Paga" senza averne scelto uno Stripe apre da solo "Carta" e mostra gli errori dei campi (provato, nessuno stato bloccato).
+  **Provati nella sandbox, uno per uno** (320, 375 e 1100 px: niente tagli né scroll orizzontale): carta 4242 → `requires_capture` e ritorno; carta rifiutata 4000…0002 → "La tua carta è stata rifiutata." e pulsante di nuovo attivo;
+  3-D Secure 4000…3184 → finestra di prova, "Complete" → `requires_capture`; **Satispay** e **Amazon Pay** → pagina di prova di Stripe, autorizzando il ritorno porta `redirect_status=pending` e il PaymentIntent diventa
+  `requires_capture` un attimo dopo (il server lo gestisce: `completaRiga` vede `processing` → pagina "Pagamento in corso" che si ricarica ogni 2 s, e il webhook/timer fanno nascere la richiesta); **Klarna** reindirizza a
+  `js.playground.klarna.com` (non accessibile dal pannello: l'autorizzazione e il ritorno NON sono provati). Per le prove: un PaymentIntent sandbox con gli stessi parametri di `creaIntento`, `views/pagamento.ejs`
+  resa con `ejs.renderFile` e un piccolo server (niente DB); **il pannello del browser deve essere VISIBILE** (`mcp__ccd_view__show_pane` con `preview`) o i clic dentro l'iframe di Stripe non arrivano (da nascosto il
+  form resta anche bianco per diversi secondi). I metodi non a carta non hanno marca né ultime 4 cifre: la riga si incassa lo stesso (test "incasso con un pagamento non a carta"). Il testo sotto il pulsante dice
+  "non ti viene addebitato nulla" (non più "la carta"); il resto del sito dice ancora "carta" (scheda "Pagamenti", ricevute): per Satispay/Klarna/Amazon Pay è impreciso, non toccato.
 - **Buco dell'app chiuso il 19/10/2026**: con Stripe acceso `POST /api/v1/richieste` e `/reinvia` creano il pagamento, non la richiesta (vedi "App Android e
   sicurezza"). Il sito in produzione richiede HTTPS (Stripe.js e webhook in modalità reale).
 - Schema: blocco "Pagamenti con Stripe" in fondo a `schema.sql` (applicato al DB condiviso il 14/10/2026; `session_id`

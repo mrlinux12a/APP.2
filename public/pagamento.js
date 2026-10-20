@@ -43,7 +43,11 @@
 
   // I metodi che compaiono (carta, Apple Pay, Google Pay, Link...) li decide Stripe in base al Dashboard, al paese e al
   // dispositivo: Apple Pay e Google Pay si vedono solo in HTTPS e con un dispositivo che li ha configurati.
-  const pagamento = elements.create('payment', { layout: { type: 'tabs', defaultCollapsed: false } });
+  // Elenco in verticale (una riga per metodo, si sceglie scorrendo la pagina), non a schede: con le schede Stripe mostra
+  // 3 metodi e nasconde gli altri dietro un menu "altro" (un <select> che sul telefono è scomodo e taglia il logo).
+  const pagamento = elements.create('payment', {
+    layout: { type: 'accordion', defaultCollapsed: true, radios: true, spacedAccordionItems: true, visibleAccordionItemsCount: 10 },
+  });
   pagamento.mount('#elemento-pagamento');
   pagamento.on('ready', function () { pulsante.disabled = false; });
   pagamento.on('loaderror', function (e) {
