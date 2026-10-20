@@ -150,10 +150,10 @@ app.use(compression());
 
 // Webhook di Stripe (checkout.session.completed / expired). Prima dei parser del corpo: la firma si verifica sul testo
 // grezzo, e un JSON già interpretato non la farebbe più tornare. Niente sessione né controllo d'origine: la chiamata
-// viene da Stripe, non da un browser, e vale solo se la firma (STRIPE_WEBHOOK_SECRET) è giusta. 2xx = ricevuto; un
+// viene da Stripe, non da un browser, e vale solo se la firma (il segreto del webhook, vedi src/stripe_config.js) è giusta. 2xx = ricevuto; un
 // errore nostro (500) fa riprovare Stripe da solo per giorni.
 app.post('/webhooks/stripe', express.raw({ type: 'application/json', limit: '1mb' }), async (req, res) => {
-  if (!stripePagamenti.attivo() || !process.env.STRIPE_WEBHOOK_SECRET) return res.status(503).send('Stripe non configurato');
+  if (!stripePagamenti.attivo() || !stripePagamenti.webhookConfigurato()) return res.status(503).send('Stripe non configurato');
   let evento;
   try {
     evento = stripePagamenti.leggiEvento(req.body, req.get('stripe-signature'));
@@ -1065,6 +1065,8 @@ app.get('/pagamento/:id', requireRole('cliente'), async (req, res) => {
     ritorno: urlBase(req) + '/pagamento/esito',
     minutiRisposta: await pricing.getFinestraMinuti(),
     riprova: req.query.riprova === '1',
+    // In sandbox la pagina lo dice (carta di prova, nessun addebito): su un sito pubblico lasciato per sbaglio in prova nessuno deve credere di aver pagato.
+    modoProva: pagamenti.modoStripe() === 'test',
   });
 });
 
@@ -2345,6 +2347,7 @@ controllaScadenze();
 setInterval(controllaScadenze, 30 * 1000).unref();
 
 // Stripe acceso ma con il .env incompleto: meglio dirlo subito che al primo cliente.
+if (stripePagamenti.attivo()) console.log('[stripe] ' + stripePagamenti.descrizioneModo());
 for (const avviso of stripePagamenti.controllaConfigurazione()) console.warn('[stripe] ' + avviso);
 
 // Gruppo WhatsApp dei corrieri: si collega solo con WHATSAPP_ATTIVO=1 (vedi src/whatsapp.js).

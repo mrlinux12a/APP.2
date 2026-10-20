@@ -525,7 +525,18 @@ Stripe (prima era Checkout ospitato: cambiato lo stesso giorno, su richiesta), *
   pagamento simulato. Le prove (`test/*.test.js`) non toccano mai Stripe né il DB vero (Stripe finto con
   `stripePagamenti.impostaStripe`, DB finto) e **non leggono il `.env`**: `test/server.test.js` svuota le variabili
   `STRIPE_*`/`APP_URL` prima di caricare `server.js` (dotenv non sovrascrive quelle già definite).
-- **Chiavi** (`.env`): `STRIPE_SECRET_KEY`, chiave pubblicabile (`STRIPE_PUBLISHABLE_KEY` o l'alias
+- **Reale e sandbox con un interruttore (20/10/2026, richiesta esplicita)**: `src/stripe_config.js` legge dal `.env` DUE serie (`STRIPE_LIVE_SECRET_KEY` / `_PUBLISHABLE_KEY` / `_WEBHOOK_SECRET` e le stesse con `STRIPE_TEST_`) e
+  `STRIPE_MODO=live|test` (alias reale/produzione, prova/sandbox) sceglie quale vale; `pagamenti.stripeAttivo()` e `pagamenti.modoStripe()` passano da lì, e `stripe_pagamenti.js` legge chiavi e segreti dal modulo.
+  **Senza `STRIPE_MODO` vale il vecchio `.env` a una serie** (il modo lo dice la chiave): nessun cambiamento per chi non lo scrive. Regole di sicurezza, tutte provate in `test/stripe_config.test.js`:
+  (1) una chiave del modo sbagliato NON si usa mai (sk_test_ in `STRIPE_LIVE_SECRET_KEY`, o la vecchia `STRIPE_SECRET_KEY` reale con `STRIPE_MODO=test`: ignorata + avviso nel log); (2) **con `STRIPE_MODO` scritto Stripe resta
+  "acceso" anche senza chiave** (`attivo()` = dichiarato || chiave): i pagamenti danno errore e NON ricadono sul simulato, che farebbe ordinare gratis; (3) il vecchio `STRIPE_WEBHOOK_SECRET` vale solo insieme alla vecchia
+  chiave segreta (un `whsec_` non dice di che modo è: con le serie separate ogni modo vuole il suo); (4) `leggiEvento` prova il segreto del modo in uso e poi quello dell'altro (un endpoint per modo sullo stesso URL non
+  accumula errori 400), `gestisciEvento` scarta gli eventi con `livemode` diverso. Il log all'avvio dice `[stripe] modalità REALE…` o `PROVA…` e avvisa se: manca la chiave del modo, il reale non ha `APP_URL` https, manca il webhook.
+  In sandbox `/pagamento/<id>` mostra "Modalità prova" (`modoProva`). `node scripts/verifica_stripe.js [--modo=live|test]` è **sola lettura** (conto, carte/bonifici abilitati, webhook verso `APP_URL` con gli eventi giusti).
+  **Cambiare modo con pagamenti aperti** li lascia fermi (ogni riga di `stripe_pagamenti` porta il suo `modo`, un'istanza lavora solo i suoi) finché non si torna: farlo senza richieste in attesa. **Sulla VPS non devono esserci
+  `PAGAMENTO_SIMULATO` né `PAGAMENTO_SIMULATO_FORZA`** (la scorciatoia del 16/10 permette di ordinare senza pagare, anche con la chiave reale): è la prima cosa da controllare prima di incassare davvero. Le chiavi reali
+  stanno solo sulla VPS: il `.env` del PC punta al DB di produzione e ha solo quelle di prova. `test/server.test.js` svuota anche le nuove variabili prima di caricare `server.js`.
+- **Chiavi** (`.env`; vecchio schema a una serie, ancora valido): `STRIPE_SECRET_KEY`, chiave pubblicabile (`STRIPE_PUBLISHABLE_KEY` o l'alias
   `STRIPE_PUBLIC_KEY`, che l'utente aveva già usato), `STRIPE_WEBHOOK_SECRET`, `APP_URL`. La pubblicabile deve avere il
   prefisso `pk_test_`/`pk_live_`. Copiandola dal Dashboard il prefisso si perde facilmente (l'utente l'aveva incollata
   come `51UQ…`, 99 caratteri): se è tutta alfanumerica e lunga (`chiaveSenzaPrefisso`) il prefisso si ricava dalla chiave

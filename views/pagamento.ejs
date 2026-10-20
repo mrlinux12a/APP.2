@@ -29,6 +29,11 @@
           <div class="errore" role="alert">Il pagamento non è andato a buon fine. Riprova o usa un'altra carta.</div>
         <% } %>
 
+        <%# Sandbox di Stripe (STRIPE_MODO=test): nessun addebito vero, e la carta vera non funziona. In reale non compare mai. %>
+        <% if (locals.modoProva) { %>
+          <div class="avviso avviso-attenzione" role="status"><strong>Modalità prova:</strong> nessun addebito reale. Usa la carta di prova 4242 4242 4242 4242, data futura e un CVC qualsiasi.</div>
+        <% } %>
+
         <div id="elemento-pagamento" class="pag-elemento" aria-live="polite"></div>
         <div class="errore pag-errore" data-pag-messaggio role="alert" hidden></div>
 

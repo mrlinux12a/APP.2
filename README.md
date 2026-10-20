@@ -190,6 +190,38 @@ forma di una chiave, al cliente mostra "Il pagamento online non è ancora config
 tutto va applicato lo schema una volta (tabella `stripe_pagamenti`, vedi `CLAUDE.md`): se il database è già quello di
 produzione è già stato fatto il 14/10/2026.
 
+**Pagamento REALE e SANDBOX: due serie di chiavi e un interruttore** (dal 20/10/2026, `src/stripe_config.js`). Nel `.env` si tengono le chiavi di **tutti e due** i modi e una riga sceglie quale vale:
+
+```
+STRIPE_MODO=live                      # live = pagamenti veri · test = sandbox di Stripe (carta 4242…) · (riga assente = come prima, vedi sotto)
+
+STRIPE_LIVE_SECRET_KEY=sk_live_...        # Dashboard in modalità REALE > Sviluppatori > Chiavi API
+STRIPE_LIVE_PUBLISHABLE_KEY=pk_live_...
+STRIPE_LIVE_WEBHOOK_SECRET=whsec_...      # il "segreto di firma" del webhook creato in modalità REALE
+
+STRIPE_TEST_SECRET_KEY=sk_test_...        # Dashboard in modalità PROVA / sandbox
+STRIPE_TEST_PUBLISHABLE_KEY=pk_test_...
+STRIPE_TEST_WEBHOOK_SECRET=whsec_...      # il segreto del webhook creato nella sandbox
+
+APP_URL=https://tuodominio.it             # senza barra finale; con il modo reale DEVE essere https://
+```
+
+- **Si cambia modo con una riga** (`STRIPE_MODO=test` ↔ `live`) e `pm2 restart minuteria`; all'avvio il log dice in che modo è (`[stripe] modalità REALE…` o `PROVA…`). In sandbox la pagina di pagamento mostra "Modalità prova: nessun
+  addebito reale" e le ricevute portano "Pagamento di prova (sandbox)".
+- **Una chiave nel posto sbagliato non si usa mai** (per esempio `sk_test_` in `STRIPE_LIVE_SECRET_KEY`, o la vecchia `STRIPE_SECRET_KEY` reale con `STRIPE_MODO=test`): il log all'avvio lo dice. E con `STRIPE_MODO`
+  scritto, se manca la chiave i pagamenti danno **errore** invece di ricadere sul pagamento simulato (che farebbe ordinare gratis). Il segreto del webhook (`whsec_`) non dice di che modo è: ogni modo vuole il suo.
+- **Il vecchio `.env` con UNA serie** (`STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`, senza `STRIPE_MODO`) continua a funzionare: il modo lo dice la chiave (`sk_live_` = reale). Senza chiavi
+  e senza `STRIPE_MODO` il pagamento resta **simulato** (sviluppo sul PC).
+- **Cosa succede ai pagamenti quando si cambia modo**: ogni pagamento ricorda il modo in cui è nato e un'istanza lavora solo i suoi. Un pagamento reale autorizzato e non ancora incassato, se passi a prova, **resta fermo**
+  finché non torni a `live` (le autorizzazioni delle carte scadono dopo circa 7 giorni). Quindi: cambia modo quando **non ci sono richieste in attesa**.
+- **Verificare senza pagare**: `node scripts/verifica_stripe.js` (o `--modo=live` / `--modo=test` per guardare l'altra serie) mostra le chiavi mascherate, segnala quelle nel posto sbagliato, chiede a Stripe di che conto sono
+  (carte e bonifici abilitati) e se esiste il webhook verso `APP_URL` con gli eventi giusti. Solo lettura: non crea e non incassa niente.
+- **Webhook**: se in Stripe hai un webhook per modo verso lo stesso indirizzo `https://tuodominio.it/webhooks/stripe`, va bene: il server controlla la firma col segreto del modo in uso e poi con quello dell'altro, e gli
+  eventi dell'altro modo li riconosce e li scarta (niente errori che si accumulano nel Dashboard). Eventi da abilitare: `payment_intent.amount_capturable_updated` e `payment_intent.canceled`.
+- **Il pagamento simulato** (`PAGAMENTO_SIMULATO=1`) è una scorciatoia **solo per il PC**, senza rete né chiavi. **Sulla VPS non deve esserci**: controlla che nel suo `.env` NON ci siano `PAGAMENTO_SIMULATO` e
+  `PAGAMENTO_SIMULATO_FORZA` (con la seconda i clienti ordinano senza pagare, anche con la chiave reale). Per provare end-to-end si usa la **sandbox** (`STRIPE_MODO=test`), non il simulato.
+- **Consiglio**: le chiavi **reali solo sulla VPS**. Il `.env` del PC punta al database di produzione: con `STRIPE_MODO=test` e solo le chiavi di prova non può toccare i pagamenti veri.
+
 **Provare in locale** (modo di prova, carta `4242 4242 4242 4242`, data futura, CVC qualsiasi):
 1. Account Stripe (gratuito), sandbox o modalità di prova: chiave segreta e pubblicabile **dello stesso ambiente** nel
    `.env`.
@@ -210,7 +242,7 @@ produzione è già stato fatto il 14/10/2026.
 2. Attivare l'account Stripe (dati dell'azienda e IBAN) e prendere le chiavi `sk_live_...` e `pk_live_...`.
 3. Dashboard > Sviluppatori > Webhook > aggiungere `https://tuodominio.it/webhooks/stripe` con gli eventi
    `payment_intent.amount_capturable_updated` e `payment_intent.canceled`, e copiare il segreto `whsec_...`.
-4. Nel `.env` della VPS: `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`, `APP_URL`; `npm ci`
+4. Nel `.env` della VPS: `STRIPE_MODO=live`, le chiavi `STRIPE_LIVE_*` (e, se vuoi poter tornare in sandbox, anche `STRIPE_TEST_*`), `APP_URL`; **togli** `PAGAMENTO_SIMULATO` e `PAGAMENTO_SIMULATO_FORZA` se ci sono; poi `node scripts/verifica_stripe.js --modo=live`; `npm ci`
    (c'è la dipendenza `stripe`) e `pm2 restart minuteria`. **Un solo processo** per chiave: due istanze con la stessa
    chiave lavorano gli stessi incassi (le chiamate a Stripe sono idempotenti, ma meglio non provarci).
 5. Dashboard > Impostazioni > Metodi di pagamento: scegliere i metodi da offrire (la **carta** deve esserci). Per

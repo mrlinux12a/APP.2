@@ -1,4 +1,5 @@
 const db = require('../db');
+const stripeConfig = require('./stripe_config');
 
 // ============================ REGOLE DEI PAGAMENTI (lato installatore) ============================
 //  · All'invio della richiesta la carta è solo AUTORIZZATA (capture_method manual): l'importo è "bloccato", non pagato.
@@ -27,9 +28,10 @@ const db = require('../db');
 const METODO_SIMULATO = 'simulato';
 const METODO_STRIPE = 'stripe';
 
-// Stripe è acceso solo se c'è la chiave segreta nel .env. Senza, tutto resta simulato.
+// Stripe è acceso se c'è la chiave segreta nel .env (o se STRIPE_MODO è scritto: allora una chiave mancante è un ERRORE da vedere, non un motivo per
+// ricadere nel pagamento simulato). Senza chiavi e senza STRIPE_MODO tutto resta simulato. Vedi src/stripe_config.js.
 function stripeAttivo() {
-  return String(process.env.STRIPE_SECRET_KEY || '').trim() !== '';
+  return stripeConfig.attivo();
 }
 
 // Solo per lo sviluppo sul PC: con PAGAMENTO_SIMULATO=1 nel .env LOCALE "Paga e invia" salta Stripe e manda la richiesta con il
@@ -56,11 +58,10 @@ function pagaConStripe() {
   return stripeAttivo() && !pagamentoSimulatoForzato();
 }
 
-// 'live' o 'test', dalla chiave: le righe di stripe_pagamenti portano il modo in cui sono nate e ogni istanza
-// lavora solo le sue (il .env del PC punta al DB di produzione, con una chiave di prova: non deve toccare i
-// pagamenti veri, e viceversa).
+// 'live' o 'test': da STRIPE_MODO se scritto, altrimenti dalla chiave (src/stripe_config.js). Le righe di stripe_pagamenti portano il modo in cui sono
+// nate e ogni istanza lavora solo le sue (il .env del PC punta al DB di produzione, con una chiave di prova: non deve toccare i pagamenti veri, e viceversa).
 function modoStripe() {
-  return /^(sk|rk)_live_/.test(String(process.env.STRIPE_SECRET_KEY || '').trim()) ? 'live' : 'test';
+  return stripeConfig.modo();
 }
 
 // Cosa si scrive su una richiesta nuova. L'importo è il totale IVA inclusa del carrello.

@@ -572,7 +572,9 @@ require.cache[percorsoDb] = { id: percorsoDb, filename: percorsoDb, loaded: true
 
 // Le prove non dipendono dal .env vero (che server.js carica con dotenv, senza sovrascrivere le variabili già definite):
 // chiavi Stripe e indirizzo del sito vuoti = spenti, come su un PC senza configurazione.
-for (const nome of ['STRIPE_SECRET_KEY', 'STRIPE_PUBLISHABLE_KEY', 'STRIPE_PUBLIC_KEY', 'STRIPE_WEBHOOK_SECRET', 'APP_URL', 'APPROVAZIONE_AUTOMATICA', 'DISTRIBUTORE_PREDEFINITO', 'PAGAMENTO_SIMULATO', 'PAGAMENTO_SIMULATO_FORZA', 'FINESTRA_CONFERMA_SEC']) {
+for (const nome of ['STRIPE_SECRET_KEY', 'STRIPE_PUBLISHABLE_KEY', 'STRIPE_PUBLIC_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_MODO',
+  'STRIPE_LIVE_SECRET_KEY', 'STRIPE_LIVE_PUBLISHABLE_KEY', 'STRIPE_LIVE_PUBLIC_KEY', 'STRIPE_LIVE_WEBHOOK_SECRET',
+  'STRIPE_TEST_SECRET_KEY', 'STRIPE_TEST_PUBLISHABLE_KEY', 'STRIPE_TEST_PUBLIC_KEY', 'STRIPE_TEST_WEBHOOK_SECRET', 'APP_URL', 'APPROVAZIONE_AUTOMATICA', 'DISTRIBUTORE_PREDEFINITO', 'PAGAMENTO_SIMULATO', 'PAGAMENTO_SIMULATO_FORZA', 'FINESTRA_CONFERMA_SEC']) {
   process.env[nome] = '';
 }
 process.env.HOST = '127.0.0.1'; // il .env del PC può avere 0.0.0.0 (telefono sulla stessa rete): le prove restano sul computer
@@ -4315,6 +4317,8 @@ test('Stripe: webhook con firma sul corpo grezzo, "Paga e invia" verso la pagina
     assert.equal(risposta.status, 200);
     let t = await risposta.text();
     assert.match(t, /<title>Pagamento/);
+    // sandbox (chiave sk_test_): la pagina lo dice, con la carta di prova; in reale non compare mai
+    assert.match(t, /<strong>Modalità prova:<\/strong> nessun addebito reale\. Usa la carta di prova 4242 4242 4242 4242/);
     assert.match(t, /data-pagamento\s+data-chiave="pk_test_finta" data-segreto="pi_test_abc_secret_xyz" data-ritorno="http:\/\/127\.0\.0\.1:\d+\/pagamento\/esito"/);
     assert.match(t, /<div id="elemento-pagamento"/);
     assert.match(t, /<button class="btn-paga pag-paga" type="button" data-pag-paga disabled>Paga € /);

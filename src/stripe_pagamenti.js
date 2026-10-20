@@ -18,8 +18,9 @@
 //     (src/ricevute.js) e parte l'email (src/email.js): tutto "best effort", mai a rischio dell'incasso.
 //
 // Stripe sa tutto dei soldi; qui il DB dice a che punto è ogni pagamento (vedi `stato` in schema.sql). Le chiavi
-// stanno nel .env: STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY, STRIPE_WEBHOOK_SECRET, APP_URL (vedi README).
+// stanno nel .env: una serie per il pagamento REALE e una per la SANDBOX, con STRIPE_MODO=live|test che sceglie (src/stripe_config.js; vedi README), più APP_URL.
 const db = require('../db');
+const stripeConfig = require('./stripe_config');
 const pagamenti = require('./pagamenti');
 const flusso = require('./flusso_cliente');
 const richieste = require('./richieste');
@@ -40,8 +41,8 @@ const LIMITE_LAVORI = 25;
 
 // ---------- Configurazione e client Stripe ----------
 
-// La chiave pubblicabile (pk_...): STRIPE_PUBLISHABLE_KEY, il nome di Stripe, o STRIPE_PUBLIC_KEY.
-const chiavePubblicaGrezza = () => String(process.env.STRIPE_PUBLISHABLE_KEY || process.env.STRIPE_PUBLIC_KEY || '').trim();
+// La chiave pubblicabile (pk_...) del modo in uso (STRIPE_<MODO>_PUBLISHABLE_KEY, o i vecchi STRIPE_PUBLISHABLE_KEY / STRIPE_PUBLIC_KEY): vedi stripe_config.js.
+const chiavePubblicaGrezza = () => stripeConfig.chiavePubblicabileGrezza();
 // Il Dashboard dà la chiave intera ("pk_test_51..."), ma copiandola si perde facilmente il prefisso: resta "51...", lunga
 // quanto basta e tutta alfanumerica. In quel caso il prefisso è quello della chiave segreta (stesso ambiente: prova o
 // reale), e all'avvio si avvisa di sistemare il .env (vedi controllaConfigurazione).
@@ -68,6 +69,17 @@ function controllaConfigurazione() {
     );
   }
   if (!attivo()) return avvisi;
+  // Le chiavi nel posto sbagliato o dell'altro modo (stripe_config le ignora): vanno dette, altrimenti sembra solo "non funziona".
+  avvisi.push(...stripeConfig.configurazione().problemi);
+  if (!stripeConfig.chiaveSegreta()) {
+    avvisi.push(
+      'ATTENZIONE: manca la chiave segreta di Stripe per il modo in uso (' + pagamenti.modoStripe() + '): i pagamenti NON funzionano (danno errore, non si ricade sul pagamento simulato). Vedi README, "Pagamenti con Stripe".'
+    );
+  }
+  // Il pagamento reale vuole HTTPS: Stripe.js lo rifiuta su HTTP e il webhook reale accetta solo indirizzi https.
+  if (pagamenti.modoStripe() === 'live' && !/^https:\/\//i.test(String(process.env.APP_URL || '').trim())) {
+    avvisi.push('ATTENZIONE: pagamento REALE ma APP_URL non è un indirizzo https://: Stripe.js non funziona su HTTP e il webhook reale accetta solo HTTPS. Metti APP_URL=https://tuodominio.it.');
+  }
   const pk = chiavePubblica();
   if (!chiavePubblicaGrezza()) {
     avvisi.push('STRIPE_PUBLISHABLE_KEY (o STRIPE_PUBLIC_KEY) manca: la pagina di pagamento non si può aprire e i clienti non possono pagare.');
@@ -78,17 +90,24 @@ function controllaConfigurazione() {
   } else if (pk.startsWith('pk_live_') !== (pagamenti.modoStripe() === 'live')) {
     avvisi.push('STRIPE_SECRET_KEY e STRIPE_PUBLISHABLE_KEY sono di modi diversi (prova e reale): il form di pagamento non funzionerà.');
   }
-  if (!String(process.env.STRIPE_WEBHOOK_SECRET || '').trim()) {
-    avvisi.push('STRIPE_WEBHOOK_SECRET manca: senza webhook i pagamenti si raccolgono dal ritorno del cliente o dal timer (entro un minuto circa).');
+  if (!stripeConfig.configurazione().webhook) {
+    avvisi.push('Il segreto del webhook (STRIPE_' + pagamenti.modoStripe().toUpperCase() + '_WEBHOOK_SECRET, o STRIPE_WEBHOOK_SECRET) manca: senza webhook i pagamenti si raccolgono dal ritorno del cliente o dal timer (entro un minuto circa).');
   }
   return avvisi;
 }
+
+// In che modo sono i pagamenti, una riga per il log all'avvio (REALE o PROVA).
+const descrizioneModo = () => stripeConfig.descrizione();
+// C'è almeno un segreto per controllare la firma dei webhook? (server.js risponde 503 se no.)
+const webhookConfigurato = () => stripeConfig.segretiWebhook().length > 0;
 
 let clienteStripe = null;
 function stripe() {
   if (clienteStripe) return clienteStripe;
   const Stripe = require('stripe');
-  clienteStripe = new Stripe(String(process.env.STRIPE_SECRET_KEY).trim(), {
+  const chiave = stripeConfig.chiaveSegreta();
+  if (!chiave) throw new Error('Manca la chiave segreta di Stripe per il modo in uso (' + pagamenti.modoStripe() + ')');
+  clienteStripe = new Stripe(chiave, {
     maxNetworkRetries: 2,
     timeout: 20000,
     appInfo: { name: 'Minuteria' },
@@ -387,8 +406,19 @@ async function completaDaIntento(intentoId) {
 // ---------- Webhook ----------
 
 // Verifica la firma di Stripe sul corpo GREZZO (qualunque modifica la invalida). Lancia se non è valida.
+// Si prova prima il segreto del modo in uso e poi quello dell'altro modo (se c'è): con un endpoint per modo sullo stesso indirizzo, gli eventi dell'altro modo si
+// riconoscono (firma buona) e `gestisciEvento` li scarta, invece di dare un errore 400 che Stripe riprova per giorni.
 function leggiEvento(corpoGrezzo, firma) {
-  return stripe().webhooks.constructEvent(corpoGrezzo, firma, String(process.env.STRIPE_WEBHOOK_SECRET || '').trim());
+  const segreti = stripeConfig.segretiWebhook();
+  let ultimoErrore = null;
+  for (const segreto of segreti) {
+    try {
+      return stripe().webhooks.constructEvent(corpoGrezzo, firma, segreto);
+    } catch (e) {
+      ultimoErrore = e;
+    }
+  }
+  throw ultimoErrore || new Error('Nessun segreto del webhook configurato');
 }
 
 async function gestisciEvento(evento) {
@@ -584,6 +614,8 @@ module.exports = {
   pagaConStripe: pagamenti.pagaConStripe,
   chiavePubblica,
   controllaConfigurazione,
+  descrizioneModo,
+  webhookConfigurato,
   impostaStripe,
   avviaPagamento,
   avviaPagamentoReinvio,

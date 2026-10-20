@@ -758,7 +758,7 @@ test('configurazione: avvisi per chiave pubblica mancante, modi diversi e webhoo
   delete process.env.STRIPE_PUBLIC_KEY;
   process.env.STRIPE_PUBLISHABLE_KEY = 'pk_test_finta';
   delete process.env.STRIPE_WEBHOOK_SECRET;
-  assert.match(stripePagamenti.controllaConfigurazione().join(' '), /STRIPE_WEBHOOK_SECRET manca/);
+  assert.match(stripePagamenti.controllaConfigurazione().join(' '), /segreto del webhook \(STRIPE_TEST_WEBHOOK_SECRET, o STRIPE_WEBHOOK_SECRET\) manca/);
   process.env.STRIPE_WEBHOOK_SECRET = 'whsec_finto';
   delete process.env.STRIPE_SECRET_KEY;
   assert.deepEqual(stripePagamenti.controllaConfigurazione(), []); // Stripe spento: niente da dire
