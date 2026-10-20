@@ -1,0 +1,16 @@
+<%#
+  Un campo di testo dei moduli dell'Anagrafica del banco (views/distributore_anagrafica.ejs): etichetta, campo e, sotto, l'errore in rosso.
+  Parametri: scheda ('ditta' | 'filiale' | 'password'), nome (name del campo), etichetta, valore (quello da mostrare), errore (testo o ''), o = { tipo,
+  classe, maxlength, autocomplete, inputmode }. L'id è "ab-<scheda>-<nome>": serve a label, aria-describedby e agli errori.
+%>
+<%
+  const idCampo = 'ab-' + scheda + '-' + nome;
+  const opz = o || {};
+%>
+<div class="ab-campo<%= opz.classe ? ' ' + opz.classe : '' %>">
+  <label class="ab-etichetta" for="<%= idCampo %>"><%= etichetta %></label>
+  <input class="ab-input<%= errore ? ' ab-input-errore' : '' %>" id="<%= idCampo %>" name="<%= nome %>" type="<%= opz.tipo || 'text' %>" value="<%= valore %>"
+    <% if (opz.maxlength) { %> maxlength="<%= opz.maxlength %>"<% } %><% if (opz.autocomplete) { %> autocomplete="<%= opz.autocomplete %>"<% } %><% if (opz.inputmode) { %> inputmode="<%= opz.inputmode %>"<% } %>
+    <% if (errore) { %> aria-invalid="true" aria-describedby="<%= idCampo %>-err"<% } %>>
+  <% if (errore) { %><p class="ab-errore" id="<%= idCampo %>-err" role="alert"><%= errore %></p><% } %>
+</div>

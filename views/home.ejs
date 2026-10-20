@@ -11,6 +11,9 @@
       <%# Richiesta in attesa o ordine in consegna (vuota se non c'è niente): stessi dati dell'icona in basso. %>
       <%- include('partials/stato_home') %>
 
+      <%# Invito a installare l'app sul telefono: nascosto finché il browser non dice che si può (public/app.js, "Installa l'app"). %>
+      <%- include('partials/installa', { variante: 'home' }) %>
+
       <%# Resta fisso sotto l'appbar quando si scorre. %>
       <div class="ricerca-fissa">
         <h1 class="domanda">Cosa ti serve?</h1>

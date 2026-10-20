@@ -2,6 +2,7 @@ const db = require('../db');
 const { calcolaOrdine, calcolaDaRigheDb, getFinestraMinuti, getSpedizioneFissa, round2 } = require('./pricing');
 const whatsapp = require('./whatsapp');
 const pagamenti = require('./pagamenti');
+const orari = require('./orari');
 
 // Con il corriere via WhatsApp il banco accetta, ma l'offerta esiste per l'installatore solo quando
 // nel gruppo qualcuno prende la consegna (corriere_stato 'preso'). NULL = nessun corriere richiesto.
@@ -132,13 +133,22 @@ async function secondiRimasti(richiesta) {
 
 // ---------- Distributori candidati ----------
 
-// Tutti i distributori attivi registrati: ogni richiesta dell'installatore arriva a tutti. Il banco non può più
-// mettere in pausa la ricezione: la colonna distributors.ricezione_attiva esiste ancora ma non si legge più.
-async function distributoriCandidati(productIds, zona, clienteId = null) {
+// Tutti i distributori attivi registrati che stanno ricevendo adesso: ogni richiesta dell'installatore arriva a tutti. Il banco non può più
+// mettere in pausa la ricezione (la colonna distributors.ricezione_attiva esiste ancora ma non si legge più), ma può impostare i suoi ORARI
+// (pagina "Anagrafica del banco", src/orari.js): fuori orario, ora di Roma, le richieste non arrivano. Senza orari è sempre aperto.
+async function distributoriCandidati(productIds, zona, clienteId = null, quando = new Date()) {
   if (!productIds.length) return [];
-  return db
-    .prepare(`SELECT * FROM distributors WHERE attivo = 1 ORDER BY nome`)
-    .all();
+  return (await distributoriAttivi()).filter((d) => orari.apertoAdesso(d.orari, quando));
+}
+
+async function distributoriAttivi() {
+  return db.prepare(`SELECT * FROM distributors WHERE attivo = 1 ORDER BY nome`).all();
+}
+
+// Le filiali attive stanno ricevendo adesso? { aperto, riapre }: se sono tutte chiuse, `riapre` dice quando apre la prima (vedi orari.statoBanchi).
+// Lo usano il carrello (il pulsante "Paga e invia richiesta") e flusso.validaRichiesta: con tutti i banchi chiusi non si paga niente.
+async function statoBanchiAttivi(quando = new Date()) {
+  return orari.statoBanchi(await distributoriAttivi(), quando);
 }
 
 // ---------- Creazione ----------
@@ -159,10 +169,11 @@ async function creaRichiesta(
   const minuti = await getFinestraMinuti();
 
   // Fallback furbo: se per qualsiasi motivo non c'è nessun candidato (DB vuoto,
-  // filtro zona, import incompleto), manda comunque a TUTTI i banchi attivi.
+  // filtro zona, import incompleto), manda comunque a TUTTI i banchi attivi... ma mai a quelli chiusi: fuori orario la richiesta
+  // non arriva (se sono tutti chiusi la richiesta nasce già chiusa e la carta si rilascia, come senza banchi).
   if (!candidati.length) {
     try {
-      candidati = await db.prepare(`SELECT * FROM distributors WHERE attivo = 1 ORDER BY nome`).all();
+      candidati = (await distributoriAttivi()).filter((d) => orari.apertoAdesso(d.orari));
       console.log(`[richieste] fallback broadcast: ${candidati.length} distributori per cliente ${cliente.id} zona=${cliente.zona}`);
     } catch (e) { console.error('[richieste] fallback fallito', e.message); }
   }
@@ -905,6 +916,7 @@ module.exports = {
   impostaAssegnatore,
   assegnaOrdine,
   distributoriCandidati,
+  statoBanchiAttivi,
   creaRichiesta,
   reinviaRichiesta,
   aggiornaScadenza,

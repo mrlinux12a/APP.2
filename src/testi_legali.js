@@ -81,8 +81,17 @@ function eliminazione() {
   const { az } = titolare();
   return {
     titolo: 'Eliminazione dell’account',
-    aggiornata: '19 ottobre 2026',
+    aggiornata: '20 ottobre 2026',
     sezioni: [
+      {
+        titolo: 'Dal sito',
+        elenco: [
+          'Entra nel sito con il tuo account.',
+          'Tocca il cerchio con le tue iniziali in alto a destra e scegli “La mia anagrafica”.',
+          'In fondo alla pagina scegli “Elimina account” e conferma con la tua password.',
+        ],
+        paragrafi: ['Lo stesso account vale per il sito e per l’app: eliminarlo da una parte lo elimina ovunque.'],
+      },
       {
         titolo: 'Dall’app',
         elenco: [

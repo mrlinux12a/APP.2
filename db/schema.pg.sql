@@ -702,3 +702,25 @@ ALTER TABLE whatsapp_messaggi ADD COLUMN IF NOT EXISTS istanza TEXT;
 -- richiesta. Il blocco si puo' rilanciare.
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS tipo TEXT;
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS request_id INTEGER;
+
+-- Anagrafica del banco: orari, email delle richieste, posizione spostata a mano (20/10/2026)
+-- `orari`: le fasce in cui il banco riceve richieste, in JSON, ora di Roma: {"lun":[["07:30","12:30"],["14:00","18:00"]], ..., "dom":[]}. NULL = nessun
+-- orario impostato = sempre aperto (com'era prima). `email_nuove_richieste`: 1 = il banco vuole un'email per ogni nuova richiesta (parte solo quando c'e'
+-- il modulo email). `geo_manuale`: 1 = la posizione sulla mappa l'ha spostata a mano il banco, quindi un cambio d'indirizzo non la ricalcola. Il blocco
+-- si puo' rilanciare.
+ALTER TABLE distributors ADD COLUMN IF NOT EXISTS orari JSONB;
+ALTER TABLE distributors ADD COLUMN IF NOT EXISTS email_nuove_richieste INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE distributors ADD COLUMN IF NOT EXISTS geo_manuale INTEGER NOT NULL DEFAULT 0;
+
+-- Recupero della password dell'installatore (20/10/2026)
+-- Il link che arriva per email contiene un codice casuale: nel DB resta solo il suo hash (SHA-256), cosi' chi legge la tabella non puo' usarlo. Vale
+-- un'ora (`scade_il`) e una volta sola (`usato_il`); un link nuovo annulla i precedenti. Il blocco si puo' rilanciare.
+CREATE TABLE IF NOT EXISTS recupero_password (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  token_hash TEXT NOT NULL UNIQUE,
+  creato_il TIMESTAMP NOT NULL DEFAULT NOW(),
+  scade_il TIMESTAMP NOT NULL,
+  usato_il TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_recupero_password_user ON recupero_password(user_id);

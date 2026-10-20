@@ -7,7 +7,11 @@
   <div class="ddt-azioni no-print">
     <%# Il cliente torna al suo ordine; il banco allo Storico (la pagina dell'ordine c'è solo finché è "Da preparare", e con la bolla emessa non lo è più). %>
     <% if (currentUser.ruolo === 'distributore') { %>
-      <a class="link-secondario" href="/distributore/storico">‹ Torna allo Storico ordini</a>
+      <% if (tornaBanco) { %>
+        <a class="link-secondario" href="<%= tornaBanco %>"><%= tornaBanco === '/distributore' ? '‹ Torna al banco' : '‹ Indietro' %></a>
+      <% } else { %>
+        <a class="link-secondario" href="/distributore/storico">‹ Torna allo Storico ordini</a>
+      <% } %>
     <% } else { %>
       <a class="link-secondario" href="/ordini/<%= ordine.id %>">‹ Torna all'ordine</a>
     <% } %>

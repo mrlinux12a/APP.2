@@ -14,6 +14,9 @@
   [data-secondi] più vicino (la scheda della richiesta, la scheda della home, il fotogramma o il link), non di un conto unico.
   Le consegne non passano da qui: il link o il fotogramma porta [data-eta-sec] (secondi all'arrivo) e i minuti, "In arrivo" (3 minuti o
   meno) e le barre li muove il blocco "Consegna in arrivo" di public/app.js, ogni secondo.
+  "Nessuna risposta": ogni richiesta scaduta resta 10 minuti dalla sua scadenza; il link o il fotogramma porta [data-scompare-sec] (secondi che
+  mancano a farla sparire) e lo script rilegge lo stato appena la prima è sparita (se la pagina aperta è proprio lei, ci pensa la pagina stessa:
+  window.minuteriaLasciaIl, vedi richiesta_chiusa.ejs).
 %>
 <%
   const attivoNav = typeof attivo !== 'undefined' ? attivo : '';
@@ -38,7 +41,7 @@
 <a href="<%= voci[0].href %>" class="nav-ordini multi fase-<%= voci[0].fase %> <%= attivoNav === 'ordini' ? 'attivo' : '' %>" data-fase="<%= voci[0].fase %>" data-fasi="<%= fasiPresenti.join(',') %>" data-attivo="<%= attivoNav %>" data-firma="<%= so.firma || '' %>" aria-label="<%= etichettaAria %>">
   <span class="fotogrammi" aria-hidden="true">
     <% voci.forEach(function (v, i) { %>
-      <span class="fotogramma fase-<%= v.fase %><%= i === 0 ? ' attivo' : '' %>" data-voce="<%= v.voce %>" data-href="<%= v.href %>"<% if (v.fase === 'richiesta') { %> data-secondi="<%= v.secondi %>" data-durata="<%= v.durata %>"<% } else if (v.fase === 'consegna' && v.etaSec != null) { %> data-eta-sec="<%= v.etaSec %>"<% } %>>
+      <span class="fotogramma fase-<%= v.fase %><%= i === 0 ? ' attivo' : '' %>" data-voce="<%= v.voce %>" data-href="<%= v.href %>"<% if (v.fase === 'richiesta') { %> data-secondi="<%= v.secondi %>" data-durata="<%= v.durata %>"<% } else if (v.fase === 'consegna' && v.etaSec != null) { %> data-eta-sec="<%= v.etaSec %>"<% } else if (v.fase === 'scaduta' && v.scompareTraSec != null) { %> data-scompare-sec="<%= v.scompareTraSec %>"<% } %>>
         <%- include('nav_ordini_fase', { v: v, CIRC: CIRC }) %>
       </span>
     <% }); %>
@@ -50,7 +53,7 @@
   </span>
 </a>
 <% } else { %>
-<a href="<%= voci.length === 1 ? voci[0].href : '/ordini' %>" class="nav-ordini fase-<%= so.fase %> <%= attivoNav === 'ordini' ? 'attivo' : '' %>" data-fase="<%= so.fase %>" data-attivo="<%= attivoNav %>" data-firma="<%= so.firma || '' %>"<% if (so.fase === 'richiesta') { %> data-secondi="<%= so.secondi %>" data-durata="<%= so.durata %>"<% } else if (so.fase === 'consegna' && so.etaSec != null) { %> data-eta-sec="<%= so.etaSec %>"<% } %>>
+<a href="<%= voci.length === 1 ? voci[0].href : '/ordini' %>" class="nav-ordini fase-<%= so.fase %> <%= attivoNav === 'ordini' ? 'attivo' : '' %>" data-fase="<%= so.fase %>" data-attivo="<%= attivoNav %>" data-firma="<%= so.firma || '' %>"<% if (so.fase === 'richiesta') { %> data-secondi="<%= so.secondi %>" data-durata="<%= so.durata %>"<% } else if (so.fase === 'consegna' && so.etaSec != null) { %> data-eta-sec="<%= so.etaSec %>"<% } else if (so.fase === 'scaduta' && voci.length === 1 && voci[0].scompareTraSec != null) { %> data-scompare-sec="<%= voci[0].scompareTraSec %>"<% } %>>
   <% if (so.fase === 'richiesta' || so.fase === 'consegna' || so.fase === 'scaduta') { %>
     <%- include('nav_ordini_fase', { v: so, CIRC: CIRC }) %>
   <% } else { %>
@@ -70,8 +73,10 @@
   //    movimento", non parte (resta fisso il primo, il più urgente).
   //  · Aggiornamento (GET /nav/stato-ordini): ogni 15 s se fra le fasi c'è una richiesta, ogni minuto se c'è solo una consegna. Dopo
   //    aver sostituito il link si riparte dal fotogramma in cui si era, non dal primo, così l'icona non "salta".
+  //  · "Nessuna risposta": ogni richiesta scaduta ha il suo [data-scompare-sec] (10 minuti dalla scadenza). Il giro di aggiornamento non
+  //    c'è per loro (non scorre niente), quindi un timer apposta rilegge lo stato appena la prima sparisce dal server.
   (function () {
-    var timer = null, attesa = null, giro = null, inLettura = false;
+    var timer = null, attesa = null, scompare = null, giro = null, inLettura = false;
     var indice = 0; // fotogramma visibile: sopravvive alla sostituzione del link
     var fini = new WeakMap();   // contenitore [data-secondi] -> istante (ms) in cui il suo conto arriva a zero
     var finiti = new WeakSet(); // contenitori già arrivati a zero: si chiede l'aggiornamento una volta sola per ciascuno
@@ -137,13 +142,34 @@
       }, 2500);
     }
 
+    // Secondi che mancano alla prima richiesta senza risposta che sparisce (null se non ce ne sono). Il numero è quello scritto dal server al
+    // momento del disegno: il link si ridisegna a ogni aggiornamento, e avvia() ripianifica da quello nuovo.
+    function primaScomparsa() {
+      var a = link(); if (!a) return null;
+      var els = Array.prototype.slice.call(a.querySelectorAll('[data-scompare-sec]'));
+      if (a.hasAttribute('data-scompare-sec')) els.push(a);
+      var min = null;
+      els.forEach(function (el) {
+        var s = Number(el.getAttribute('data-scompare-sec'));
+        if (isFinite(s) && (min === null || s < min)) min = s;
+      });
+      return min;
+    }
+    // La pagina aperta è una richiesta senza risposta che sta per lasciare "Stato ordini" e andrà da sola a /ordini (richiesta_chiusa.ejs):
+    // ricaricarla qui la lascerebbe sulla richiesta ormai fuori dall'elenco.
+    function staPerLasciare() {
+      return !!window.minuteriaLasciaIl && window.minuteriaLasciaIl - Date.now() < 6000;
+    }
+
     function avvia() {
-      clearInterval(timer); clearTimeout(attesa);
+      clearInterval(timer); clearTimeout(attesa); clearTimeout(scompare);
       var a = link(); if (!a) return;
       if (document.querySelector('[data-secondi]')) { tick(); timer = setInterval(tick, 1000); }
       var f = fasi(a);
       if (f.indexOf('richiesta') !== -1) attesa = setTimeout(aggiorna, 15000);
       else if (f.indexOf('consegna') !== -1) attesa = setTimeout(aggiorna, 60000);
+      var s = primaScomparsa();
+      if (s !== null) scompare = setTimeout(aggiorna, Math.max(1, s) * 1000 + 800);
       avviaGiro();
     }
 
@@ -165,6 +191,7 @@
             // finito, la firma delle voci cambia e si ricarica. Se cambia solo il tempo, la firma è la stessa e basta muovere i timer.
             var striscia = document.querySelector('[data-striscia]');
             if (striscia && nuovoLink && (nuovoLink.getAttribute('data-firma') || '') !== (striscia.getAttribute('data-firma') || '')) {
+              if (staPerLasciare()) { inLettura = false; return; }
               location.reload();
               return;
             }

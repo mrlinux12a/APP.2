@@ -16,4 +16,18 @@ async function passwordValida(password, utente) {
   return !!utente && corrisponde;
 }
 
-module.exports = { passwordValida };
+// Le regole di una password NUOVA (le stesse della registrazione, vedi anagrafiche.validaIscrizione): almeno 8 caratteri, al massimo 72 (bcrypt considera
+// solo i primi 72 byte: oltre non aggiunge sicurezza). Ritorna gli errori per campo: { nuova: 'testo', ripeti: 'testo' }, vuoto se va bene.
+const LUNGHEZZA_MINIMA_PASSWORD = 8;
+const LUNGHEZZA_MASSIMA_PASSWORD = 72;
+
+function erroriNuovaPassword(nuova, ripeti) {
+  const errori = {};
+  const pwd = typeof nuova === 'string' ? nuova : '';
+  if (pwd.length < LUNGHEZZA_MINIMA_PASSWORD) errori.nuova = `La password deve avere almeno ${LUNGHEZZA_MINIMA_PASSWORD} caratteri.`;
+  else if (pwd.length > LUNGHEZZA_MASSIMA_PASSWORD) errori.nuova = `La password può avere al massimo ${LUNGHEZZA_MASSIMA_PASSWORD} caratteri.`;
+  else if (pwd !== (typeof ripeti === 'string' ? ripeti : '')) errori.ripeti = 'Le due password non coincidono.';
+  return errori;
+}
+
+module.exports = { passwordValida, erroriNuovaPassword, LUNGHEZZA_MINIMA_PASSWORD, LUNGHEZZA_MASSIMA_PASSWORD };

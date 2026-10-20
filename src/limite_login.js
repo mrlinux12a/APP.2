@@ -9,7 +9,9 @@
 //  · login, per solo INDIRIZZO (60 errori in 10 minuti, su qualunque nome): ferma chi prova una password su molti utenti
 //    (password spraying), che il contatore per coppia non vede mai. La soglia è alta perché dietro un proxy mal configurato
 //    tanti clienti possono condividere lo stesso indirizzo;
-//  · registrazioni, per indirizzo (12 all'ora).
+//  · registrazioni, per indirizzo (12 all'ora);
+//  · richieste di recupero password ("Password dimenticata?"), per COPPIA indirizzo + identificativo (3 all'ora: nessuno deve poter riempire di email
+//    la casella di un altro) e per solo INDIRIZZO (10 all'ora).
 
 // Un contatore a finestra fissa: dopo `massimo` eventi nella finestra, `colpito` risponde true fino alla fine della finestra.
 function creaLimite({ finestraMs, massimo }) {
@@ -58,6 +60,11 @@ const MAX_ISCRIZIONI_PER_INDIRIZZO = 12;
 const perCoppia = creaLimite({ finestraMs: FINESTRA_LOGIN_MS, massimo: MAX_TENTATIVI_LOGIN });
 const perIndirizzo = creaLimite({ finestraMs: FINESTRA_LOGIN_MS, massimo: MAX_TENTATIVI_PER_INDIRIZZO });
 const iscrizioni = creaLimite({ finestraMs: FINESTRA_ISCRIZIONI_MS, massimo: MAX_ISCRIZIONI_PER_INDIRIZZO });
+const FINESTRA_RECUPERI_MS = 60 * 60 * 1000;
+const MAX_RECUPERI_PER_COPPIA = 3;
+const MAX_RECUPERI_PER_INDIRIZZO = 10;
+const recuperiPerCoppia = creaLimite({ finestraMs: FINESTRA_RECUPERI_MS, massimo: MAX_RECUPERI_PER_COPPIA });
+const recuperiPerIndirizzo = creaLimite({ finestraMs: FINESTRA_RECUPERI_MS, massimo: MAX_RECUPERI_PER_INDIRIZZO });
 
 const indirizzo = (req) => String((req && req.ip) || 'sconosciuto');
 
@@ -98,7 +105,18 @@ function registraIscrizione(req) {
   iscrizioni.registra(indirizzo(req));
 }
 
+// ---- Recupero password: ogni richiesta conta, sia che l'account esista o no (la risposta è sempre la stessa) ----
+function recuperoBloccato(req, identificativo) {
+  return recuperiPerCoppia.colpito(chiaveLogin(req, identificativo)) || recuperiPerIndirizzo.colpito(indirizzo(req));
+}
+function registraRecupero(req, identificativo) {
+  recuperiPerCoppia.registra(chiaveLogin(req, identificativo));
+  recuperiPerIndirizzo.registra(indirizzo(req));
+}
+
 function svuotaTutto() {
+  recuperiPerCoppia.svuota();
+  recuperiPerIndirizzo.svuota();
   perCoppia.svuota();
   perIndirizzo.svuota();
   iscrizioni.svuota();
@@ -114,8 +132,12 @@ module.exports = {
   accessoRiuscito,
   iscrizioneBloccata,
   registraIscrizione,
+  recuperoBloccato,
+  registraRecupero,
   svuotaTutto,
   creaLimite,
   MAX_TENTATIVI_PER_INDIRIZZO,
   MAX_ISCRIZIONI_PER_INDIRIZZO,
+  MAX_RECUPERI_PER_COPPIA,
+  MAX_RECUPERI_PER_INDIRIZZO,
 };

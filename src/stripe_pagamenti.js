@@ -182,6 +182,7 @@ async function avviaPagamentoReinvio(clienteId, richiesta) {
   if (richiesta.cliente_id !== clienteId || richiesta.stato !== 'nessuna_offerta') {
     throw new ErroreFlusso('reinvio', 'Richiesta non rinviabile', 'Questa richiesta non si può più rinviare.');
   }
+  await flusso.controllaBancoAperto(); // banco chiuso (orari): non si autorizza nessuna carta
   const importoCent = centesimi((await flusso.totaliRichiestaOggi(richiesta.id)).da_pagare_app);
   if (!(importoCent > 0)) {
     throw new ErroreFlusso('reinvio', 'Richiesta non rinviabile', 'Per questa richiesta non posso ripetere il pagamento: invia una nuova richiesta dal carrello.');

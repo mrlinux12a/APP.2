@@ -265,7 +265,7 @@ provvisorie). Variabili CSS in cima a `public/style.css`. DDT bianca (stampa).
   05/10/2026; classi `acc-*`, `reg-*`, `ben-*`; campi dal partial `partials/acc_campo.ejs`, che disegna anche
   l'occhio della password). Non rimettere: la nota "i distributori che indichi dovranno confermare…", gli asterischi
   `*` (i facoltativi hanno l'hint "Facoltativo"), la sezione "I tuoi distributori di riferimento", la nota "Per ora
-  tutte le consegne vanno in…" né un link di recupero password (non esiste). **Un solo `<form>`** con tre
+  tutte le consegne vanno in…" né un link di recupero password **dentro la registrazione** (il "Password dimenticata?" sta solo sul login, vedi "Account dell'installatore"). **Un solo `<form>`** con tre
   `fieldset` `[data-reg-passo]`: senza JS si vedono tutti, con JS ("Registrazione a passi" in `app.js`) uno alla
   volta; lo script mette `form.noValidate` perché un campo non valido in un fieldset nascosto bloccherebbe l'invio
   senza messaggio, e controlla i passi da sé (`checkValidity`/`reportValidity`), tutti prima dell'invio. La
@@ -647,7 +647,7 @@ Attesa corriere → Da preparare, senza numeri d'ordine delle fasi. Convenzioni 
   non farne un'altra): `partials/banco_testa.ejs` = ditta e filiale (`res.locals.bancoTesta`, in cache 60 s dal
   middleware di `server.js`), schede **Banco / Clienti / Storico ordini** (dal 19/10/2026 "Storico ordini" è una scheda del menu come le altre, la terza dopo Clienti, con l'icona `iconaOrdini`:
   prima era un pulsante accanto al cerchio dell'utente, `.banco-storico`, **non rimetterlo**) e cerchio con le iniziali della
-  **filiale** ("Banco Genova Fegino" → BG) che apre la tendina `.menu-account` (Esci; Clienti compare lì solo sotto i 900px, dove le schede della barra spariscono; **non c'è più "Storico ordini"
+  **filiale** ("Banco Genova Fegino" → BG) che apre la tendina `.menu-account` (**Anagrafica del banco** in cima dal 20/10/2026, poi Esci; Clienti compare lì solo sotto i 900px, dove le schede della barra spariscono; **non c'è più "Storico ordini"
   nella tendina**: sotto i 900px sta nel menu in basso, che ha tre voci, Home / Clienti / Storico: `nav_distributore` con `attivo: 'storico'` nello Storico e nella pagina dell'ordine). **Niente campanella delle notifiche** (tolta su richiesta esplicita
   del 14/10/2026, non rimetterla: `/notifiche` esiste ancora ma il banco non ha un link per arrivarci). La home la include; **tutte le altre pagine del
   distributore passano da `partials/appbar.ejs`, che per `ruolo = distributore` delega qui** (anche `/notifiche` e la
@@ -700,7 +700,7 @@ meno di 24 h), **3** consegnato (`consegnato_il`): la 3 **non è più attiva**, 
   150ms di uscita, rimbalzo da 8px ai capi, niente animazione con "riduci movimento"): blocco "Striscia degli ordini in corso" di `app.js`.
 - **Le voci** (`costruisciVoce`, un'unica costruzione per icona e striscia: non possono dire cose diverse): `{ fase, tipo, id, richiestaId, href,
   voce: 'tipo-id', secondi/durata (richiesta), minuti (consegna) }` più `breve` (primo articolo + " +N") solo nella striscia. Ordine
-  (`ordinaVociIcona`): scaduta recente, richieste dal timer più corto, consegne dall'arrivo **più vicino** (senza minuti in fondo). **Cambio di
+  (`ordinaVociIcona`): scadute (nei loro 10 minuti), richieste dal timer più corto, consegne dall'arrivo **più vicino** (senza minuti in fondo). **Cambio di
   ripartenza**: nella lista di prima le consegne andavano dalla più lontana. `firmaVoci` (`tipo-id-fase`, in ordine alfabetico, non dipende dal
   tempo né dall'ordine) sta in `data-firma` del link dell'icona e della striscia: la pagina con la striscia **si ricarica** quando il controllo
   periodico di `nav_ordini` vede una firma diversa (ordine passato di fase, nuovo, finito); se cambia solo il tempo si muovono solo i timer.
@@ -722,14 +722,23 @@ meno di 24 h), **3** consegnato (`consegnato_il`): la 3 **non è più attiva**, 
   dell'icona. Ogni scheda porta alla pagina della sua attività (`voce.href`) e ogni richiesta ha il suo `[data-secondi]`, quindi il suo
   conto. Le voci di consegna portano `corriere` e `progresso` (la barra a metà) proprio per questo. Il controllo periodico di `nav_ordini`
   rimpiazza tutto lo slot `[data-stato-home]`: una scheda sparisce da sola quando l'attività finisce.
-- **"Nessuna risposta" (fase `scaduta`) solo se è l'ULTIMA cosa successa** (`scadutaRecente`: la richiesta con l'id più alto è
-  `nessuna_offerta` da meno di 3 h). Prima bastava una scaduta qualunque fra le ultime cinque: con un ordine consegnato (fase 3)
-  l'icona diceva comunque "Nessuna risposta" (bug segnalato il 15/10/2026).
+- **"Nessuna risposta" (fase `scaduta`): OGNI richiesta senza risposta resta 10 minuti dalla sua scadenza, per conto suo** (richiesta esplicita del 20/10/2026,
+  sostituisce la regola del 15/10 "solo se è l'ULTIMA cosa successa, entro 3 h", che con due richieste insieme faceva sparire subito la prima a scadere: non rimetterla).
+  `flusso.scaduteRecenti(cards)` = tutte le `nessuna_offerta` con `secondiAllaScomparsa > 0` (`SCADUTA_VISIBILE_MS` = 10 min da `scade_il`, arrotondato per eccesso), a prescindere
+  da cos'altro è successo dopo (altre richieste, un ordine anche consegnato); l'annullata non è mai una voce. Ogni voce `scaduta` porta `scompareTraSec`; fra scadute prima quella che
+  sparisce prima. Quando i 10 minuti finiscono si passa a: un'altra scaduta ancora nei suoi 10 minuti, poi le richieste/ordini nelle varie fasi, poi la pagina "Stato ordini" vuota
+  (è l'ordine delle voci, quello che segue `/ordini`). **Come sparisce**: l'icona (`nav_ordini.ejs`) legge `[data-scompare-sec]` e, appena la prima è sparita (+0,8 s), rilegge lo
+  stato (`avvia()` → `primaScomparsa()`); una pagina con la striscia si ricarica per la firma cambiata. Se la pagina aperta è proprio la richiesta che sparisce (`richiesta_chiusa.ejs`,
+  `lasciaFra` da `server.js`, = 0 se è aperta dallo Storico o oltre i 10 minuti) un timer in pagina fa `location.replace('/ordini')` a +1 s e imposta `window.minuteriaLasciaIl`:
+  l'icona, negli ultimi 6 s, **non ricarica** la pagina (`staPerLasciare`), altrimenti la ricarica vincerebbe la corsa e il cliente resterebbe su una richiesta ormai fuori dall'elenco.
+  **Limite noto**: se TUTTI i banchi rifiutano prima della fine della finestra la richiesta si chiude subito (`chiudiSenzaOrdine`) ma `scade_il` resta nel futuro, quindi i 10 minuti
+  contano dalla fine della finestra e non dal rifiuto (mancano un orario di chiusura nel DB). L'API dell'app (`/stato-ordini`) non scrive `scompare_tra_sec`: l'app non ha il passaggio automatico.
+  Prove: `test/stato_ordini.test.js` ("DUE richieste…", "secondiAllaScomparsa…", "ogni «Nessuna risposta» porta i secondi…") e "richiesta senza risposta: resta in «Stato ordini» 10 minuti…" in `test/server.test.js`.
 - Si guardano le ultime **30** richieste (`RICHIESTE_RECENTI`), non più 5.
 - **L'icona alterna le attività quando sono 2 o più** (richiesta del 15/10/2026): `statoIconaOrdini` ritorna, oltre ai campi di sempre
   (la prima inviata), `voci` = TUTTE le attività nell'ordine di alternanza
-  (`ordinaVociIcona`, funzione pura: prima la `scaduta`, poi le `richiesta` dal timer più corto, poi le `consegna` da chi arriva prima, senza
-  minuti in fondo; a parità la più vecchia). La **scaduta** entra fra le voci anche con altre attività (la vecchia regola la nascondeva).
+  (`ordinaVociIcona`, funzione pura: prima le `scaduta` (da quella che sparisce prima), poi le `richiesta` dal timer più corto, poi le `consegna` da chi arriva prima, senza
+  minuti in fondo; a parità la più vecchia). Le **scadute** entrano fra le voci anche con altre attività, ciascuna per 10 minuti (vedi sopra).
   `views/partials/nav_ordini.ejs`: con `voci.length >= 2` il link ha `multi`, `data-fasi="richiesta,consegna"`, `data-fase` della prima voce e
   `aria-label` ("Stato ordini: 2 attivi. In attesa, 07:42 rimasti. Arriva tra 18 minuti."), dentro un `.fotogramma` per voce (sovrapposti,
   dissolvenza di 250 ms, `aria-hidden`) e i `.puntini`; con 0 o 1 voce il markup è quello di sempre. Il contenuto di una fase sta **solo** in
@@ -847,7 +856,7 @@ niente, in nessuno stato** (dal 19/10/2026: prima chiamava `prendiInCarico` e po
 - **La bolla si emette solo mentre l'ordine è "Da preparare"** (richiesta esplicita del 19/10/2026: durante la consegna non ha senso), cioè solo da questa pagina. `POST /ddt` lo rifiuta lato server
   (`ordine.stato !== 'inviato'` e senza DDT → pagina d'errore **409** "La bolla si emette quando l'ordine è ancora da preparare…" con il ritorno allo Storico; un secondo invio con la bolla già emessa passa, `emetti` non
   rinumera). **Gli ordini già "In consegna" senza bolla non possono più averla** (sul DB condiviso al 19/10/2026: 7, vecchie prove). Emessa la bolla l'ordine diventa `evaso` = "In consegna" e si va alla bolla da stampare
-  (`/ddt/:id`, il cui "‹ Torna" per il banco va allo **Storico**, non più all'ordine). Come si **rivede** una bolla: "Apri ›" nel pannello della riga dello Storico (`.sto-d-bolla-apri`; nella lista il numero DDT è solo un testo), "Apri e stampa la bolla / DDT" nella pagina
+  (`/ddt/:id`, il cui "‹ Torna" per il banco va **da dove si è emessa la bolla**: il modulo manda `torna` (la pagina di partenza, di norma la home: "Torna al banco", richiesta del 20/10/2026), e senza `?torna=` valido, per esempio aprendo la bolla dallo Storico, resta lo **Storico**; mai all'ordine). Come si **rivede** una bolla: "Apri ›" nel pannello della riga dello Storico (`.sto-d-bolla-apri`; nella lista il numero DDT è solo un testo), "Apri e stampa la bolla / DDT" nella pagina
   dell'ordine in consegna o consegnato e "Apri la bolla / DDT N ›" nella scheda cliente (`.mc-vedi`): tutti link a `/ddt/:id`. Dalla richiesta con l'ordine "Da preparare" si arriva qui da soli (redirect).
 - **Pulsante della bolla**: sempre attivo (prima era "spento" con `aria-disabled` finché non si spuntava tutto). Etichetta "Emetti bolla e consegna al corriere" (con corriere) / "… e segna la merce partita"; trasporto predefinito `vettore` col corriere,
   altrimenti mittente/destinatario secondo la modalità (`trasportoPredefinito`). **"Aspetto dei beni" è un gruppo di radio veri** (`name="aspetto"`, non un hidden + pulsanti: funziona anche senza JS). Dopo l'emissione si va a `/ddt/:id` (la bolla da stampare), non più a questa pagina.
@@ -965,6 +974,81 @@ fondo a `style.css`); logica di approvazione e rifiuto **invariata** (`POST .../
   approvazione e rifiuto non usare i clienti veri (un "da approvare" è una persona reale): creare due clienti di prova,
   provare, **cancellarli per id** (users, client_distributors, notifications, client_discount_rules).
 
+## Account dell'installatore: password dimenticata, cambio password, elimina account (20/10/2026)
+
+Richiesta esplicita ("fai 1 e 2" dopo l'elenco di cosa mancava). Solo **clienti** (installatori); il banco ha il suo cambio password nell'Anagrafica del banco, l'agente nessuno.
+- **Password dimenticata** (`src/recupero_password.js`, `views/password_dimenticata.ejs`, `views/password_reimposta.ejs`; link "Password dimenticata?" sul login): `GET/POST /password-dimenticata`
+  (nome utente **o** email, anche maiuscolo) → per ogni cliente attivo che corrisponde (al massimo 3) UNA email **all'indirizzo salvato nell'account**, mai a uno scritto da chi chiede, con un link
+  `/reimposta-password/<codice>`. Il codice (32 byte, 43 caratteri base64url) **non sta nel DB**: tabella `recupero_password` con l'hash SHA-256, `scade_il` = un'ora, `usato_il`; un link nuovo annulla i
+  precedenti dello stesso account; `accountDaCodice` non cerca nemmeno nel DB un codice mal formato. **La risposta è sempre la stessa** (account che c'è o no, senza email, eliminato: stessa pagina, stesso stato) e
+  l'**invio non si aspetta** (nemmeno il tempo dice se l'account esiste; provato: `test` "risposta uguale per account che c'è e che non c'è"). Limiti (`limite_login`): 3 richieste/ora per coppia indirizzo+identificativo
+  e 10/ora per indirizzo (429, conta anche per account inesistenti). Reimpostare (`reimposta`): link consumato nella STESSA transazione che cambia la password (due invii insieme non la cambiano due volte); con
+  campi che non vanno il link NON si consuma; poi **si chiudono TUTTE le sessioni** dell'account (`session`, nessuna da tenere) e **si revocano gli accessi dell'app** (`app_tokens`), e si va a `/login?avviso=password`.
+  **Il link nell'email usa `APP_URL`**, MAI l'intestazione Host (la scrive chi chiama: un link verso un sito altrui farebbe rubare il codice); senza `APP_URL` l'email non parte (riga nel log) tranne in locale
+  (host `localhost`/`127.0.0.1`/`::1`), dove, **senza SMTP**, il link si scrive nel log del server (`[recupero password] (solo in locale) link per …`) per poter provare senza posta; mai su un indirizzo pubblico.
+  **Serve l'SMTP configurato** (`SMTP_*` nel `.env`, vedi `src/email.js`): oggi non c'è sulla VPS, quindi in produzione **non parte nessuna email e il recupero non funziona finché non lo si configura**. `src/email.js`:
+  `inviaRecuperoPassword` (HTML + testo, non lancia mai). Solo il cliente ha il recupero: banco/agente/account senza email o disattivati non ricevono niente.
+- **Cambio password dal profilo** (`POST /profilo/password`, scheda "Accesso" di `views/profilo.ejs`, `<details>` che con errori resta aperto): stessa logica del banco, **estratta in `src/password_account.js`** (`cambiaPassword`,
+  `controllaCambioPassword`, `chiudiAltreSessioni`, `revocaAccessiApp`, `scriviNuovaPassword`; `anagrafica_banco.js` la importa): attuale giusta (`passwordValida`), nuova 8–72 caratteri e DIVERSA, chiude le ALTRE
+  sessioni e **da ora revoca anche gli accessi dell'app** (anche per il banco: `UPDATE app_tokens … revocato_il`), limite tentativi del login (chiave `cambio-password:<utente>`, 8 in 10 minuti → 429).
+- **Elimina account dal sito** (`GET/POST /profilo/elimina`, `views/profilo_elimina.ejs`, scheda "Elimina account" nel profilo): usa lo STESSO `src/account.js` dell'app (anonimizza e disattiva, non cancella: ordini, bolle,
+  ricevute e pagamenti restano). La pagina spiega cosa si cancella e cosa resta e chiede la password; **se c'è qualcosa in corso** (richiesta in attesa, ordine non consegnato nelle ultime 24 h, pagamento a metà) lo dice
+  subito e il modulo non c'è (anche un POST a mano riceve 409); a buon fine `tokenApp.dimenticaUtente`, sessione distrutta, `/login?avviso=eliminato`. Le frasi del login (`?avviso=`) sono solo `AVVISI_LOGIN` in `server.js`.
+  `/elimina-account` (pagina pubblica per Google Play, `src/testi_legali.js`) ora ha anche la sezione "Dal sito".
+- **App Expo**: nel login c'è "Password dimenticata?" che apre `SERVER + '/password-dimenticata'` nel browser (come Privacy ed Elimina account); il cambio password dentro l'app non c'è (solo `tsc` provato, non su un telefono).
+- **Schema** (blocco "Recupero della password dell'installatore (20/10/2026)" in fondo a `schema.sql` e `schema.pg.sql`, DOPO quello dell'anagrafica del banco): tabella `recupero_password` + indice. **Applicato solo al DB locale
+  di prova, NON al condiviso** (`node scripts/applica_blocco_schema.js "-- Recupero della password dell'installatore"`). Senza la tabella il recupero dà errore 500; il resto (cambio password, elimina) funziona.
+  Nota: `applica_blocco_schema.js` applica **dal commento indicato fino in fondo**, quindi lanciarlo con "-- Anagrafica del banco: orari" applica entrambi i blocchi.
+- **Prove**: `test/recupero_password.test.js` (modulo e email, DB e posta finti), `test/anagrafica_banco.test.js` (la revoca degli accessi dell'app), e in `test/server.test.js` "login: link …", "recupero password: …", "profilo: scheda
+  Accesso…", "elimina account dal sito…". Provato su Postgres locale con il server vero (link con scadenza reale, hash nel DB, sessioni vecchie fuori, account anonimizzato, nuovo recupero per un account eliminato: niente) e a 430px.
+  **Non provato**: l'invio con un SMTP vero, l'app Expo su un telefono.
+
+## Anagrafica del banco e orari (20/10/2026)
+
+`GET /distributore/anagrafica` (`server.js`, "Anagrafica del banco") + `views/distributore_anagrafica.ejs` + `views/partials/ab_campo.ejs`, classi `ab-*` (blocco in fondo a `style.css`), logica in
+**`src/anagrafica_banco.js`** (controlli, lettura, salvataggi) e **`src/orari.js`** (orari, pura). Mockup in `docs/mockup/anagrafica-banco*.png` (la loro intestazione è vecchia: bottone "Storico ordini" e campanella
+non ci sono più, vale quella unica di `banco_testa`). **Un solo profilo con tutti i permessi**: niente ruoli, colleghi, inviti né sezione Bolla/DDT (richiesta esplicita, non aggiungerli). Prove: `test/orari.test.js`,
+`test/anagrafica_banco.test.js` (controlli, salvataggi con DB finto, geocodifica con `fetch` finto), "banco: anagrafica…" e "carrello: con TUTTI i banchi chiusi…" in `test/server.test.js`, "orari" in `test/richieste_importi.test.js`.
+- **Dove si apre**: voce "Anagrafica del banco" in cima alla tendina del cerchio (`banco_testa.ejs`); sulla pagina il cerchio ha la classe `.attivo` (anello blu pieno `#245A8F`) e nessuna scheda del menu è accesa
+  (`sezione` vuota per quel percorso). **Dalla tendina sono spariti "Suoni notifiche" e "Attiva le notifiche del computer"**: gli interruttori stanno nella scheda Notifiche della pagina.
+- **Schede e dove scrivono**: *Ditta* = tabella `ditte` via `distributors.ditta_id` (ragione sociale, P. IVA, SDI/PEC, sede legale); senza `ditta_id` vale `distributors.ragione_sociale/partita_iva` e la scheda cambia **solo
+  quelle due** (SDI e sede non si mostrano: gli indirizzi di `distributors` sono quelli di ritiro, non la sede legale). *Questa filiale* = riga di `distributors` **e** riga di `store_locations` (la prima della filiale: indirizzo,
+  telefono, email, e il nome solo se era quello della filiale): i due non devono divergere, li leggono `/punti-vendita`, `consegna.js` e il messaggio ai corrieri. *Orari* = `distributors.orari`. *Accesso* = `users.email`
+  dell'utente loggato + password. Controlli (messaggi sotto il campo, rosso): P. IVA 11 cifre; SDI 7 caratteri (maiuscolo) **o** PEC; CAP 5 cifre; provincia 2 lettere (maiuscolo); **un campo vuoto va bene** (oggi P. IVA e
+  SDI sono vuoti: non devono bloccare il salvataggio del telefono), ragione sociale / nome banco / via / zona sono obbligatori. Il nome della filiale duplicato (indice unico nome+filiale) dà l'errore sotto il campo (23505).
+- **Come si apre una scheda**: ogni scheda ha lettura + modulo nascosto; "Modifica" è un link `?modifica=<scheda>#<scheda>` (senza JS il server la rende già aperta, `data-aperta`) che lo script (blocco "Anagrafica del banco"
+  in fondo a `app.js`) trasforma in un cambio di vista. Con errori la pagina si ripropone 400 con la scheda aperta e i valori scritti; salvato → redirect `?ok=<scheda>` con il messaggio verde. **Niente `data-auto-refresh`**
+  su questa pagina (si ricaricherebbe mentre si scrive).
+- **Posizione sulla mappa**: riga verde se `geo_lat/geo_lng` ci sono, arancio se mancano; "Sposta"/"Imposta" apre un `<dialog>` con Leaflet (blocco in `public/mappa.js`, `[data-mappa-dialog]`) e salva con
+  `POST /distributore/anagrafica/posizione` (JSON; solo numeri in un riquadro che copre l'Italia, `geo.posizioneValida`). Da quel momento `distributors.geo_manuale = 1` e **un cambio d'indirizzo non la ricalcola più**
+  (avviso "resta quella che hai scelto tu"). Il ricalcolo dall'indirizzo è `geo.geocodifica` (**Nominatim/OpenStreetMap**, User-Agent proprio, due tentativi: completo e senza CAP, 6 s di attesa, non lancia mai; se non trova niente
+  la posizione resta e la pagina avvisa). **La spec diceva "la geocodifica che usa già l'app (geo.js)": non esisteva** (geo.js aveva solo le distanze, Nominatim si usava negli script una tantum), l'ho scritta io.
+  Non c'è un modo per tornare dalla posizione "a mano" a quella automatica, tranne rimettere `geo_manuale = 0` a mano.
+- **Orari** (`src/orari.js`): JSONB `{"lun":[["07:30","12:30"],["14:00","18:00"]],…,"dom":[]}`, sette giorni, al massimo due fasce, ora di **Roma** (`Intl`, anche se il server è in UTC), fascia `[inizio, fine)` nello stesso
+  giorno. **NULL = sempre aperto** (com'era; anche un valore rovinato vale "aperto": meglio una richiesta fuori orario che una persa). Il modulo: una riga per giorno con interruttore aperto/chiuso e due fasce, "Copia su tutti i
+  giorni feriali" (lun → mar–ven), e la casella "Nessun orario: sempre aperto" (non era nella spec: serve per tornare a NULL; con NULL il modulo propone gli orari del mockup, spenti). Non si salva con tutti i giorni chiusi
+  (il banco non riceverebbe mai niente). In lettura i giorni consecutivi uguali stanno su una riga (`orari.riassunto`).
+- **Effetto sulle richieste**: `richieste.distributoriCandidati` (solo le filiali aperte adesso), il ripiego "broadcast" di `creaRichiesta` (**mai** i chiusi: se sono tutti chiusi la richiesta nasce già `nessuna_offerta` e la carta
+  si rilascia, come senza banchi) e **`flusso.controllaBancoAperto`** → `ErroreFlusso('banco_chiuso')`, chiamata da `validaRichiesta` (quindi dall'invio sul sito, con Stripe prima di autorizzare la carta **e di nuovo a carta già
+  autorizzata**, e dall'API dell'app: `400` con `codice: 'banco_chiuso'`), da **"Rinvia richiesta"** (sito, API e `avviaPagamentoReinvio`; non era nella spec, ma rinviare a un banco chiuso farebbe pagare per niente) e dal carrello. Il
+  carrello (`/carrello`, `richieste.statoBanchiAttivi`, una query solo a carrello pieno) al posto di "Paga e invia richiesta" mostra **"Il banco è chiuso · riapre giovedì alle 07:30"** (`.btn-paga-chiuso`, sempre `disabled`, e
+  `aggiornaCarrelloDa` in `app.js` non lo riattiva: `data-banco-chiuso`); la nota "Se nessun banco accetta, ti rimborsiamo" non c'è. Più filiali: chiuso solo se lo sono **tutte**, e dice quando riapre la prima. **L'app Expo non
+  mostra niente** (il suo carrello non sa degli orari: il server rifiuta e l'app vede l'errore generico dell'API). La pagina del carrello **non si aggiorna da sola** alla riapertura.
+- **Password** (`POST /distributore/anagrafica/password`): controlla l'attuale con `passwordValida`, la nuova con `password.erroriNuovaPassword` (8–72 caratteri come in registrazione, uguale alla ripetizione, **diversa
+  dall'attuale**), salva l'hash bcrypt e **chiude le altre sessioni** dello stesso utente (`DELETE FROM session WHERE (sess::jsonb #>> '{user,id}') = ? AND sid <> ?`, come `src/account.js`). I tentativi con l'attuale
+  sbagliata contano nello stesso limite del login (`limite_login`, chiave `cambio-password:<utente>`: 8 in 10 minuti → 429). Le password non tornano mai nel modulo.
+- **Notifiche** (solo browser, `localStorage`/permesso, blocco "Avvisi del banco" di `app.js`): "Suoni" (`minuteria.banco.suoni`, come prima) e "Notifiche del computer" (permesso del browser **e** `minuteria.banco.notificheSistema`:
+  il permesso non si revoca da una pagina, quindi "spento" = "non le mostro", e la comparsa vera in `app.js` guarda `notificheSistemaConsentite()`); a permesso negato l'interruttore resta spento con la nota "Bloccate dal browser…".
+  **"Email per ogni nuova richiesta" è NASCOSTA**: la riga compare solo quando `email.inviaNuovaRichiesta` esiste (oggi `src/email.js` manda solo "Pagamento ricevuto"); la colonna `distributors.email_nuove_richieste` e la
+  rotta `POST /distributore/anagrafica/email-richieste` (JSON `{acceso}`) ci sono già.
+- **Intestazione**: `intestazioneBanco` (server.js) ha una "versione" per banco, alzata dopo ogni salvataggio di ditta/filiale (`rileggiIntestazioneBanco`): il nuovo nome si vede subito, non fra 60 secondi.
+- **Schema** (blocco "Anagrafica del banco: orari, email delle richieste, posizione spostata a mano" in fondo a `schema.sql` e `schema.pg.sql`): `distributors.orari JSONB`, `email_nuove_richieste INTEGER DEFAULT 0`,
+  `geo_manuale INTEGER DEFAULT 0`. **Applicato solo al DB locale di prova; NON al DB condiviso di produzione**: va applicato PRIMA di mettere il codice sulla VPS (`node scripts/applica_blocco_schema.js "-- Anagrafica del banco: orari" [--applica]`).
+  Senza le colonne il carrello e l'invio funzionano lo stesso (leggono `SELECT *`: `orari` mancante = sempre aperto), ma la pagina dell'anagrafica non può salvare orari, posizione a mano né email.
+- **Provato su Postgres vero** (locale usa-e-getta, server vero da una cartella senza `.env`): salvataggio di ditta e filiale, geocodifica reale (Via XX Settembre, Genova) scritta su `distributors` e `store_locations`, posizione a mano
+  e subito dopo cambio d'indirizzo (resta), orari e banco chiuso nel carrello (pulsante, rifiuto del server, nessuna richiesta creata, ripiego broadcast), cambio password con due sessioni (l'altra esce), limite tentativi,
+  dialog della mappa (clic e "Salva posizione"), vista a 375px. **Non provato**: il permesso delle notifiche del browser (nel pannello incorporato è negato: si vede solo la nota "Bloccate"), l'audio, Safari.
+
 ## Aggiornamento automatico del banco
 
 Le pagine del banco (home, ordini, clienti, dettaglio richiesta) hanno `data-versione` = i contatori
@@ -1001,8 +1085,7 @@ blocco "Avvisi del banco" in fondo a `public/style.css`, `public/suoni/avviso.mp
   pagina si ricarica prima. Si mostrano al massimo 3 (i più nuovi; gli altri restano vivi, con una pastiglia "+N altri avvisi"). Una notifica nata da più di 10 minuti (`eta_sec`, dopo una lunga assenza) non si mostra più. Sulla pagina della
   richiesta (o dell'ordine) a cui si riferisce l'avviso non compare (c'è già tutto) e la notifica si segna letta. Tutti i testi degli avvisi sono `textContent` (il nome del cliente lo scrive lui in registrazione).
 - **Scelte mie da confermare**: senza il modulo WhatsApp (nessun corriere) l'avviso verde dice "Nuovo ordine · Ordine #N / Ordine già pagato: prepara il materiale." invece di "Corriere trovato" (sarebbe falso); gli avvisi si fermano sopra il
-  menu in basso sotto i 900px; la striscia non è sticky (la barra sì: si vede sempre il pallino); `Notification.requestPermission()` richiede un clic e nessuna pagina del banco aveva un pulsante: c'è la voce "Attiva le notifiche del computer" nel menu
-  dell'account (solo finché il permesso non è dato o negato). "Suoni notifiche: sì/no" è in `localStorage` (`minuteria.banco.suoni`). **Il suono parte solo dopo un clic su quella pagina** (regola del browser): ogni ricarica completa riparte da zero.
+  menu in basso sotto i 900px; la striscia non è sticky (la barra sì: si vede sempre il pallino); `Notification.requestPermission()` richiede un clic: dal 20/10/2026 sta negli interruttori della scheda Notifiche dell'**Anagrafica del banco** (non più nella tendina dell'account: vedi la sezione sopra). "Suoni" è in `localStorage` (`minuteria.banco.suoni`). **Il suono parte solo dopo un clic su quella pagina** (regola del browser): ogni ricarica completa riparte da zero.
 - **Non provato / limiti**: la notifica di sistema (nel browser incorporato il permesso è negato: il percorso è `document.hidden` + `Notification.permission === 'granted'`), l'ascolto vero del suono (si vede solo la richiesta dell'MP3),
   "riduci movimento" (solo il CSS, controllato da un test), Safari/iPhone. Provato nel browser incorporato su un Postgres locale usa-e-getta (`DROP DATABASE` fatto a fine prova): pallino, striscia (rossa sotto i 2 minuti), avviso con "Conferma" senza
   lasciare la pagina (poi "Nuovo ordine"), scadenza, risposta di un collega, "Corriere trovato" che resta cambiando pagina, chiusura automatica a 10 s con pausa al passaggio del mouse, titolo che alterna e favicon col pallino, home senza avvisi, 375 px.
@@ -1182,12 +1265,22 @@ Solo sito/PWA (`mobile/` non toccata, schema DB e logica di business invariati).
   è servito prima della sessione. Header `X-Content-Type-Options`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy`;
   niente CSP (script e stili inline). Chiusura pulita su SIGTERM/SIGINT; il controllo scadenze (30 s) non si
   sovrappone.
-- **PWA** (`public/manifest.webmanifest`, `public/sw.js`, `public/icons/`): il service worker **non mette niente in
-  cache** (pagine e API sono dati di chi è collegato) e serve solo a mostrare le notifiche su Chrome Android, dove
+- **PWA** (`public/manifest.webmanifest`, `public/sw.js`, `public/offline.html`, `public/icons/`): il service worker **non mette in
+  cache pagine, CSS, JS né API** (sono dati di chi è collegato) e fa tre cose: mostra le notifiche su Chrome Android, dove
   `new Notification()` lancia (`Minuteria.mostraNotifica` in `app.js` prova il costruttore e ripiega su
-  `registration.showNotification`) e a rendere l'app installabile. **Funziona solo in HTTPS** (o localhost): finché
-  il sito resta su HTTP semplice non succede niente, senza errori. Le icone (lettera "M" su blu) sono
+  `registration.showNotification`), rende l'app installabile e, **solo per le navigazioni** (`request.mode === 'navigate'`), se la rete manca mostra
+  `/offline.html` (l'unica cosa in cache, `minuteria-offline-v1`, scaricata con `cache: 'reload'` all'installazione; pagina autonoma, tutto in
+  linea) invece dell'errore del browser. Immagini, script e `/api` non passano da qui e falliscono come prima: l'app non finge di avere dati che non ha.
+  **Funziona solo in HTTPS** (o localhost): finché il sito resta su HTTP semplice non succede niente, senza errori. Le icone (lettera "M" su blu) sono
   **segnaposto**, rigenerabili con `node scripts/genera_icone_pwa.js`; manca ancora il logo vero.
+  **Installare dal telefono (20/10/2026, richiesta "web app per mobile")**: il manifest ha `id`, `orientation: portrait`, `categories`; `partials/installa.ejs`
+  (nella home, compatta con la × "Non ora" per 30 giorni in `localStorage`, e nella scheda **"Sul telefono"** del profilo, sempre disponibile) è
+  nascosta e il blocco "Installa l'app" di `app.js` la mostra solo con `beforeinstallprompt` (Chrome/Edge/Samsung, HTTPS) o, su iPhone/iPad con Safari,
+  con la spiegazione "Condividi → Aggiungi alla schermata Home"; mai se è già aperta da installata. Nella scheda "Sul telefono" c'è anche "Avvisi sul telefono"
+  (`[data-abilita-notifiche]`, che prima non stava in nessuna vista): chiede il permesso del browser, **ma gli avvisi arrivano solo finché l'app è aperta**
+  (controllo ogni 10 s): **non esiste Web Push** (servirebbero chiavi VAPID, un archivio delle iscrizioni e `web-push`). Prove: `test/sw.test.js` (il
+  service worker in un contesto isolato con `caches`/`fetch` finti: il pannello browser incorporato non registra service worker, quindi **cache offline e
+  installazione vera non sono provate su un telefono**) e due test in `test/server.test.js`.
 - **Browser**: `leggiJson` (in `Minuteria`, testa di `public/app.js`) gestisce il 401 delle chiamate `/api` tornando
   al login; i pulsanti disabilitati dall'anti-doppio-invio si riattivano se la pagina riappare da "indietro"
   (`pageshow`, bfcache); il blocco "Consegna in cantiere" non va più in errore (e non ferma lo script) se manca

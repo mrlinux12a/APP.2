@@ -272,7 +272,8 @@ const Minuteria = (function () {
     });
     document.querySelectorAll('[data-riga-raee]').forEach(function (el) { el.hidden = !r.con_raee; });
     document.querySelectorAll('[data-minimo-avviso]').forEach(function (el) { el.hidden = !!r.raggiunto; });
-    document.querySelectorAll('[data-btn-paga]').forEach(function (el) { el.disabled = !r.raggiunto; });
+    // Con il banco chiuso (orari) il pulsante resta spento qualunque sia il carrello.
+    document.querySelectorAll('[data-btn-paga]').forEach(function (el) { el.disabled = !r.raggiunto || el.hasAttribute('data-banco-chiuso'); });
     const righe = d.totali_righe || {};
     Object.keys(righe).forEach(function (id) {
       document.querySelectorAll('[data-totale-riga="' + id + '"]').forEach(function (el) { el.textContent = '€ ' + righe[id]; });
@@ -1166,15 +1167,27 @@ const Minuteria = (function () {
 
   // ---------- Notifiche del browser ----------
 
+  // Il pulsante "Attiva" della scheda "Sul telefono" del profilo (views/profilo.ejs): chiede il permesso con un clic e dice com'è messa la cosa. Gli avvisi
+  // arrivano però solo finché l'app (o la scheda) è aperta: il controllo qui sotto gira ogni 10 secondi nella pagina, non c'è ancora una notifica che
+  // arrivi a telefono chiuso (servirebbe Web Push: chiavi VAPID e un archivio delle iscrizioni).
   const pulsanteNotifiche = document.querySelector('[data-abilita-notifiche]');
-  if (pulsanteNotifiche && 'Notification' in window) {
-    if (Notification.permission === 'granted') pulsanteNotifiche.hidden = true;
+  const statoNotifiche = document.querySelector('[data-notifiche-stato]');
+  const schedaNotifiche = document.querySelector('[data-notifiche-scheda]');
+  function mostraStatoNotifiche() {
+    if (!pulsanteNotifiche) return;
+    if (!('Notification' in window)) { if (schedaNotifiche) schedaNotifiche.hidden = true; return; } // browser senza notifiche: niente scheda
+    const permesso = Notification.permission;
+    pulsanteNotifiche.hidden = permesso !== 'default';
+    if (!statoNotifiche) return;
+    if (permesso === 'granted') statoNotifiche.textContent = "Attivi: ti avvisiamo quando un banco risponde, finché l'app è aperta.";
+    else if (permesso === 'denied') statoNotifiche.textContent = 'Bloccati dal browser: riattivali dalle impostazioni del sito.';
+  }
+  if (pulsanteNotifiche) {
+    mostraStatoNotifiche();
     pulsanteNotifiche.addEventListener('click', function () {
       Notification.requestPermission().then(function (p) {
-        if (p === 'granted') {
-          pulsanteNotifiche.hidden = true;
-          mostraNotifica('Notifiche attive', 'Ti avviseremo quando i distributori rispondono.', null, 'minuteria-attive');
-        }
+        if (p === 'granted') mostraNotifica('Avvisi attivi', 'Ti avviseremo quando i distributori rispondono.', null, 'minuteria-attive');
+        mostraStatoNotifiche();
       });
     });
   }
@@ -2135,6 +2148,80 @@ window.addEventListener('pageshow', function (e) {
   contenuto.addEventListener('touchcancel', function () { inizio = null; }, { passive: true });
 })();
 
+/* Installa l'app (views/partials/installa.ejs, nella home e nel profilo). Le schede [data-installa] sono nascoste e qui si mostrano solo se si può installare:
+   · Chrome/Edge/Samsung (HTTPS): il browser manda `beforeinstallprompt`; lo si tiene da parte e "Installa" lo mostra (si può usare una volta sola);
+   · iPhone/iPad con Safari: non c'è un pulsante, si spiega a parole ("Condividi → Aggiungi alla schermata Home") e il bottone non c'è;
+   · già installata (display-mode standalone / navigator.standalone): niente.
+   Sulla home la × "Non ora" la nasconde per 30 giorni (localStorage); nel profilo ([data-installa-sempre]) non scompare mai. Dopo l'installazione
+   (`appinstalled`) le schede spariscono. */
+(function () {
+  'use strict';
+  const schede = Array.prototype.slice.call(document.querySelectorAll('[data-installa]'));
+  if (!schede.length) return;
+
+  const CHIAVE = 'minuteria.installa.nascosto';
+  const TRENTA_GIORNI_MS = 30 * 24 * 60 * 60 * 1000;
+  function leggi(chiave) { try { return window.localStorage.getItem(chiave); } catch (e) { return null; } }
+  function scrivi(chiave, valore) { try { window.localStorage.setItem(chiave, valore); } catch (e) { /* si va avanti senza */ } }
+
+  const giaInstallata = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  if (giaInstallata) return;
+
+  const agente = window.navigator.userAgent || '';
+  const iosSafari = (/iphone|ipad|ipod/i.test(agente) || (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1)) && !/crios|fxios|edgios|opios/i.test(agente);
+  let proposta = null; // l'evento beforeinstallprompt
+
+  function mostra() {
+    const nascostaFino = Number(leggi(CHIAVE)) || 0;
+    schede.forEach(function (scheda) {
+      if (scheda.hasAttribute('data-installa-sempre') || Date.now() > nascostaFino) scheda.hidden = false;
+    });
+  }
+  function nascondi() { schede.forEach(function (scheda) { scheda.hidden = true; }); }
+
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault(); // niente mini-barra del browser: l'invito è il nostro
+    proposta = e;
+    mostra();
+  });
+  window.addEventListener('appinstalled', function () {
+    proposta = null;
+    nascondi();
+  });
+
+  if (iosSafari) {
+    schede.forEach(function (scheda) {
+      const testo = scheda.querySelector('[data-installa-testo]');
+      const bottone = scheda.querySelector('[data-installa-btn]');
+      if (testo) testo.textContent = 'Tocca Condividi, poi «Aggiungi alla schermata Home».';
+      if (bottone) bottone.hidden = true;
+    });
+    mostra();
+  }
+
+  schede.forEach(function (scheda) {
+    const bottone = scheda.querySelector('[data-installa-btn]');
+    const chiudi = scheda.querySelector('[data-installa-chiudi]');
+    if (bottone) {
+      bottone.addEventListener('click', function () {
+        if (!proposta) return;
+        const evento = proposta;
+        proposta = null; // una proposta si può mostrare una volta sola
+        evento.prompt();
+        evento.userChoice.then(function (scelta) {
+          if (scelta && scelta.outcome === 'accepted') nascondi();
+        }).catch(function () { /* il browser ha annullato: l'invito resta fino al prossimo evento */ });
+      });
+    }
+    if (chiudi) {
+      chiudi.addEventListener('click', function () {
+        scrivi(CHIAVE, String(Date.now() + TRENTA_GIORNI_MS));
+        scheda.hidden = true;
+      });
+    }
+  });
+})();
+
 /* Service worker: serve a mostrare le notifiche dove `new Notification` non esiste (Chrome per Android) e a
    rendere l'app installabile sulla schermata Home. Non mette in cache pagine né file: restano sempre quelli
    del server. Funziona solo in HTTPS (o su localhost): altrove il browser non lo offre e non succede niente. */
@@ -2157,9 +2244,9 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
         ordine_consegnato si chiude da sola dopo 6 s
       Passando il mouse sopra, il conto alla rovescia di chiusura si ferma. Aperta o chiusa, la notifica risulta letta (POST /api/notifiche/lette).
    4. scheda del browser: se ci sono richieste da confermare e la scheda non è in primo piano, il titolo alterna ogni 2 s con "(N) Nuova richiesta · ditta"
-      e la favicon prende un pallino arancio; la notifica di sistema (Notification) parte solo se la pagina è nascosta;
-   5. suono breve (public/suoni/avviso.mp3) per nuova richiesta e corriere trovato, sbloccato dal primo clic sulla pagina; "Suoni notifiche: sì/no" nel
-      menu dell'account (localStorage).
+      e la favicon prende un pallino arancio; la notifica di sistema (Notification) parte solo se la pagina è nascosta e l'interruttore è acceso;
+   5. suono breve (public/suoni/avviso.mp3) per nuova richiesta e corriere trovato, sbloccato dal primo clic sulla pagina. Gli interruttori "Suoni" e
+      "Notifiche del computer" stanno nella scheda Notifiche della pagina "Anagrafica del banco" (non più nella tendina dell'account); localStorage.
    Dati: GET /distributore/stato-banco ogni 15 s (e subito quando arriva una notifica) per numeri, richieste ancora aperte e ordini da preparare; GET /api/notifiche/push ogni 5 s
    per le notifiche nuove (src/banco_avvisi.js). Una richiesta che non c'è più nell'elenco (risposta di un collega, scaduta, annullata) fa sparire il suo avviso.
    Questo blocco sostituisce, sulle pagine del banco, quello delle notifiche del browser qui sopra. */
@@ -2229,34 +2316,69 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
     } catch (e) { /* niente suono */ }
   }
 
-  // "Suoni notifiche: sì/no" nel menu dell'account.
-  const voceSuoni = document.querySelector('[data-suoni-voce]');
-  function mostraVoceSuoni() {
-    if (!voceSuoni) return;
-    const stato = voceSuoni.querySelector('[data-suoni-stato]');
-    if (stato) stato.textContent = suoniAttivi ? 'sì' : 'no';
-    voceSuoni.setAttribute('aria-pressed', suoniAttivi ? 'true' : 'false');
+  // Interruttori della pagina "Anagrafica del banco" (scheda Notifiche; prima erano due voci della tendina dell'account: "Suoni notifiche" e
+  // "Attiva le notifiche del computer"). Valgono per questo computer, non per il profilo. Sono bottoni role="switch": aria-checked dice se sono accesi.
+  // Suoni: localStorage (CHIAVE_SUONI, default acceso). Notifiche del computer: serve il permesso del browser (si chiede solo con un clic) E la preferenza
+  // qui sotto: il permesso non si revoca da una pagina, quindi "spento" vuol dire solo "non le mostro più" (CHIAVE_NOTIFICHE_SISTEMA = 'no').
+  const CHIAVE_NOTIFICHE_SISTEMA = 'minuteria.banco.notificheSistema';
+  function notificheSistemaConsentite() {
+    return 'Notification' in window && Notification.permission === 'granted' && leggi('localStorage', CHIAVE_NOTIFICHE_SISTEMA) !== 'no';
   }
-  mostraVoceSuoni();
-  if (voceSuoni) {
-    voceSuoni.addEventListener('click', function () {
+
+  const interruttoreSuoni = document.querySelector('[data-suoni-voce]');
+  function mostraInterruttoreSuoni() {
+    if (interruttoreSuoni) interruttoreSuoni.setAttribute('aria-checked', suoniAttivi ? 'true' : 'false');
+  }
+  mostraInterruttoreSuoni();
+  if (interruttoreSuoni) {
+    interruttoreSuoni.addEventListener('click', function () {
       suoniAttivi = !suoniAttivi;
       scrivi('localStorage', CHIAVE_SUONI, suoniAttivi ? 'sì' : 'no');
-      mostraVoceSuoni();
+      mostraInterruttoreSuoni();
       if (suoniAttivi) suono(); // il clic sblocca l'audio: si sente subito com'è
     });
   }
 
-  // Le notifiche del computer: il permesso si chiede solo con un clic, la voce del menu c'è finché serve.
-  const voceSistema = document.querySelector('[data-notifiche-sistema]');
-  if (voceSistema && 'Notification' in window && Notification.permission === 'default') {
-    voceSistema.hidden = false;
-    voceSistema.addEventListener('click', function () {
+  const interruttoreSistema = document.querySelector('[data-notifiche-sistema]');
+  const notaSistema = document.querySelector('[data-notifiche-nota]');
+  function mostraInterruttoreSistema() {
+    if (!interruttoreSistema) return;
+    const supportate = 'Notification' in window;
+    interruttoreSistema.setAttribute('aria-checked', notificheSistemaConsentite() ? 'true' : 'false');
+    if (!notaSistema) return;
+    // Permesso negato: l'interruttore resta spento e dice come sbloccarlo (solo il browser può farlo).
+    const bloccate = supportate && Notification.permission === 'denied';
+    notaSistema.hidden = supportate && !bloccate;
+    notaSistema.textContent = !supportate ? 'Questo browser non supporta le notifiche.' : bloccate ? 'Bloccate dal browser: riattivale dalle impostazioni del sito' : '';
+  }
+  mostraInterruttoreSistema();
+  if (interruttoreSistema) {
+    interruttoreSistema.addEventListener('click', function () {
+      if (!('Notification' in window)) return;
+      if (notificheSistemaConsentite()) { scrivi('localStorage', CHIAVE_NOTIFICHE_SISTEMA, 'no'); mostraInterruttoreSistema(); return; }
+      if (Notification.permission === 'granted') { scrivi('localStorage', CHIAVE_NOTIFICHE_SISTEMA, 'sì'); mostraInterruttoreSistema(); return; }
+      if (Notification.permission === 'denied') { mostraInterruttoreSistema(); return; }
       Notification.requestPermission().then(function (permesso) {
-        if (permesso === 'default') return;
-        voceSistema.hidden = true;
-        if (permesso === 'granted') mostraNotifica('Notifiche attive', 'Ti avviseremo quando arrivano richieste e ordini.', null, 'minuteria-attive');
+        if (permesso === 'granted') {
+          scrivi('localStorage', CHIAVE_NOTIFICHE_SISTEMA, 'sì');
+          mostraNotifica('Notifiche attive', 'Ti avviseremo quando arrivano richieste e ordini.', null, 'minuteria-attive');
+        }
+        mostraInterruttoreSistema();
       });
+    });
+  }
+
+  // Email per ogni nuova richiesta: salva subito (la riga c'è solo quando esiste l'invio, vedi views/distributore_anagrafica.ejs). Se il salvataggio
+  // non riesce l'interruttore torna com'era.
+  const interruttoreEmail = document.querySelector('[data-email-richieste]');
+  if (interruttoreEmail) {
+    interruttoreEmail.addEventListener('click', function () {
+      const acceso = interruttoreEmail.getAttribute('aria-checked') !== 'true';
+      interruttoreEmail.setAttribute('aria-checked', acceso ? 'true' : 'false');
+      fetch('/distributore/anagrafica/email-richieste', {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acceso: acceso }),
+      }).then(function (r) { if (!r.ok) throw new Error('non salvato'); })
+        .catch(function () { interruttoreEmail.setAttribute('aria-checked', acceso ? 'false' : 'true'); });
     });
   }
 
@@ -2832,7 +2954,7 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
         let aggiornare = false;
         nuove.forEach(function (n) {
           // Notifica di sistema: solo se la pagina è nascosta (se si vede basta l'avviso a comparsa, per non avvisare due volte).
-          if (document.hidden && 'Notification' in window && Notification.permission === 'granted') mostraNotifica(n.titolo, n.testo, n.link, 'minuteria-' + n.id);
+          if (document.hidden && notificheSistemaConsentite()) mostraNotifica(n.titolo, n.testo, n.link, 'minuteria-' + n.id);
           const sullaPagina = n.link && window.location.pathname === n.link.split('?')[0];
           switch (n.tipo) {
             case 'nuova_richiesta':
@@ -2913,4 +3035,93 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
   window.addEventListener('online', function () { aggiornaStato(); daiPush(); });
   // Tornando con "indietro" il browser può rimostrare la pagina com'era: gli avvisi vanno rifatti da capo.
   window.addEventListener('pageshow', function (e) { if (e.persisted) window.location.reload(); });
+})();
+
+
+/* Anagrafica del banco (views/distributore_anagrafica.ejs, richiesta esplicita del 20/10/2026). Ogni scheda ([data-scheda]) ha la sua lettura
+   ([data-lettura]) e il suo modulo ([data-modulo], nascosto): "Modifica" li scambia, "Annulla" torna alla lettura. Se la pagina è arrivata con una scheda già
+   aperta (errori di un salvataggio, o ?modifica=...: [data-aperta]) "Annulla" è il link vero che ricarica la pagina, così spariscono anche errori e valori
+   scritti. Senza JavaScript "Modifica" e "Annulla" restano collegamenti normali. Orari: l'interruttore aperto/chiuso di ogni giorno accende o spegne i suoi
+   campi, "sempre aperto" li spegne tutti, "Copia su tutti i giorni feriali" copia il lunedì su martedì-venerdì. */
+(function () {
+  'use strict';
+  const pagina = document.querySelector('.pagina-anagrafica-banco');
+  if (!pagina) return;
+
+  pagina.querySelectorAll('[data-scheda]').forEach(function (scheda) {
+    const lettura = scheda.querySelector('[data-lettura]');
+    const modulo = scheda.querySelector('[data-modulo]');
+    const modifica = scheda.querySelector('[data-modifica]');
+    const annulla = scheda.querySelector('[data-annulla]');
+    if (!modulo) return;
+
+    function apri(e) {
+      if (e) e.preventDefault();
+      if (lettura) lettura.hidden = true;
+      if (modifica) modifica.hidden = true;
+      modulo.hidden = false;
+      const primo = modulo.querySelector('input:not([type="checkbox"]):not([disabled])');
+      if (primo) primo.focus();
+    }
+    function chiudi(e) {
+      // Scheda arrivata già aperta (errori, ?modifica=): il link ricarica la pagina com'è salvata.
+      if (scheda.hasAttribute('data-aperta')) return;
+      if (e) e.preventDefault();
+      modulo.reset();
+      if (typeof modulo.aggiornaOrari === 'function') modulo.aggiornaOrari();
+      modulo.hidden = true;
+      if (lettura) lettura.hidden = false;
+      if (modifica) { modifica.hidden = false; modifica.focus(); }
+    }
+    if (modifica) modifica.addEventListener('click', apri);
+    if (annulla) annulla.addEventListener('click', chiudi);
+    modulo.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && annulla) { e.preventDefault(); if (scheda.hasAttribute('data-aperta')) window.location.href = annulla.href; else chiudi(); }
+    });
+  });
+
+  // ---------- Orari ----------
+  const moduloOrari = pagina.querySelector('[data-modulo-orari]');
+  if (moduloOrari) {
+    const sempre = moduloOrari.querySelector('[data-sempre-aperto]');
+    const giorni = Array.prototype.slice.call(moduloOrari.querySelectorAll('[data-giorno]'));
+
+    function campiDelGiorno(giorno) { return Array.prototype.slice.call(giorno.querySelectorAll('[data-fasce] input')); }
+    function aggiornaGiorno(giorno) {
+      const aperto = giorno.querySelector('[data-aperto]');
+      const testo = giorno.querySelector('[data-aperto-testo]');
+      const spento = !!(sempre && sempre.checked);
+      if (aperto) aperto.disabled = spento;
+      if (testo) testo.textContent = aperto && aperto.checked ? 'Aperto' : 'Chiuso';
+      const apertoOra = !spento && aperto && aperto.checked;
+      campiDelGiorno(giorno).forEach(function (c) { c.disabled = !apertoOra; });
+      giorno.classList.toggle('ab-giorno-chiuso', !apertoOra);
+    }
+    function aggiornaOrari() { giorni.forEach(aggiornaGiorno); }
+    moduloOrari.aggiornaOrari = aggiornaOrari; // lo richiama "Annulla" dopo il reset del modulo
+    giorni.forEach(function (giorno) {
+      const aperto = giorno.querySelector('[data-aperto]');
+      if (aperto) aperto.addEventListener('change', function () { aggiornaGiorno(giorno); });
+    });
+    if (sempre) sempre.addEventListener('change', aggiornaOrari);
+    aggiornaOrari();
+
+    // Il lunedì su martedì-venerdì: stato aperto/chiuso e le quattro ore (i giorni in cui non conta restano com'erano).
+    const copia = moduloOrari.querySelector('[data-copia-feriali]');
+    if (copia) {
+      copia.addEventListener('click', function () {
+        const lunedi = moduloOrari.querySelector('[data-giorno="lun"]');
+        if (!lunedi) return;
+        const daCopiare = Array.prototype.slice.call(lunedi.querySelectorAll('input')).map(function (c) { return c.type === 'checkbox' ? c.checked : c.value; });
+        ['mar', 'mer', 'gio', 'ven'].forEach(function (g) {
+          const giorno = moduloOrari.querySelector('[data-giorno="' + g + '"]');
+          if (!giorno) return;
+          Array.prototype.slice.call(giorno.querySelectorAll('input')).forEach(function (c, i) {
+            if (c.type === 'checkbox') c.checked = daCopiare[i]; else c.value = daCopiare[i];
+          });
+        });
+        aggiornaOrari();
+      });
+    }
+  }
 })();

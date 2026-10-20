@@ -118,6 +118,8 @@ function esegui(sql, params, modo) {
   }
   if (/^SELECT pagamento_stato FROM requests WHERE id = \?/.test(s)) return richiesteDb.get(params[0]) || null;
   if (/^SELECT \* FROM users WHERE id = \?/.test(s)) return { id: params[0], ragione_sociale: 'Rossi Impianti', email: 'info@rossi.it' };
+  // Le filiali attive con i loro orari (flusso.controllaBancoAperto): una sola, senza orari = sempre aperta.
+  if (/^SELECT \* FROM distributors WHERE attivo = 1 ORDER BY nome/.test(s)) return [{ id: 1, nome: 'Borea', filiale: 'Fegino', orari: null }];
 
   throw new Error('SQL non gestito dal DB finto: ' + s.slice(0, 120));
 }

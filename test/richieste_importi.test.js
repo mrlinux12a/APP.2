@@ -9,6 +9,7 @@ const config = { servizio_pct: '10', iva_pct: '22', spedizione_fissa: '10', ordi
 const chiamate = []; // { s, p, modo }
 let richiestaDb = null; // la riga di requests che "esiste"
 let righeDb = []; // request_items + prodotto
+let banchiAttivi = [{ id: 2, nome: 'BOREA SRL', filiale: 'Fegino' }]; // le filiali attive (con i loro `orari`, se ci sono)
 const dbFinto = {
   prepare: (sql) => {
     const s = sql.replace(/\s+/g, ' ').trim();
@@ -17,7 +18,7 @@ const dbFinto = {
       if (/FROM config WHERE chiave/.test(s)) return config[p[0]] !== undefined ? [{ valore: config[p[0]] }] : [];
       if (/^SELECT \* FROM requests WHERE id = \?/.test(s)) return richiestaDb ? [richiestaDb] : [];
       if (/FROM request_items ri JOIN products p/.test(s)) return righeDb;
-      if (/^SELECT \* FROM distributors WHERE attivo = 1/.test(s)) return [{ id: 2, nome: 'BOREA SRL', filiale: 'Fegino' }];
+      if (/^SELECT \* FROM distributors WHERE attivo = 1/.test(s)) return banchiAttivi;
       if (/FROM request_responses rr/.test(s)) return [];
       if (/^SELECT id FROM users WHERE distributor_id/.test(s)) return [];
       if (/^UPDATE requests SET pagamento_stato = 'rimborsato'/.test(s)) return { changes: 1 };
@@ -44,7 +45,7 @@ const righeCarrello = [{ prodotto: prodotto(1, 54.5), quantita: 1 }, { prodotto:
 const riga = (id, listino) => ({ request_id: 55, product_id: id, quantita: 1, codice: 'C' + id, nome: 'P' + id, categoria: 'X', prezzo_listino: listino, sconto_base_pct: 0, raee: 0 });
 const inserimento = () => chiamate.find((c) => /^INSERT INTO requests/.test(c.s));
 const aggiornamento = (re) => chiamate.find((c) => re.test(c.s));
-const prepara = () => { chiamate.length = 0; richiestaDb = null; righeDb = []; };
+const prepara = () => { chiamate.length = 0; richiestaDb = null; righeDb = []; banchiAttivi = [{ id: 2, nome: 'BOREA SRL', filiale: 'Fegino' }]; };
 
 test('creaRichiesta: salva gli importi divisi (consegna e materiale) dai totali del carrello, accanto al pagamento', async () => {
   prepara();
@@ -167,4 +168,74 @@ test('importi(): un solo punto per ordine o richiesta', async () => {
   const ordine = { totale_netto: 64.5, totale_finale: 70.95, costo_consegna: 10, contributo_raee: 0, iva: 17.81 };
   assert.deepEqual(pricing.importi({ ordine, ivaPct: 22, servizioPct: 10 }), pricing.importiOrdine(ordine, null, 22, 10));
   assert.throws(() => pricing.importi({}), /ordine o una richiesta/);
+});
+
+// ---------------- Orari del banco (Anagrafica del banco, 20/10/2026) ----------------
+
+const FASCE_ORARI = [['07:30', '12:30'], ['14:00', '18:00']];
+const SETTIMANA = { lun: FASCE_ORARI, mar: FASCE_ORARI, mer: FASCE_ORARI, gio: FASCE_ORARI, ven: FASCE_ORARI, sab: [['07:30', '12:00']], dom: [] };
+// Roma, lunedì 19 ottobre 2026 (ora legale, UTC+2): `a(giorno, ore, minuti)` con giorno 0 = lunedì.
+const a = (giorno, ore, minuti = 0) => new Date(Date.UTC(2026, 9, 19 + giorno, ore - 2, minuti));
+
+test('distributoriCandidati: solo le filiali aperte adesso (senza orari = sempre aperta)', async () => {
+  prepara();
+  banchiAttivi = [
+    { id: 2, nome: 'BOREA SRL', filiale: 'Fegino', orari: SETTIMANA },
+    { id: 3, nome: 'BOREA SRL', filiale: 'Staglieno', orari: { ...SETTIMANA, mar: [['15:00', '19:00']] } },
+    { id: 4, nome: 'ALTRA', filiale: 'Sempre', orari: null },
+  ];
+  const ids = async (quando) => (await richieste.distributoriCandidati([1], 'Genova', 1, quando)).map((d) => d.id);
+  assert.deepEqual(await ids(a(1, 10)), [2, 4], 'martedì 10:00: Fegino aperta, Staglieno no (apre alle 15), la terza sempre');
+  assert.deepEqual(await ids(a(1, 13)), [4], 'martedì 13:00: Fegino è nella pausa pranzo, Staglieno apre alle 15');
+  assert.deepEqual(await ids(a(1, 16)), [2, 3, 4], 'martedì 16:00: tutte aperte');
+  assert.deepEqual(await ids(a(6, 10)), [4], 'domenica: aperta solo quella senza orari');
+  assert.deepEqual(await richieste.distributoriCandidati([], 'Genova', 1, a(1, 10)), [], 'senza articoli niente candidati');
+});
+
+test('statoBanchiAttivi: basta una filiale aperta; se sono tutte chiuse dice quando riapre la prima', async () => {
+  prepara();
+  banchiAttivi = [{ id: 2, nome: 'BOREA SRL', filiale: 'Fegino', orari: SETTIMANA }, { id: 3, nome: 'BOREA SRL', filiale: 'Staglieno', orari: { ...SETTIMANA, mer: [['09:00', '12:00']] } }];
+  assert.equal((await richieste.statoBanchiAttivi(a(1, 10))).aperto, true);
+  const chiuso = await richieste.statoBanchiAttivi(a(1, 20));
+  assert.equal(chiuso.aperto, false);
+  assert.equal(chiuso.riapre.testo, 'domani alle 07:30', 'mercoledì apre prima Fegino (07:30)');
+  banchiAttivi = [];
+  assert.equal((await richieste.statoBanchiAttivi(a(1, 20))).aperto, true, 'nessuna filiale attiva: non è una questione di orari');
+});
+
+test('creaRichiesta con i banchi chiusi: il ripiego "broadcast" non include i chiusi, la richiesta nasce già chiusa e nessun banco è interpellato', async () => {
+  prepara();
+  const chiusoAdesso = Object.fromEntries(Object.keys(SETTIMANA).map((g) => [g, []]));
+  chiusoAdesso[['lun', 'mar', 'mer', 'gio', 'ven', 'sab', 'dom'][(new Date(Date.now() + 86400000 * 3).getUTCDay() + 6) % 7]] = [['07:30', '12:30']]; // aperto solo fra tre giorni
+  banchiAttivi = [{ id: 2, nome: 'BOREA SRL', filiale: 'Fegino', orari: chiusoAdesso }];
+  const { candidati } = await richieste.creaRichiesta({ id: 1, zona: 'Genova', ragione_sociale: 'Rossi' }, righeCarrello, { destinazione: 'Via Puggia 22/3', importo: 20.07 });
+  assert.deepEqual(candidati, []);
+  const ins = inserimento();
+  assert.equal(ins.p[2], 'nessuna_offerta', 'la richiesta nasce chiusa');
+  assert.equal(chiamate.some((c) => /^INSERT INTO request_responses/.test(c.s) && c.modo === 'run'), false, 'nessun banco interpellato');
+
+  // con un banco aperto (senza orari) invece parte
+  prepara();
+  const { candidati: aperti } = await richieste.creaRichiesta({ id: 1, zona: 'Genova', ragione_sociale: 'Rossi' }, righeCarrello, { destinazione: 'Via Puggia 22/3', importo: 20.07 });
+  assert.equal(aperti.length, 1);
+  assert.equal(inserimento().p[2], 'in_attesa');
+});
+
+test('controllaBancoAperto: lancia ErroreFlusso "banco_chiuso" con quando riapre; aperto = ritorna lo stato', async () => {
+  const flusso = require('../src/flusso_cliente');
+  prepara();
+  banchiAttivi = [{ id: 2, nome: 'BOREA SRL', filiale: 'Fegino', orari: SETTIMANA }];
+  assert.equal((await flusso.controllaBancoAperto(a(1, 10))).aperto, true);
+  await assert.rejects(flusso.controllaBancoAperto(a(1, 20)), (e) => {
+    assert.ok(e instanceof flusso.ErroreFlusso);
+    assert.equal(e.codice, 'banco_chiuso');
+    assert.equal(e.titolo, 'Il banco è chiuso');
+    assert.equal(e.message, 'Riapre domani alle 07:30. Non è stato addebitato nulla: riprova quando riapre.');
+    assert.equal(e.frase, 'Il banco è chiuso · riapre domani alle 07:30');
+    assert.equal(e.riapre.ora, '07:30');
+    return true;
+  });
+  // tutti i giorni chiusi: dice solo che non riceve richieste
+  banchiAttivi = [{ id: 2, nome: 'BOREA SRL', filiale: 'Fegino', orari: Object.fromEntries(Object.keys(SETTIMANA).map((g) => [g, []])) }];
+  await assert.rejects(flusso.controllaBancoAperto(a(1, 10)), /Al momento non riceve richieste/);
 });

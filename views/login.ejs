@@ -18,6 +18,8 @@
     </nav>
 
     <% if (errore) { %><div class="errore" role="alert"><%= errore %></div><% } %>
+    <%# Dopo aver cambiato la password dal link dell'email, o dopo aver eliminato l'account (?avviso=... di GET /login). %>
+    <% if (typeof avviso !== 'undefined' && avviso) { %><div class="acc-avviso" role="status"><%= avviso %></div><% } %>
 
     <form method="POST" action="/login">
       <%- include('partials/acc_campo', {
@@ -28,6 +30,7 @@
         id: 'password', etichetta: 'Password', tipo: 'password',
         attributi: { autocomplete: 'current-password', required: true },
       }) %>
+      <p class="acc-dimenticata"><a href="/password-dimenticata">Password dimenticata?</a></p>
       <button class="acc-btn" type="submit">Accedi</button>
     </form>
 

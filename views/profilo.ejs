@@ -132,6 +132,64 @@
         </section>
       <% } %>
 
+      <%# Accesso: nome utente e cambio della password (modulo in un <details>: senza JavaScript si apre da sé e con errori resta aperto). Dopo il cambio le altre
+          sessioni e l'app dovranno accedere di nuovo (src/password_account.js). %>
+      <%
+        const errP = locals.erroriPassword || {};
+        const haErroriPassword = Object.keys(errP).length > 0;
+      %>
+      <section class="an-scheda an-accesso" id="accesso">
+        <h2 class="an-titolo">Accesso</h2>
+        <div class="an-riga">
+          <span class="an-icona" aria-hidden="true"><%- iconaPersona %></span>
+          <div class="an-testi">
+            <div class="an-etichetta">Nome utente</div>
+            <div class="an-valore"><%= cliente.username %></div>
+          </div>
+        </div>
+        <div class="an-riga">
+          <span class="an-icona" aria-hidden="true"><%- iconaLucchetto %></span>
+          <div class="an-testi">
+            <div class="an-etichetta">Password</div>
+            <div class="an-valore an-punti" aria-label="Password nascosta">••••••••••</div>
+          </div>
+        </div>
+        <% if (locals.passwordCambiata) { %><p class="an-ok" role="status">Password cambiata. Le altre sessioni e l'app dovranno accedere di nuovo.</p><% } %>
+        <details class="an-pw"<%= haErroriPassword ? ' open' : '' %>>
+          <summary>Cambia password</summary>
+          <form method="POST" action="/profilo/password" novalidate>
+            <%- include('partials/acc_campo', { id: 'attuale', etichetta: 'Password attuale', tipo: 'password', sbagliato: !!errP.attuale, hint: errP.attuale || '',
+                 attributi: { autocomplete: 'current-password', required: true, maxlength: 100 } }) %>
+            <%- include('partials/acc_campo', { id: 'nuova', etichetta: 'Nuova password', tipo: 'password', sbagliato: !!errP.nuova, hint: errP.nuova || 'Almeno 8 caratteri.',
+                 attributi: { autocomplete: 'new-password', required: true, maxlength: 100 } }) %>
+            <%- include('partials/acc_campo', { id: 'ripeti', etichetta: 'Ripeti la nuova password', tipo: 'password', sbagliato: !!errP.ripeti, hint: errP.ripeti || '',
+                 attributi: { autocomplete: 'new-password', required: true, maxlength: 100 } }) %>
+            <button class="acc-btn an-pw-salva" type="submit">Salva la nuova password</button>
+          </form>
+        </details>
+      </section>
+
+      <%# Sul telefono: installare l'app (la scheda compare solo se si può) e attivare gli avvisi del browser (public/app.js). %>
+      <section class="an-scheda an-telefono" data-telefono>
+        <h2 class="an-titolo">Sul telefono</h2>
+        <%- include('partials/installa', { variante: 'profilo' }) %>
+        <div class="an-riga an-notifiche" data-notifiche-scheda>
+          <span class="an-icona an-icona-blu" aria-hidden="true"><%- iconaNotifiche %></span>
+          <div class="an-testi">
+            <div class="an-valore">Avvisi sul telefono</div>
+            <div class="an-dettaglio" data-notifiche-stato>Ricevi un avviso quando un banco risponde alla tua richiesta, finché l'app è aperta.</div>
+          </div>
+          <button type="button" class="installa-btn" data-abilita-notifiche>Attiva</button>
+        </div>
+      </section>
+
+      <%# Eliminare l'account: una pagina a parte spiega cosa succede e chiede la password (GET/POST /profilo/elimina). %>
+      <section class="an-scheda an-pericolo">
+        <h2 class="an-titolo">Elimina account</h2>
+        <p class="an-testo">Se non vuoi più usare Minuteria puoi eliminare il tuo account. Ordini, bolle e ricevute già emessi restano per obbligo di legge.</p>
+        <a class="an-elimina" href="/profilo/elimina">Elimina account…</a>
+      </section>
+
       <p class="an-nota">
         <span class="an-nota-icona" aria-hidden="true"><%- iconaInfo %></span>
         <span>Per correggere i dati scrivi al tuo distributore o all'agente.</span>

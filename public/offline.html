@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#f3f1ec">
+  <title>Sei offline · Ordini Minuteria</title>
+  <!-- Pagina di riserva del service worker (public/sw.js): si mostra al posto dell'errore del browser quando una pagina non si può caricare perché manca
+       la rete. Autonoma di proposito (stile in linea, niente font esterni, niente script del sito): deve funzionare proprio quando non c'è connessione. -->
+  <style>
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      display: flex; align-items: center; justify-content: center; padding: 24px max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+      background: #f3f1ec; color: #232019; font-family: "Source Sans 3", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    }
+    main { width: 100%; max-width: 360px; text-align: center; }
+    .figura { display: inline-flex; align-items: center; justify-content: center; width: 112px; height: 112px; border-radius: 50%; background: #e3edf7; color: #245a8f; }
+    .figura svg { width: 52px; height: 52px; }
+    h1 { margin: 22px 0 8px; font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; font-size: 24px; font-weight: 800; line-height: 1.2; }
+    p { margin: 0 0 24px; color: #5c5b52; font-size: 16px; line-height: 1.45; }
+    button {
+      min-height: 52px; width: 100%; padding: 0 24px; border: none; border-radius: 26px; background: #245a8f; color: #fff;
+      font: inherit; font-size: 17px; font-weight: 700; cursor: pointer;
+    }
+    button:active { background: #1a4468; }
+    .nota { margin: 16px 0 0; font-size: 14px; color: #6b6a5f; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="figura" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.2a15 15 0 0 1 18 0"/><path d="M6 12.6a10.5 10.5 0 0 1 12 0"/><path d="M9 16a6 6 0 0 1 6 0"/><path d="M12 19.5h.01"/><path d="M4 4l16 16"/></svg>
+    </div>
+    <h1>Sei offline</h1>
+    <p>Non riesco a raggiungere Minuteria. Controlla la connessione: appena torna la rete la pagina si riapre da sola.</p>
+    <button type="button" id="riprova">Riprova</button>
+    <p class="nota">Le richieste e gli ordini già inviati non cambiano: li ritrovi in Stato ordini.</p>
+  </main>
+  <script>
+    // L'indirizzo nella barra è quello della pagina che si voleva aprire: ricaricare la riprova. Appena torna la rete si riprova da soli.
+    document.getElementById('riprova').addEventListener('click', function () { window.location.reload(); });
+    window.addEventListener('online', function () { window.location.reload(); });
+  </script>
+</body>
+</html>

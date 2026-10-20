@@ -80,6 +80,16 @@ export default function Login() {
               style={campo}
             />
 
+            {/* Il recupero della password è una pagina del sito (email con il link): qui si apre nel browser, come Privacy ed Elimina account. */}
+            <Pressable
+              onPress={() => Linking.openURL(SERVER + '/password-dimenticata')}
+              accessibilityRole="link"
+              hitSlop={10}
+              style={stili.linkDimenticata}
+            >
+              <Text style={[stili.link, { color: c.accento }]}>Password dimenticata?</Text>
+            </Pressable>
+
             <Pressable
               onPress={accedi}
               disabled={invio}
@@ -120,6 +130,8 @@ const stili = StyleSheet.create({
   errore: { fontFamily: FONT.testoMedio, fontSize: 14, padding: 10, borderRadius: 8, overflow: 'hidden', marginBottom: 6 },
   etichetta: { fontFamily: FONT.testoMedio, fontSize: 15, marginTop: 10, marginBottom: 6 },
   campo: { borderWidth: 1, borderRadius: 10, padding: 12, fontSize: 16, fontFamily: FONT.testo },
+  linkDimenticata: { alignSelf: 'flex-end', marginTop: 12, minHeight: 28, justifyContent: 'center' },
+  link: { fontFamily: FONT.testoForte, fontSize: 14 },
   bottone: { borderRadius: 999, paddingVertical: 15, alignItems: 'center', marginTop: 20 },
   bottoneTesto: { fontFamily: FONT.testoForte, fontSize: 16 },
   nota: { fontFamily: FONT.testo, fontSize: 14, lineHeight: 20, marginTop: 16 },

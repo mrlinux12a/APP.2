@@ -1,0 +1,310 @@
+<%
+  // Anagrafica del banco (GET /distributore/anagrafica; richiesta esplicita del 20/10/2026, mockup in docs/mockup/anagrafica-banco*.png; classi ab-*).
+  // Il banco ha UN SOLO profilo con tutti i permessi: niente ruoli, colleghi o inviti. Sinistra: Ditta, Questa filiale, Orari; destra: Accesso, Notifiche, Esci
+  // (sotto i 900px una colonna sola in questo stesso ordine). Ogni scheda ha la sua lettura e il suo modulo (nascosto): "Modifica" li scambia (lo script in
+  // fondo; senza JS "Modifica" è un link a ?modifica=<scheda>, che il server rende già aperta), "Salva" fa un POST e ritorna qui; con errori la pagina
+  // si ripropone con la scheda aperta, i valori scritti e il testo rosso sotto ogni campo. Dati e controlli: src/anagrafica_banco.js e src/orari.js.
+  //
+  // Dati: dati (anagrafica_banco.leggi), aperta ('ditta' | 'filiale' | 'orari' | 'password' | null), valori / errori (per scheda), moduloOrari, ok, posizione.
+  const vuoto = (v) => (v === undefined || v === null || String(v).trim() === '' ? '—' : v);
+  const val = (scheda, campo, ripiego) => ((valori[scheda] && valori[scheda][campo] !== undefined) ? valori[scheda][campo] : (ripiego === undefined || ripiego === null ? '' : ripiego));
+  const err = (scheda, campo) => (errori[scheda] && errori[scheda][campo]) || '';
+  const f = dati.filiale;
+  const d = dati.ditta;
+  const nomeDitta = d.ragione_sociale || f.nome;
+  const nomeFiliale = f.filiale || '';
+  const matita = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l1-4L16.2 4.8a1.8 1.8 0 0 1 2.5 0l.5.5a1.8 1.8 0 0 1 0 2.5L8 19Z"/><path d="M14.5 6.5l3 3"/></svg>';
+  const GIORNI = orari.GIORNI;
+  // Un campo di testo del modulo (partials/ab_campo.ejs): etichetta, campo e l'errore sotto, in rosso.
+  const campo = (scheda, nome, etichetta, opzioni) => include('partials/ab_campo', {
+    scheda, nome, etichetta, o: opzioni || {}, valore: val(scheda, nome, (opzioni || {}).ripiego), errore: err(scheda, nome),
+  });
+  // Il messaggio di una scheda appena salvata (?ok=...), in testata.
+  const salvato = (scheda, testoOk) => (ok === scheda ? '<p class="ab-ok" role="status">' + testoOk + '</p>' : '');
+%>
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<%# Niente data-auto-refresh: la pagina si ricaricherebbe da sola mentre si scrive in un modulo. %>
+<body class="pagina-anagrafica-banco" data-loggato="1">
+
+  <%# Intestazione unica del banco: qui nessuna scheda è accesa e il cerchio con le iniziali ha l'anello blu pieno (la sceglie il percorso). %>
+  <%- include('partials/banco_testa') %>
+
+  <main class="ab-pagina">
+    <div class="ab-testata">
+      <%- include('partials/iniziali', { nome: nomeFiliale || nomeDitta, persona: currentUser.ragione_sociale, misura: 56 }) %>
+      <div class="ab-testata-testi">
+        <h1 class="ab-h1">Anagrafica del banco</h1>
+        <p class="ab-sotto"><%= [nomeDitta, nomeFiliale].filter(Boolean).join(' · ') %></p>
+      </div>
+    </div>
+
+    <div class="ab-corpo">
+      <div class="ab-colonna">
+
+        <%# ---------- Ditta ---------- %>
+        <section class="ab-card" id="ditta" data-scheda="ditta"<%- aperta === 'ditta' ? ' data-aperta' : '' %>>
+          <header class="ab-card-testa">
+            <div>
+              <h2 class="ab-titolo">Ditta</h2>
+              <p class="ab-spiega">Valgono per tutte le filiali e finiscono in bolla e nelle fatture del materiale.</p>
+            </div>
+            <a class="ab-modifica" href="/distributore/anagrafica?modifica=ditta#ditta" data-modifica<%- aperta === 'ditta' ? ' hidden' : '' %>><%- matita %>Modifica</a>
+          </header>
+          <%- salvato('ditta', 'Dati della ditta salvati.') %>
+
+          <div class="ab-lettura" data-lettura<%- aperta === 'ditta' ? ' hidden' : '' %>>
+            <dl class="ab-dati ab-dati-3">
+              <div><dt>Ragione sociale</dt><dd><%= vuoto(d.ragione_sociale) %></dd></div>
+              <div><dt>Partita IVA</dt><dd><%= vuoto(d.partita_iva) %></dd></div>
+              <div><dt>Codice SDI / PEC</dt><dd><%= vuoto(d.sdi_pec) %></dd></div>
+            </dl>
+            <dl class="ab-dati ab-dati-1">
+              <div><dt>Sede legale</dt><dd><%= vuoto(anagraficaBanco.indirizzoInRiga(d)) %></dd></div>
+            </dl>
+          </div>
+
+          <form class="ab-modulo" method="POST" action="/distributore/anagrafica/ditta" data-modulo novalidate<%- aperta === 'ditta' ? '' : ' hidden' %>>
+            <div class="ab-griglia ab-griglia-3">
+              <%- campo('ditta', 'ragione_sociale', 'Ragione sociale', { ripiego: d.ragione_sociale, maxlength: 200, autocomplete: 'organization' }) %>
+              <%- campo('ditta', 'partita_iva', 'Partita IVA', { ripiego: d.partita_iva, maxlength: 20, inputmode: 'numeric' }) %>
+              <% if (dati.conDitta) { %><%- campo('ditta', 'sdi_pec', 'Codice SDI / PEC', { ripiego: d.sdi_pec, maxlength: 120 }) %><% } %>
+            </div>
+            <% if (dati.conDitta) { %>
+              <p class="ab-etichetta ab-gruppo">Sede legale</p>
+              <div class="ab-griglia ab-griglia-via">
+                <%- campo('ditta', 'indirizzo', 'Via e numero', { ripiego: d.indirizzo, maxlength: 200, autocomplete: 'street-address', classe: 'ab-via' }) %>
+                <%- campo('ditta', 'cap', 'CAP', { ripiego: d.cap, maxlength: 5, inputmode: 'numeric', autocomplete: 'postal-code' }) %>
+                <%- campo('ditta', 'citta', 'Città', { ripiego: d.citta, maxlength: 100 }) %>
+                <%- campo('ditta', 'provincia', 'Provincia', { ripiego: d.provincia, maxlength: 2 }) %>
+              </div>
+            <% } else { %>
+              <p class="ab-nota">Questa filiale non ha ancora una ditta: qui si cambiano solo ragione sociale e partita IVA.</p>
+            <% } %>
+            <div class="ab-azioni">
+              <a class="ab-annulla" href="/distributore/anagrafica#ditta" data-annulla>Annulla</a>
+              <button class="ab-salva" type="submit">Salva</button>
+            </div>
+          </form>
+        </section>
+
+        <%# ---------- Questa filiale ---------- %>
+        <section class="ab-card" id="filiale" data-scheda="filiale"<%- aperta === 'filiale' ? ' data-aperta' : '' %>>
+          <header class="ab-card-testa">
+            <div>
+              <h2 class="ab-titolo">Questa filiale</h2>
+              <p class="ab-spiega">È il banco che riceve le richieste e da cui parte il materiale.</p>
+            </div>
+            <a class="ab-modifica" href="/distributore/anagrafica?modifica=filiale#filiale" data-modifica<%- aperta === 'filiale' ? ' hidden' : '' %>><%- matita %>Modifica</a>
+          </header>
+          <%- salvato('filiale', 'Dati della filiale salvati.') %>
+          <% if (ok === 'filiale' && posizione === 'ricalcolata') { %><p class="ab-ok" role="status">Posizione sulla mappa aggiornata dal nuovo indirizzo.</p><% } %>
+          <% if (ok === 'filiale' && posizione === 'non_trovata') { %><p class="ab-avviso" role="status">Non ho trovato il nuovo indirizzo sulla mappa: la posizione è rimasta quella di prima. Controllala con «Sposta».</p><% } %>
+          <% if (ok === 'filiale' && posizione === 'manuale') { %><p class="ab-avviso" role="status">La posizione sulla mappa resta quella che hai scelto tu. Se l'indirizzo è cambiato, controllala con «Sposta».</p><% } %>
+
+          <div class="ab-lettura" data-lettura<%- aperta === 'filiale' ? ' hidden' : '' %>>
+            <dl class="ab-dati ab-dati-2">
+              <div><dt>Nome del banco</dt><dd><%= vuoto(f.filiale) %></dd></div>
+              <div><dt>Telefono del banco</dt><dd><%= vuoto(f.telefono) %></dd></div>
+            </dl>
+            <dl class="ab-dati ab-dati-1">
+              <div><dt>Indirizzo di ritiro (dove passa il corriere)</dt><dd><%= vuoto(anagraficaBanco.indirizzoInRiga(f)) %></dd></div>
+            </dl>
+            <dl class="ab-dati ab-dati-2">
+              <div><dt>Email per gli avvisi</dt><dd><%= vuoto(f.email) %></dd></div>
+              <div><dt>Zona servita</dt><dd><%= vuoto(f.zona) %></dd></div>
+            </dl>
+            <%# Posizione sulla mappa: verde se c'è, arancio se manca. "Sposta"/"Imposta" apre la mappa con il segnaposto da trascinare (public/mappa.js). %>
+            <% if (dati.posizioneImpostata) { %>
+              <div class="ab-posizione ab-posizione-ok">
+                <span class="ab-posizione-ico" aria-hidden="true"><%- iconaPosizione %></span>
+                <span class="ab-posizione-testo"><strong>Posizione sulla mappa impostata.</strong> Serve ai corrieri e per calcolare le distanze.</span>
+                <button type="button" class="ab-posizione-link" data-sposta>Sposta</button>
+              </div>
+            <% } else { %>
+              <div class="ab-posizione ab-posizione-manca">
+                <span class="ab-posizione-ico" aria-hidden="true"><%- iconaPosizione %></span>
+                <span class="ab-posizione-testo"><strong>Posizione non impostata:</strong> i corrieri non vedono dove ritirare.</span>
+                <button type="button" class="ab-posizione-link" data-sposta>Imposta</button>
+              </div>
+            <% } %>
+            <% if (ok === 'posizione') { %><p class="ab-ok" role="status">Posizione salvata.</p><% } %>
+          </div>
+
+          <form class="ab-modulo" method="POST" action="/distributore/anagrafica/filiale" data-modulo novalidate<%- aperta === 'filiale' ? '' : ' hidden' %>>
+            <div class="ab-griglia ab-griglia-2">
+              <%- campo('filiale', 'filiale', 'Nome del banco', { ripiego: f.filiale, maxlength: 100 }) %>
+              <%- campo('filiale', 'telefono', 'Telefono del banco', { ripiego: f.telefono, maxlength: 30, tipo: 'tel', autocomplete: 'tel' }) %>
+            </div>
+            <p class="ab-etichetta ab-gruppo">Indirizzo di ritiro (dove passa il corriere)</p>
+            <div class="ab-griglia ab-griglia-via">
+              <%- campo('filiale', 'indirizzo', 'Via e numero', { ripiego: f.indirizzo, maxlength: 200, classe: 'ab-via' }) %>
+              <%- campo('filiale', 'cap', 'CAP', { ripiego: f.cap, maxlength: 5, inputmode: 'numeric' }) %>
+              <%- campo('filiale', 'citta', 'Città', { ripiego: f.citta, maxlength: 100 }) %>
+              <%- campo('filiale', 'provincia', 'Provincia', { ripiego: f.provincia, maxlength: 2 }) %>
+            </div>
+            <div class="ab-griglia ab-griglia-2">
+              <%- campo('filiale', 'email', 'Email per gli avvisi', { ripiego: f.email, maxlength: 200, tipo: 'email', autocomplete: 'email' }) %>
+              <%- campo('filiale', 'zona', 'Zona servita', { ripiego: f.zona, maxlength: 100 }) %>
+            </div>
+            <p class="ab-nota">Se cambi l'indirizzo, la posizione sulla mappa si aggiorna da sola, a meno che tu non l'abbia spostata a mano.</p>
+            <div class="ab-azioni">
+              <a class="ab-annulla" href="/distributore/anagrafica#filiale" data-annulla>Annulla</a>
+              <button class="ab-salva" type="submit">Salva</button>
+            </div>
+          </form>
+        </section>
+
+        <%# ---------- Orari del banco ---------- %>
+        <section class="ab-card" id="orari" data-scheda="orari"<%- aperta === 'orari' ? ' data-aperta' : '' %>>
+          <header class="ab-card-testa">
+            <div>
+              <h2 class="ab-titolo">Orari del banco</h2>
+              <p class="ab-spiega">Fuori orario le richieste non arrivano.</p>
+            </div>
+            <a class="ab-modifica" href="/distributore/anagrafica?modifica=orari#orari" data-modifica<%- aperta === 'orari' ? ' hidden' : '' %>><%- matita %>Modifica</a>
+          </header>
+          <%- salvato('orari', 'Orari salvati.') %>
+
+          <div class="ab-lettura" data-lettura<%- aperta === 'orari' ? ' hidden' : '' %>>
+            <ul class="ab-orari">
+              <% if (!riassuntoOrari.length) { %>
+                <li class="ab-orari-riga"><span class="ab-orari-giorni">Tutti i giorni</span><span class="ab-orari-fasce">Sempre aperto</span></li>
+              <% } %>
+              <% riassuntoOrari.forEach(function (r) { %>
+                <li class="ab-orari-riga"><span class="ab-orari-giorni"><%= r.etichetta %></span><span class="ab-orari-fasce<%= r.chiuso ? ' ab-orari-chiuso' : '' %>"><%= r.chiuso ? 'Chiuso' : r.fasce.join(' · ') %></span></li>
+              <% }); %>
+            </ul>
+          </div>
+
+          <form class="ab-modulo" method="POST" action="/distributore/anagrafica/orari" data-modulo data-modulo-orari novalidate<%- aperta === 'orari' ? '' : ' hidden' %>>
+            <% if (errori.orari && errori.orari._generale) { %><p class="ab-errore" role="alert"><%= errori.orari._generale %></p><% } %>
+            <label class="ab-sempre">
+              <input type="checkbox" name="sempre_aperto" value="1" data-sempre-aperto<%= sempreAperto ? ' checked' : '' %>>
+              <span>Nessun orario: sempre aperto</span>
+            </label>
+            <div class="ab-giorni" data-giorni>
+              <% GIORNI.forEach(function (g) {
+                   const v = moduloOrari[g];
+                   const e = (errori.orari && errori.orari[g]) || ''; %>
+                <div class="ab-giorno" data-giorno="<%= g %>">
+                  <div class="ab-giorno-riga">
+                    <span class="ab-giorno-nome"><%= orari.NOMI[g] %></span>
+                    <label class="ab-interruttore-etichetta">
+                      <input class="ab-interruttore" type="checkbox" role="switch" name="aperto_<%= g %>" value="1" data-aperto<%= v.aperto ? ' checked' : '' %> aria-label="<%= orari.NOMI[g] %> aperto">
+                      <span class="ab-interruttore-testo" data-aperto-testo><%= v.aperto ? 'Aperto' : 'Chiuso' %></span>
+                    </label>
+                    <div class="ab-fasce" data-fasce>
+                      <span class="ab-fascia">
+                        <input class="ab-ora" type="time" name="da1_<%= g %>" value="<%= v.da1 %>" aria-label="<%= orari.NOMI[g] %>, prima fascia, dalle">
+                        <span aria-hidden="true">–</span>
+                        <input class="ab-ora" type="time" name="a1_<%= g %>" value="<%= v.a1 %>" aria-label="<%= orari.NOMI[g] %>, prima fascia, alle">
+                      </span>
+                      <span class="ab-fasce-sep" aria-hidden="true">·</span>
+                      <span class="ab-fascia">
+                        <input class="ab-ora" type="time" name="da2_<%= g %>" value="<%= v.da2 %>" aria-label="<%= orari.NOMI[g] %>, seconda fascia, dalle">
+                        <span aria-hidden="true">–</span>
+                        <input class="ab-ora" type="time" name="a2_<%= g %>" value="<%= v.a2 %>" aria-label="<%= orari.NOMI[g] %>, seconda fascia, alle">
+                      </span>
+                    </div>
+                  </div>
+                  <% if (e) { %><p class="ab-errore" role="alert"><%= e %></p><% } %>
+                </div>
+              <% }); %>
+            </div>
+            <button type="button" class="ab-copia" data-copia-feriali>Copia su tutti i giorni feriali</button>
+            <div class="ab-azioni">
+              <a class="ab-annulla" href="/distributore/anagrafica#orari" data-annulla>Annulla</a>
+              <button class="ab-salva" type="submit">Salva</button>
+            </div>
+          </form>
+        </section>
+      </div>
+
+      <div class="ab-colonna">
+
+        <%# ---------- Accesso ---------- %>
+        <section class="ab-card" id="accesso" data-scheda="password"<%- aperta === 'password' ? ' data-aperta' : '' %>>
+          <header class="ab-card-testa">
+            <div>
+              <h2 class="ab-titolo">Accesso</h2>
+              <p class="ab-spiega">Il profilo del banco: uno solo, con tutti i permessi.</p>
+            </div>
+          </header>
+          <dl class="ab-dati ab-dati-1">
+            <div><dt>Email di accesso</dt><dd><%= vuoto(dati.utente.email) %></dd></div>
+            <div><dt>Password</dt><dd class="ab-punti" aria-label="Password nascosta">••••••••••</dd></div>
+          </dl>
+          <%- salvato('password', 'Password cambiata.') %>
+          <a class="ab-secondario" href="/distributore/anagrafica?modifica=password#accesso" data-modifica<%- aperta === 'password' ? ' hidden' : '' %>>Cambia password</a>
+
+          <form class="ab-modulo ab-modulo-password" method="POST" action="/distributore/anagrafica/password" data-modulo novalidate<%- aperta === 'password' ? '' : ' hidden' %>>
+            <%# Le password non tornano mai nel modulo, nemmeno dopo un errore. %>
+            <%- campo('password', 'attuale', 'Password attuale', { tipo: 'password', autocomplete: 'current-password', maxlength: 100, ripiego: '' }) %>
+            <%- campo('password', 'nuova', 'Nuova password', { tipo: 'password', autocomplete: 'new-password', maxlength: 100, ripiego: '' }) %>
+            <%- campo('password', 'ripeti', 'Ripeti la nuova password', { tipo: 'password', autocomplete: 'new-password', maxlength: 100, ripiego: '' }) %>
+            <p class="ab-nota">Almeno 8 caratteri. Dopo il cambio, le altre sessioni aperte con questo profilo si chiudono.</p>
+            <div class="ab-azioni">
+              <a class="ab-annulla" href="/distributore/anagrafica#accesso" data-annulla>Annulla</a>
+              <button class="ab-salva" type="submit">Salva</button>
+            </div>
+          </form>
+        </section>
+
+        <%# ---------- Notifiche ---------- %>
+        <section class="ab-card" id="notifiche">
+          <header class="ab-card-testa">
+            <div>
+              <h2 class="ab-titolo">Notifiche</h2>
+              <p class="ab-spiega">Valgono solo per te, su questo computer.</p>
+            </div>
+          </header>
+          <ul class="ab-interruttori">
+            <li class="ab-riga-interruttore">
+              <div class="ab-riga-testi"><strong>Suoni</strong><span>Nuove richieste e corriere trovato</span></div>
+              <button type="button" class="ab-switch" role="switch" aria-checked="true" aria-label="Suoni" data-suoni-voce><span class="ab-switch-pallino"></span></button>
+            </li>
+            <li class="ab-riga-interruttore">
+              <div class="ab-riga-testi">
+                <strong>Notifiche del computer</strong><span>Anche quando la scheda non è aperta</span>
+                <span class="ab-riga-nota" data-notifiche-nota hidden></span>
+              </div>
+              <button type="button" class="ab-switch" role="switch" aria-checked="false" aria-label="Notifiche del computer" data-notifiche-sistema><span class="ab-switch-pallino"></span></button>
+            </li>
+            <%# L'email per ogni nuova richiesta c'è solo quando esiste l'invio (email.inviaNuovaRichiesta): finché manca la riga non si mostra. %>
+            <% if (emailRichieste) { %>
+              <li class="ab-riga-interruttore">
+                <div class="ab-riga-testi"><strong>Email per ogni nuova richiesta</strong><span>A <%= f.email || 'indirizzo non impostato' %></span></div>
+                <button type="button" class="ab-switch" role="switch" aria-checked="<%= dati.emailNuoveRichieste ? 'true' : 'false' %>" aria-label="Email per ogni nuova richiesta" data-email-richieste><span class="ab-switch-pallino"></span></button>
+              </li>
+            <% } %>
+          </ul>
+        </section>
+
+        <form class="ab-esci-form" method="POST" action="/logout">
+          <button type="submit" class="ab-esci"><span class="ab-esci-ico" aria-hidden="true"><%- iconaEsci %></span>Esci dal banco</button>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <%# Mappa per spostare il segnaposto del banco (public/mappa.js, blocco [data-sposta]): si apre da "Sposta" / "Imposta". %>
+  <dialog class="ab-mappa-dialog" data-mappa-dialog aria-labelledby="ab-mappa-titolo">
+    <h2 class="ab-titolo" id="ab-mappa-titolo">Posizione del banco</h2>
+    <p class="ab-spiega">Trascina il segnaposto sul punto in cui passa il corriere, oppure tocca la mappa.</p>
+    <div class="ab-mappa" data-mappa-sposta<% if (dati.posizioneImpostata) { %> data-lat="<%= f.geo_lat %>" data-lng="<%= f.geo_lng %>"<% } %>></div>
+    <p class="ab-errore" data-mappa-errore role="alert" hidden></p>
+    <div class="ab-azioni">
+      <button type="button" class="ab-annulla" data-mappa-annulla>Annulla</button>
+      <button type="button" class="ab-salva" data-mappa-salva>Salva posizione</button>
+    </div>
+  </dialog>
+
+  <%- include('partials/nav_distributore', { attivo: '' }) %>
+  <script src="<%= asset('/app.js') %>" defer></script>
+  <script src="<%= asset('/mappa.js') %>" defer></script>
+</body>
+</html>

@@ -37,11 +37,18 @@ const materialeModulo = require('./src/materiale');
 const ricevuteModulo = require('./src/ricevute');
 const catalogo = require('./src/catalogo');
 const richieste = require('./src/richieste');
+const orari = require('./src/orari');
 const notifiche = require('./src/notifiche');
 const bancoAvvisi = require('./src/banco_avvisi');
 const ddt = require('./src/ddt');
 const geo = require('./src/geo');
 const anagrafiche = require('./src/anagrafiche');
+const anagraficaBanco = require('./src/anagrafica_banco');
+const passwordAccount = require('./src/password_account');
+const recuperoPassword = require('./src/recupero_password');
+const account = require('./src/account');
+const tokenApp = require('./src/token_app');
+const emailModulo = require('./src/email');
 const { conCache } = require('./src/memo');
 const flusso = require('./src/flusso_cliente');
 const storicoBanco = require('./src/storico_banco');
@@ -53,7 +60,7 @@ const pagamenti = require('./src/pagamenti');
 const testiLegali = require('./src/testi_legali');
 const { ArchivioSqlite } = require('./src/sessioni');
 const { TESTO_DISPONIBILITA, prodottoJson } = require('./src/prodotto_json');
-const { accessoBloccato, registraAccessoFallito, accessoRiuscito, iscrizioneBloccata, registraIscrizione } = require('./src/limite_login');
+const { accessoBloccato, registraAccessoFallito, accessoRiuscito, iscrizioneBloccata, registraIscrizione, recuperoBloccato, registraRecupero } = require('./src/limite_login');
 const apiV1 = require('./src/api_v1');
 const whatsapp = require('./src/whatsapp');
 
@@ -242,9 +249,14 @@ app.use(salvaSessionePrimaDelRedirect);
 
 // Ditta e filiale scritte nell'intestazione del banco (views/partials/banco_testa.ejs), che ha ogni pagina del
 // distributore: cambiano di rado, quindi si leggono una volta al minuto invece che a ogni pagina.
-const intestazioneBanco = conCache(60000, (distributorId) =>
+// La chiave della cache include una "versione" per banco: quando l'Anagrafica del banco cambia nome o filiale la si alza e l'intestazione si rilegge
+// subito (senza, il vecchio nome restava fino a un minuto).
+const versioneIntestazioneBanco = new Map();
+const intestazioneBancoLetta = conCache(60000, (distributorId) =>
   db.prepare('SELECT nome, filiale FROM distributors WHERE id = ?').get(distributorId)
 );
+const intestazioneBanco = (distributorId) => intestazioneBancoLetta(distributorId, versioneIntestazioneBanco.get(distributorId) || 0);
+const rileggiIntestazioneBanco = (distributorId) => versioneIntestazioneBanco.set(distributorId, (versioneIntestazioneBanco.get(distributorId) || 0) + 1);
 
 // rende disponibili utente, helper e contatori a tutte le viste
 app.use(async (req, res, next) => {
@@ -399,9 +411,69 @@ app.get('/', async (req, res) => {
   return res.redirect('/home');
 });
 
+// Le frasi che il login può mostrare dopo un passaggio altrove (?avviso=...): solo queste, scelte da noi (mai testo preso dall'indirizzo).
+const AVVISI_LOGIN = {
+  password: 'Password cambiata. Accedi con quella nuova.',
+  eliminato: 'Account eliminato. Grazie per aver usato Minuteria.',
+};
+
 app.get('/login', async (req, res) => {
   if (req.session.user) return res.redirect('/');
-  res.render('login', { titolo: 'Accedi', errore: null, scheda: 'accedi' });
+  res.render('login', { titolo: 'Accedi', errore: null, scheda: 'accedi', avviso: AVVISI_LOGIN[req.query.avviso] || '' });
+});
+
+// ---------- Recupero della password (installatore) ----------
+// "Password dimenticata?": nome utente o email -> email con un link valido un'ora (src/recupero_password.js). La risposta è sempre la stessa, che l'account esista
+// o no, e l'invio non si aspetta. Il link usa APP_URL (mai l'intestazione Host, che la scrive chi chiama: un link verso un sito altrui farebbe rubare il codice);
+// senza APP_URL vale solo in locale.
+const HOST_LOCALI = ['localhost', '127.0.0.1', '::1'];
+const eLocale = (req) => HOST_LOCALI.includes(req.hostname);
+function urlPerEmail(req) {
+  const fisso = String(process.env.APP_URL || '').trim().replace(/\/+$/, '');
+  return fisso || (eLocale(req) ? req.protocol + '://' + req.get('host') : '');
+}
+
+app.get('/password-dimenticata', (req, res) => {
+  if (req.session.user) return res.redirect('/');
+  res.render('password_dimenticata', { stato: 'modulo', identificativo: '' });
+});
+
+app.post('/password-dimenticata', async (req, res) => {
+  if (req.session.user) return res.redirect('/');
+  const identificativo = typeof req.body.identificativo === 'string' ? req.body.identificativo.trim().slice(0, 200) : '';
+  if (!identificativo) {
+    return res.status(400).render('password_dimenticata', { stato: 'modulo', errore: 'Scrivi il tuo nome utente o la tua email.', identificativo: '' });
+  }
+  if (recuperoBloccato(req, identificativo)) return res.status(429).render('password_dimenticata', { stato: 'troppe' });
+  registraRecupero(req, identificativo);
+  const esito = await recuperoPassword.richiedi(identificativo, { baseUrl: urlPerEmail(req) });
+  // Non si aspetta l'invio (nemmeno il tempo di risposta deve dire se l'account c'è). In locale, se l'email non è partita (niente SMTP), il link si scrive nel
+  // log del server: serve a provare senza posta. Mai su un indirizzo pubblico: nel log finirebbe un link che apre un account.
+  esito.consegne.then((consegne) => {
+    if (!eLocale(req)) return;
+    for (const c of consegne) if (!c.inviata && c.link) console.log('[recupero password] (solo in locale) link per ' + c.username + ': ' + c.link);
+  });
+  res.render('password_dimenticata', { stato: 'inviata', minutiValidita: recuperoPassword.VALIDITA_MIN });
+});
+
+// Il link dell'email: se è ancora buono si sceglie la nuova password, altrimenti si propone di chiederne uno nuovo.
+app.get('/reimposta-password/:codice', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const accountLink = await recuperoPassword.accountDaCodice(req.params.codice);
+  if (!accountLink) return res.status(410).render('password_reimposta', { stato: 'nonvalido' });
+  res.render('password_reimposta', { stato: 'modulo', username: accountLink.username, codice: req.params.codice, errori: {} });
+});
+
+app.post('/reimposta-password/:codice', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const esito = await recuperoPassword.reimposta(req.params.codice, req.body);
+  if (esito.nonValido) return res.status(410).render('password_reimposta', { stato: 'nonvalido' });
+  if (!esito.ok) {
+    const accountLink = await recuperoPassword.accountDaCodice(req.params.codice);
+    if (!accountLink) return res.status(410).render('password_reimposta', { stato: 'nonvalido' });
+    return res.status(400).render('password_reimposta', { stato: 'modulo', username: accountLink.username, codice: req.params.codice, errori: esito.errori });
+  }
+  res.redirect('/login?avviso=password');
 });
 
 // Pagine pubbliche richieste da Google Play per l'app: informativa sulla privacy e come eliminare l'account (src/testi_legali.js). Senza accesso.
@@ -483,17 +555,75 @@ app.get('/benvenuto', requireRole('cliente'), async (req, res) => {
 
 // ---------- Profilo del cliente ----------
 
-app.get('/profilo', requireRole('cliente'), async (req, res) => {
+// La pagina "La mia anagrafica". `extra`: stato (400/429 dopo un cambio password andato male) e erroriPassword (aprono la scheda "Accesso").
+async function paginaProfilo(req, res, extra = {}) {
   const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
   const legami = await anagrafiche.legamiDelCliente(cliente.id);
-  res.render('profilo', {
+  res.status(extra.stato || 200).render('profilo', {
     titolo: 'La mia anagrafica',
     cliente,
     legami,
     distributore: anagrafiche.distributoreDiRiferimento(legami),
     tipi: anagrafiche.TIPI_SOGGETTO,
     indirizzoCliente: ddt.indirizzoCompleto(cliente),
+    // Scheda "Accesso": errori del cambio password (aprono il modulo) e messaggio dopo averla cambiata (?ok=password).
+    erroriPassword: extra.erroriPassword || {},
+    passwordCambiata: !extra.erroriPassword && req.query.ok === 'password',
   });
+}
+
+app.get('/profilo', requireRole('cliente'), (req, res) => paginaProfilo(req, res));
+
+// Cambio della password dall'interno (scheda "Accesso"). Stesse regole del banco (src/password_account.js): attuale giusta, nuova di 8-72 caratteri e diversa,
+// altre sessioni chiuse e accessi dell'app revocati. La password attuale sbagliata conta nel limite dei tentativi del login.
+app.post('/profilo/password', requireRole('cliente'), async (req, res) => {
+  const chiaveLimite = 'cambio-password:' + String(req.session.user.username || req.session.user.id);
+  if (accessoBloccato(req, chiaveLimite)) {
+    return paginaProfilo(req, res, { stato: 429, erroriPassword: { attuale: 'Troppi tentativi non riusciti. Riprova tra qualche minuto.' } });
+  }
+  const esito = await passwordAccount.cambiaPassword(req.session.user.id, req.sessionID, req.body);
+  if (!esito.ok) {
+    if (esito.passwordSbagliata) registraAccessoFallito(req, chiaveLimite);
+    return paginaProfilo(req, res, { stato: 400, erroriPassword: esito.errori });
+  }
+  accessoRiuscito(req, chiaveLimite);
+  res.redirect('/profilo?ok=password#accesso');
+});
+
+// Eliminare l'account dal sito (src/account.js, lo stesso dell'app): una pagina che spiega cosa succede e chiede la password. Si anonimizza e si disattiva,
+// non si cancella (ordini, bolle e ricevute restano). Se c'è qualcosa in corso la pagina lo dice subito e il pulsante non c'è.
+async function paginaEliminaAccount(req, res, extra = {}) {
+  const corso = await account.attivitaInCorso(req.session.user.id);
+  res.status(extra.stato || 200).render('profilo_elimina', {
+    titolo: 'Elimina account',
+    corso,
+    inCorso: !!(corso.richieste || corso.ordini || corso.pagamenti),
+    errore: extra.errore || '',
+  });
+}
+
+app.get('/profilo/elimina', requireRole('cliente'), (req, res) => paginaEliminaAccount(req, res));
+
+app.post('/profilo/elimina', requireRole('cliente'), async (req, res) => {
+  const username = String(req.session.user.username || '');
+  if (accessoBloccato(req, username)) {
+    return paginaEliminaAccount(req, res, { stato: 429, errore: 'Troppi tentativi non riusciti. Riprova tra qualche minuto.' });
+  }
+  const utente = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
+  if (!(await passwordValida(req.body.password, utente))) {
+    registraAccessoFallito(req, username);
+    return paginaEliminaAccount(req, res, { stato: 400, errore: 'Password non corretta.' });
+  }
+  accessoRiuscito(req, username);
+  try {
+    await account.eliminaAccount(utente);
+  } catch (e) {
+    if (!(e instanceof account.AccountNonEliminabile)) throw e;
+    return paginaEliminaAccount(req, res, { stato: 409, errore: e.messaggioCliente });
+  }
+  tokenApp.dimenticaUtente(utente.id);
+  // L'account non esiste più: anche la sessione di questa scheda (le altre le ha già tolte eliminaAccount).
+  req.session.destroy(() => res.redirect('/login?avviso=eliminato'));
 });
 
 app.post('/login', async (req, res) => {
@@ -798,7 +928,12 @@ app.post('/carrello', requireRole('cliente'), async (req, res) => {
 // Da qui si paga e parte la richiesta: dopo l'installatore non sceglie più niente.
 app.get('/carrello', requireRole('cliente'), async (req, res) => {
   const righe = await righeCarrello(req);
-  const riepilogo = await flusso.riepilogoCarrello(righe);
+  // Il banco è aperto? Fuori dagli orari impostati nella sua "Anagrafica" il pulsante di pagamento dice quando riapre e non si può premere (lo stesso
+  // controllo lo rifà il server al momento di pagare). A carrello vuoto non serve: niente query in più.
+  const [riepilogo, statoBanco] = await Promise.all([
+    flusso.riepilogoCarrello(righe),
+    righe.length ? richieste.statoBanchiAttivi() : { aperto: true, riapre: null },
+  ]);
 
   // Gli articoli che "Riordina" ha saltato (POST /storico/:id/riordina): l'avviso si mostra una volta sola.
   const saltati = Number(req.session.avvisoCarrello) || 0;
@@ -810,6 +945,8 @@ app.get('/carrello', requireRole('cliente'), async (req, res) => {
     chiaveInvio: require('crypto').randomBytes(12).toString('hex'),
     avviso: saltati === 1 ? '1 articolo non è più disponibile' : saltati > 1 ? saltati + ' articoli non sono più disponibili' : '',
     righe,
+    bancoChiuso: !statoBanco.aperto,
+    fraseBancoChiuso: orari.frasePerCarrello(statoBanco),
     ...riepilogo,
     cliente: await db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id),
     // Solo a carrello vuoto: la scheda "Il tuo ultimo ordine" con "Rimetti nel carrello" (una lettura sola).
@@ -832,13 +969,14 @@ function urlBase(req) {
 }
 
 // Dove mandare chi ha un errore del flusso (richiesta già aperta, minimo, carrello vuoto, pagamento non disponibile).
-function paginaErroreFlusso(res, e) {
+function paginaErroreFlusso(res, e, altroLink = null) {
   const link =
-    e.codice === 'in_corso' && e.requestId
+    altroLink ||
+    (e.codice === 'in_corso' && e.requestId
       ? { link: '/richieste/' + e.requestId, linkTesto: 'Apri la richiesta in corso' }
       : e.codice === 'vuota'
         ? { link: '/home', linkTesto: 'Torna alla home' }
-        : { link: '/carrello', linkTesto: 'Torna al riepilogo' };
+        : { link: '/carrello', linkTesto: 'Torna al riepilogo' });
   return res.status(400).render('errore', { titolo: e.titolo, messaggio: e.message, ...link });
 }
 
@@ -961,7 +1099,10 @@ app.get('/richieste/:id', requireRole('cliente'), async (req, res) => {
     strisciaPer(req, res, 'richiesta-' + richiesta.id),
   ]);
   res.locals.ordiniNonLetti = 0;
-  const vista = { titolo: 'Richiesta #' + richiesta.id, striscia, ...dati };
+  // Una richiesta senza risposta resta in "Stato ordini" per 10 minuti dalla scadenza: se la si sta guardando quando finiscono, la pagina passa da
+  // sola a "Stato ordini" (che mostra la prossima attività, o la pagina vuota). 0 = non è più in "Stato ordini" (aperta dallo Storico, o già oltre):
+  // nessun passaggio automatico.
+  const vista = { titolo: 'Richiesta #' + richiesta.id, striscia, lasciaFra: flusso.secondiAllaScomparsa(richiesta), ...dati };
   if (richiesta.stato === 'in_attesa') return res.render('richiesta_attesa', vista);
   return res.render('richiesta_chiusa', vista);
 });
@@ -1001,15 +1142,22 @@ app.post('/richieste/:id/reinvia', requireRole('cliente'), async (req, res) => {
   if (!richiesta || richiesta.cliente_id !== req.session.user.id) return res.redirect('/ordini');
   // Con Stripe il blocco sulla carta è stato rilasciato alla chiusura: per rinviare si autorizza di nuovo, e la
   // richiesta si riapre a pagamento fatto.
+  // Se non si può rinviare (banco chiuso fuori orario, richiesta non più rinviabile) si torna alla richiesta, non al carrello.
+  const allaRichiesta = { link: '/richieste/' + richiesta.id, linkTesto: 'Torna alla richiesta' };
   if (stripePagamenti.pagaConStripe() && richiesta.stato === 'nessuna_offerta') {
     try {
       return res.redirect(303, '/pagamento/' + (await stripePagamenti.avviaPagamentoReinvio(req.session.user.id, richiesta)));
     } catch (e) {
       if (!(e instanceof flusso.ErroreFlusso)) throw e;
-      return paginaErroreFlusso(res, e);
+      return paginaErroreFlusso(res, e, allaRichiesta);
     }
   }
-  res.redirect('/richieste/' + (await flusso.reinviaRichiesta(richiesta)));
+  try {
+    res.redirect('/richieste/' + (await flusso.reinviaRichiesta(richiesta)));
+  } catch (e) {
+    if (!(e instanceof flusso.ErroreFlusso)) throw e;
+    paginaErroreFlusso(res, e, allaRichiesta);
+  }
 });
 
 // Elimina richiesta (cliente) — globale: sparisce anche per tutti i distributori (da confermare + storico)
@@ -1691,6 +1839,109 @@ app.post('/distributore/richieste/:id/rispondi', requireRole('distributore'), as
 
 // ---------- Distributore: anagrafiche clienti da approvare ----------
 
+// ---------- Anagrafica del banco ----------
+// Pagina (richiesta esplicita del 20/10/2026) con le schede Ditta, Questa filiale, Orari, Accesso e Notifiche: logica in src/anagrafica_banco.js e
+// src/orari.js, presentazione in views/distributore_anagrafica.ejs. Un solo profilo con tutti i permessi: ogni utente del banco vede e cambia le stesse cose.
+// Ogni scheda ha il suo POST: con errori la pagina si ripropone (400) con la scheda aperta, i valori scritti e gli errori sotto i campi; con il salvataggio
+// si torna alla pagina (`?ok=<scheda>`), che lo conferma.
+const SCHEDE_ANAGRAFICA = ['ditta', 'filiale', 'orari', 'password'];
+const SALVATI_ANAGRAFICA = ['ditta', 'filiale', 'orari', 'password', 'posizione'];
+const ESITI_POSIZIONE = ['ricalcolata', 'non_trovata', 'manuale', 'invariata'];
+
+async function paginaAnagraficaBanco(req, res, extra = {}) {
+  const dati = extra.dati || (await anagraficaBanco.leggi(req.session.user.distributor_id, req.session.user.id));
+  if (!dati) return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Banco non trovato.' });
+  res.status(extra.stato || 200).render('distributore_anagrafica', {
+    titolo: 'Anagrafica del banco',
+    dati,
+    anagraficaBanco,
+    orari,
+    // Quale scheda è aperta in modifica: quella con gli errori, o quella chiesta con ?modifica= (anche senza JavaScript).
+    aperta: extra.aperta !== undefined ? extra.aperta : (SCHEDE_ANAGRAFICA.includes(req.query.modifica) ? req.query.modifica : null),
+    valori: extra.valori || {},
+    errori: extra.errori || {},
+    ok: SALVATI_ANAGRAFICA.includes(req.query.ok) ? req.query.ok : '',
+    posizione: ESITI_POSIZIONE.includes(req.query.pos) ? req.query.pos : '',
+    riassuntoOrari: orari.riassunto(dati.orari),
+    moduloOrari: extra.moduloOrari || orari.valoriPerModulo(dati.orari),
+    // Senza orari salvati la casella "sempre aperto" parte spuntata (i giorni mostrano solo una proposta, spenta).
+    sempreAperto: extra.sempreAperto !== undefined ? extra.sempreAperto : !dati.orari,
+    // La riga "Email per ogni nuova richiesta" c'è solo quando esiste l'invio vero (email.inviaNuovaRichiesta): oggi manca e la riga resta nascosta.
+    emailRichieste: typeof emailModulo.inviaNuovaRichiesta === 'function',
+  });
+}
+
+app.get('/distributore/anagrafica', requireRole('distributore'), (req, res) => paginaAnagraficaBanco(req, res));
+
+app.post('/distributore/anagrafica/ditta', requireRole('distributore'), async (req, res) => {
+  const idBanco = req.session.user.distributor_id;
+  const dati = await anagraficaBanco.leggi(idBanco, req.session.user.id);
+  if (!dati) return paginaAnagraficaBanco(req, res, { dati });
+  const { valori, errori } = anagraficaBanco.controllaDitta(req.body, { conDitta: dati.conDitta });
+  if (Object.keys(errori).length) {
+    return paginaAnagraficaBanco(req, res, { dati, stato: 400, aperta: 'ditta', valori: { ditta: valori }, errori: { ditta: errori } });
+  }
+  await anagraficaBanco.salvaDitta(idBanco, valori);
+  rileggiIntestazioneBanco(idBanco);
+  res.redirect('/distributore/anagrafica?ok=ditta#ditta');
+});
+
+app.post('/distributore/anagrafica/filiale', requireRole('distributore'), async (req, res) => {
+  const idBanco = req.session.user.distributor_id;
+  const dati = await anagraficaBanco.leggi(idBanco, req.session.user.id);
+  if (!dati) return paginaAnagraficaBanco(req, res, { dati });
+  const { valori, errori } = anagraficaBanco.controllaFiliale(req.body);
+  const riproponi = (e) => paginaAnagraficaBanco(req, res, { dati, stato: 400, aperta: 'filiale', valori: { filiale: valori }, errori: { filiale: e } });
+  if (Object.keys(errori).length) return riproponi(errori);
+  // Se cambia l'indirizzo la posizione sulla mappa si ricalcola (geocodifica di OpenStreetMap), salvo che il banco l'abbia spostata a mano.
+  const esito = await anagraficaBanco.salvaFiliale(idBanco, valori);
+  if (!esito.ok) return riproponi(esito.errori);
+  rileggiIntestazioneBanco(idBanco);
+  res.redirect('/distributore/anagrafica?ok=filiale&pos=' + esito.posizione + '#filiale');
+});
+
+app.post('/distributore/anagrafica/orari', requireRole('distributore'), async (req, res) => {
+  const idBanco = req.session.user.distributor_id;
+  const letti = orari.orariDaModulo(req.body);
+  if (letti.errore || Object.keys(letti.errori).length) {
+    const dati = await anagraficaBanco.leggi(idBanco, req.session.user.id);
+    return paginaAnagraficaBanco(req, res, {
+      dati, stato: 400, aperta: 'orari', moduloOrari: letti.valori, sempreAperto: false,
+      errori: { orari: { ...letti.errori, _generale: letti.errore } },
+    });
+  }
+  await anagraficaBanco.salvaOrari(idBanco, letti.orari); // null = sempre aperto
+  res.redirect('/distributore/anagrafica?ok=orari#orari');
+});
+
+// Cambio password: i tentativi con la password attuale sbagliata contano nello stesso limite del login (chi ha rubato una sessione non deve poterla
+// indovinare qui). Dopo il cambio le altre sessioni dello stesso utente si chiudono (anagraficaBanco.cambiaPassword).
+app.post('/distributore/anagrafica/password', requireRole('distributore'), async (req, res) => {
+  const chiaveLimite = 'cambio-password:' + String(req.session.user.username || req.session.user.id);
+  const riproponi = (stato, errori) => paginaAnagraficaBanco(req, res, { stato, aperta: 'password', errori: { password: errori } });
+  if (accessoBloccato(req, chiaveLimite)) return riproponi(429, { attuale: 'Troppi tentativi non riusciti. Riprova tra qualche minuto.' });
+  const esito = await anagraficaBanco.cambiaPassword(req.session.user.id, req.sessionID, req.body);
+  if (!esito.ok) {
+    if (esito.passwordSbagliata) registraAccessoFallito(req, chiaveLimite);
+    return riproponi(400, esito.errori);
+  }
+  accessoRiuscito(req, chiaveLimite);
+  res.redirect('/distributore/anagrafica?ok=password#accesso');
+});
+
+// "Sposta" / "Imposta": il segnaposto trascinato sulla mappa (public/mappa.js). Da qui un cambio d'indirizzo non ricalcola più la posizione.
+app.post('/distributore/anagrafica/posizione', requireRole('distributore'), async (req, res) => {
+  const salvata = await anagraficaBanco.spostaPosizione(req.session.user.distributor_id, req.body.lat, req.body.lng);
+  if (!salvata) return res.status(400).json({ ok: false, errore: 'Posizione non valida: scegli un punto in Italia.' });
+  res.json({ ok: true });
+});
+
+// L'interruttore "Email per ogni nuova richiesta" salva subito (fetch).
+app.post('/distributore/anagrafica/email-richieste', requireRole('distributore'), async (req, res) => {
+  await anagraficaBanco.salvaEmailNuoveRichieste(req.session.user.distributor_id, req.body.acceso === true || req.body.acceso === '1' || req.body.acceso === 1);
+  res.json({ ok: true });
+});
+
 app.get('/distributore/clienti', requireRole('distributore'), async (req, res) => {
   // Una query sola, con l'ultimo ordine di ogni cliente (`ultimo_ordine`). Ordine per ragione sociale fatto qui, senza
   // badare alle maiuscole: quello del DB dipende dalla collazione.
@@ -1988,7 +2239,8 @@ app.post('/distributore/ordini/:id/ddt', requireRole('distributore'), async (req
     });
   }
 
-  res.redirect('/ddt/' + ordine.id);
+  // La bolla porta con sé la pagina da cui si è partiti (di norma la home del banco: "Ispeziona" → "Emetti bolla"): "Torna" lì riporta.
+  res.redirect(conRitorno('/ddt/' + ordine.id, ritornoBanco(req.body.torna)));
 });
 
 // ---------- Bolla / DDT ----------
@@ -2019,6 +2271,8 @@ app.get('/ddt/:id', requireLogin, async (req, res) => {
 
   res.render('ddt', {
     titolo: 'DDT ' + ordine.ddt_numero,
+    // Solo per il banco: dove riporta "Torna" (la pagina da cui ha emesso la bolla); senza `?torna=` (per esempio dallo Storico) resta lo Storico.
+    tornaBanco: utente.ruolo === 'distributore' && req.query.torna ? ritornoBanco(req.query.torna, '') : '',
     ...documento,
     indirizzoMittente: ddt.indirizzoCompleto(documento.distributore),
     indirizzoCliente: ddt.indirizzoCompleto(documento.cliente),

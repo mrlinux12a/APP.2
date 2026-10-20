@@ -511,7 +511,12 @@ router.post('/richieste/:id/reinvia', richiedeCliente, async (req, res) => {
       return rispostaErroreFlusso(res, e);
     }
   }
-  res.json({ id: await flusso.reinviaRichiesta(richiesta) });
+  try {
+    res.json({ id: await flusso.reinviaRichiesta(richiesta) });
+  } catch (e) {
+    if (!(e instanceof flusso.ErroreFlusso)) throw e;
+    rispostaErroreFlusso(res, e); // per esempio 'banco_chiuso' fuori orario
+  }
 });
 
 router.delete('/richieste/:id', richiedeCliente, async (req, res) => {

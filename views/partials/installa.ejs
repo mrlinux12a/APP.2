@@ -1,0 +1,19 @@
+<%#
+  Invito a installare il sito come app sul telefono (PWA): una scheda nascosta che public/app.js ("Installa l'app") mostra solo quando si può davvero
+  installare, cioè quando il browser manda `beforeinstallprompt` (Chrome/Edge/Samsung, in HTTPS) oppure su iPhone/iPad con Safari, dove non c'è un
+  pulsante ma si spiega come ("Condividi → Aggiungi alla schermata Home"). Non si mostra se l'app è già aperta da installata (display-mode standalone).
+  Parametro `variante`: 'home' (default: scheda compatta con la × "Non ora": scompare per 30 giorni) o 'profilo' (sempre disponibile, senza ×: è il
+  posto dove tornare se si era detto "non ora").
+%>
+<%
+  const nelProfilo = typeof variante !== 'undefined' && variante === 'profilo';
+%>
+<section class="installa<%= nelProfilo ? ' installa-profilo' : '' %>" data-installa<%= nelProfilo ? ' data-installa-sempre' : '' %> hidden aria-label="Installa l'app">
+  <span class="installa-ico" aria-hidden="true"><%- iconaDownload %></span>
+  <div class="installa-testi">
+    <strong>Installa l'app</strong>
+    <span data-installa-testo>Aprila dalla schermata Home, a tutto schermo e senza la barra del browser.</span>
+  </div>
+  <button type="button" class="installa-btn" data-installa-btn>Installa</button>
+  <% if (!nelProfilo) { %><button type="button" class="installa-chiudi" data-installa-chiudi aria-label="Non ora"><%- iconaChiudi %></button><% } %>
+</section>

@@ -12,6 +12,7 @@ const whatsapp = require('./whatsapp');
 const pagamenti = require('./pagamenti');
 const consegna = require('./consegna');
 const format = require('./format');
+const orari = require('./orari');
 const { QUANTITA_MASSIMA, leggiId, leggiQuantita } = require('./input');
 
 // Errore "previsto" del flusso (ordine minimo, richiesta già aperta...): il chiamante lo
@@ -120,10 +121,28 @@ async function validaRichiesta(clienteId, righe) {
   if (!righe.length) {
     throw new ErroreFlusso('vuota', 'Nessun materiale', 'Seleziona almeno un prodotto prima di procedere.');
   }
+  await controllaBancoAperto();
 
   const cliente = await db.prepare('SELECT * FROM users WHERE id = ?').get(clienteId);
 
   return { cliente, totali };
+}
+
+// Fuori dagli orari dei banchi (src/orari.js, impostati nell'"Anagrafica del banco") una richiesta non arriva a nessuno: quindi non si paga e non
+// parte. Si controlla ADESSO anche lato server (il pulsante del carrello è disabilitato, ma la pagina può essere rimasta aperta o la richiesta
+// arrivare da un'altra parte): vale per l'invio, per "Rinvia" e, con Stripe, anche a carta già autorizzata (allora la carta si rilascia).
+// Ritorna lo stato ({ aperto, riapre }) se è aperto, altrimenti lancia ErroreFlusso 'banco_chiuso'.
+async function controllaBancoAperto(quando = new Date()) {
+  const stato = await richieste.statoBanchiAttivi(quando);
+  if (!stato.aperto) {
+    throw new ErroreFlusso(
+      'banco_chiuso',
+      'Il banco è chiuso',
+      (stato.riapre ? 'Riapre ' + stato.riapre.testo + '.' : 'Al momento non riceve richieste.') + ' Non è stato addebitato nulla: riprova quando riapre.',
+      { riapre: stato.riapre, frase: orari.frasePerCarrello(stato) }
+    );
+  }
+  return stato;
 }
 
 // La chiave di un invio dal carrello: una stringa casuale scritta nella pagina (o generata dall'app) che identifica quel
@@ -294,6 +313,7 @@ async function annullaRichiesta(requestId) {
 // Ritorna l'id della richiesta da mostrare.
 async function reinviaRichiesta(richiesta) {
   if (richiesta.stato !== 'nessuna_offerta') return richiesta.id;
+  await controllaBancoAperto();
   await richieste.reinviaRichiesta(richiesta.id);
   return richiesta.id;
 }
@@ -704,11 +724,11 @@ async function ultimoOrdineConsegnato(clienteId, massimo = 3) {
 //   fase 3 — ordine consegnato (consegnato_il): non si mostra più in "Stato ordini", resta nello Storico.
 // "Stato ordini" le elenca prima le richieste (timer più lungo per primo) e poi gli ordini in consegna (arrivo più
 // lontano per primo, senza orario in fondo). L'icona della barra, la scheda della home e l'API dell'app seguono invece
-// UNA sola attività: la prima in ordine di invio (la richiesta con id più basso). Una richiesta scaduta senza ordine
-// conta solo se è l'ultima cosa che il cliente ha fatto (vedi scadutaRecente).
+// UNA sola attività: la prima in ordine di invio (la richiesta con id più basso). Le richieste chiuse senza ordine
+// ("Nessuna risposta") restano visibili 10 minuti dalla scadenza, ciascuna per conto suo (vedi scaduteRecenti).
 const PROGRESSO_IN_VIAGGIO = 0.5; // metà barra: "In viaggio"
 const PROGRESSO_ARRIVO = 0.94; // dove si ferma la barra a tempo finito: un filo prima di "Consegnato", che arriva solo con la consegna vera
-const TRE_ORE_MS = 3 * 60 * 60 * 1000;
+const SCADUTA_VISIBILE_MS = 10 * 60 * 1000; // quanto una richiesta senza risposta resta in "Stato ordini" (richiesta esplicita del 20/10/2026)
 const VENTIQUATTRO_ORE_MS = 24 * 60 * 60 * 1000;
 const FASE_ATTESA = 1;
 const FASE_CONSEGNA = 2;
@@ -811,14 +831,22 @@ function primaInviata(attive) {
   return attive.length ? attive.reduce((a, b) => (b.card.richiesta.id < a.card.richiesta.id ? b : a)) : null;
 }
 
-// Una richiesta rimasta senza risposta da meno di 3 ore conta solo se è l'ULTIMA cosa che il cliente ha fatto (la
-// richiesta con l'id più alto): se dopo c'è un ordine (anche già consegnato) o un'altra richiesta, "Nessuna risposta"
-// non descrive più la situazione. Prima bastava una scaduta qualunque fra le ultime cinque.
-function scadutaRecente(cards) {
-  if (!cards.length) return null;
-  const ultima = cards.reduce((a, b) => (b.richiesta.id > a.richiesta.id ? b : a));
-  if (ultima.step !== 0 || ultima.richiesta.stato !== 'nessuna_offerta') return null;
-  return eta(ultima.richiesta.scade_il) <= TRE_ORE_MS ? ultima : null;
+// Secondi che mancano a far sparire da "Stato ordini" una richiesta chiusa senza ordine: 10 minuti dalla scadenza (`scade_il`, il momento in cui
+// la finestra è finita e nessuno ha confermato). 0 se non è una richiesta "senza risposta" o i 10 minuti sono passati. Arrotondato per eccesso:
+// una voce che c'è non ha mai 0 secondi, e il browser che aspetta quel numero trova il server già pronto a non mandarla più.
+function secondiAllaScomparsa(richiesta) {
+  if (!richiesta || richiesta.stato !== 'nessuna_offerta') return 0;
+  return Math.max(0, Math.ceil((SCADUTA_VISIBILE_MS - eta(richiesta.scade_il)) / 1000));
+}
+
+// Le richieste rimaste senza risposta da meno di 10 minuti: OGNUNA resta in "Stato ordini" per 10 minuti dalla sua scadenza, a prescindere da cos'altro
+// è successo dopo (un'altra richiesta in attesa o scaduta, un ordine anche già consegnato). Prima ne contava una sola, e solo se era l'ULTIMA cosa
+// fatta: con due richieste insieme la prima a scadere spariva subito, davanti agli occhi del cliente. Le annullate non ci sono (le ha chiuse lui).
+// Ordine: prima quella che sparisce prima, a parità la più vecchia.
+function scaduteRecenti(cards) {
+  return cards
+    .filter((c) => c.step === 0 && c.richiesta.stato === 'nessuna_offerta' && secondiAllaScomparsa(c.richiesta) > 0)
+    .sort((a, b) => secondiAllaScomparsa(a.richiesta) - secondiAllaScomparsa(b.richiesta) || a.richiesta.id - b.richiesta.id);
 }
 
 function riferimentoAttivita(card) {
@@ -826,8 +854,8 @@ function riferimentoAttivita(card) {
 }
 
 // Tutto quello che "Stato ordini" deve sapere: `attive` (le attività in corso, già nell'ordine da mostrare) e
-// `corrente` ({ tipo: 'ordine'|'richiesta', id } o null: la singola attività che segue l'app, o la richiesta scaduta
-// da poco se non c'è altro). Segna anche come lette le notifiche di richieste/ordini: il cliente le sta guardando.
+// `corrente` ({ tipo: 'ordine'|'richiesta', id } o null: la singola attività che segue l'app, o la prima richiesta senza risposta
+// ancora visibile se non c'è altro). Segna anche come lette le notifiche di richieste/ordini: il cliente le sta guardando.
 async function attivitaCliente(clienteId) {
   // I due "segna come lette" e la lettura delle richieste recenti non dipendono l'uno dall'altro: partono
   // insieme (un giro al DB invece di tre). Le scadenze si aggiornano DOPO, come prima: le notifiche che possono
@@ -842,8 +870,8 @@ async function attivitaCliente(clienteId) {
 
   const prima = primaInviata(attive);
   if (prima) return { attive, corrente: riferimentoAttivita(prima.card) };
-  const scaduta = scadutaRecente(cards);
-  return { attive, corrente: scaduta ? { tipo: 'richiesta', id: scaduta.richiesta.id } : null };
+  const scadute = scaduteRecenti(cards);
+  return { attive, corrente: scadute.length ? { tipo: 'richiesta', id: scadute[0].richiesta.id } : null };
 }
 
 // L'attività da mostrare quando se ne può mostrare una sola (l'app): { tipo, id } o null. È la prima inviata, non la più urgente.
@@ -852,14 +880,16 @@ async function attivitaCorrente(clienteId) {
 }
 
 // L'ordine delle voci di "Stato ordini", uguale per l'icona che alterna e per la striscia di schede (funzione pura, provata in
-// test/stato_ordini.test.js): prima la richiesta scaduta (il cliente deve rinviarla), poi le richieste in attesa dal timer più corto al più
-// lungo, poi gli ordini in consegna da quello che arriva prima a quello che arriva dopo (senza minuti in fondo). A parità, la più vecchia
-// per prima: l'ordine non cambia da un aggiornamento all'altro. Ogni voce ha `fase` ('scaduta' | 'richiesta' | 'consegna') e `id`.
+// test/stato_ordini.test.js): prima le richieste scadute (il cliente deve rinviarle) da quella che sparisce prima, poi le richieste in attesa
+// dal timer più corto al più lungo, poi gli ordini in consegna da quello che arriva prima a quello che arriva dopo (senza minuti in fondo).
+// A parità, la più vecchia per prima: l'ordine non cambia da un aggiornamento all'altro. Ogni voce ha `fase` ('scaduta' | 'richiesta' |
+// 'consegna') e `id`.
 function ordinaVociIcona(voci) {
   const peso = { scaduta: 0, richiesta: 1, consegna: 2 };
   const minuti = (v) => (v.minuti === null || v.minuti === undefined ? Infinity : v.minuti);
   return [...voci].sort((a, b) => {
     if (a.fase !== b.fase) return peso[a.fase] - peso[b.fase];
+    if (a.fase === 'scaduta' && (a.scompareTraSec || 0) !== (b.scompareTraSec || 0)) return (a.scompareTraSec || 0) - (b.scompareTraSec || 0);
     if (a.fase === 'richiesta' && a.secondi !== b.secondi) return a.secondi - b.secondi;
     if (a.fase === 'consegna' && minuti(a) !== minuti(b)) return minuti(a) < minuti(b) ? -1 : 1;
     return Number(a.id || 0) - Number(b.id || 0);
@@ -868,8 +898,9 @@ function ordinaVociIcona(voci) {
 
 // Una voce di "Stato ordini": quello che serve all'icona e alla striscia, sempre dalla stessa costruzione (così non dicono mai cose
 // diverse). `tipo`+`id` dicono quale pagina la mostra (/richieste/:id o /ordini/:id), `voce` è "tipo-id" (il parametro ?voce= di
-// /ordini), `richiestaId` serve a leggere il materiale. Solo `richiesta` ha secondi e durata, solo `consegna` ha minuti (null se
-// il corriere non ha scritto l'orario), il nome del corriere ('' se manca) e l'avanzamento 0-1 della barra della home.
+// /ordini), `richiestaId` serve a leggere il materiale. Solo `richiesta` ha secondi e durata, solo `scaduta` ha `scompareTraSec` (secondi
+// che mancano a farla sparire: 10 minuti dalla scadenza), solo `consegna` ha minuti (null se il corriere non ha scritto l'orario), il nome
+// del corriere ('' se manca) e l'avanzamento 0-1 della barra della home.
 // Le schede della home (partials/stato_home.ejs) sono una per voce, quindi leggono tutto da qui.
 function costruisciVoce(fase, card, finestra) {
   const r = card.richiesta;
@@ -905,6 +936,8 @@ function costruisciVoce(fase, card, finestra) {
   if (fase === 'richiesta') {
     voce.secondi = secondiAllaScadenza(card);
     voce.durata = format.durataFinestraSec(r.creato_il, r.scade_il, finestra);
+  } else if (fase === 'scaduta') {
+    voce.scompareTraSec = secondiAllaScomparsa(r);
   }
   return voce;
 }
@@ -922,12 +955,12 @@ async function leggiVoci(clienteId) {
   const [recenti, finestra] = await Promise.all([leggiRichiesteRecenti(clienteId), pricing.getFinestraMinuti()]);
   const cards = await richiesteAttiveClienteLeggere(recenti);
   const attive = attiveOrdinate(cards);
-  const scaduta = scadutaRecente(cards);
+  const scadute = scaduteRecenti(cards);
   const voci = ordinaVociIcona([
-    ...(scaduta ? [costruisciVoce('scaduta', scaduta, finestra)] : []),
+    ...scadute.map((card) => costruisciVoce('scaduta', card, finestra)),
     ...attive.map(({ fase, card }) => costruisciVoce(fase === FASE_ATTESA ? 'richiesta' : 'consegna', card, finestra)),
   ]);
-  return { attive, scaduta, voci, finestra };
+  return { attive, scadute, voci, finestra };
 }
 
 // Aggiunge a ogni voce `breve`: il nome del primo articolo e, se ce ne sono altri, " +N". Una lettura sola per tutte le richieste.
@@ -941,8 +974,8 @@ async function conBreve(voci) {
   });
 }
 
-// Le voci della striscia di schede di "Stato ordini", nello stesso ordine dell'icona: scaduta recente, richieste in attesa dal timer più
-// corto, ordini in consegna dall'arrivo più vicino. Con `segnaLette` segna anche come lette le notifiche (è la pagina "Stato ordini" a
+// Le voci della striscia di schede di "Stato ordini", nello stesso ordine dell'icona: richieste senza risposta da meno di 10 minuti,
+// richieste in attesa dal timer più corto, ordini in consegna dall'arrivo più vicino. Con `segnaLette` segna anche come lette le notifiche (è la pagina "Stato ordini" a
 // chiederlo); con `breve: false` salta la lettura del materiale.
 async function vociStriscia(clienteId, { segnaLette = false, breve = true } = {}) {
   const [, , lette] = await Promise.all([
@@ -962,11 +995,11 @@ async function vociStriscia(clienteId, { segnaLette = false, breve = true } = {}
 //   { fase: 'consegna', ordineId, minuti, etaSec, durataSec, inArrivo, corriere, progresso, voci, firma } -> minuti all'arrivo (null se
 //                                                non scritto), secondi all'arrivo e durata totale, "In arrivo" (3 min o meno), nome del
 //                                                corriere ('' se manca), avanzamento 0-1 per la home
-//   { fase: 'scaduta', voci, firma }          -> nessun banco ha accettato in tempo (e non è successo altro dopo)
-// voci: [{ fase, tipo, id, richiestaId, href, voce, secondi?, durata?, minuti?, etaSec?, durataSec?, inArrivo?, corriere?, progresso? }]
-// (la `breve` la aggiunge solo la striscia).
+//   { fase: 'scaduta', voci, firma }          -> nessun banco ha accettato in tempo, da meno di 10 minuti, e non c'è altra attività in corso
+// voci: [{ fase, tipo, id, richiestaId, href, voce, secondi?, durata?, scompareTraSec?, minuti?, etaSec?, durataSec?, inArrivo?, corriere?,
+// progresso? }] (la `breve` la aggiunge solo la striscia).
 async function statoIconaOrdini(clienteId) {
-  const { attive, scaduta, voci, finestra } = await leggiVoci(clienteId);
+  const { attive, scadute, voci, finestra } = await leggiVoci(clienteId);
   const firma = firmaVoci(voci);
 
   const prima = primaInviata(attive);
@@ -991,19 +1024,21 @@ async function statoIconaOrdini(clienteId) {
     };
   }
 
-  return { fase: scaduta ? 'scaduta' : 'nessuna', voci, firma };
+  return { fase: scadute.length ? 'scaduta' : 'nessuna', voci, firma };
 }
 
 module.exports = {
   ErroreFlusso,
   statoIconaOrdini,
   ordinaVociIcona,
+  secondiAllaScomparsa,
   senzaFiliale,
   OrdineInLavorazione,
   righeDaQuantita,
   riepilogoCarrello,
   vistaRiepilogo,
   validaRichiesta,
+  controllaBancoAperto,
   nuovaRichiesta,
   chiaveInvioValida,
   dettaglioRichiesta,

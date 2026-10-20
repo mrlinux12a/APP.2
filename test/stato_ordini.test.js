@@ -78,11 +78,15 @@ test('non esiste più il blocco "una sola richiesta aperta"', () => {
   assert.equal(flusso.richiestaBloccante, undefined);
 });
 
-// Le voci come le costruisce il flusso: { fase, tipo, id, richiestaId, href, voce, ... }
+// Le voci come le costruisce il flusso: { fase, tipo, id, richiestaId, href, voce, ... }. Le scadute portano anche `scompareTraSec` (secondi che
+// mancano a farle sparire: 10 minuti dalla scadenza); la prova lo controlla a parte, perché dipende dall'orologio.
 const voceScaduta = (id) => ({ fase: 'scaduta', tipo: 'richiesta', id, richiestaId: id, href: '/richieste/' + id, voce: 'richiesta-' + id });
+const senzaScomparsa = (voci) => voci.map(({ scompareTraSec, ...resto }) => resto);
 const chiavi = (voci) => voci.map((v) => v.voce);
+// Quanto manca a far sparire una scaduta nata `scadutaFa` ms fa: 10 minuti meno il tempo passato (con 2 secondi di tolleranza).
+const scompareFra = (voce, scadutaFa) => Math.abs(voce.scompareTraSec - Math.ceil((10 * MIN - scadutaFa) / 1000)) <= 2;
 
-test('icona: un ordine consegnato (fase 3) non mostra "Nessuna risposta" per una richiesta scaduta più vecchia', async () => {
+test('icona: un ordine consegnato (fase 3) non mostra "Nessuna risposta" per una richiesta scaduta da più di 10 minuti', async () => {
   const consegnato = conOrdine(11, { consegnato: true });
   prepara(() => [scaduta(10, 90 * MIN), consegnato]);
   assert.deepEqual(await flusso.statoIconaOrdini(1), { fase: 'nessuna', voci: [], firma: '' });
@@ -92,18 +96,67 @@ test('icona: un ordine consegnato (fase 3) non mostra "Nessuna risposta" per una
   assert.deepEqual(await flusso.vociStriscia(1), [], 'e la striscia non ha voci');
 });
 
-test('icona: "Nessuna risposta" resta quando la richiesta scaduta è l\'ultima cosa successa', async () => {
-  prepara(() => [conOrdine(9, { consegnato: true }), scaduta(10, 30 * MIN)]);
-  assert.deepEqual(await flusso.statoIconaOrdini(1), { fase: 'scaduta', voci: [voceScaduta(10)], firma: 'richiesta-10-scaduta' });
+test('icona: "Nessuna risposta" resta 10 minuti dalla scadenza, poi sparisce', async () => {
+  prepara(() => [conOrdine(9, { consegnato: true }), scaduta(10, 4 * MIN)]);
+  const icona = await flusso.statoIconaOrdini(1);
+  assert.equal(icona.fase, 'scaduta');
+  assert.equal(icona.firma, 'richiesta-10-scaduta');
+  assert.deepEqual(senzaScomparsa(icona.voci), [voceScaduta(10)]);
+  assert.ok(scompareFra(icona.voci[0], 4 * MIN), 'mancano ~6 minuti: ' + icona.voci[0].scompareTraSec);
   assert.deepEqual((await flusso.attivitaCliente(1)).corrente, { tipo: 'richiesta', id: 10 });
-  // oltre le 3 ore non conta più
+  // appena passati i 10 minuti (o molto dopo) non conta più
+  prepara(() => [scaduta(10, 10 * MIN + 5000)]);
+  assert.deepEqual(await flusso.statoIconaOrdini(1), { fase: 'nessuna', voci: [], firma: '' });
   prepara(() => [scaduta(10, 4 * ORA)]);
   assert.deepEqual(await flusso.statoIconaOrdini(1), { fase: 'nessuna', voci: [], firma: '' });
 });
 
-test('icona: una richiesta annullata dopo la scaduta cancella il "Nessuna risposta"', async () => {
-  prepara(() => [scaduta(10, 30 * MIN), { id: 11, stato: 'annullata', creato_il: fa(5 * MIN), scade_il: tra(5 * MIN), order_id: null, secondi_rimasti: 300 }]);
+test('DUE richieste: la prima a scadere resta visibile 10 minuti anche se la seconda è ancora in attesa (o è già scaduta)', async () => {
+  // la 10 è scaduta da 3 minuti, la 11 (più nuova) è ancora in attesa: prima la 10 spariva subito
+  prepara(() => [scaduta(10, 3 * MIN), inAttesa(11, 400)]);
+  let voci = await flusso.vociStriscia(1);
+  assert.deepEqual(voci.map((v) => [v.fase, v.id]), [['scaduta', 10], ['richiesta', 11]]);
+  assert.ok(scompareFra(voci[0], 3 * MIN));
+  assert.equal((await flusso.statoIconaOrdini(1)).fase, 'richiesta', 'il primo livello (home, app) è la richiesta ancora aperta');
+  assert.deepEqual((await flusso.statoIconaOrdini(1)).voci.map((v) => v.voce), ['richiesta-10', 'richiesta-11']);
+
+  // passati i 10 minuti della 10, resta solo la 11
+  prepara(() => [scaduta(10, 11 * MIN), inAttesa(11, 400)]);
+  voci = await flusso.vociStriscia(1);
+  assert.deepEqual(voci.map((v) => [v.fase, v.id]), [['richiesta', 11]]);
+
+  // la 11 scade a sua volta: ognuna ha il SUO conto, dalla propria scadenza (la 10 da 8 minuti, la 11 da 1), e prima sparisce la 10
+  prepara(() => [scaduta(10, 8 * MIN), scaduta(11, 1 * MIN)]);
+  const icona = await flusso.statoIconaOrdini(1);
+  assert.equal(icona.fase, 'scaduta');
+  assert.deepEqual(icona.voci.map((v) => v.id), [10, 11]);
+  assert.ok(scompareFra(icona.voci[0], 8 * MIN) && scompareFra(icona.voci[1], 1 * MIN));
+  assert.equal(icona.firma, 'richiesta-10-scaduta,richiesta-11-scaduta');
+  assert.deepEqual((await flusso.attivitaCliente(1)).corrente, { tipo: 'richiesta', id: 10 }, 'senza altro in corso, l\'app segue quella che sparisce prima');
+
+  // e dopo che la 10 è sparita resta la 11 con il suo tempo, poi più niente
+  prepara(() => [scaduta(10, 10 * MIN + 1000), scaduta(11, 2 * MIN)]);
+  assert.deepEqual((await flusso.vociStriscia(1)).map((v) => v.id), [11]);
+  prepara(() => [scaduta(10, 12 * MIN), scaduta(11, 11 * MIN)]);
+  assert.deepEqual(await flusso.vociStriscia(1), []);
   assert.deepEqual(await flusso.statoIconaOrdini(1), { fase: 'nessuna', voci: [], firma: '' });
+});
+
+test('icona: una richiesta annullata dopo la scaduta NON cancella il "Nessuna risposta" (restano i suoi 10 minuti)', async () => {
+  prepara(() => [scaduta(10, 3 * MIN), { id: 11, stato: 'annullata', creato_il: fa(MIN), scade_il: tra(5 * MIN), order_id: null, secondi_rimasti: 300 }]);
+  const icona = await flusso.statoIconaOrdini(1);
+  assert.equal(icona.fase, 'scaduta');
+  assert.deepEqual(icona.voci.map((v) => v.id), [10], 'l\'annullata non è mai una voce');
+});
+
+test('secondiAllaScomparsa: 10 minuti dalla scadenza, 0 per tutto il resto', () => {
+  assert.equal(flusso.secondiAllaScomparsa(scaduta(1, 0)), 600);
+  assert.ok(Math.abs(flusso.secondiAllaScomparsa(scaduta(1, 4 * MIN)) - 360) <= 2);
+  assert.equal(flusso.secondiAllaScomparsa(scaduta(1, 10 * MIN)), 0);
+  assert.equal(flusso.secondiAllaScomparsa(scaduta(1, 3 * ORA)), 0);
+  assert.equal(flusso.secondiAllaScomparsa(inAttesa(1, 300)), 0, 'una richiesta in attesa non scompare');
+  assert.equal(flusso.secondiAllaScomparsa({ id: 1, stato: 'annullata', scade_il: fa(MIN) }), 0);
+  assert.equal(flusso.secondiAllaScomparsa(null), 0);
 });
 
 // ---------------- Striscia di schede: le voci ----------------
@@ -130,7 +183,7 @@ test('striscia: scaduta, poi le richieste in attesa, poi gli ordini in consegna 
     conOrdine(33, { arrivoTraMin: null }),
     inAttesa(34, 400),
     inAttesa(35, 200),
-    scaduta(36, 30 * MIN),
+    scaduta(36, 5 * MIN),
   ]);
   const voci = await flusso.vociStriscia(1);
   assert.deepEqual(chiavi(voci), ['richiesta-36', 'richiesta-35', 'richiesta-34', 'ordine-1030', 'ordine-1031', 'ordine-1033']);
@@ -166,7 +219,7 @@ test('striscia: `segnaLette` segna le notifiche, `breve: false` salta la lettura
 });
 
 test('striscia e icona dicono la stessa cosa: stesse voci, stesso ordine', async () => {
-  prepara(() => [conOrdine(50, { arrivoTraMin: 30 }), inAttesa(51, 300), inAttesa(52, 100), scaduta(53, 20 * MIN)]);
+  prepara(() => [conOrdine(50, { arrivoTraMin: 30 }), inAttesa(51, 300), inAttesa(52, 100), scaduta(53, 3 * MIN)]);
   const icona = await flusso.statoIconaOrdini(1);
   const striscia = await flusso.vociStriscia(1);
   assert.deepEqual(chiavi(striscia), chiavi(icona.voci));
@@ -251,6 +304,15 @@ test('ordinaVociIcona: prima la scaduta, poi le richieste dal timer più corto, 
     ordinate.map((v) => [v.fase, v.id]),
     [['scaduta', 100], ['richiesta', 201], ['richiesta', 202], ['consegna', 303], ['consegna', 301], ['consegna', 302]]
   );
+  // fra due scadute prima quella che sparisce prima; a parità la più vecchia
+  assert.deepEqual(
+    flusso.ordinaVociIcona([
+      { fase: 'scaduta', id: 8, scompareTraSec: 500 },
+      { fase: 'scaduta', id: 9, scompareTraSec: 90 },
+      { fase: 'scaduta', id: 7, scompareTraSec: 500 },
+    ]).map((v) => v.id),
+    [9, 7, 8]
+  );
   assert.notEqual(ordinate, voci, 'non modifica l\'elenco ricevuto');
   assert.equal(voci[0].id, 301);
   // a parità, la più vecchia per prima: l'ordine non cambia da un aggiornamento all'altro
@@ -293,7 +355,7 @@ test('icona: `voci` elenca tutte le attività nell\'ordine dell\'alternanza, i c
 });
 
 test('icona: la richiesta scaduta entra fra le voci anche con un ordine in consegna (e viene per prima)', async () => {
-  prepara(() => [conOrdine(9, { arrivoTraMin: 20 }), scaduta(10, 30 * MIN)]);
+  prepara(() => [conOrdine(9, { arrivoTraMin: 20 }), scaduta(10, 5 * MIN)]);
   const icona = await flusso.statoIconaOrdini(1);
   assert.equal(icona.fase, 'consegna', 'il primo livello resta l\'ordine in consegna');
   assert.deepEqual(icona.voci.map((v) => [v.fase, v.id]), [['scaduta', 10], ['consegna', 1009]]);
@@ -307,10 +369,11 @@ test('icona: con una sola attività o nessuna `voci` ha 1 o 0 elementi (l\'icona
   prepara(() => []);
   icona = await flusso.statoIconaOrdini(1);
   assert.deepEqual(icona, { fase: 'nessuna', voci: [], firma: '' });
-  prepara(() => [scaduta(80, 30 * MIN)]);
+  prepara(() => [scaduta(80, 5 * MIN)]);
   icona = await flusso.statoIconaOrdini(1);
   assert.equal(icona.fase, 'scaduta');
-  assert.deepEqual(icona.voci, [voceScaduta(80)]);
+  assert.deepEqual(senzaScomparsa(icona.voci), [voceScaduta(80)]);
+  assert.ok(scompareFra(icona.voci[0], 5 * MIN));
 });
 
 test('anello: una richiesta rinviata (creata ore fa, finestra ripartita adesso) parte piena, non quasi vuota', async () => {
@@ -410,6 +473,35 @@ test('schede e icona: "In arrivo" e basta a 3 minuti o meno, altrimenti i minuti
   assert.match(striscia, /<span class="str-valore" data-eta-testo="tra \{t\}">tra 12 min<\/span>/);
   assert.match(striscia, /<span class="str-valore" data-eta-testo="tra \{t\}">In arrivo<\/span>/);
   assert.match(striscia, /<span class="str-valore">In consegna<\/span>/);
+});
+
+test('icona: ogni "Nessuna risposta" porta i secondi che mancano a farla sparire (fotogramma o link singolo), lo script li legge', async () => {
+  const ejs = require('ejs');
+  const format = require('../src/format');
+  const fileNav = path.join(__dirname, '..', 'views', 'partials', 'nav_ordini.ejs');
+  const dati = { fmt: format, iconaOrdini: '', iconaFurgone: '', parziale: true };
+
+  // due scadute: un fotogramma ciascuna, ognuna col suo conto
+  prepara(() => [scaduta(10, 8 * MIN), scaduta(11, 1 * MIN)]);
+  let icona = await flusso.statoIconaOrdini(1);
+  let h = await ejs.renderFile(fileNav, { ...dati, statoOrdini: icona });
+  const fotogrammi = h.match(/<span class="fotogramma fase-scaduta[^>]*>/g) || [];
+  assert.equal(fotogrammi.length, 2);
+  assert.match(fotogrammi[0], /data-voce="richiesta-10"[^>]*data-scompare-sec="\d+"/);
+  assert.match(fotogrammi[1], /data-voce="richiesta-11"[^>]*data-scompare-sec="\d+"/);
+  assert.ok(Number(/data-scompare-sec="(\d+)"/.exec(fotogrammi[0])[1]) < Number(/data-scompare-sec="(\d+)"/.exec(fotogrammi[1])[1]), 'sparisce prima la 10');
+
+  // una sola: il conto sta sul link
+  prepara(() => [scaduta(12, 2 * MIN)]);
+  icona = await flusso.statoIconaOrdini(1);
+  h = await ejs.renderFile(fileNav, { ...dati, statoOrdini: icona });
+  assert.match(h, /<a href="\/richieste\/12" class="nav-ordini fase-scaduta[^>]*data-scompare-sec="\d+"/);
+
+  // una richiesta in attesa non ha niente da far sparire
+  prepara(() => [inAttesa(13, 300)]);
+  icona = await flusso.statoIconaOrdini(1);
+  h = await ejs.renderFile(fileNav, { ...dati, statoOrdini: icona });
+  assert.doesNotMatch(h, /data-scompare-sec/);
 });
 
 test('senza il corriere l\'arrivo è la stima del banco (consegna_ore): "Arriva tra 5 h 57", "In arrivo" solo negli ultimi 3 minuti', async () => {

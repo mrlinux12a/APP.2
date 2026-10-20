@@ -239,6 +239,8 @@
         <section class="ric-scheda ord-bolla" aria-labelledby="ord-bolla-titolo">
           <h2 class="ric-h2 ord-bolla-titolo" id="ord-bolla-titolo"><span class="ric-dato-icona" aria-hidden="true"><%- iconaDocumento %></span>Bolla / DDT</h2>
           <form method="POST" action="/distributore/ordini/<%= ordine.id %>/ddt">
+            <%# Da dove si è arrivati (home, Storico...): la bolla emessa ha la sua freccia "Torna" che riporta lì. %>
+            <input type="hidden" name="torna" value="<%= paginaPrecedente %>">
             <div class="ord-bolla-griglia">
               <div class="ord-campo">
                 <label class="ord-etichetta" for="ord-colli">Colli</label>

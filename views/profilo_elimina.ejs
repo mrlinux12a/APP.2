@@ -1,0 +1,55 @@
+<%
+  // Elimina account (GET/POST /profilo/elimina). Spiega cosa si cancella e cosa resta (lo stesso di src/account.js, che lo fa anche per l'app) e chiede la
+  // password. Se c'è una richiesta o un ordine in corso (`inCorso`) lo dice subito e il modulo non c'è: prima si lascia finire. Parametri: corso, inCorso, errore.
+%>
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="1">
+  <div class="app app-anagrafica">
+    <%- include('partials/appbar', { titolo, intestazione: 'Elimina account', indietro: '/profilo' }) %>
+
+    <div class="contenuto anag">
+      <section class="an-scheda">
+        <h1 class="an-titolo">Vuoi eliminare il tuo account?</h1>
+        <p class="an-testo">L'account si disattiva subito e non si può più usare. Non si torna indietro: per tornare su Minuteria dovrai registrarti di nuovo.</p>
+        <h2 class="an-sottotitolo">Viene cancellato</h2>
+        <ul class="an-elenco">
+          <li>referente, email, telefono e PEC o codice SDI;</li>
+          <li>nome utente e password;</li>
+          <li>notifiche e telefoni collegati agli avvisi.</li>
+        </ul>
+        <h2 class="an-sottotitolo">Resta, per obbligo di legge</h2>
+        <ul class="an-elenco">
+          <li>ragione sociale, partita IVA, codice fiscale e indirizzo dell'impresa;</li>
+          <li>ordini, bolle di trasporto, ricevute e pagamenti già emessi: fanno parte della contabilità tua e del distributore.</li>
+        </ul>
+      </section>
+
+      <% if (inCorso) { %>
+        <div class="avviso avviso-attenzione" role="alert">
+          <strong>Hai ancora qualcosa in corso.</strong>
+          <% if (corso.richieste) { %>Una richiesta è in attesa di risposta. <% } %>
+          <% if (corso.ordini) { %>Un ordine non è ancora stato consegnato. <% } %>
+          <% if (corso.pagamenti) { %>Un pagamento non è ancora concluso. <% } %>
+          Aspetta che finisca (o che arrivi la consegna) e poi torna qui.
+        </div>
+        <a class="acc-btn an-torna" href="/profilo">Torna al profilo</a>
+      <% } else { %>
+        <% if (errore) { %><div class="errore" role="alert"><%= errore %></div><% } %>
+        <form method="POST" action="/profilo/elimina" class="an-scheda an-pericolo">
+          <%- include('partials/acc_campo', { id: 'password', etichetta: 'Per confermare, scrivi la tua password', tipo: 'password', sbagliato: !!errore,
+               attributi: { autocomplete: 'current-password', required: true, maxlength: 100 } }) %>
+          <button class="an-elimina-btn" type="submit">Elimina il mio account</button>
+          <a class="an-annulla-link" href="/profilo">Annulla</a>
+        </form>
+      <% } %>
+    </div>
+  </div>
+
+  <%- include('partials/nav', { attivo: '' }) %>
+  <script src="<%= asset('/app.js') %>" defer></script>
+</body>
+</html>

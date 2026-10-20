@@ -90,6 +90,23 @@
           <button class="att-elimina" type="submit">Elimina richiesta</button>
         </form>
 
+        <%# Una richiesta senza risposta resta in "Stato ordini" 10 minuti dalla scadenza (flusso.secondiAllaScomparsa): se la si sta guardando quando
+            finiscono, la pagina passa da sola a /ordini, che porta alla prossima attività (un'altra richiesta senza risposta ancora nei suoi 10
+            minuti, una richiesta o un ordine in corso) o alla pagina vuota. +1 s di margine, così il server ha già smesso di mandarla. L'icona in basso
+            (nav_ordini.ejs) legge window.minuteriaLasciaIl: negli ultimi secondi non ricarica la pagina, per non vincere la corsa col passaggio. %>
+        <% if (typeof lasciaFra !== 'undefined' && lasciaFra > 0) { %>
+          <script>
+            (function () {
+              var fine = Date.now() + <%= lasciaFra %> * 1000 + 1000;
+              window.minuteriaLasciaIl = fine;
+              function controlla() { if (Date.now() >= fine) location.replace('/ordini'); }
+              setTimeout(function () { location.replace('/ordini'); }, <%= lasciaFra %> * 1000 + 1000);
+              window.addEventListener('pageshow', controlla);
+              document.addEventListener('visibilitychange', function () { if (!document.hidden) controlla(); });
+            })();
+          </script>
+        <% } %>
+
       <% } else { %>
       <% if (richiesta.stato === 'annullata') { %>
         <div class="avviso avviso-attenzione">

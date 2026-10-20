@@ -268,6 +268,28 @@ const utenteBanco = {
   password_hash: bcrypt.hashSync('password-di-prova', 4),
 };
 const distributoreBanco = { id: 2, nome: 'BOREA SRL', filiale: 'Banco Genova Fegino', zona: 'Genova', attivo: 1 };
+// Account dell'installatore (recupero password, cambio password, eliminazione): clienti di prova, la tabella dei link di recupero, le scritture e cosa c'è "in corso".
+// Il cliente "prova" è quello degli altri test (stesso id 1): qui si aggiungono solo i dati per cercarlo per email.
+const accountProva = {
+  clienti: [{ id: 1, ruolo: 'cliente', attivo: 1, username: 'prova', email: 'prova@example.com', referente: 'Prova', ragione_sociale: 'Prova S.r.l.' }],
+  link: [],
+  scritture: [],
+  corso: { richieste: 0, ordini: 0, pagamenti: 0 },
+  mail: [],
+};
+// Anagrafica del banco (filiale 2): la riga di distributors, la ditta e l'utente; le scritture che la pagina fa si registrano in `scrittureAnagrafica`.
+const anagraficaProva = {
+  filiale: {
+    id: 2, nome: 'BOREA SRL', filiale: 'Banco Genova Fegino', zona: 'Genova e provincia', attivo: 1, ditta_id: 6, ragione_sociale: '', partita_iva: '',
+    indirizzo: 'Via Castel Morrone 1/7 rosso', cap: '16161', citta: 'Genova', provincia: 'GE', telefono: '010 123456', email: 'fegino@borea.example',
+    geo_lat: 44.4521, geo_lng: 8.9055, geo_manuale: 0, orari: null, email_nuove_richieste: 0,
+  },
+  ditta: { id: 6, nome: 'BOREA SRL', ragione_sociale: 'BOREA SRL', partita_iva: '', sdi_pec: '', indirizzo: '', cap: '', citta: '', provincia: '' },
+  utente: { id: 9, username: 'banco', email: 'banco.fegino@borea.example' },
+};
+const scrittureAnagrafica = [];
+// Le filiali attive come le legge il carrello per gli orari (richieste.statoBanchiAttivi): senza orari = sempre aperta.
+const banchiAttiviProva = { righe: [{ id: 2, nome: 'BOREA SRL', filiale: 'Banco Genova Fegino', orari: null }] };
 const richiesteBanco = [
   { id: 11, cliente_nome: 'Rossi <b>Impianti</b> S.r.l.', esito: 'in_attesa', secondi: 447, secondi_da_risposta: null },
   { id: 12, cliente_nome: 'Bianchi Termoidraulica', esito: 'in_attesa', secondi: 95, secondi_da_risposta: null },
@@ -330,6 +352,14 @@ const righeOrdineBanco = {
 const scrittureBolla = [];
 
 function eseguiBanco(s, p, modo) {
+  // Anagrafica del banco (src/anagrafica_banco.js)
+  if (/^SELECT \* FROM distributors WHERE id = \?/.test(s) && Number(p[0]) === 2) return anagraficaProva.filiale;
+  if (/^SELECT id, username, email FROM users WHERE id = \?/.test(s)) return anagraficaProva.utente;
+  if (/^SELECT \* FROM ditte WHERE id = \?/.test(s)) return anagraficaProva.ditta;
+  if (/^SELECT ditta_id FROM distributors WHERE id = \?/.test(s)) return { ditta_id: anagraficaProva.filiale.ditta_id };
+  if (/^(UPDATE (ditte|distributors|store_locations) SET|DELETE FROM session WHERE \(sess::jsonb)/.test(s)) { scrittureAnagrafica.push({ s, p }); return { changes: 1 }; }
+  if (/^SELECT id, password_hash FROM users WHERE id = \?/.test(s)) return { id: 9, password_hash: utenteBanco.password_hash };
+  if (/^UPDATE users SET password_hash = \?/.test(s)) { scrittureAnagrafica.push({ s, p }); return { changes: 1 }; }
   if (/n_articoli/.test(s) && /FROM request_responses rr JOIN requests r ON r\.id = rr\.request_id JOIN users u/.test(s)) { avvisiBanco.viste.push({ s, p }); return avvisiBanco.richieste; }
   if (/FROM notifications WHERE user_id = \? AND notificata = 0/.test(s)) return avvisiBanco.notifiche;
   if (/^SELECT id FROM orders WHERE distributor_id = \? AND stato = 'inviato' AND consegnato_il IS NULL ORDER BY id$/.test(s)) return avvisiBanco.ordiniDaPreparare;
@@ -484,7 +514,33 @@ function esegui(sql, p, modo) {
   if (/UPDATE session SET expire/.test(s)) return { changes: 1 };
   if (/DELETE FROM session WHERE expire/.test(s)) return { changes: 0 };
   if (/COUNT\(\*\) n FROM products/.test(s)) return { n: 1 }; // catalogo "non vuoto": niente seed automatico
+  // Recupero password, cambio password ed eliminazione dell'account (src/recupero_password.js, src/password_account.js, src/account.js)
+  if (/^SELECT id, username, email, referente, ragione_sociale FROM users WHERE ruolo = 'cliente'/.test(s)) {
+    return accountProva.clienti.filter((u) => u.attivo === 1 && (u.username.toLowerCase() === String(p[0]).toLowerCase() || (u.email !== '' && u.email.toLowerCase() === String(p[1]).toLowerCase())));
+  }
+  if (/^UPDATE recupero_password SET usato_il = NOW\(\) WHERE user_id = \? AND usato_il IS NULL/.test(s)) {
+    for (const l of accountProva.link) if (l.user_id === p[0]) l.usato = true;
+    return { changes: 1 };
+  }
+  if (/^INSERT INTO recupero_password \(user_id, token_hash, scade_il\)/.test(s)) { accountProva.link.push({ id: accountProva.link.length + 1, user_id: p[0], token_hash: p[1], usato: false }); return { changes: 1 }; }
+  if (/^SELECT r\.id AS recupero_id, u\.id, u\.username FROM recupero_password r JOIN users u/.test(s)) {
+    const l = accountProva.link.find((x) => x.token_hash === p[0] && !x.usato);
+    const u = l && accountProva.clienti.find((x) => x.id === l.user_id && x.attivo === 1);
+    return u ? { recupero_id: l.id, id: u.id, username: u.username } : null;
+  }
+  if (/^UPDATE recupero_password SET usato_il = NOW\(\) WHERE id = \? AND usato_il IS NULL AND scade_il > NOW\(\)/.test(s)) {
+    const l = accountProva.link.find((x) => x.id === p[0]);
+    if (!l || l.usato) return { changes: 0 };
+    l.usato = true;
+    return { changes: 1 };
+  }
+  if (/^SELECT \(SELECT COUNT\(\*\) FROM requests WHERE cliente_id = \? AND stato = 'in_attesa'\) AS richieste/.test(s)) return accountProva.corso;
+  if (/^(UPDATE users SET password_hash = \?|UPDATE users SET attivo = 0|UPDATE app_tokens SET revocato_il|DELETE FROM app_tokens WHERE user_id|DELETE FROM session WHERE \(sess::jsonb)/.test(s)) {
+    accountProva.scritture.push({ s, p });
+    return { changes: 1 };
+  }
   if (/FROM config WHERE chiave/.test(s)) return config[p[0]] !== undefined ? { valore: config[p[0]] } : null;
+  if (/^SELECT \* FROM distributors WHERE attivo = 1 ORDER BY nome/.test(s)) return modo === 'all' ? banchiAttiviProva.righe : banchiAttiviProva.righe[0] || null;
   if (/FROM users WHERE username/.test(s)) return p[0] === 'prova' ? utente : null;
   if (/FROM users WHERE id/.test(s)) return modo === 'get' ? utente : [];
   if (/FROM products WHERE attivo = 1 AND id IN/.test(s)) return p.map((id) => catalogo[id]).filter(Boolean);
@@ -629,6 +685,26 @@ test('file statici della PWA: favicon, manifest, service worker, icone', async (
   assert.match(await r.text(), /notificationclick/);
   for (const i of m.icons) assert.equal((await chiedi(i.src)).status, 200, i.src);
   assert.equal((await chiedi('/icons/apple-touch-icon.png')).status, 200);
+  // web app per telefono: identità, orientamento, categorie; la pagina offline del service worker si serve SENZA accesso (serve proprio quando manca la rete)
+  assert.equal(m.id, '/');
+  assert.equal(m.orientation, 'portrait');
+  assert.equal(m.start_url, '/');
+  assert.ok(m.icons.some((i) => i.purpose === 'maskable'));
+  const salvato = cookie;
+  cookie = '';
+  try {
+    r = await chiedi('/offline.html');
+    assert.equal(r.status, 200);
+    assert.match(r.headers.get('content-type'), /text\/html/);
+    const offline = await r.text();
+    assert.match(offline, /<h1>Sei offline<\/h1>/);
+  } finally {
+    cookie = salvato;
+  }
+  // il service worker lo tiene in cache e lo mostra solo per le navigazioni
+  const sw = await (await chiedi('/sw.js')).text();
+  assert.match(sw, /'\/offline\.html'/);
+  assert.match(sw, /request\.mode !== 'navigate'/);
 });
 
 test('percorso inesistente: 404 con pagina, /api: 404 JSON', async () => {
@@ -691,6 +767,11 @@ test('home cliente: pagina completa', async () => {
   const t = await r.text();
   assert.match(t, /Cosa ti serve/);
   assert.match(t, /Idraulica/);
+  // invito a installare l'app: c'è ma è nascosto (lo mostra lo script solo se il browser dice che si può), con la × "Non ora"
+  assert.match(t, /<section class="installa" data-installa hidden aria-label="Installa l'app">/);
+  assert.match(t, /data-installa-btn>Installa<\/button>/);
+  assert.match(t, /data-installa-chiudi aria-label="Non ora"/);
+  assert.match(t, /apple-mobile-web-app-status-bar-style" content="default"/);
 });
 
 test('query ripetuta (?q=a&q=b) e filtri come array: niente 500', async () => {
@@ -856,6 +937,15 @@ test('carrello dal vivo: /api/carrello/imposta restituisce tutte le voci già pr
   assert.equal(senza.righe, 1);
   assert.equal(senza.riepilogo.banco_merce, '109,00');
   await chiedi('/carrello/svuota', { method: 'POST' });
+});
+
+test('profilo: scheda "Sul telefono" con installazione (sempre disponibile, senza ×) e avvisi del browser', async () => {
+  const t = await (await chiedi('/profilo')).text();
+  assert.match(t, /<h2 class="an-titolo">Sul telefono<\/h2>/);
+  assert.match(t, /<section class="installa installa-profilo" data-installa data-installa-sempre hidden/);
+  assert.doesNotMatch(t.slice(t.indexOf('Sul telefono')), /data-installa-chiudi/, 'nel profilo non scompare mai');
+  assert.match(t, /data-notifiche-stato>Ricevi un avviso quando un banco risponde alla tua richiesta, finché l'app è aperta\.<\/div>/);
+  assert.match(t, /<button type="button" class="installa-btn" data-abilita-notifiche>Attiva<\/button>/);
 });
 
 test('menu del profilo (cliente): niente voce "Notifiche"', async () => {
@@ -1403,6 +1493,58 @@ test('striscia: con una sola attività niente striscia e tutto come prima; neanc
     storico.attivo = false;
     storico.conOrdini = false;
     ordiniProva.attivo = false;
+  }
+});
+
+test('richiesta senza risposta: resta in "Stato ordini" 10 minuti dalla scadenza anche con un\'altra richiesta aperta, poi si passa alla prossima attività o alla pagina vuota', async () => {
+  storico.attivo = true; // la 6 è in attesa; la 4 è chiusa senza ordine (la scadenza di fabbrica è del 2025: la si sposta a ogni passo)
+  const r4 = storico.richieste.find((r) => r.id === 4);
+  const r6 = storico.richieste.find((r) => r.id === 6);
+  const scadenza4 = r4.scade_il;
+  const stato6 = r6.stato;
+  const schede = (testo) => [...testo.matchAll(/<a class="str-scheda str-(\w+)( str-attiva)?" href="([^"]+)" data-voce="([^"]+)"/g)].map((m) => [m[1], !!m[2], m[4]]);
+  try {
+    // scaduta da 3 minuti, con la 6 ancora in attesa: prima la 4 spariva subito (non era l'ultima richiesta inviata)
+    r4.scade_il = fa(3 * 60000);
+    let r = await chiedi('/ordini');
+    assert.equal(r.status, 302);
+    assert.equal(r.headers.get('location'), '/richieste/4', 'la senza risposta per prima: il cliente deve rinviarla');
+    assert.equal((await chiedi('/ordini?voce=richiesta-6')).headers.get('location'), '/richieste/6');
+
+    // la pagina della 4: striscia con le due schede, il conto per l'icona e il passaggio automatico fra ~7 minuti
+    let t = await (await chiedi('/richieste/4')).text();
+    assert.match(t, /<body data-loggato="1" class="con-striscia">/);
+    assert.deepEqual(schede(t), [['scaduta', true, 'richiesta-4'], ['richiesta', false, 'richiesta-6']]);
+    const m = /var fine = Date\.now\(\) \+ (\d+) \* 1000 \+ 1000;/.exec(t);
+    assert.ok(m && Math.abs(Number(m[1]) - 420) <= 3, 'mancano ~7 minuti: ' + (m && m[1]));
+    assert.match(t, /location\.replace\('\/ordini'\)/);
+    assert.match(t, /data-voce="richiesta-4" data-href="\/richieste\/4" data-scompare-sec="\d+"/);
+
+    // dalla 6 la scheda della 4 si vede ancora, e quella pagina non va da nessuna parte
+    t = await (await chiedi('/richieste/6')).text();
+    assert.deepEqual(schede(t), [['scaduta', false, 'richiesta-4'], ['richiesta', true, 'richiesta-6']]);
+    assert.doesNotMatch(t, /window.minuteriaLasciaIl = fine/);
+
+    // passati i 10 minuti: la 4 non è più in "Stato ordini" (resta la 6), la sua pagina si apre ancora (dallo Storico) ma senza striscia né passaggio
+    r4.scade_il = fa(11 * 60000);
+    assert.equal((await chiedi('/ordini')).headers.get('location'), '/richieste/6');
+    t = await (await chiedi('/richieste/4')).text();
+    assert.doesNotMatch(t, /window.minuteriaLasciaIl = fine|class="con-striscia"/);
+    assert.match(t, /<h2 class="att-titolo">/);
+
+    // senza altro in corso: finché la 4 è nei suoi 10 minuti ci porta lì; poi la pagina vuota
+    r6.stato = 'annullata';
+    r4.scade_il = fa(2 * 60000);
+    r = await chiedi('/ordini');
+    assert.equal(r.headers.get('location'), '/richieste/4');
+    r4.scade_il = fa(11 * 60000);
+    r = await chiedi('/ordini');
+    assert.equal(r.status, 200);
+    assert.match(await r.text(), /<h1 class="vuoto-titolo">Nessun ordine in corso<\/h1>/);
+  } finally {
+    r4.scade_il = scadenza4;
+    r6.stato = stato6;
+    storico.attivo = false;
   }
 });
 
@@ -3205,7 +3347,7 @@ test('banco: "Preparato" toglie l\'ordine dalla colonna (in preparazione, torna 
 
 // ---------- Avvisi del banco: pallino su "Banco", striscia sotto l'intestazione, stato-banco, notifiche nuove con i dati dell'avviso ----------
 
-test('banco: pallino arancio su "Banco" in ogni pagina, striscia arancio solo fuori dalla home (col tempo della prima richiesta), icone e voce "Suoni notifiche"', async () => {
+test('banco: pallino arancio su "Banco" in ogni pagina, striscia arancio solo fuori dalla home (col tempo della prima richiesta), icone; suoni e notifiche del computer NON stanno più nella tendina', async () => {
   cookie = '';
   banco.attivo = true;
   try {
@@ -3220,8 +3362,9 @@ test('banco: pallino arancio su "Banco" in ogni pagina, striscia arancio solo fu
     for (const [nome, t] of Object.entries({ home, clienti, storico })) {
       assert.match(t, /Banco\s*<span class="banco-voce-pallino banco-voce-pallino-ordini" data-banco-pallino aria-label="2 da confermare">2<\/span>/, nome);
       assert.match(t, /<header class="banco-testa" data-banco-testa data-ditta="BOREA">/, nome + ': lo script riconosce la pagina del banco');
-      assert.match(t, /data-suoni-voce aria-pressed="true">Suoni notifiche: <span data-suoni-stato>sì<\/span><\/button>/, nome);
-      assert.match(t, /data-notifiche-sistema hidden>Attiva le notifiche del computer<\/button>/, nome);
+      // la tendina ha "Anagrafica del banco" in cima; gli interruttori dei suoni e delle notifiche del computer sono nella pagina dell'anagrafica
+      assert.match(t, /<a class="voce-anagrafica" href="\/distributore\/anagrafica">Anagrafica del banco<\/a>/, nome);
+      assert.doesNotMatch(t, /data-suoni-voce|data-notifiche-sistema|Suoni notifiche|Attiva le notifiche del computer/, nome);
     }
     // sulla home niente striscia e niente icone degli avvisi a comparsa
     assert.doesNotMatch(home, /data-banco-avviso/);
@@ -4004,7 +4147,7 @@ test('banco: la bolla si emette solo mentre l\'ordine è "Da preparare" (poi "In
     scrittureBolla.length = 0;
     let r = await emetti();
     assert.equal(r.status, 302);
-    assert.equal(r.headers.get('location'), '/ddt/1295');
+    assert.equal(r.headers.get('location'), '/ddt/1295?torna=%2Fdistributore', 'senza altra indicazione la bolla riporta al banco (la home)');
     assert.equal(scrittureBolla.length, 1);
     assert.deepEqual(scrittureBolla[0].p, ['7/2026', 2, 'Bancali', 'vettore', 'Vendita', 'Citofonare', 1295]);
     assert.match(scrittureBolla[0].s, /stato = 'evaso'/, 'emessa la bolla l\'ordine non è più da preparare: "In consegna"');
@@ -4027,8 +4170,20 @@ test('banco: la bolla si emette solo mentre l\'ordine è "Da preparare" (poi "In
     // un secondo invio con la bolla già emessa (doppio tocco, pagina riaperta) passa: la bolla c'è, non si rinumera né si riscrive
     imposta({ stato: 'evaso', ddt_numero: '7/2026', ddt_data: fa(0), evaso_il: fa(0) });
     r = await emetti();
-    assert.equal(r.headers.get('location'), '/ddt/1295');
+    assert.equal(r.headers.get('location'), '/ddt/1295?torna=%2Fdistributore');
     assert.equal(scrittureBolla.length, 0);
+    // la pagina da cui si è partiti (modulo: campo `torna`) viene ricordata, ma solo se è una pagina del banco
+    r = await emetti({ torna: '/distributore/storico?stato=da_preparare' });
+    assert.equal(r.headers.get('location'), '/ddt/1295?torna=' + encodeURIComponent('/distributore/storico?stato=da_preparare'));
+    r = await emetti({ torna: 'https://altro.example/x' });
+    assert.equal(r.headers.get('location'), '/ddt/1295?torna=%2Fdistributore', 'mai un indirizzo esterno');
+    // la bolla: "Torna al banco" con torna=home; "Torna allo Storico" senza (si arriva dallo Storico)
+    let bolla = await (await chiedi('/ddt/1295?torna=%2Fdistributore')).text();
+    assert.match(bolla, /<a class="link-secondario" href="\/distributore">‹ Torna al banco<\/a>/);
+    bolla = await (await chiedi('/ddt/1295')).text();
+    assert.match(bolla, /href="\/distributore\/storico">‹ Torna allo Storico ordini<\/a>/);
+    bolla = await (await chiedi('/ddt/1295?torna=https%3A%2F%2Faltro.example')).text();
+    assert.match(bolla, /href="\/distributore\/storico">‹ Torna allo Storico ordini<\/a>/, 'un ritorno non valido vale lo Storico');
     // l'ordine di un altro banco: come prima
     r = await chiedi('/distributore/ordini/1290/ddt', form({ colli: '1' }));
     assert.equal(r.headers.get('location'), '/distributore/storico');
@@ -4313,4 +4468,594 @@ test('ricerca, "Elementi con foto" e home: righe compatte come nella categoria (
   } finally {
     Object.assign(catalogoModulo, originali);
   }
+});
+
+// ---------- Anagrafica del banco (richiesta esplicita del 20/10/2026) ----------
+
+test('banco: "Anagrafica del banco": schede a sinistra e a destra, dati in lettura, cerchio con l\'anello pieno, nessuna scheda del menu accesa', async () => {
+  cookie = '';
+  banco.attivo = true;
+  try {
+    assert.equal((await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }))).status, 302);
+    const r = await chiedi('/distributore/anagrafica');
+    assert.equal(r.status, 200);
+    const t = await r.text();
+    assert.match(t, /<title>Anagrafica del banco<\/title>/);
+    // testata: cerchio da 56px con le iniziali della filiale, titolo e "ditta · filiale"
+    assert.match(t, /<span class="avatar avatar-56" aria-hidden="true">BG<\/span>/);
+    assert.match(t, /<h1 class="ab-h1">Anagrafica del banco<\/h1>\s*<p class="ab-sotto">BOREA SRL · Banco Genova Fegino<\/p>/);
+    // intestazione unica: il cerchio ha la classe "attivo" (anello blu pieno), nessuna scheda del menu è accesa, la tendina ha la voce in cima
+    assert.match(t, /<button class="banco-avatar-btn attivo"/);
+    assert.doesNotMatch(t, /class="banco-voce attiva"/);
+    assert.match(t, /<a class="voce-anagrafica" href="\/distributore\/anagrafica" aria-current="page">Anagrafica del banco<\/a>/);
+    // nessun aggiornamento automatico (si ricaricherebbe mentre si scrive in un modulo)
+    assert.doesNotMatch(t, /data-auto-refresh/);
+
+    // le cinque schede nell'ordine: Ditta, Questa filiale, Orari | Accesso, Notifiche, e "Esci"
+    const ordine = ['id="ditta"', 'id="filiale"', 'id="orari"', 'id="accesso"', 'id="notifiche"', 'class="ab-esci"'].map((x) => t.indexOf(x));
+    assert.ok(ordine.every((n, i) => n > 0 && (i === 0 || n > ordine[i - 1])), 'ordine delle schede: ' + ordine);
+    assert.match(t, /<h2 class="ab-titolo">Ditta<\/h2>\s*<p class="ab-spiega">Valgono per tutte le filiali e finiscono in bolla e nelle fatture del materiale\.<\/p>/);
+    assert.match(t, /<p class="ab-spiega">È il banco che riceve le richieste e da cui parte il materiale\.<\/p>/);
+    assert.match(t, /<p class="ab-spiega">Fuori orario le richieste non arrivano\.<\/p>/);
+    assert.match(t, /<p class="ab-spiega">Il profilo del banco: uno solo, con tutti i permessi\.<\/p>/);
+    assert.match(t, /<p class="ab-spiega">Valgono solo per te, su questo computer\.<\/p>/);
+    // Ditta in lettura: i dati della tabella ditte, vuoti con "—"
+    assert.match(t, /<dt>Ragione sociale<\/dt><dd>BOREA SRL<\/dd>/);
+    assert.match(t, /<dt>Partita IVA<\/dt><dd>—<\/dd>/);
+    assert.match(t, /<dt>Codice SDI \/ PEC<\/dt><dd>—<\/dd>/);
+    assert.match(t, /<dt>Sede legale<\/dt><dd>—<\/dd>/);
+    // Questa filiale: nome, telefono, indirizzo di ritiro, email e zona; la posizione c'è: riga verde con "Sposta"
+    assert.match(t, /<dt>Nome del banco<\/dt><dd>Banco Genova Fegino<\/dd>/);
+    assert.match(t, /<dt>Telefono del banco<\/dt><dd>010 123456<\/dd>/);
+    assert.match(t, /<dt>Indirizzo di ritiro \(dove passa il corriere\)<\/dt><dd>Via Castel Morrone 1\/7 rosso, 16161 Genova \(GE\)<\/dd>/);
+    assert.match(t, /<dt>Email per gli avvisi<\/dt><dd>fegino@borea\.example<\/dd>/);
+    assert.match(t, /<dt>Zona servita<\/dt><dd>Genova e provincia<\/dd>/);
+    assert.match(t, /<div class="ab-posizione ab-posizione-ok">[\s\S]*?<strong>Posizione sulla mappa impostata\.<\/strong> Serve ai corrieri e per calcolare le distanze\.[\s\S]*?data-sposta>Sposta<\/button>/);
+    assert.match(t, /data-mappa-sposta data-lat="44\.4521" data-lng="8\.9055"/);
+    // Orari: senza orari impostati vale "sempre aperto"
+    assert.match(t, /<span class="ab-orari-giorni">Tutti i giorni<\/span><span class="ab-orari-fasce">Sempre aperto<\/span>/);
+    // Accesso: email dell'utente e password nascosta, e il pulsante "Cambia password"
+    assert.match(t, /<dt>Email di accesso<\/dt><dd>banco\.fegino@borea\.example<\/dd>/);
+    assert.match(t, /<dd class="ab-punti" aria-label="Password nascosta">••••••••••<\/dd>/);
+    assert.match(t, /data-modifica>Cambia password<\/a>/);
+    // Notifiche: suoni e notifiche del computer (interruttori), NON l'email finché non esiste l'invio
+    assert.match(t, /<button type="button" class="ab-switch" role="switch" aria-checked="true" aria-label="Suoni" data-suoni-voce>/);
+    assert.match(t, /aria-label="Notifiche del computer" data-notifiche-sistema>/);
+    assert.doesNotMatch(t, /data-email-richieste|Email per ogni nuova richiesta/);
+    // "Esci": lo stesso modulo della tendina
+    assert.match(t, /<form class="ab-esci-form" method="POST" action="\/logout">\s*<button type="submit" class="ab-esci"><span class="ab-esci-ico" aria-hidden="true"><svg[\s\S]*?<\/svg><\/span>Esci dal banco<\/button>/);
+    // moduli: ogni scheda ha il suo POST, tutti nascosti finché non si preme "Modifica"
+    for (const azione of ['ditta', 'filiale', 'orari', 'password']) {
+      assert.match(t, new RegExp('<form class="ab-modulo[^"]*" method="POST" action="/distributore/anagrafica/' + azione + '"[^>]* hidden>'), azione);
+    }
+    assert.doesNotMatch(t, /data-aperta/);
+    // ?modifica=filiale apre quella scheda già col modulo (anche senza JavaScript)
+    const aperta = await (await chiedi('/distributore/anagrafica?modifica=filiale')).text();
+    assert.match(aperta, /<section class="ab-card" id="filiale" data-scheda="filiale" data-aperta>/);
+    assert.match(aperta, /<form class="ab-modulo" method="POST" action="\/distributore\/anagrafica\/filiale" data-modulo novalidate>/);
+    // un valore sconosciuto non apre niente
+    assert.doesNotMatch(await (await chiedi('/distributore/anagrafica?modifica=boh')).text(), /data-aperta/);
+  } finally {
+    banco.attivo = false;
+  }
+});
+
+test('banco: anagrafica, la posizione manca: riga arancio con "Imposta"; il cliente e chi non ha fatto l\'accesso non entrano', async () => {
+  cookie = '';
+  banco.attivo = true;
+  const senza = { geo_lat: anagraficaProva.filiale.geo_lat, geo_lng: anagraficaProva.filiale.geo_lng };
+  try {
+    assert.equal((await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }))).status, 302);
+    anagraficaProva.filiale.geo_lat = null;
+    anagraficaProva.filiale.geo_lng = null;
+    const t = await (await chiedi('/distributore/anagrafica')).text();
+    assert.match(t, /<div class="ab-posizione ab-posizione-manca">[\s\S]*?<strong>Posizione non impostata:<\/strong> i corrieri non vedono dove ritirare\.[\s\S]*?data-sposta>Imposta<\/button>/);
+    assert.doesNotMatch(t, /data-mappa-sposta data-lat/, 'la mappa parte dall\'Italia, senza un segnaposto');
+  } finally {
+    Object.assign(anagraficaProva.filiale, senza);
+    banco.attivo = false;
+  }
+  // un cliente non vede la pagina (e non può salvare niente)
+  cookie = '';
+  assert.equal((await chiedi('/login', form({ username: 'prova', password: 'password-di-prova' }))).status, 302);
+  assert.equal((await chiedi('/distributore/anagrafica')).status, 403);
+  assert.equal((await chiedi('/distributore/anagrafica/ditta', form({ ragione_sociale: 'X' }))).status, 403);
+  assert.equal((await chiedi('/distributore/anagrafica/posizione', json({ lat: 44, lng: 9 }))).status, 403);
+  cookie = '';
+  assert.equal((await chiedi('/distributore/anagrafica')).status, 302, 'senza accesso: al login');
+});
+
+test('banco: anagrafica, "Ditta" e "Questa filiale" salvano e tornano in lettura; gli errori restano sotto i campi, senza scrivere niente', async () => {
+  cookie = '';
+  banco.attivo = true;
+  const geoModulo = require('../src/geo');
+  const geocodificaOriginale = geoModulo.geocodifica;
+  const ricerche = [];
+  const originale = { ...anagraficaProva.filiale };
+  try {
+    assert.equal((await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }))).status, 302);
+    scrittureAnagrafica.length = 0;
+    const messaggi = (t) => [...t.matchAll(/<p class="ab-errore" id="[^"]+-err" role="alert">([^<]*)<\/p>/g)].map((m) => m[1]);
+
+    // ---- Ditta: P. IVA, SDI/PEC, CAP e provincia sbagliati -> 400, scheda aperta, valori scritti e messaggi sotto i campi
+    let r = await chiedi('/distributore/anagrafica/ditta', form({ ragione_sociale: '', partita_iva: '123', sdi_pec: 'xx', indirizzo: 'Via Roma 1', cap: '1616', citta: 'Genova', provincia: 'G' }));
+    assert.equal(r.status, 400);
+    let t = await r.text();
+    assert.deepEqual(messaggi(t), ['Scrivi la ragione sociale.', 'La partita IVA ha 11 cifre.', 'Scrivi il codice SDI (7 caratteri) oppure un indirizzo PEC valido.', 'Il CAP ha 5 cifre.', 'La provincia si scrive con 2 lettere (per esempio GE).']);
+    assert.match(t, /<section class="ab-card" id="ditta" data-scheda="ditta" data-aperta>/);
+    assert.match(t, /id="ab-ditta-partita_iva" name="partita_iva" type="text" value="123"[^>]*aria-invalid="true" aria-describedby="ab-ditta-partita_iva-err">/);
+    assert.match(t, /id="ab-ditta-indirizzo" name="indirizzo" type="text" value="Via Roma 1"/, 'quello che era giusto resta scritto');
+    assert.equal(scrittureAnagrafica.length, 0, 'con errori non si scrive niente');
+    assert.match(t, /<button class="banco-avatar-btn attivo"/, 'anche con gli errori (indirizzo del modulo) è la stessa pagina: anello pieno');
+
+    // ---- Ditta giusta: P. IVA, SDI in maiuscolo, provincia in maiuscolo -> torna alla pagina con "salvato"
+    r = await chiedi('/distributore/anagrafica/ditta', form({ ragione_sociale: 'BOREA SRL', partita_iva: '12345678901', sdi_pec: 'abcdefg', indirizzo: 'Via Roma 1', cap: '16121', citta: 'Genova', provincia: 'ge' }));
+    assert.equal(r.status, 302);
+    assert.equal(r.headers.get('location'), '/distributore/anagrafica?ok=ditta#ditta');
+    assert.equal(scrittureAnagrafica.length, 1);
+    assert.match(scrittureAnagrafica[0].s, /^UPDATE ditte SET ragione_sociale = \?, partita_iva = \?, sdi_pec = \?, indirizzo = \?, cap = \?, citta = \?, provincia = \? WHERE id = \?/);
+    assert.deepEqual(scrittureAnagrafica[0].p, ['BOREA SRL', '12345678901', 'ABCDEFG', 'Via Roma 1', '16121', 'Genova', 'GE', 6]);
+    t = await (await chiedi('/distributore/anagrafica?ok=ditta')).text();
+    assert.match(t, /<p class="ab-ok" role="status">Dati della ditta salvati\.<\/p>/);
+    // una PEC al posto del codice SDI va bene
+    scrittureAnagrafica.length = 0;
+    r = await chiedi('/distributore/anagrafica/ditta', form({ ragione_sociale: 'BOREA SRL', partita_iva: '', sdi_pec: 'borea@pec.it' }));
+    assert.equal(r.status, 302);
+    assert.equal(scrittureAnagrafica[0].p[2], 'borea@pec.it');
+
+    // ---- Questa filiale: errori
+    scrittureAnagrafica.length = 0;
+    r = await chiedi('/distributore/anagrafica/filiale', form({ filiale: '', telefono: 'abc', email: 'nope', zona: '', indirizzo: '', cap: '12', citta: 'Genova', provincia: 'GE' }));
+    assert.equal(r.status, 400);
+    t = await r.text();
+    assert.deepEqual(messaggi(t), ['Scrivi il nome del banco.', 'Il telefono può avere solo cifre, spazi e + ( ) - /.', 'Scrivi la via e il numero civico.', 'Il CAP ha 5 cifre.', 'Scrivi un indirizzo email valido.', 'Scrivi la zona servita.']);
+    assert.match(t, /<section class="ab-card" id="filiale" data-scheda="filiale" data-aperta>/);
+    assert.equal(scrittureAnagrafica.length, 0);
+
+    // ---- Indirizzo uguale: nessuna geocodifica, la posizione non si tocca
+    geoModulo.geocodifica = async (dati) => { ricerche.push(dati); return { lat: 44.405, lng: 8.941, descrizione: 'Via XX Settembre, Genova' }; };
+    const uguale = { filiale: 'Banco Genova Fegino', telefono: '010 999999', email: 'fegino@borea.example', zona: 'Genova e provincia', indirizzo: 'Via Castel Morrone 1/7 rosso', cap: '16161', citta: 'Genova', provincia: 'GE' };
+    r = await chiedi('/distributore/anagrafica/filiale', form(uguale));
+    assert.equal(r.status, 302);
+    assert.equal(r.headers.get('location'), '/distributore/anagrafica?ok=filiale&pos=invariata#filiale');
+    assert.equal(ricerche.length, 0, 'indirizzo invariato: niente geocodifica');
+    assert.deepEqual(scrittureAnagrafica.map((w) => w.s.split(' SET ')[0]), ['UPDATE distributors', 'UPDATE store_locations'], 'la filiale e il suo punto vendita insieme');
+    assert.deepEqual(scrittureAnagrafica[0].p, ['Banco Genova Fegino', '010 999999', 'fegino@borea.example', 'Genova e provincia', 'Via Castel Morrone 1/7 rosso', '16161', 'Genova', 'GE', 2]);
+
+    // ---- Indirizzo cambiato (posizione non spostata a mano): si ricalcola dall'indirizzo, su entrambe le tabelle
+    scrittureAnagrafica.length = 0;
+    r = await chiedi('/distributore/anagrafica/filiale', form({ ...uguale, indirizzo: 'Via XX Settembre 10', cap: '16121' }));
+    assert.equal(r.status, 302);
+    assert.equal(r.headers.get('location'), '/distributore/anagrafica?ok=filiale&pos=ricalcolata#filiale');
+    assert.deepEqual(ricerche, [{ indirizzo: 'Via XX Settembre 10', cap: '16121', citta: 'Genova', provincia: 'GE' }]);
+    const posizioni = scrittureAnagrafica.filter((w) => /geo_lat/.test(w.s));
+    assert.deepEqual(posizioni.map((w) => w.s.split(' SET ')[0]), ['UPDATE distributors', 'UPDATE store_locations']);
+    assert.deepEqual(posizioni[0].p, [44.405, 8.941, 0, 2], 'ricalcolata: non è "a mano"');
+    t = await (await chiedi('/distributore/anagrafica?ok=filiale&pos=ricalcolata')).text();
+    assert.match(t, /Posizione sulla mappa aggiornata dal nuovo indirizzo\./);
+
+    // ---- Indirizzo cambiato ma la geocodifica non lo trova: la posizione resta com'era, con un avviso
+    ricerche.length = 0;
+    scrittureAnagrafica.length = 0;
+    geoModulo.geocodifica = async () => null;
+    r = await chiedi('/distributore/anagrafica/filiale', form({ ...uguale, indirizzo: 'Via Che Non Esiste 1' }));
+    assert.equal(r.headers.get('location'), '/distributore/anagrafica?ok=filiale&pos=non_trovata#filiale');
+    assert.equal(scrittureAnagrafica.filter((w) => /geo_lat/.test(w.s)).length, 0);
+    assert.match(await (await chiedi('/distributore/anagrafica?ok=filiale&pos=non_trovata')).text(), /Non ho trovato il nuovo indirizzo sulla mappa: la posizione è rimasta quella di prima/);
+
+    // ---- Posizione spostata a mano: un cambio d'indirizzo NON la ricalcola
+    ricerche.length = 0;
+    anagraficaProva.filiale.geo_manuale = 1;
+    geoModulo.geocodifica = async (dati) => { ricerche.push(dati); return { lat: 1, lng: 1, descrizione: '' }; };
+    r = await chiedi('/distributore/anagrafica/filiale', form({ ...uguale, indirizzo: 'Via Balbi 5' }));
+    assert.equal(r.headers.get('location'), '/distributore/anagrafica?ok=filiale&pos=manuale#filiale');
+    assert.equal(ricerche.length, 0, 'spostata a mano: niente geocodifica');
+    assert.match(await (await chiedi('/distributore/anagrafica?ok=filiale&pos=manuale')).text(), /resta quella che hai scelto tu/);
+  } finally {
+    geoModulo.geocodifica = geocodificaOriginale;
+    Object.assign(anagraficaProva.filiale, originale);
+    banco.attivo = false;
+  }
+});
+
+test('banco: anagrafica, "Sposta" salva la posizione su entrambe le tabelle e la segna "a mano"; coordinate assurde rifiutate', async () => {
+  cookie = '';
+  banco.attivo = true;
+  try {
+    assert.equal((await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }))).status, 302);
+    scrittureAnagrafica.length = 0;
+    let r = await chiedi('/distributore/anagrafica/posizione', json({ lat: 44.4056, lng: 8.9463 }));
+    assert.equal(r.status, 200);
+    assert.deepEqual(await r.json(), { ok: true });
+    assert.deepEqual(scrittureAnagrafica.map((w) => w.s.split(' SET ')[0]), ['UPDATE distributors', 'UPDATE store_locations']);
+    assert.deepEqual(scrittureAnagrafica[0].p, [44.4056, 8.9463, 1, 2], 'geo_manuale = 1');
+    assert.deepEqual(scrittureAnagrafica[1].p.slice(0, 3), [44.4056, 8.9463, 'Posizione impostata dal banco']);
+    scrittureAnagrafica.length = 0;
+    for (const corpo of [{ lat: 0, lng: 0 }, { lat: 'abc', lng: 8.9 }, { lat: 51.5, lng: -0.12 }, { lat: null, lng: null }, {}, { lat: [44], lng: [9] }]) {
+      r = await chiedi('/distributore/anagrafica/posizione', json(corpo));
+      assert.equal(r.status, 400, JSON.stringify(corpo));
+      assert.equal((await r.json()).ok, false);
+    }
+    assert.equal(scrittureAnagrafica.length, 0);
+    // l'interruttore dell'email salva subito (la riga non si vede ancora, ma la rotta c'è)
+    r = await chiedi('/distributore/anagrafica/email-richieste', json({ acceso: true }));
+    assert.deepEqual(await r.json(), { ok: true });
+    assert.deepEqual(scrittureAnagrafica[0].p, [1, 2]);
+  } finally {
+    banco.attivo = false;
+  }
+});
+
+test('banco: anagrafica, orari: salva le fasce (o "sempre aperto"), raggruppa i giorni uguali e segnala gli errori giorno per giorno', async () => {
+  cookie = '';
+  banco.attivo = true;
+  const originale = anagraficaProva.filiale.orari;
+  try {
+    assert.equal((await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }))).status, 302);
+    scrittureAnagrafica.length = 0;
+    const feriali = {};
+    for (const g of ['lun', 'mar', 'mer', 'gio', 'ven']) Object.assign(feriali, { ['aperto_' + g]: '1', ['da1_' + g]: '07:30', ['a1_' + g]: '12:30', ['da2_' + g]: '14:00', ['a2_' + g]: '18:00' });
+    const modulo = { ...feriali, aperto_sab: '1', da1_sab: '07:30', a1_sab: '12:00' };
+    let r = await chiedi('/distributore/anagrafica/orari', form(modulo));
+    assert.equal(r.status, 302);
+    assert.equal(r.headers.get('location'), '/distributore/anagrafica?ok=orari#orari');
+    assert.match(scrittureAnagrafica[0].s, /^UPDATE distributors SET orari = \?::jsonb WHERE id = \?/);
+    assert.deepEqual(JSON.parse(scrittureAnagrafica[0].p[0]), {
+      lun: [['07:30', '12:30'], ['14:00', '18:00']], mar: [['07:30', '12:30'], ['14:00', '18:00']], mer: [['07:30', '12:30'], ['14:00', '18:00']],
+      gio: [['07:30', '12:30'], ['14:00', '18:00']], ven: [['07:30', '12:30'], ['14:00', '18:00']], sab: [['07:30', '12:00']], dom: [],
+    });
+    assert.equal(scrittureAnagrafica[0].p[1], 2);
+
+    // le righe in lettura: i giorni consecutivi con gli stessi orari su una riga sola (come nel mockup)
+    anagraficaProva.filiale.orari = JSON.parse(scrittureAnagrafica[0].p[0]);
+    let t = await (await chiedi('/distributore/anagrafica?ok=orari')).text();
+    assert.match(t, /<span class="ab-orari-giorni">Lunedì – Venerdì<\/span><span class="ab-orari-fasce">07:30 – 12:30 · 14:00 – 18:00<\/span>/);
+    assert.match(t, /<span class="ab-orari-giorni">Sabato<\/span><span class="ab-orari-fasce">07:30 – 12:00<\/span>/);
+    assert.match(t, /<span class="ab-orari-giorni">Domenica<\/span><span class="ab-orari-fasce ab-orari-chiuso">Chiuso<\/span>/);
+    assert.match(t, /<p class="ab-ok" role="status">Orari salvati\.<\/p>/);
+    // il modulo ha i valori salvati e l'interruttore dei giorni aperti; "sempre aperto" non è spuntato
+    t = await (await chiedi('/distributore/anagrafica?modifica=orari')).text();
+    assert.match(t, /name="aperto_lun" value="1" data-aperto checked/);
+    assert.doesNotMatch(t, /name="aperto_dom" value="1" data-aperto checked/);
+    assert.match(t, /name="da2_lun" value="14:00"/);
+    assert.doesNotMatch(t, /data-sempre-aperto checked/);
+    assert.match(t, /data-copia-feriali>Copia su tutti i giorni feriali<\/button>/);
+
+    // errori: fine prima dell'inizio, ora scritta male, giorno aperto senza fasce: sotto il giorno giusto, nulla viene scritto
+    scrittureAnagrafica.length = 0;
+    r = await chiedi('/distributore/anagrafica/orari', form({ ...modulo, da1_lun: '13:00', a1_lun: '12:00', da1_sab: '7.30', aperto_dom: '1' }));
+    assert.equal(r.status, 400);
+    t = await r.text();
+    assert.match(t, /<section class="ab-card" id="orari" data-scheda="orari" data-aperta>/);
+    assert.match(t, /data-giorno="lun">[\s\S]*?<p class="ab-errore" role="alert">Ogni fascia deve finire dopo l’inizio \(13:00 – 12:00\)\.<\/p>/);
+    assert.match(t, /data-giorno="sab">[\s\S]*?<p class="ab-errore" role="alert">Orari non validi: scrivi ore e minuti, per esempio 07:30\.<\/p>/);
+    assert.match(t, /data-giorno="dom">[\s\S]*?<p class="ab-errore" role="alert">Scrivi gli orari della prima fascia, oppure segna il giorno come chiuso\.<\/p>/);
+    assert.match(t, /name="da1_lun" value="13:00"/, 'i valori scritti tornano nel modulo');
+    assert.equal(scrittureAnagrafica.length, 0);
+    // tutto chiuso: non si salva (il banco non riceverebbe mai niente)
+    r = await chiedi('/distributore/anagrafica/orari', form({}));
+    assert.equal(r.status, 400);
+    assert.match(await r.text(), /Segna almeno un giorno come aperto, oppure scegli «Sempre aperto»\./);
+    assert.equal(scrittureAnagrafica.length, 0);
+
+    // "sempre aperto": gli orari tornano NULL
+    r = await chiedi('/distributore/anagrafica/orari', form({ sempre_aperto: '1', ...modulo }));
+    assert.equal(r.status, 302);
+    assert.equal(scrittureAnagrafica[0].p[0], null);
+  } finally {
+    anagraficaProva.filiale.orari = originale;
+    banco.attivo = false;
+  }
+});
+
+test('banco: anagrafica, cambio password: attuale sbagliata, nuova che non va, poi riesce, salva l\'hash e chiude le ALTRE sessioni', async () => {
+  cookie = '';
+  banco.attivo = true;
+  try {
+    assert.equal((await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }))).status, 302);
+    scrittureAnagrafica.length = 0;
+    const messaggi = (t) => [...t.matchAll(/<p class="ab-errore" id="ab-password-[a-z]+-err" role="alert">([^<]*)<\/p>/g)].map((m) => m[1]);
+    const cambia = (attuale, nuova, ripeti) => chiedi('/distributore/anagrafica/password', form({ attuale, nuova, ripeti }));
+
+    let r = await cambia('sbagliata!', 'nuovapassword1', 'nuovapassword1');
+    assert.equal(r.status, 400);
+    let t = await r.text();
+    assert.deepEqual(messaggi(t), ['La password attuale non è corretta.']);
+    assert.match(t, /<section class="ab-card" id="accesso" data-scheda="password" data-aperta>/);
+    assert.doesNotMatch(t, /value="sbagliata!"/, 'le password non tornano mai nel modulo');
+    r = await cambia('password-di-prova', 'corta', 'corta');
+    assert.deepEqual(messaggi(await r.text()), ['La password deve avere almeno 8 caratteri.']);
+    r = await cambia('password-di-prova', 'nuovapassword1', 'diversa123456');
+    assert.deepEqual(messaggi(await r.text()), ['Le due password non coincidono.']);
+    r = await cambia('password-di-prova', 'password-di-prova', 'password-di-prova');
+    assert.deepEqual(messaggi(await r.text()), ['La nuova password deve essere diversa da quella attuale.']);
+    r = await cambia('', '', '');
+    assert.deepEqual(messaggi(await r.text()), ['Scrivi la password attuale.', 'La password deve avere almeno 8 caratteri.']);
+    assert.equal(scrittureAnagrafica.length, 0, 'finora non è stato scritto niente');
+
+    r = await cambia('password-di-prova', 'nuovapassword1', 'nuovapassword1');
+    assert.equal(r.status, 302);
+    assert.equal(r.headers.get('location'), '/distributore/anagrafica?ok=password#accesso');
+    const [hash, chiusura] = scrittureAnagrafica;
+    assert.match(hash.s, /^UPDATE users SET password_hash = \? WHERE id = \?/);
+    assert.ok(bcrypt.compareSync('nuovapassword1', hash.p[0]), 'si salva l\'hash bcrypt della nuova password');
+    assert.equal(hash.p[1], 9);
+    // chiude le altre sessioni dello stesso utente (id dentro sess -> user -> id) e tiene quella da cui si cambia
+    assert.match(chiusura.s, /^DELETE FROM session WHERE \(sess::jsonb #>> '\{user,id\}'\) = \? AND sid <> \?/);
+    assert.equal(chiusura.p[0], '9');
+    assert.ok(chiusura.p[1].length > 10, 'sid della sessione corrente: ' + chiusura.p[1]);
+    t = await (await chiedi('/distributore/anagrafica?ok=password')).text();
+    assert.match(t, /<p class="ab-ok" role="status">Password cambiata\.<\/p>/);
+  } finally {
+    banco.attivo = false;
+  }
+});
+
+test('carrello: con TUTTI i banchi chiusi (orari) il pulsante dice quando riapre e resta spento; il server rifiuta comunque e non crea la richiesta', async () => {
+  cookie = '';
+  assert.equal((await chiedi('/login', form({ username: 'prova', password: 'password-di-prova' }))).status, 302);
+  await chiedi('/carrello/svuota', { method: 'POST' });
+  await chiedi('/api/carrello/imposta', json({ id: 1, qty: 50 }));
+  const orari = require('../src/orari');
+  const originale = banchiAttiviProva.righe;
+  // Aperto solo "fra due giorni" (a Roma): chiuso adesso, qualunque giorno sia oggi.
+  const oggi = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 }[new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Rome', weekday: 'short' }).format(new Date())];
+  const apre = orari.GIORNI[(oggi + 2) % 7];
+  const nomeGiorno = orari.NOMI[apre].toLowerCase();
+  const soloQuelGiorno = () => [{ id: 2, nome: 'BOREA SRL', filiale: 'Banco Genova Fegino', orari: Object.fromEntries(orari.GIORNI.map((g) => [g, g === apre ? [['07:30', '12:30']] : []])) }];
+  try {
+    banchiAttiviProva.righe = soloQuelGiorno();
+    let t = await (await chiedi('/carrello')).text();
+    assert.match(t, new RegExp('<button class="btn-paga btn-paga-chiuso" type="submit" form="form-invia" data-btn-paga data-banco-chiuso disabled>Il banco è chiuso · riapre ' + nomeGiorno + ' alle 07:30</button>'));
+    assert.doesNotMatch(t, /Paga e invia richiesta<\/button>/, 'al posto del pulsante di pagamento');
+    assert.doesNotMatch(t, /Se nessun banco accetta, ti rimborsiamo/, 'niente promessa di rimborso: non si paga');
+
+    // il server rifiuta lo stesso (la pagina può essere rimasta aperta): errore, nessun INSERT, il carrello resta
+    const prima = registro.length;
+    const r = await chiedi('/richieste', form({ modo: 'imposta', chiave_invio: 'prova-banco-chiuso', destinazione: 'Via Puggia 22/3' }));
+    assert.equal(r.status, 400);
+    t = await r.text();
+    assert.match(t, /Il banco è chiuso/);
+    assert.match(t, new RegExp('Riapre ' + nomeGiorno + ' alle 07:30\\. Non è stato addebitato nulla'));
+    assert.equal(registro.slice(prima).some((q) => /INSERT INTO requests/.test(q)), false);
+    assert.match(await (await chiedi('/carrello')).text(), /Valvola a sfera/);
+
+    // basta UNA filiale aperta: il pulsante torna quello di sempre
+    banchiAttiviProva.righe = [...soloQuelGiorno(), { id: 3, nome: 'BOREA SRL', filiale: 'Banco Genova Staglieno', orari: null }];
+    t = await (await chiedi('/carrello')).text();
+    assert.match(t, /<button class="btn-paga" type="submit" form="form-invia" data-btn-paga >Paga e invia richiesta<\/button>/);
+    assert.doesNotMatch(t, /btn-paga-chiuso|data-banco-chiuso/);
+    assert.match(t, /Se nessun banco accetta, ti rimborsiamo/);
+  } finally {
+    banchiAttiviProva.righe = originale;
+  }
+
+  // "Rinvia richiesta" non parte neanche lui a banco chiuso (ritorna alla richiesta, non al carrello)
+  storico.attivo = true;
+  try {
+    banchiAttiviProva.righe = soloQuelGiorno();
+    const r = await chiedi('/richieste/4/reinvia', { method: 'POST' });
+    assert.equal(r.status, 400);
+    const t = await r.text();
+    assert.match(t, /Il banco è chiuso/);
+    assert.match(t, /<a[^>]*href="\/richieste\/4"[^>]*>\s*Torna alla richiesta\s*<\/a>/);
+  } finally {
+    banchiAttiviProva.righe = originale;
+    storico.attivo = false;
+  }
+});
+
+// ---------- Account dell'installatore: password dimenticata, cambio password, elimina account (richiesta del 20/10/2026) ----------
+
+const attendi = (ms) => new Promise((r) => setTimeout(r, ms));
+const erroriCampo = (t) => [...t.matchAll(/<p class="acc-hint"[^>]*>([^<]*)<\/p>/g)].map((m) => m[1]);
+
+test('login: link "Password dimenticata?" e avvisi dopo il cambio password o l\'eliminazione (solo frasi nostre, mai testo dall\'indirizzo)', async () => {
+  cookie = '';
+  let t = await (await chiedi('/login')).text();
+  assert.match(t, /<p class="acc-dimenticata"><a href="\/password-dimenticata">Password dimenticata\?<\/a><\/p>/);
+  assert.doesNotMatch(t, /acc-avviso/);
+  t = await (await chiedi('/login?avviso=password')).text();
+  assert.match(t, /<div class="acc-avviso" role="status">Password cambiata\. Accedi con quella nuova\.<\/div>/);
+  t = await (await chiedi('/login?avviso=eliminato')).text();
+  assert.match(t, /Account eliminato\. Grazie per aver usato Minuteria\./);
+  t = await (await chiedi('/login?avviso=' + encodeURIComponent('<script>alert(1)</script>'))).text();
+  assert.doesNotMatch(t, /acc-avviso|<script>alert/);
+  // la pagina del recupero: senza accesso; con l'accesso si va alla home
+  const r = await chiedi('/password-dimenticata');
+  assert.equal(r.status, 200);
+  t = await r.text();
+  assert.match(t, /<h1 class="acc-titolo">Password dimenticata\?<\/h1>/);
+  assert.match(t, /name="identificativo"/);
+  assert.match(t, /<button class="acc-btn" type="submit">Mandami il link<\/button>/);
+  assert.equal((await chiedi('/password-dimenticata', form({ identificativo: '' }))).status, 400);
+});
+
+test('recupero password: email con il link, scelta della nuova password, link usabile una volta sola; risposta uguale per account che c\'è e che non c\'è', async () => {
+  cookie = '';
+  const limite = require('../src/limite_login');
+  limite.svuotaTutto();
+  const emailModulo2 = require('../src/email');
+  accountProva.link.length = 0;
+  accountProva.scritture.length = 0;
+  const spedite = [];
+  emailModulo2.impostaTrasporto({ sendMail: async (o) => { spedite.push(o); } });
+  try {
+    // account che c'è (per email) e account che non c'è: la STESSA pagina, lo stesso stato
+    let r = await chiedi('/password-dimenticata', form({ identificativo: 'PROVA@example.com' }));
+    assert.equal(r.status, 200);
+    const trovato = await r.text();
+    r = await chiedi('/password-dimenticata', form({ identificativo: 'nessuno@example.com' }));
+    assert.equal(r.status, 200);
+    const nonTrovato = await r.text();
+    const pulisci = (t) => t.replace(/\s+/g, ' ').replace(/value="[^"]*"/g, '');
+    assert.equal(pulisci(trovato), pulisci(nonTrovato), 'chi chiede non può capire se l\'account esiste');
+    assert.match(trovato, /Controlla la posta\./);
+    assert.match(trovato, /Il link vale 60 minuti/);
+    await attendi(60); // l'invio non si aspetta: parte dopo la risposta
+    assert.equal(spedite.length, 1, 'una sola email, per l\'account che c\'è');
+    assert.equal(spedite[0].to, 'prova@example.com');
+    const m = /href="(http:\/\/127\.0\.0\.1:\d+\/reimposta-password\/([A-Za-z0-9_-]{43}))"/.exec(spedite[0].html);
+    assert.ok(m, 'il link è nell\'email, sul nostro indirizzo (solo in locale: in produzione vale APP_URL)');
+    const percorso = '/reimposta-password/' + m[2];
+
+    // il link: modulo con il nome utente
+    r = await chiedi(percorso);
+    assert.equal(r.status, 200);
+    assert.equal(r.headers.get('cache-control'), 'no-store');
+    let t = await r.text();
+    assert.match(t, /<h1 class="acc-titolo">Scegli una nuova password<\/h1>/);
+    assert.match(t, /Account: <strong>prova<\/strong>/);
+    assert.match(t, /name="nuova"/);
+    assert.match(t, /<meta name="referrer" content="no-referrer">/);
+    // campi che non vanno: 400, il link resta buono
+    r = await chiedi(percorso, form({ nuova: 'corta', ripeti: 'corta' }));
+    assert.equal(r.status, 400);
+    assert.match(await r.text(), /La password deve avere almeno 8 caratteri\./);
+    r = await chiedi(percorso, form({ nuova: 'nuovapassword1', ripeti: 'diversa1234567' }));
+    assert.match(await r.text(), /Le due password non coincidono\./);
+    assert.equal(accountProva.scritture.length, 0);
+    // la password nuova: torna al login con l'avviso; chiude tutte le sessioni e gli accessi dell'app
+    r = await chiedi(percorso, form({ nuova: 'nuovapassword1', ripeti: 'nuovapassword1' }));
+    assert.equal(r.status, 302);
+    assert.equal(r.headers.get('location'), '/login?avviso=password');
+    const [hash, sessioni, app] = accountProva.scritture;
+    assert.ok(bcrypt.compareSync('nuovapassword1', hash.p[0]));
+    assert.equal(hash.p[1], 1);
+    assert.deepEqual(sessioni.p, ['1', ''], 'tutte le sessioni di quell\'account');
+    assert.match(app.s, /^UPDATE app_tokens SET revocato_il = NOW\(\)/);
+    // lo stesso link non vale più (né per aprirlo né per usarlo)
+    r = await chiedi(percorso);
+    assert.equal(r.status, 410);
+    t = await r.text();
+    assert.match(t, /<h1 class="acc-titolo">Link non valido<\/h1>/);
+    assert.match(t, /href="\/password-dimenticata"[^>]*>Chiedi un nuovo link<\/a>/);
+    assert.equal((await chiedi(percorso, form({ nuova: 'altrapassword2', ripeti: 'altrapassword2' }))).status, 410);
+    // un codice inventato o fatto male: stessa pagina, senza errori
+    assert.equal((await chiedi('/reimposta-password/inventato')).status, 410);
+    assert.equal((await chiedi('/reimposta-password/' + 'A'.repeat(43))).status, 410);
+
+    // troppe richieste per lo stesso identificativo: 429, e conta anche se l'account non c'è
+    limite.svuotaTutto();
+    for (let i = 0; i < limite.MAX_RECUPERI_PER_COPPIA; i++) assert.equal((await chiedi('/password-dimenticata', form({ identificativo: 'spam@example.com' }))).status, 200);
+    r = await chiedi('/password-dimenticata', form({ identificativo: 'spam@example.com' }));
+    assert.equal(r.status, 429);
+    assert.match(await r.text(), /troppe richieste/);
+  } finally {
+    emailModulo2.impostaTrasporto(null);
+    limite.svuotaTutto();
+  }
+});
+
+test('profilo: scheda "Accesso" e cambio password (errori sotto i campi, poi riesce); l\'attuale sbagliata conta nel limite del login', async () => {
+  cookie = '';
+  const limite = require('../src/limite_login');
+  limite.svuotaTutto();
+  assert.equal((await chiedi('/login', form({ username: 'prova', password: 'password-di-prova' }))).status, 302);
+  accountProva.scritture.length = 0;
+  try {
+    let t = await (await chiedi('/profilo')).text();
+    assert.match(t, /<h2 class="an-titolo">Accesso<\/h2>/);
+    assert.match(t, /<div class="an-etichetta">Nome utente<\/div>\s*<div class="an-valore">prova<\/div>/);
+    assert.match(t, /<details class="an-pw">\s*<summary>Cambia password<\/summary>/);
+    assert.doesNotMatch(t, /an-ok/);
+
+    const cambia = (attuale, nuova, ripeti) => chiedi('/profilo/password', form({ attuale, nuova, ripeti }));
+    let r = await cambia('sbagliata!', 'nuovapassword1', 'nuovapassword1');
+    assert.equal(r.status, 400);
+    t = await r.text();
+    assert.deepEqual(erroriCampo(t).filter((x) => /password/.test(x)), ['La password attuale non è corretta.']);
+    assert.match(t, /<details class="an-pw" open>/, 'con errori il modulo resta aperto');
+    assert.doesNotMatch(t, /value="sbagliata!"/, 'le password non tornano mai nel modulo');
+    r = await cambia('password-di-prova', 'corta', 'corta');
+    assert.match(await r.text(), /La password deve avere almeno 8 caratteri\./);
+    r = await cambia('password-di-prova', 'password-di-prova', 'password-di-prova');
+    assert.match(await r.text(), /La nuova password deve essere diversa da quella attuale\./);
+    assert.equal(accountProva.scritture.length, 0);
+
+    r = await cambia('password-di-prova', 'nuovapassword1', 'nuovapassword1');
+    assert.equal(r.status, 302);
+    assert.equal(r.headers.get('location'), '/profilo?ok=password#accesso');
+    const [hash, sessioni, app] = accountProva.scritture;
+    assert.ok(bcrypt.compareSync('nuovapassword1', hash.p[0]));
+    assert.equal(sessioni.p[0], '1');
+    assert.ok(sessioni.p[1].length > 10, 'la sessione corrente resta: ' + sessioni.p[1]);
+    assert.match(app.s, /^UPDATE app_tokens SET revocato_il/);
+    t = await (await chiedi('/profilo?ok=password')).text();
+    assert.match(t, /<p class="an-ok" role="status">Password cambiata\. Le altre sessioni e l'app dovranno accedere di nuovo\.<\/p>/);
+
+    // otto tentativi con l'attuale sbagliata: poi 429
+    let ultimo;
+    for (let i = 0; i < 9; i++) ultimo = await cambia('sbagliata' + i, 'nuovapassword1', 'nuovapassword1');
+    assert.equal(ultimo.status, 429);
+    assert.match(await ultimo.text(), /Troppi tentativi non riusciti/);
+  } finally {
+    limite.svuotaTutto();
+  }
+});
+
+test('elimina account dal sito: spiega cosa si cancella e cosa resta, chiede la password, rifiuta se c\'è qualcosa in corso, poi disattiva e chiude la sessione', async () => {
+  cookie = '';
+  const limite = require('../src/limite_login');
+  limite.svuotaTutto();
+  assert.equal((await chiedi('/login', form({ username: 'prova', password: 'password-di-prova' }))).status, 302);
+  accountProva.scritture.length = 0;
+  accountProva.corso = { richieste: 0, ordini: 0, pagamenti: 0 };
+  try {
+    // la scheda nel profilo porta alla pagina di conferma
+    let t = await (await chiedi('/profilo')).text();
+    assert.match(t, /<a class="an-elimina" href="\/profilo\/elimina">Elimina account…<\/a>/);
+
+    let r = await chiedi('/profilo/elimina');
+    assert.equal(r.status, 200);
+    t = await r.text();
+    assert.match(t, /<h1 class="an-titolo">Vuoi eliminare il tuo account\?<\/h1>/);
+    assert.match(t, /Viene cancellato/);
+    assert.match(t, /Resta, per obbligo di legge/);
+    assert.match(t, /<form method="POST" action="\/profilo\/elimina"/);
+    assert.match(t, /<button class="an-elimina-btn" type="submit">Elimina il mio account<\/button>/);
+
+    // password sbagliata: errore sul campo, niente scritto
+    r = await chiedi('/profilo/elimina', form({ password: 'sbagliata' }));
+    assert.equal(r.status, 400);
+    assert.match(await r.text(), /Password non corretta\./);
+    assert.equal(accountProva.scritture.length, 0);
+
+    // qualcosa in corso: la pagina lo dice subito, il modulo non c'è, e anche un invio a mano viene respinto
+    accountProva.corso = { richieste: 1, ordini: 1, pagamenti: 0 };
+    t = await (await chiedi('/profilo/elimina')).text();
+    assert.match(t, /Hai ancora qualcosa in corso\./);
+    assert.match(t, /Una richiesta è in attesa di risposta\./);
+    assert.match(t, /Un ordine non è ancora stato consegnato\./);
+    assert.doesNotMatch(t, /an-elimina-btn|action="\/profilo\/elimina"/);
+    r = await chiedi('/profilo/elimina', form({ password: 'password-di-prova' }));
+    assert.equal(r.status, 409);
+    assert.match(await r.text(), /Hai ancora qualcosa in corso./, 'la pagina rifà vedere il motivo, senza il modulo');
+    assert.equal(accountProva.scritture.length, 0, 'niente è stato eliminato');
+
+    // tutto finito: si elimina, si va al login con l'avviso e la sessione non vale più
+    accountProva.corso = { richieste: 0, ordini: 0, pagamenti: 0 };
+    r = await chiedi('/profilo/elimina', form({ password: 'password-di-prova' }));
+    assert.equal(r.status, 302);
+    assert.equal(r.headers.get('location'), '/login?avviso=eliminato');
+    const disattivato = accountProva.scritture.find((w) => /^UPDATE users SET attivo = 0/.test(w.s));
+    assert.ok(disattivato, 'account disattivato e anonimizzato (src/account.js)');
+    assert.equal(disattivato.p[0], 'eliminato-1');
+    assert.ok(accountProva.scritture.some((w) => /^DELETE FROM app_tokens WHERE user_id/.test(w.s)), 'accessi dell\'app tolti');
+    assert.ok(accountProva.scritture.some((w) => /^DELETE FROM session WHERE \(sess::jsonb/.test(w.s)), 'sessioni tolte');
+    assert.match(await (await chiedi('/login?avviso=eliminato')).text(), /Account eliminato/);
+    assert.equal((await chiedi('/home')).status, 302, 'la sessione di questa scheda è stata chiusa');
+  } finally {
+    accountProva.corso = { richieste: 0, ordini: 0, pagamenti: 0 };
+    limite.svuotaTutto();
+    cookie = '';
+  }
+});
+
+test('pagina pubblica "Elimina account": ora spiega anche il percorso dal sito', async () => {
+  cookie = '';
+  const t = await (await chiedi('/elimina-account')).text();
+  assert.match(t, /Dal sito/);
+  assert.match(t, /Elimina account/);
+  assert.match(t, /Lo stesso account vale per il sito e per l’app/);
 });

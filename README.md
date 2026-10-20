@@ -326,7 +326,9 @@ disattivati) sono solo in `db/punti_vendita.js`: lo script che li carica,
    la richiesta si chiude ("Nessuna conferma ricevuta"), il **blocco sulla carta si toglie** (nessun
    addebito) e si può reinviare (si blocca di nuovo la carta).
 7. **Stato ordini** — mostra sempre e solo l'attività più rilevante (in attesa > in consegna >
-   scaduta da poco); lo **Storico** ha tutto il resto (le richieste annullate si vedono ma non si aprono). Sul sito l'icona nella barra in basso segue la
+   senza risposta); una richiesta senza risposta ci resta **10 minuti dalla scadenza**, ciascuna per
+   conto suo (anche con altre richieste in corso), poi sparisce e si passa alla prossima attività o
+   alla pagina vuota; lo **Storico** ha tutto il resto (le richieste annullate si vedono ma non si aprono). Sul sito l'icona nella barra in basso segue la
    fase: anello con conto alla rovescia (in attesa), furgone con i minuti all'arrivo (in consegna),
    "!" (nessuna risposta). Un ordine **non si annulla mai** dall'app o dal sito: il banco ha già
    confermato e la carta è incassata (per un problema, l'assistenza).
@@ -396,6 +398,31 @@ Vale sempre la regola più precisa; dove non c'è nessuna regola resta lo sconto
 del banco. Svuotando un campo la regola sparisce. Oggi sono solo un riferimento di lettura quando
 il banco risponde (`righeDistributore` in `src/richieste.js`): il codice per applicarli riga per
 riga esiste ancora (`rispondi()` accetta `sconti`/`scontoCliente`) ma nessuna route lo richiama.
+
+## Anagrafica del banco e orari
+
+Dalla tendina del cerchio con le iniziali (in alto a destra) il banco apre **Anagrafica del banco** (`/distributore/anagrafica`): i dati della ditta
+(valgono per tutte le filiali: ragione sociale, partita IVA, SDI/PEC, sede legale), quelli della filiale (nome, telefono, indirizzo di ritiro, email, zona,
+posizione sulla mappa), gli **orari**, l'accesso (email e cambio password) e gli interruttori di suoni e notifiche del computer. Il banco ha un solo profilo,
+con tutti i permessi.
+
+- **Orari**: fuori orario (ora di Roma) le richieste non arrivano a quella filiale. Senza orari impostati è sempre aperta. Se **tutte** le filiali sono chiuse
+  l'installatore non può pagare: nel carrello il pulsante dice "Il banco è chiuso · riapre giovedì alle 07:30" e il server rifiuta comunque l'invio (anche
+  "Rinvia richiesta").
+- **Posizione**: se cambia l'indirizzo di ritiro si ricalcola da sola (Nominatim/OpenStreetMap, serve la rete); se il banco l'ha spostata a mano con "Sposta" resta com'è.
+- **Schema**: servono le colonne `distributors.orari`, `email_nuove_richieste` e `geo_manuale` (blocco "Anagrafica del banco" in fondo a
+  `db/postgres/schema.sql`): sulla VPS applicarlo **prima** di riavviare, con
+  `node scripts/applica_blocco_schema.js "-- Anagrafica del banco: orari"` (a secco) e poi con `--applica`.
+
+## Password dimenticata, cambio password ed eliminazione dell'account (installatore)
+
+- **Password dimenticata?** (sul login): l'installatore scrive nome utente o email e riceve un link, valido un'ora e una volta sola, per scegliere una nuova password. Dopo il cambio escono tutte le sessioni
+  e l'app deve rifare l'accesso. **Serve l'invio email**: nel `.env` della VPS `SMTP_HOST` (e `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_DA`, vedi `src/email.js`) e `APP_URL=https://tuodominio.it` (il link
+  si costruisce da lì, mai dall'indirizzo con cui arriva la richiesta). Senza, in produzione non parte niente. In locale, senza SMTP, il link compare nel log del server.
+- **La mia anagrafica → Accesso**: cambio della password da dentro (con quella attuale). **Elimina account**: pagina di conferma con la password; si disattiva e si anonimizzano i dati personali, restano
+  ordini, bolle e ricevute. Con una richiesta o un ordine in corso non si può.
+- **Schema**: tabella `recupero_password` (blocco "Recupero della password dell'installatore" in fondo a `db/postgres/schema.sql`): applicarla sul DB condiviso **prima** di riavviare, con
+  `node scripts/applica_blocco_schema.js "-- Recupero della password dell'installatore"` (a secco) e poi con `--applica`.
 
 ## Contributo RAEE
 

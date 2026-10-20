@@ -207,12 +207,20 @@
               <span class="bp-label">Paghi ora · consegna</span>
               <span class="bp-importo">€ <span data-riep="app_totale"><%= vista.app_totale %></span></span>
             </div>
-            <button class="btn-paga" type="submit" form="form-invia" data-btn-paga <%= raggiunto ? '' : 'disabled' %>>Paga e invia richiesta</button>
+            <%# Banco chiuso (fuori dagli orari impostati nell'"Anagrafica del banco"): niente pagamento, il pulsante dice quando riapre e resta spento anche
+                se si cambia una quantità (public/app.js guarda data-banco-chiuso). Il server rifiuta comunque (flusso.validaRichiesta, 'banco_chiuso'). %>
+            <% if (bancoChiuso) { %>
+              <button class="btn-paga btn-paga-chiuso" type="submit" form="form-invia" data-btn-paga data-banco-chiuso disabled><%= fraseBancoChiuso %></button>
+            <% } else { %>
+              <button class="btn-paga" type="submit" form="form-invia" data-btn-paga <%= raggiunto ? '' : 'disabled' %>>Paga e invia richiesta</button>
+            <% } %>
           </div>
-          <p class="barra-paga-nota">
-            <span class="scudo"><%- iconaScudo %></span>
-            <span>Se nessun banco accetta, ti rimborsiamo</span>
-          </p>
+          <% if (!bancoChiuso) { %>
+            <p class="barra-paga-nota">
+              <span class="scudo"><%- iconaScudo %></span>
+              <span>Se nessun banco accetta, ti rimborsiamo</span>
+            </p>
+          <% } %>
         </div>
       </div>
     <% } %>
