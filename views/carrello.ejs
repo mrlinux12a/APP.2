@@ -59,8 +59,9 @@
       </div>
     <% } else { %>
       <%
-        // L'indirizzo è una riga sola ("Via Puggia 22/3, 16131 Genova (GE)"): la via in evidenza, il resto sotto.
-        const indirizzo = (cliente.indirizzo_consegna || '').trim();
+        // L'indirizzo è una riga sola ("Via Puggia 22/3, 16131 Genova (GE)"): la via in evidenza, il resto sotto. Parte VUOTO: lo precompila la posizione del
+        // dispositivo (public/app.js, "Carrello: indirizzo di consegna"), se c'è; senza, lo scrive l'installatore. Non si paga senza un indirizzo.
+        const indirizzo = '';
         const taglio = indirizzo.indexOf(',');
         const via = taglio === -1 ? indirizzo : indirizzo.slice(0, taglio).trim();
         const capCitta = taglio === -1 ? '' : indirizzo.slice(taglio + 1).trim();
@@ -127,9 +128,16 @@
                   <button type="button" class="btn-cambia" data-consegna-cambia><%= indirizzo ? 'Cambia' : 'Fatto' %></button>
                 </div>
                 <div class="consegna-campo" data-consegna-campo <%= indirizzo ? 'hidden' : '' %>>
-                  <input type="text" id="destinazione" name="destinazione"
-                         value="<%= cliente.indirizzo_consegna || '' %>"
-                         placeholder="Via, numero, CAP, città" aria-label="Indirizzo di consegna">
+                  <input type="text" id="destinazione" name="destinazione" value="" required
+                         placeholder="Via, numero, CAP, città" aria-label="Indirizzo di consegna" autocomplete="street-address">
+                  <%# Coordinate del dispositivo, scritte dallo script quando l'indirizzo viene dalla posizione (e tolte appena lo si modifica). %>
+                  <input type="hidden" name="dest_lat" value="" data-dest-lat>
+                  <input type="hidden" name="dest_lng" value="" data-dest-lng>
+                </div>
+                <%# Dice com'è andata la posizione: cerca, non attiva, indirizzo non trovato. Il pulsante la richiede (il browser la chiede da sé se serve). %>
+                <div class="consegna-pos" data-consegna-pos hidden>
+                  <span data-consegna-pos-testo></span>
+                  <button type="button" class="consegna-pos-usa" data-consegna-pos-usa>Usa la mia posizione</button>
                 </div>
               </div>
 

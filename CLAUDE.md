@@ -648,13 +648,30 @@ Le regole stanno in cima a `src/pagamenti.js` (commento). Dove questa sezione co
   "ordine pagato con Stripe", "ordine con il pagamento rimborsato", "il cliente non annulla MAI un ordine" e "storico con pagamenti incassati". Per **vedere** un PDF senza poppler: `pypdfium2` in una cartella fuori dal progetto
   (`pip install --target <cartella> pypdfium2`); il pannello browser incorporato scarica i PDF invece di mostrarli.
 
-## Installatori in Via Puggia 22/3 (provvisorio)
+## Posizione dell'installatore = indirizzo di consegna del pagamento (20/10/2026) e sede provvisoria in Via Puggia 22/3
 
-Tutti gli installatori sono in Via Puggia 22/3, Genova (`src/sede_installatori.js`, vedi README,
-"Posizione"): `indirizzo_consegna` + `geo_*` con `geo_consenso = 1`, impostati da
-`scripts/imposta_installatori_puggia.js` e da `anagrafiche.iscriviCliente`. La sede legale resta quella
-dichiarata. Niente `navigator.geolocation` né `/api/posizione`. Quando torneranno gli indirizzi veri
-togliere i due punti d'uso.
+**La posizione per i calcoli è quella dell'indirizzo che l'installatore manda nel form di pagamento del carrello** (richiesta esplicita del 20/10/2026, sostituisce "niente `navigator.geolocation`"; un primo giro che la leggeva in background su tutte le pagine
+e la rimandava all'accettazione del banco è stato **tolto**: non rimetterlo). Blocco "Carrello: indirizzo di consegna" di `public/app.js` + `views/carrello.ejs`:
+- Il campo `destinazione` parte **vuoto** (non più `cliente.indirizzo_consegna`) ed è `required`. All'apertura, se è vuoto, la pagina chiede la posizione al browser (`navigator.geolocation`) e ricava l'indirizzo con `GET /api/indirizzo?lat&lng`
+  (`geo.indirizzoDaPosizione`: Nominatim inversa, formato "Via Puggia 22, 16131 Genova (GE)", solo Italia e solo con una via; non lancia mai). Con l'indirizzo precompilato la scheda "Consegna in cantiere" si chiude (con "Cambia") e le coordinate stanno nei campi
+  nascosti `dest_lat`/`dest_lng`. **Se la posizione manca** (permesso negato, nessun GPS, niente HTTPS: `!isSecureContext`) il campo resta vuoto e sotto compare `.consegna-pos` con il motivo e il pulsante "Usa la mia posizione" / "Riprova" (il browser chiede il permesso da sé;
+  da solo non si sovrascrive mai un indirizzo già scritto, col pulsante sì).
+- **Appena l'indirizzo si modifica le coordinate si tolgono** (`input` ≠ indirizzo ricavato dalla posizione): non descrivono più quell'indirizzo.
+- **Non si invia senza un indirizzo**: `required` sul campo, un gestore `submit` sul form (ferma la propagazione, apre il campo e lo dice) e il server (`POST /richieste`: `ErroreFlusso('destinazione')` → 400 "Manca l'indirizzo di consegna", nessuna richiesta, nessuna chiamata alla mappa).
+  **Solo il sito**: l'API dell'app (`api_v1.js`) e il vecchio flusso non lo richiedono e ripiegano su `indirizzo_consegna`.
+- **Cosa salva il server** (`POST /richieste`, prima di pagare e di creare la richiesta): `geo.posizioneDellaDestinazione` → le coordinate del dispositivo se la pagina le ha mandate e valgono (riquadro dell'Italia), altrimenti la geocodifica dell'indirizzo scritto (`geo.geocodifica`, fino a ~6 s, non lancia mai); poi
+  `geo.salvaPosizioneCliente` le scrive in `users.geo_lat/geo_lng/geo_consenso = 1`. Se la mappa non trova l'indirizzo la richiesta parte lo stesso e `users.geo_*` resta com'era. **Nessuna colonna nuova**: la posizione sta sull'utente, quindi è l'ULTIMA mandata; con due richieste
+  insieme a indirizzi diversi, il tragitto di quella spedita per prima si calcola dall'ultima posizione (se serve, colonne `requests.dest_lat/dest_lng` e lo stesso nella tabella `stripe_pagamenti`).
+- **Il tragitto** si calcola alla conferma del banco (`consegna.minutiStimati`, vedi "Orari del corriere") da `users.geo_*`; **un account senza posizione (o senza consenso) usa la sede provvisoria** invece di non calcolare niente: prima il tragitto valeva 0 e l'installatore vedeva
+  solo il tempo del corriere (era il caso del cliente di prova id 2 in produzione: `geo_consenso = 0`, nessuna coordinata; le 6 ultime consegne avevano `consegna_minuti_stimati` = `corriere_minuti`).
+- Il messaggio ai corrieri (`whatsapp.datiConsegna`) scrive la `destinazione` della richiesta e le coordinate di `users.geo_*` salvate con lo stesso invio: indirizzo e posizione coincidono.
+- Testo della privacy (`src/testi_legali.js`): riga sul sito che usa la posizione per il tragitto. **Non fatto**: l'app Android non manda la posizione (e non richiede l'indirizzo). Nominatim ha una regola d'uso (1 richiesta al secondo, User-Agent): per molti utenti serve un servizio proprio.
+- **Provato** su Postgres locale usa-e-getta e nel browser incorporato (Nominatim vero): permesso negato → campo vuoto + "Usa la mia posizione", invio bloccato; posizione simulata + pulsante → "Via Puggia 22, 16131 Genova (GE)" e coordinate nel form → pagamento → `users.geo_*` e `requests.destinazione` corretti;
+  indirizzo cambiato a mano dopo la precompilazione → coordinate tolte e posizione ricavata da "Via XX Settembre 10" sul server. **Non provato**: il permesso vero su un telefono (nel browser incorporato è negato), Safari/iPhone.
+- Prove: `test/orari_corriere.test.js` (sede provvisoria), `test/server.test.js` ("posizione di consegna: …", due test; Nominatim finto `nominatim`, che intercetta `fetch` verso `nominatim.openstreetmap.org`: ogni prova che paga dal carrello chiama la geocodifica, che resta finta).
+
+**Sede provvisoria**: tutti gli installatori hanno Via Puggia 22/3, Genova (`src/sede_installatori.js`, vedi README, "Posizione"): `indirizzo_consegna` + `geo_*` con `geo_consenso = 1`, impostati da
+`scripts/imposta_installatori_puggia.js` e da `anagrafiche.iscriviCliente`; vale finché con un pagamento non arriva la posizione di un indirizzo. La sede legale resta quella dichiarata. Quando torneranno gli indirizzi veri togliere i punti d'uso.
 
 ## Home del banco: bacheca a 3 colonne (09/10/2026)
 
@@ -899,7 +916,7 @@ sono "il tempo che ci metti ad arrivare dal venditore (tappa 1, prelievo merci)"
 - **Chi vede cosa**: il banco **solo** il ritiro (pillola della home "29 min · ore HH:MM", riquadro "Ritiro" e Avanzamento della pagina dell'ordine, "ritira alle HH:MM" nel dettaglio dello Storico e nella card "In consegna", avviso a comparsa "Corriere trovato", notifica "Nuovo ordine da preparare: Il corriere ritira alle HH:MM",
   "Consegna presa da Marco: arriva da te in N minuti" nel dettaglio della richiesta); l'installatore **solo** l'arrivo (notifica "Consegna prevista entro le HH:MM (…)", "Arriva entro le HH:MM", conti alla rovescia). Il vecchio `/ordini/:id` visto da banco e agente: il banco vede il ritiro, l'agente l'arrivo.
   **Ordini nati prima di questa regola** hanno in `corriere_minuti` il tempo TOTALE: per loro il ritiro ricavato coincide con l'arrivo dal cliente (com'era mostrato al banco prima), nessuna migrazione.
-- **Il tragitto** (`src/percorso.js`, `src/consegna.js`): `consegna.minutiStimati(banco, cliente, partenzaOre)` lo calcola quando il banco CONFERMA (`richieste.rispondi`, fuori da ogni transazione; con il corriere la partenza passata è 0) dal punto vendita più vicino alla posizione dell'installatore (`users.geo_*` con consenso: oggi Via Puggia per tutti)
+- **Il tragitto** (`src/percorso.js`, `src/consegna.js`): `consegna.minutiStimati(banco, cliente, partenzaOre)` lo calcola quando il banco CONFERMA (`richieste.rispondi`, fuori da ogni transazione; con il corriere la partenza passata è 0) dal punto vendita più vicino alla posizione dell'installatore (`users.geo_*` con consenso: quella dell'indirizzo di consegna mandato col pagamento, o la sede provvisoria di Via Puggia, vedi "Posizione dell'installatore")
   con **OSRM su OpenStreetMap** (`https://router.project-osrm.org`, senza chiave, limite d'attesa 4 s, **non lancia mai**: se non risponde o manca una posizione si ripiega sulla stima in linea d'aria × 1,35 a `velocita_media_kmh`, e senza posizioni resta 0). `fonte: 'mappa' | 'stima'` dice quale. Variabili: `ROUTING_URL` (server proprio) e `ROUTING_ATTIVO=0` (spento; **`test/server.test.js` lo spegne**: le prove
   non fanno chiamate di rete). Il server pubblico di OSRM è di prova e va usato con moderazione: con molte richieste serve un OSRM proprio o un servizio a pagamento con lo stesso formato (non è Google Maps: con una chiave Google andrebbe scritto un secondo fornitore). Le coordinate di banco e installatore vanno a quel servizio.
   La chiamata sta nella conferma del banco: costa ~150-300 ms (misurato), al massimo 4 s se il servizio non risponde.

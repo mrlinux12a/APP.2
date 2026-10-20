@@ -38,6 +38,7 @@ function privacy() {
           'Dati d’uso del servizio: richieste di disponibilità, ordini, materiale richiesto, indirizzo e note di consegna, ricevute, notifiche.',
           'Dati dei pagamenti: l’importo, la data e l’esito. I dati della carta sono gestiti direttamente da Stripe e non passano dai nostri server: noi conserviamo solo la marca e le ultime quattro cifre.',
           'Dati tecnici dell’app: l’identificativo che serve a inviare le notifiche al tuo telefono e il tipo di dispositivo.',
+          'Sul sito, solo se lo consenti al browser: la posizione del dispositivo, usata per precompilare l’indirizzo di consegna e per calcolare il tragitto della merce dal distributore fino a te.',
         ],
         paragrafi: ['L’app non raccoglie la posizione del dispositivo, non usa la fotocamera né il microfono e non contiene pubblicità né strumenti di tracciamento.'],
       },

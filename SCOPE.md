@@ -64,8 +64,10 @@ Aggiornato al 19/10/2026 (app Android completata; il resto com'era al 04/10/2026
 - **Notifiche in-app** raggruppate per Ordini / Richieste / Approvazioni con sottostati
   (una richiesta confermata diventa un ordine e passa in Ordini), promuovibili a notifica di
   sistema mentre il sito è aperto.
-- **Posizione degli installatori fissa** (Via Puggia 22/3, Genova) e dei banchi del punto vendita: la
-  posizione del dispositivo non si raccoglie più (dal 02/10/2026). Le **mappe sono oggi nascoste** via CSS.
+- **Posizione degli installatori**: sul sito è quella dell'indirizzo di consegna mandato col pagamento (dal 20/10/2026: precompilato dalla
+  posizione del dispositivo, o scritto a mano; senza indirizzo non si invia; serve al tragitto banco → installatore); finché non c'è vale la
+  sede provvisoria (Via Puggia 22/3, Genova). L'app Android non la manda ancora.
+  I banchi usano il punto vendita. Le **mappe sono oggi nascoste** via CSS.
 - **Isolamento dati**: un cliente vede solo i propri ordini, un distributore solo le proprie
   richieste e gli ordini assegnati a lui.
 - **Sessioni su database** (un riavvio non scollega nessuno) e menu account in alto a destra.
@@ -142,6 +144,8 @@ Aggiornato al 19/10/2026 (app Android completata; il resto com'era al 04/10/2026
   accettare o rifiutare.
 - 02/10/2026 — **Tutti gli installatori in Via Puggia 22/3** e **niente più posizione del dispositivo**
   (sostituisce le scelte di agosto sulla geolocalizzazione con consenso).
+- 20/10/2026 — **La posizione torna sul sito, legata all'indirizzo di consegna del pagamento** (tragitto banco → installatore, si somma ai minuti
+  del corriere). La sede in Via Puggia resta come ripiego per chi non ne ha una.
 - **Solo tema chiaro**, su app (29/09/2026) e sito (02/10/2026): niente modalità scura né interruttore.
 - 29/09/2026 — **Il sito passa da Vercel a una VPS**, con lo stesso Supabase; **l'app usa lo stesso
   database del sito**: niente DB di test separato.

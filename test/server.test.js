@@ -268,6 +268,8 @@ const utenteBanco = {
   password_hash: bcrypt.hashSync('password-di-prova', 4),
 };
 const distributoreBanco = { id: 2, nome: 'BOREA SRL', filiale: 'Banco Genova Fegino', zona: 'Genova', attivo: 1 };
+// Posizioni del dispositivo dell'installatore salvate da POST /api/posizione (parametri di ogni UPDATE users SET geo_lat ...).
+const posizioniProva = [];
 // Account dell'installatore (recupero password, cambio password, eliminazione): clienti di prova, la tabella dei link di recupero, le scritture e cosa c'è "in corso".
 // Il cliente "prova" è quello degli altri test (stesso id 1): qui si aggiungono solo i dati per cercarlo per email.
 const accountProva = {
@@ -537,6 +539,10 @@ function esegui(sql, p, modo) {
     accountProva.scritture.push({ s, p });
     return { changes: 1 };
   }
+  if (/^UPDATE users SET geo_lat = \?, geo_lng = \?, geo_precisione = \?, geo_consenso = 1, geo_aggiornata_il = NOW\(\) WHERE id = \? AND ruolo = 'cliente'$/.test(s)) {
+    posizioniProva.push(p);
+    return { changes: 1 };
+  }
   if (/FROM config WHERE chiave/.test(s)) return config[p[0]] !== undefined ? { valore: config[p[0]] } : null;
   if (/^SELECT \* FROM distributors WHERE attivo = 1 ORDER BY nome/.test(s)) return modo === 'all' ? banchiAttiviProva.righe : banchiAttiviProva.righe[0] || null;
   if (/FROM users WHERE username/.test(s)) return p[0] === 'prova' ? utente : null;
@@ -585,6 +591,21 @@ console.log = () => {};
 console.warn = () => {};
 console.error = (...a) => erroriServer.push(a.map(String).join(' ').slice(0, 200));
 require(path.join(radice, 'server.js'));
+
+// Nominatim finto: la posizione dell'indirizzo di consegna (cerca) e l'indirizzo dalla posizione (inversa) non escono mai sulla rete. Il resto passa al fetch vero
+// (le prove parlano col server su 127.0.0.1). `nominatim.cerca`/`inversa` si cambiano nelle prove; `chiamate` dice cosa è stato chiesto.
+const nominatim = {
+  chiamate: [],
+  cerca: [{ lat: '44.4056', lon: '8.9463', display_name: 'Via Prova 1, Genova' }],
+  inversa: { address: { country_code: 'it', road: 'Via Puggia', house_number: '22/3', postcode: '16131', city: 'Genova', 'ISO3166-2-lvl6': 'IT-GE' } },
+};
+const fetchVero = globalThis.fetch;
+globalThis.fetch = (url, opzioni) => {
+  if (!/nominatim\.openstreetmap\.org/.test(String(url))) return fetchVero(url, opzioni);
+  nominatim.chiamate.push(String(url));
+  const corpo = /\/reverse\?/.test(String(url)) ? nominatim.inversa : nominatim.cerca;
+  return Promise.resolve({ ok: !!corpo, json: async () => corpo });
+};
 
 const base = 'http://127.0.0.1:' + PORTA;
 let cookie = '';
@@ -802,6 +823,123 @@ test('carrello: imposta, tetto sulla quantità, id non valido o inesistente', as
   assert.equal(d.pezzi, 9999, "l'id inventato non resta nel carrello");
   r = await chiedi('/api/carrello/imposta', json({ id: 1, qty: 0 }));
   assert.equal((await r.json()).pezzi, 0);
+});
+
+test('posizione di consegna: l\'indirizzo del carrello parte VUOTO e si precompila dalla posizione (GET /api/indirizzo); non si invia senza un indirizzo', async () => {
+  await chiedi('/api/carrello/imposta', json({ id: 1, qty: 5 }));
+  const t = await (await chiedi('/carrello')).text();
+  // il campo non è più precompilato con l'indirizzo abituale (Via Puggia): vuoto e obbligatorio, con le coordinate nascoste e la riga di stato della posizione
+  assert.match(t, /<input type="text" id="destinazione" name="destinazione" value="" required/);
+  assert.doesNotMatch(t, /value="Via Puggia 22\/3, Genova"/);
+  assert.match(t, /<input type="hidden" name="dest_lat" value="" data-dest-lat>/);
+  assert.match(t, /<input type="hidden" name="dest_lng" value="" data-dest-lng>/);
+  assert.match(t, /<div class="consegna-pos" data-consegna-pos hidden>/);
+  assert.match(t, /data-consegna-pos-usa>Usa la mia posizione<\/button>/);
+  assert.match(t, /<button type="button" class="btn-cambia" data-consegna-cambia>Fatto<\/button>/, 'senza indirizzo il campo è aperto');
+  await chiedi('/api/carrello/imposta', json({ id: 1, qty: 0 }));
+
+  // dalla posizione all'indirizzo: la geocodifica inversa, già nel formato del campo ("Via, civico, CAP città (provincia)")
+  nominatim.chiamate.length = 0;
+  let r = await chiedi('/api/indirizzo?lat=44.4019&lng=8.9742');
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), { ok: true, indirizzo: 'Via Puggia 22/3, 16131 Genova (GE)' });
+  assert.match(nominatim.chiamate[0], /\/reverse\?.*lat=44\.4019.*lon=8\.9742/);
+  // senza una via, fuori dall'Italia o con coordinate che non valgono: nessun indirizzo, il campo resta da scrivere
+  const inversaPrima = nominatim.inversa;
+  try {
+    nominatim.inversa = { address: { country_code: 'it', city: 'Genova' } };
+    assert.deepEqual(await (await chiedi('/api/indirizzo?lat=44.4&lng=8.9')).json(), { ok: false, indirizzo: '' });
+    nominatim.inversa = { address: { country_code: 'fr', road: 'Rue X', city: 'Nice' } };
+    assert.deepEqual(await (await chiedi('/api/indirizzo?lat=44.4&lng=8.9')).json(), { ok: false, indirizzo: '' });
+    nominatim.inversa = null; // il servizio non risponde bene
+    assert.deepEqual(await (await chiedi('/api/indirizzo?lat=44.4&lng=8.9')).json(), { ok: false, indirizzo: '' });
+  } finally {
+    nominatim.inversa = inversaPrima;
+  }
+  nominatim.chiamate.length = 0;
+  for (const q of ['', '?lat=abc&lng=8.9', '?lat=51.5&lng=-0.12', '?lat=0&lng=0']) {
+    assert.deepEqual(await (await chiedi('/api/indirizzo' + q)).json(), { ok: false, indirizzo: '' }, q);
+  }
+  assert.deepEqual(nominatim.chiamate, [], 'coordinate che non valgono non arrivano nemmeno al servizio');
+  // solo il cliente loggato
+  const conSessione = cookie;
+  cookie = '';
+  try {
+    assert.equal((await chiedi('/api/indirizzo?lat=44.4&lng=8.9')).status, 401);
+  } finally {
+    cookie = conSessione;
+  }
+
+  // lo script: coordinate nascoste, tolte se si modifica l'indirizzo, e nessun invio senza indirizzo
+  const js = await (await chiedi('/app.js')).text();
+  assert.match(js, /navigator\.geolocation\.getCurrentPosition/);
+  assert.match(js, /fetch\('\/api\/indirizzo\?lat='/);
+  assert.match(js, /if \(campo\.value\.trim\(\) !== daPosizione\) \{ destLat\.value = ''; destLng\.value = ''; \}/);
+  assert.match(js, /form\.addEventListener\('submit'[\s\S]*?if \(campo\.value\.trim\(\)\) return;[\s\S]*?e\.preventDefault\(\);/);
+  assert.doesNotMatch(js, /\/api\/posizione/, 'la posizione non si legge più in background: viaggia solo col pagamento');
+});
+
+test('posizione di consegna: col pagamento parte la posizione di quell\'indirizzo (quella del dispositivo, o ricavata dall\'indirizzo scritto); senza indirizzo non si invia nulla', async () => {
+  const conCarrello = async (prova) => {
+    await chiedi('/api/carrello/imposta', json({ id: 3, qty: 1 }));
+    try { await prova(); } finally { await chiedi('/api/carrello/imposta', json({ id: 3, qty: 0 })); }
+  };
+  const nuove = (da) => registro.slice(da).filter((q) => /^INSERT INTO requests/.test(q));
+  await conCarrello(async () => {
+    // 1. nessun indirizzo (vuoto o solo spazi, con o senza coordinate): errore, niente richiesta, niente posizione
+    posizioniProva.length = 0;
+    nominatim.chiamate.length = 0;
+    let prima = registro.length;
+    for (const corpo of [{ modo: 'imposta' }, { modo: 'imposta', destinazione: '   ' }, { modo: 'imposta', destinazione: '', dest_lat: '44.4', dest_lng: '8.9' }]) {
+      const r = await chiedi('/richieste', form(corpo));
+      assert.equal(r.status, 400, JSON.stringify(corpo));
+      const t = await r.text();
+      assert.match(t, /Manca l’indirizzo di consegna/);
+      assert.match(t, /Torna al riepilogo/);
+    }
+    assert.deepEqual(nuove(prima), [], 'nessuna richiesta');
+    assert.deepEqual(posizioniProva, []);
+    assert.deepEqual(nominatim.chiamate, []);
+
+    // 2. indirizzo ricavato dalla posizione del dispositivo: le sue coordinate vanno salvate così come sono, senza altre chiamate alla mappa
+    prima = registro.length;
+    let r = await chiedi('/richieste', form({ modo: 'imposta', chiave_invio: 'pos-dispositivo-1', destinazione: 'Via Puggia 22/3, 16131 Genova (GE)', dest_lat: '44.4019', dest_lng: '8.9742' }));
+    assert.equal(r.status, 302);
+    assert.deepEqual(posizioniProva, [[44.4019, 8.9742, null, 1]], 'lat, lng, nessuna precisione, id del cliente');
+    assert.deepEqual(nominatim.chiamate, []);
+    assert.equal(nuove(prima).length, 1, 'la richiesta parte');
+    await chiedi('/api/carrello/imposta', json({ id: 3, qty: 1 }));
+
+    // 3. indirizzo scritto a mano (nessuna coordinata): la posizione si ricava dall'indirizzo
+    posizioniProva.length = 0;
+    r = await chiedi('/richieste', form({ modo: 'imposta', chiave_invio: 'pos-scritto-1', destinazione: 'Via Prova 1, 16100 Genova' }));
+    assert.equal(r.status, 302);
+    assert.deepEqual(posizioniProva, [[44.4056, 8.9463, null, 1]]);
+    assert.equal(nominatim.chiamate.length, 1);
+    assert.match(nominatim.chiamate[0], /\/search\?.*q=Via\+Prova\+1%2C\+16100\+Genova%2C\+Italia/);
+    await chiedi('/api/carrello/imposta', json({ id: 3, qty: 1 }));
+
+    // 4. coordinate che non valgono (fuori Italia, testo): si ignorano e si ricava dall'indirizzo
+    posizioniProva.length = 0;
+    r = await chiedi('/richieste', form({ modo: 'imposta', chiave_invio: 'pos-strane-1', destinazione: 'Via Prova 1, Genova', dest_lat: '51.5', dest_lng: '-0.12' }));
+    assert.equal(r.status, 302);
+    assert.deepEqual(posizioniProva, [[44.4056, 8.9463, null, 1]]);
+    await chiedi('/api/carrello/imposta', json({ id: 3, qty: 1 }));
+
+    // 5. la mappa non trova l'indirizzo: la richiesta parte comunque e la posizione resta quella di prima (nessuna scrittura)
+    posizioniProva.length = 0;
+    const cercaPrima = nominatim.cerca;
+    nominatim.cerca = [];
+    try {
+      prima = registro.length;
+      r = await chiedi('/richieste', form({ modo: 'imposta', chiave_invio: 'pos-introvabile-1', destinazione: 'Via Che Non Esiste 99' }));
+      assert.equal(r.status, 302);
+      assert.deepEqual(posizioniProva, []);
+      assert.equal(nuove(prima).length, 1);
+    } finally {
+      nominatim.cerca = cercaPrima;
+    }
+  });
 });
 
 test('carrello: aggiungi e batch con valori strani', async () => {
@@ -1644,13 +1782,15 @@ test('richiesta in attesa: righe e "Merce" a prezzo del banco, scheda "Pagamenti
     assert.match(t, /<form method="POST" action="\/richieste\/6\/annulla" data-annulla-richiesta>/);
     assert.match(t, /Annulla la richiesta/);
     assert.doesNotMatch(t, /Elimina definitivamente|\/richieste\/6\/elimina/);
-    assert.equal((await (await chiedi('/api/richieste/6')).json()).annullabile, true);
+    let api = await (await chiedi('/api/richieste/6')).json();
+    assert.equal(api.annullabile, true);
     // un banco ha confermato (anche se il corriere non ha ancora risposto: all'installatore risulta ancora "in attesa"): "Annulla la richiesta"
     // non c'è più, e il controllo periodico della pagina lo dice (la pagina lo nasconde da sola)
     storico.risposte[6] = [rispostaProva(6, { esito: 'confermato', corriere_stato: 'in_attesa' })];
     t = await (await chiedi('/richieste/6')).text();
     assert.match(t, /<form method="POST" action="\/richieste\/6\/annulla" data-annulla-richiesta hidden>/);
-    assert.equal((await (await chiedi('/api/richieste/6')).json()).annullabile, false);
+    api = await (await chiedi('/api/richieste/6')).json();
+    assert.equal(api.annullabile, false);
     storico.risposte[6] = [rispostaProva(6)];
     // con più ditte interpellate non c'è un nome solo: "al banco"
     storico.risposte[6] = [rispostaProva(6), rispostaProva(6, { id: 2, distributore_nome: 'AFIS SPA', ditta_id: 7 })];

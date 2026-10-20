@@ -417,6 +417,80 @@ const Minuteria = (function () {
       campo.addEventListener('keydown', function (e) {
         if (e.key === 'Enter') { e.preventDefault(); conferma(); }
       });
+
+      // Posizione di consegna: se il dispositivo la dà, l'indirizzo si precompila da lì (geocodifica inversa, GET /api/indirizzo) e le sue coordinate partono con la
+      // richiesta (dest_lat/dest_lng: da quelle il server calcola il tragitto del corriere). Se non c'è, il campo resta vuoto e l'indirizzo lo scrive l'installatore
+      // (il server ne ricava la posizione). Appena si modifica il testo le coordinate si tolgono: non descrivono più quell'indirizzo. Non si paga senza un indirizzo.
+      const form = campo.form;
+      const destLat = consegna.querySelector('[data-dest-lat]');
+      const destLng = consegna.querySelector('[data-dest-lng]');
+      const posizione = consegna.querySelector('[data-consegna-pos]');
+      const posizioneTesto = consegna.querySelector('[data-consegna-pos-testo]');
+      const posizioneUsa = consegna.querySelector('[data-consegna-pos-usa]');
+      if (form && destLat && destLng && posizione && posizioneTesto && posizioneUsa) {
+        let daPosizione = ''; // l'indirizzo ricavato dalla posizione, per accorgersi che è stato cambiato
+        const dice = function (testo, conPulsante, etichetta) {
+          posizione.hidden = !testo;
+          posizioneTesto.textContent = testo || '';
+          posizioneUsa.hidden = !conPulsante;
+          if (etichetta) posizioneUsa.textContent = etichetta;
+        };
+        campo.addEventListener('input', function () {
+          if (campo.value.trim() !== daPosizione) { destLat.value = ''; destLng.value = ''; }
+        });
+
+        let incorso = false;
+        const cercaPosizione = function (daClic) {
+          if (incorso) return;
+          if (!('geolocation' in navigator) || !window.isSecureContext) {
+            if (daClic) dice('Il browser non legge la posizione su questa connessione: scrivi l’indirizzo.', false);
+            return;
+          }
+          incorso = true;
+          dice('Cerco la tua posizione…', false);
+          navigator.geolocation.getCurrentPosition(function (p) {
+            const lat = p.coords.latitude;
+            const lng = p.coords.longitude;
+            fetch('/api/indirizzo?lat=' + encodeURIComponent(lat) + '&lng=' + encodeURIComponent(lng))
+              .then(leggiJson)
+              .then(function (dati) {
+                incorso = false;
+                if (!dati || !dati.ok || !dati.indirizzo) {
+                  dice('Ho trovato la posizione ma non l’indirizzo: scrivilo qui sopra.', true, 'Riprova');
+                  return;
+                }
+                // Col clic si sostituisce quello che c'era; da sola la pagina non sovrascrive mai un indirizzo già scritto.
+                if (campo.value.trim() && !daClic) { dice('', false); return; }
+                campo.value = dati.indirizzo;
+                daPosizione = dati.indirizzo;
+                destLat.value = String(lat);
+                destLng.value = String(lng);
+                dice('', false);
+                conferma();
+              })
+              .catch(function (errore) {
+                incorso = false;
+                if (!errore || !errore.sessioneScaduta) dice('Non riesco a ricavare l’indirizzo dalla posizione: scrivilo qui sopra.', true, 'Riprova');
+              });
+          }, function (errore) {
+            incorso = false;
+            if (errore && errore.code === 1) dice('Posizione non attiva: scrivi l’indirizzo, oppure attivala e tocca il pulsante.', true, 'Usa la mia posizione');
+            else dice('Non riesco a leggere la posizione: scrivi l’indirizzo.', true, 'Riprova');
+          }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+        };
+        posizioneUsa.addEventListener('click', function () { cercaPosizione(true); });
+
+        // Senza indirizzo non si invia: il campo si apre e dice cosa manca. Il gestore del form sta sul form (prima di quello sul documento) e ferma la propagazione.
+        form.addEventListener('submit', function (e) {
+          if (campo.value.trim()) return;
+          e.preventDefault();
+          e.stopPropagation();
+          apri();
+          dice('Scrivi l’indirizzo di consegna (o attiva la posizione) per poter pagare.', true, 'Usa la mia posizione');
+        });
+
+        if (!campo.value.trim()) cercaPosizione(false);
+      }
     }
 
     const nota = document.querySelector('[data-nota]');

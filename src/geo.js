@@ -1,8 +1,8 @@
 const db = require('../db');
 
-// Posizione e distanze. La posizione del dispositivo non si raccoglie più: quella di ogni
-// installatore è fissa (src/sede_installatori.js) e quella dei banchi è del punto vendita, quindi
-// qui restano solo la lettura e il calcolo delle distanze.
+// Posizione e distanze. La posizione di un installatore è quella dell'indirizzo di consegna che manda col pagamento (posizioneDellaDestinazione, salvata da
+// salvaPosizioneCliente); finché non ne ha mandata una vale la sede fissa di src/sede_installatori.js. Quella dei banchi è del punto vendita. Qui anche la
+// lettura e il calcolo delle distanze.
 
 async function statoUtente(userId) {
   const u = await db
@@ -93,4 +93,62 @@ function posizioneValida(lat, lng) {
   return Number.isFinite(lat) && Number.isFinite(lng) && lat >= 35 && lat <= 48 && lng >= 6 && lng <= 19;
 }
 
-module.exports = { statoUtente, distanzaKm, formattaDistanza, geocodifica, ricercheGeocodifica, posizioneValida };
+// Dalla posizione del dispositivo all'indirizzo (Nominatim, geocodifica inversa): serve al carrello, che con la posizione precompila "Consegna in cantiere".
+// Ritorna "Via Puggia 22/3, 16131 Genova (GE)" o null (fuori dall'Italia, senza una via, rete assente). NON lancia mai. `opzioni.fetch` serve alle prove.
+const NOMINATIM_INVERSA_URL = 'https://nominatim.openstreetmap.org/reverse';
+async function indirizzoDaPosizione(lat, lng, opzioni = {}) {
+  const chiama = opzioni.fetch || (typeof fetch === 'function' ? fetch : null);
+  if (!chiama || !posizioneValida(lat, lng)) return null;
+  const controllo = new AbortController();
+  const timer = setTimeout(() => controllo.abort(), opzioni.attesaMs || ATTESA_GEOCODIFICA_MS);
+  try {
+    const url = NOMINATIM_INVERSA_URL + '?' + new URLSearchParams({ lat: String(lat), lon: String(lng), format: 'jsonv2', zoom: '18', addressdetails: '1' }).toString();
+    const risposta = await chiama(url, { signal: controllo.signal, headers: { 'User-Agent': 'Minuteria/1.0 (indirizzo di consegna)', 'Accept-Language': 'it' } });
+    if (!risposta || !risposta.ok) return null;
+    const a = (await risposta.json()).address;
+    if (!a || a.country_code !== 'it') return null;
+    const via = a.road || a.pedestrian || a.footway || a.path || '';
+    if (!via) return null;
+    const citta = a.city || a.town || a.village || a.municipality || '';
+    const provincia = String(a['ISO3166-2-lvl6'] || '').replace(/^IT-/, '');
+    const luogo = [a.postcode, citta].filter(Boolean).join(' ') + (provincia && citta ? ' (' + provincia + ')' : '');
+    return [[via, a.house_number].filter(Boolean).join(' '), luogo].filter(Boolean).join(', ');
+  } catch (e) {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// La posizione dell'indirizzo di consegna che l'installatore manda col pagamento: quella del dispositivo se il carrello ha mandato le coordinate (valgono solo
+// se l'indirizzo è ancora quello ricavato da lei: lo script le toglie appena lo si modifica), altrimenti la ricava dall'indirizzo scritto. Ritorna { lat, lng } o null.
+async function posizioneDellaDestinazione(destinazione, lat, lng, opzioni = {}) {
+  const numero = (v) => (typeof v === 'number' || (typeof v === 'string' && v.trim() !== '') ? Number(v) : NaN);
+  const la = numero(lat);
+  const lo = numero(lng);
+  if (posizioneValida(la, lo)) return { lat: la, lng: lo };
+  const trovata = await geocodifica({ indirizzo: String(destinazione || '').trim() }, opzioni);
+  return trovata ? { lat: trovata.lat, lng: trovata.lng } : null;
+}
+
+// Salva la posizione di consegna dell'installatore (users.geo_*): è da qui che si calcola il tragitto banco -> installatore. Sostituisce quella di prima (la sede
+// fissa di src/sede_installatori.js, che resta solo come ripiego per chi non ne ha una). È l'ultima mandata: con due richieste insieme vale quella dell'ultima.
+// Solo numeri veri (un testo o un elenco non valgono), dentro il riquadro dell'Italia. `precisione` (metri) è facoltativa. Ritorna false se non vale.
+async function salvaPosizioneCliente(userId, lat, lng, precisione) {
+  const numero = (v) => (typeof v === 'number' || (typeof v === 'string' && v.trim() !== '') ? Number(v) : NaN);
+  const la = numero(lat);
+  const lo = numero(lng);
+  if (!posizioneValida(la, lo)) return false;
+  const p = numero(precisione);
+  const precisioneM = Number.isFinite(p) && p >= 0 ? Math.min(Math.round(p), 1000000) : null;
+  const info = await db
+    .prepare(
+      `UPDATE users
+          SET geo_lat = ?, geo_lng = ?, geo_precisione = ?, geo_consenso = 1, geo_aggiornata_il = NOW()
+        WHERE id = ? AND ruolo = 'cliente'`
+    )
+    .run(la, lo, precisioneM, userId);
+  return info.changes > 0;
+}
+
+module.exports = { statoUtente, distanzaKm, formattaDistanza, geocodifica, ricercheGeocodifica, posizioneValida, salvaPosizioneCliente, indirizzoDaPosizione, posizioneDellaDestinazione };

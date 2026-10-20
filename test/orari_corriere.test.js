@@ -170,15 +170,37 @@ test('minutiStimati: se la mappa non risponde si ripiega sulla stima in linea d\
   assert.equal(stima.minuti, stima.viaggio);
 });
 
-test('minutiStimati: senza le posizioni (o senza consenso) non chiama la mappa e resta il solo tempo dichiarato', async () => {
+test('minutiStimati: un account senza posizione (nessuna mandata dal dispositivo, o senza consenso) parte dalla sede provvisoria, non resta senza tragitto', async () => {
+  const sede = require('../src/sede_installatori');
+  let visto = null;
+  conMappa(async (da, a) => { visto = { da, a }; return { minuti: 21, km: 8.1 }; });
+  const prima = cliente;
+  try {
+    cliente = { lat: null, lng: null, geo_consenso: 0 };
+    let stima = await consegna.minutiStimati(2, 7, 0);
+    assert.deepEqual([stima.minuti, stima.viaggio, stima.stimato, stima.fonte], [21, 21, true, 'mappa'], 'il tragitto c\'è comunque');
+    assert.deepEqual(visto.a, { lat: sede.lat, lng: sede.lng }, 'arriva alla sede provvisoria di tutti gli installatori');
+    cliente = { lat: 45.1, lng: 9.1, geo_consenso: 0 }; // una posizione senza consenso non vale: si usa la sede, non quella
+    await consegna.minutiStimati(2, 7, 0);
+    assert.deepEqual(visto.a, { lat: sede.lat, lng: sede.lng });
+    cliente = { lat: 45.1, lng: 9.1, geo_consenso: 1 }; // quella mandata dal dispositivo vince sulla sede
+    await consegna.minutiStimati(2, 7, 0);
+    assert.deepEqual(visto.a, cliente);
+  } finally {
+    cliente = prima;
+  }
+});
+
+test('minutiStimati: senza il cliente o senza la posizione del banco non chiama la mappa e resta il solo tempo dichiarato', async () => {
   let chiamata = 0;
   conMappa(async () => { chiamata++; return { minuti: 99, km: 1 }; });
   const prima = { cliente, puntiVendita };
   try {
-    cliente = { lat: null, lng: null, geo_consenso: 0 };
+    cliente = null; // account che non c'è
     let stima = await consegna.minutiStimati(2, 7, 2);
     assert.deepEqual([stima.minuti, stima.viaggio, stima.stimato], [120, null, false]);
-    cliente = { lat: 44.4284, lng: 8.9438, geo_consenso: 0 }; // la posizione c'è ma senza consenso non vale
+    cliente = prima.cliente;
+    puntiVendita = []; // e il banco non ha nessuna posizione (neanche la riga di distributors, che il DB finto non ha)
     stima = await consegna.minutiStimati(2, 7, 0);
     assert.deepEqual([stima.minuti, stima.stimato], [0, false]);
   } finally {

@@ -182,11 +182,12 @@ async function datiRitiro(distributorId) {
   };
 }
 
-// Dove si consegna: l'indirizzo dell'installatore (per ora uguale per tutti, vedi sede_installatori.js).
-async function datiConsegna(clienteId) {
+// Dove si consegna: l'indirizzo scritto nel carrello (`destinazione` della richiesta) e la posizione che l'installatore ha mandato con quello stesso invio
+// (users.geo_*). Per le richieste senza destinazione (app, vecchio flusso) l'indirizzo di consegna abituale.
+async function datiConsegna(clienteId, destinazione) {
   const c = await db.prepare('SELECT * FROM users WHERE id = ?').get(clienteId);
   return {
-    indirizzo: (c.indirizzo_consegna || '').trim() || format.indirizzoCompleto(c),
+    indirizzo: String(destinazione || '').trim() || (c.indirizzo_consegna || '').trim() || format.indirizzoCompleto(c),
     lat: c.geo_lat,
     lng: c.geo_lng,
   };
@@ -205,7 +206,7 @@ async function accodaRitiroConsegna(requestId, responseId) {
   const testo = testoRitiroConsegna({
     richiestaId: richiesta.id,
     banco: await datiRitiro(risposta.distributor_id),
-    consegnaA: await datiConsegna(richiesta.cliente_id),
+    consegnaA: await datiConsegna(richiesta.cliente_id, richiesta.destinazione),
   });
   const info = await db
     .prepare(`INSERT INTO whatsapp_messaggi (request_id, response_id, tipo, testo, istanza) VALUES (?, ?, 'ritiro_consegna', ?, ?)`)

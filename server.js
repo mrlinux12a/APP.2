@@ -916,6 +916,13 @@ app.post('/api/carrello/imposta', requireRole('cliente'), async (req, res) => {
   });
 });
 
+// Dalla posizione del dispositivo all'indirizzo: il carrello (blocco "Carrello: indirizzo di consegna" di public/app.js) ne precompila "Consegna in cantiere".
+// Senza una via trovata (o fuori dall'Italia) `indirizzo` è vuoto e il campo resta da scrivere a mano.
+app.get('/api/indirizzo', requireRole('cliente'), async (req, res) => {
+  const indirizzo = await geo.indirizzoDaPosizione(Number(req.query.lat), Number(req.query.lng));
+  res.json({ ok: !!indirizzo, indirizzo: indirizzo || '' });
+});
+
 app.post('/carrello', requireRole('cliente'), async (req, res) => {
   aggiornaCarrelloDaForm(req, req.body.modo === 'imposta' ? 'imposta' : 'aggiungi');
   // "Procedi" non manda più la richiesta: porta al riepilogo, dove si conferma.
@@ -990,6 +997,15 @@ app.post('/richieste', requireRole('cliente'), async (req, res) => {
   aggiornaCarrelloDaForm(req, req.body && req.body.modo === 'imposta' ? 'imposta' : 'aggiungi');
   let requestId;
   try {
+    // Non si invia senza un indirizzo di consegna (la pagina lo precompila dalla posizione, se c'è; altrimenti è vuoto e lo scrive l'installatore).
+    const destinazione = String((req.body && req.body.destinazione) || '').trim();
+    if (!destinazione) {
+      throw new flusso.ErroreFlusso('destinazione', 'Manca l’indirizzo di consegna', 'Scrivi dove consegnare il materiale (via, numero, CAP, città) prima di pagare.');
+    }
+    // La posizione per il tragitto banco -> installatore è quella di questo indirizzo: le coordinate del dispositivo, se la pagina le ha mandate (indirizzo
+    // preso dalla posizione), altrimenti quelle dell'indirizzo scritto. Se non si trovano resta l'ultima posizione nota (o la sede provvisoria).
+    const posizione = await geo.posizioneDellaDestinazione(destinazione, req.body.dest_lat, req.body.dest_lng);
+    if (posizione) await geo.salvaPosizioneCliente(req.session.user.id, posizione.lat, posizione.lng, null);
     // `chiave_invio` è scritta nella pagina del carrello: la stessa pagina dà una richiesta sola, comunque si clicchi.
     const dati = {
       destinazione: req.body && req.body.destinazione,

@@ -463,12 +463,18 @@ importa insieme al prodotto e compare come **voce separata** in riepilogo e ordi
 
 ## Posizione
 
-La posizione del dispositivo **non si raccoglie più**, né sul sito né nell'app. Per ora tutti gli
-installatori stanno in **Via Puggia 22/3, Genova** (`src/sede_installatori.js`): è il loro indirizzo di
-consegna e la posizione da cui si calcolano distanza e tragitto. I banchi usano il punto vendita
+**Sul sito** la posizione dell'installatore è quella dell'**indirizzo di consegna che manda nel form di pagamento** del carrello.
+L'indirizzo parte vuoto: se il dispositivo dà la posizione (`navigator.geolocation`, serve HTTPS o localhost) il campo si
+precompila da lì (`GET /api/indirizzo`, OpenStreetMap) e le coordinate partono col pagamento; altrimenti lo scrive
+l'installatore e il server ricava la posizione dall'indirizzo. **Senza un indirizzo non si può inviare.** Da quella posizione,
+quando il banco accetta, si calcola il tragitto banco → installatore che si somma ai minuti del corriere. **L'app Android non
+la manda ancora.**
+
+Finché un account non ne ha una, vale la sede provvisoria: tutti gli installatori in **Via Puggia 22/3,
+Genova** (`src/sede_installatori.js`), usata anche come indirizzo di consegna. I banchi usano il punto vendita
 (`store_locations`). Chi è già iscritto si allinea con `node scripts/imposta_installatori_puggia.js`
-(prova a secco, `--applica` per confermare); chi si iscrive da ora la riceve da solo. Le stime di
-consegna usano la distanza in linea d'aria (`src/consegna.js`).
+(prova a secco, `--applica` per confermare); chi si iscrive da ora la riceve da solo. Il tragitto lo calcola un servizio di
+mappe, con la distanza in linea d'aria come ripiego (`src/consegna.js`, `src/percorso.js`).
 
 Le mappe usano Leaflet servito dal progetto (`public/vendor/leaflet`) con tasselli
 OpenStreetMap, ma **oggi le mappe sono nascoste** via CSS (ultima regola di

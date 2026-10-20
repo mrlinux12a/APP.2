@@ -1,6 +1,7 @@
 const db = require('../db');
 const geo = require('./geo');
 const percorso = require('./percorso');
+const sede = require('./sede_installatori');
 
 // Quanto ci mette la merce ad arrivare dal banco all'installatore.
 //
@@ -45,10 +46,14 @@ async function partenzaPiuVicina(distributorId, posizioneCliente) {
 async function minutiStimati(distributorId, clienteId, partenzaOre) {
   const partenzaMinuti = Math.max(0, Math.round((parseFloat(partenzaOre) || 0) * 60));
 
+  // La posizione è l'ultima mandata dal dispositivo dell'installatore (POST /api/posizione). Un account che non ne ha ancora mandata nessuna (o ha negato il
+  // permesso) usa la sede provvisoria di tutti gli installatori (src/sede_installatori.js): meglio un tragitto approssimato che nessun tragitto, perché
+  // senza questo all'installatore si direbbe solo il tempo del corriere.
   const cliente = await db
     .prepare('SELECT geo_lat AS lat, geo_lng AS lng, geo_consenso FROM users WHERE id = ?')
     .get(clienteId);
-  const posizione = cliente && cliente.geo_consenso && cliente.lat !== null ? cliente : null;
+  const dalDispositivo = cliente && cliente.geo_consenso && cliente.lat !== null ? cliente : null;
+  const posizione = dalDispositivo || (cliente ? { lat: sede.lat, lng: sede.lng } : null);
   const partenza = await partenzaPiuVicina(distributorId, posizione);
 
   const km = geo.distanzaKm(posizione, partenza);

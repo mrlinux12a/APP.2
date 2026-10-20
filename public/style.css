@@ -5606,3 +5606,12 @@ html.misura-aperta { overflow: hidden; }
 .an-elimina-btn:active { background: #973030; }
 .an-annulla-link { display: flex; align-items: center; justify-content: center; min-height: 48px; margin-top: 6px; color: var(--grigio); font-size: 15px; font-weight: 700; text-decoration: none; }
 .an-torna { margin-top: 12px; }
+
+/* Carrello: com'è andata la posizione di consegna (public/app.js, "Carrello: indirizzo di consegna"). */
+.consegna-pos { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 14px; line-height: 1.35; color: var(--arancio); }
+.consegna-pos > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.consegna-pos-usa {
+  flex: none; min-height: 44px; padding: 0 14px; border: 1px solid var(--arancio); border-radius: 22px;
+  background: var(--surface); color: var(--arancio); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.consegna-pos-usa:active { background: var(--arancio-chiaro); }
