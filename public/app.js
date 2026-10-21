@@ -3230,3 +3230,22 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
     }
   }
 })();
+
+/* iPhone / web app installata: dopo che la tastiera si chiude (ricerca, quantità, indirizzo) iOS a volte lascia il "viewport del layout" accorciato e gli
+   elementi fixed, come la barra in basso, restano a metà schermo. Riportare lo scorrimento sulla stessa posizione e far ridisegnare la barra lo corregge. */
+(function () {
+  const ua = navigator.userAgent || '';
+  const suIos = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  if (!suIos) return;
+  const riallinea = function () {
+    window.scrollTo(window.pageXOffset, window.pageYOffset);
+    const barra = document.querySelector('.navbar');
+    if (barra) {
+      barra.style.transform = 'translate3d(0,0,0)';
+      requestAnimationFrame(function () { barra.style.transform = ''; });
+    }
+  };
+  document.addEventListener('focusout', function () { setTimeout(riallinea, 150); });
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', function () { setTimeout(riallinea, 150); });
+  window.addEventListener('pageshow', function () { setTimeout(riallinea, 50); });
+})();

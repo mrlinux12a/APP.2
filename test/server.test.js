@@ -5155,3 +5155,23 @@ test('pagina pubblica "Elimina account": ora spiega anche il percorso dal sito',
   assert.match(t, /Elimina account/);
   assert.match(t, /Lo stesso account vale per il sito e per l’app/);
 });
+
+test('Apple Pay: il file di verifica del dominio sta a /.well-known/..., in testo, senza sessione né reindirizzamenti (404 se non è stato scaricato)', async () => {
+  const fs = require('fs');
+  const file = path.join(radice, 'public', '.well-known', 'apple-developer-merchantid-domain-association');
+  const prima = cookie;
+  cookie = '';
+  try {
+    const r = await chiedi('/.well-known/apple-developer-merchantid-domain-association', { redirect: 'manual' });
+    assert.equal(r.headers.get('set-cookie'), null, 'prima della sessione: nessun cookie');
+    if (fs.existsSync(file)) {
+      assert.equal(r.status, 200);
+      assert.match(r.headers.get('content-type'), /^text\/plain/);
+      assert.equal(await r.text(), fs.readFileSync(file, 'utf8'));
+    } else {
+      assert.equal(r.status, 404);
+    }
+  } finally {
+    cookie = prima;
+  }
+});

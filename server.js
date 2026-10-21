@@ -229,6 +229,16 @@ app.get('/favicon.ico', (req, res) => {
   res.set('Cache-Control', 'public, max-age=86400');
   res.type('png').sendFile(path.join(__dirname, 'public', 'icons', 'icona-192.png'));
 });
+// Verifica del dominio per Apple Pay (Stripe): Apple controlla che questo sito pubblichi il file di Stripe, uguale per tutti i conti, a questo indirizzo esatto, in
+// HTTPS, senza reindirizzamenti. express.static ignora le cartelle che cominciano per punto, per questo c'è una rotta apposta, prima della sessione. Il file sta in
+// public/.well-known/ (scripts/scarica_file_apple_pay.js lo scarica da Stripe); se manca risponde 404 e Apple Pay semplicemente non compare.
+app.get('/.well-known/apple-developer-merchantid-domain-association', (req, res) => {
+  const file = path.join(__dirname, 'public', '.well-known', 'apple-developer-merchantid-domain-association');
+  res.set('Cache-Control', 'public, max-age=300');
+  res.type('text/plain').sendFile(file, { dotfiles: 'allow' }, (err) => {
+    if (err && !res.headersSent) res.status(404).type('text/plain').send('Non trovato');
+  });
+});
 app.use(
   session({
     store: new ArchivioSqlite(), // su file, così un riavvio non scollega nessuno

@@ -632,6 +632,9 @@ a.nota { display: flex; align-items: center; min-height: 44px; margin-top: 0; ma
   z-index: 25;
   padding: 0 12px calc(var(--nav-stacco) + env(safe-area-inset-bottom));
   pointer-events: none;
+  /* iOS: livello proprio, così la barra non resta a metà schermo quando il viewport cambia (tastiera, barra di Safari). */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
 }
 .navbar .interno {
   pointer-events: auto;

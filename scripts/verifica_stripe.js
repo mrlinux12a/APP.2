@@ -83,6 +83,21 @@ const EVENTI_ATTESI = ['payment_intent.amount_capturable_updated', 'payment_inte
   } catch (e) {
     console.log(AV_('Non riesco a leggere i webhook (la chiave potrebbe essere "ristretta" senza permesso di lettura): ' + e.message));
   }
+
+  // 3) Apple Pay: il dominio del sito deve essere registrato su Stripe e il file di verifica deve essere pubblicato (solo avvisi: senza Apple Pay si paga con carta)
+  try {
+    const dominio = (() => { try { return new URL(process.env.APP_URL || '').hostname; } catch (e) { return ''; } })();
+    const registrati = await stripe.applePayDomains.list({ limit: 100 });
+    if (!dominio) console.log(AV_('APP_URL manca: non so quale dominio cercare per Apple Pay.'));
+    else if (registrati.data.some((d) => d.domain_name === dominio)) console.log(OK + `Apple Pay: il dominio ${dominio} è registrato su Stripe.`);
+    else console.log(AV_(`Apple Pay: il dominio ${dominio} NON è registrato su Stripe (Dashboard > Impostazioni > Metodi di pagamento > Apple Pay > Aggiungi un nuovo dominio). Senza, Apple Pay non compare.`));
+    if (dominio && /^https:/i.test(process.env.APP_URL || '')) {
+      const r = await fetch(process.env.APP_URL.replace(/\/+$/, '') + '/.well-known/apple-developer-merchantid-domain-association', { redirect: 'manual' }).catch(() => null);
+      console.log(r && r.status === 200 ? OK + 'Il file di verifica per Apple Pay è pubblicato.' : AV_('Il file di verifica per Apple Pay NON è raggiungibile su ' + process.env.APP_URL + '/.well-known/apple-developer-merchantid-domain-association' + (r ? ' (risposta ' + r.status + ')' : '') + '. Lancia scripts/scarica_file_apple_pay.js, fai commit e deploy.'));
+    }
+  } catch (e) {
+    console.log(AV_('Non riesco a leggere i domini di Apple Pay: ' + e.message));
+  }
   fine(problemi);
 })().catch((e) => { console.error('ERRORE', e.message); process.exit(1); });
 
