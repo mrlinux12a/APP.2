@@ -632,9 +632,10 @@ a.nota { display: flex; align-items: center; min-height: 44px; margin-top: 0; ma
   z-index: 25;
   padding: 0 12px calc(var(--nav-stacco) + env(safe-area-inset-bottom));
   pointer-events: none;
-  /* iOS: livello proprio, così la barra non resta a metà schermo quando il viewport cambia (tastiera, barra di Safari). */
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
+  /* iOS: livello proprio, e agganciata al bordo basso VISIBILE: --vv-sposta lo scrive public/app.js ("iPhone / web app installata") quando il viewport del
+     layout e quello visibile non coincidono (dopo la tastiera, con la barra di Safari). Di norma vale 0 e non cambia niente. */
+  -webkit-transform: translate3d(0, var(--vv-sposta, 0px), 0);
+  transform: translate3d(0, var(--vv-sposta, 0px), 0);
 }
 .navbar .interno {
   pointer-events: auto;
@@ -2210,6 +2211,7 @@ html.misura-aperta { overflow: hidden; }
   position: fixed; left: 0; right: 0; bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + 8px); z-index: 24;
   background: var(--surface); border-top: 1px solid var(--bordo); box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.08);
   padding: 10px 14px 8px;
+  transform: translate3d(0, var(--vv-sposta, 0px), 0); /* come .navbar */
 }
 .barra-paga-interno { max-width: 520px; margin: 0 auto; }
 .barra-paga-riga { display: flex; align-items: center; gap: 14px; }
@@ -2405,6 +2407,7 @@ html.misura-aperta { overflow: hidden; }
   z-index: 24;
   padding: 0 12px;
   pointer-events: none;
+  transform: translate3d(0, var(--vv-sposta, 0px), 0); /* come .navbar */
 }
 .barra-vai-link {
   pointer-events: auto;

@@ -406,6 +406,9 @@ provvisorie). Variabili CSS in cima a `public/style.css`.
   **da aggiornare se cambia**; `--barra-bassa` = `--nav-alt` + `--nav-stacco` è lo spazio che occupa: ogni barra
   fissa che sta sopra (`.barra-vai`, `.barra-paga`, `.barra-carrello`) e il riempimento in fondo alle pagine
   (`.app`, `.app-carrello`, `.app-categoria`) partono da lì: non scrivere più un `60px` a mano.
+  **iOS (21/10/2026)**: su iPhone/web app installata la barra restava a metà schermo (screenshot dell'utente, catalogo dopo l'uso della ricerca): è il viewport del layout (a cui si agganciano i `fixed`) che non coincide con quello visibile dopo la tastiera o la barra di Safari. Fix in fondo a `app.js`
+  ("iPhone / web app installata"): solo su iOS misura `visualViewport.offsetTop + height − documentElement.clientHeight` e, se lo scarto è ≥ 2px (senza pinch), lo scrive in `--vv-sposta` (px), che `.navbar`, `.barra-vai` e `.barra-paga` applicano come `translateY`. Provato solo il meccanismo (variabile → spostamento esatto) nel browser incorporato; **non su un iPhone vero**.
+  **"Catalogo" torna dov'eri (21/10/2026, richiesta esplicita)**: l'ultima pagina di catalogo vista (`/categoria/*`, `/marchi/*`, `/con-foto`, `/cerca`, con la query) sta in `sessionStorage` `minuteria.catalogo.<id utente>`; dalle altre pagine (carrello, Stato ordini, Storico, profilo) il tasto "Catalogo" della barra e "+ Aggiungi pezzi" del carrello (`data-torna-catalogo`) puntano lì. Aprendo `/home` la memoria si azzera, e sulle pagine di catalogo il tasto va alla home (così se ne esce). Provato nel browser (categoria → carrello → Catalogo → categoria; da lì Catalogo → home → carrello → Catalogo → home).
 
 ## Richieste e ordini
 
