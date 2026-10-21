@@ -13,7 +13,7 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <%- include('partials/app_head', { titolo }) %>
+  <%- include('partials/app_head', { titolo, senzaTelefoni: true }) %>
 </head>
 <body class="pagina-richiesta" data-loggato="1" data-auto-refresh="15000" data-versione="<%= JSON.stringify(contatori) %>">
 
@@ -206,7 +206,7 @@
               <li><span class="ric-dato-icona" aria-hidden="true"><%- iconaPosizione %></span><span><%= destinazione %></span></li>
             <% } %>
             <% if (cliente.telefono) { %>
-              <li><span class="ric-dato-icona" aria-hidden="true"><%- iconaTelefono %></span><a href="tel:<%= cliente.telefono.replace(/\s/g, '') %>"><%= cliente.telefono %></a></li>
+              <li><span class="ric-dato-icona" aria-hidden="true"><%- iconaTelefono %></span><span><%= cliente.telefono %></span></li>
             <% } %>
           </ul>
           <% if (schedaClienteAperta) { %>

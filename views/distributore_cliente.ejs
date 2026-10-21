@@ -42,7 +42,7 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <%- include('partials/app_head', { titolo }) %>
+  <%- include('partials/app_head', { titolo, senzaTelefoni: true }) %>
 </head>
 <body class="pagina-clienti" data-loggato="1">
 
@@ -120,13 +120,14 @@
             <h2 class="cli-scheda-titolo" id="cli-contatti">Contatti</h2>
             <div class="cli-contatti">
               <% if (telefono) { %>
-                <a class="cli-contatto" href="tel:<%= telefono.replace(/[^\d+]/g, '') %>">
+                <%# Il numero non è un collegamento (richiesta esplicita del 21/10/2026): un riquadro come gli altri, ma senza tocco né effetto al passaggio. %>
+                <div class="cli-contatto cli-contatto-fisso">
                   <span class="cli-contatto-ico" aria-hidden="true"><%- iconaTelefono %></span>
                   <span class="cli-contatto-testi">
                     <span class="cli-dato-eti">Telefono</span>
                     <span class="cli-contatto-val cli-cifre"><%= telefono %></span>
                   </span>
-                </a>
+                </div>
               <% } %>
               <% if (email) { %>
                 <a class="cli-contatto" href="mailto:<%= email %>">

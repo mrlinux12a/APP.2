@@ -1,4 +1,5 @@
 const db = require('../db');
+const eventi = require('./eventi');
 const icone = require('./icone');
 
 // Notifiche in-app, raggruppate per categoria con i relativi sottostati.
@@ -51,6 +52,9 @@ async function notifica(userId, { titolo, testo, link = null, categoria = 'gener
   fuori(() => require('./push').inviaAUtente(userId, { titolo, testo, link, orderId: order_id }).catch(() => {}));
   // Le stesse notifiche arrivano anche ai browser iscritti (src/web_push.js), con l'app chiusa. Stesse regole: senza aspettare, senza mai far fallire nessuno.
   const id = info && info.lastInsertRowid ? Number(info.lastInsertRowid) : null;
+  // Le pagine già aperte di quell'utente lo sanno subito (src/eventi.js, GET /api/eventi): oggi lo ascoltano quelle del banco, per far partire il suono senza aspettare il
+  // giro di controllo ogni 5 secondi, che in una scheda nascosta il browser rallenta. Senza pagine aperte (o in un altro processo) non succede niente; non lancia mai.
+  eventi.emetti(userId, 'notifica', { id, tipo });
   fuori(() =>
     require('./web_push')
       .inviaAUtente(userId, { titolo, testo, link, id, tipo })

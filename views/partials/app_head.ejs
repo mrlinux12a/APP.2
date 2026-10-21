@@ -1,6 +1,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#f3f1ec">
+<%# Pagine del banco (`senzaTelefoni`): un numero di telefono resta testo, nemmeno l'iPhone lo trasforma in un collegamento da toccare. %>
+<% if (typeof senzaTelefoni !== 'undefined' && senzaTelefoni) { %><meta name="format-detection" content="telephone=no"><% } %>
 <%# L'utente collegato: public/app.js ci lega le quantità scelte e non ancora aggiunte al carrello (un altro utente sulla stessa scheda non le vede). %>
 <% if (typeof currentUser !== 'undefined' && currentUser) { %><meta name="utente" content="<%= currentUser.id %>"><% } %>
 <%# Notifiche ad app chiusa (src/web_push.js, public/app.js "Notifiche anche ad app chiusa"): la chiave con cui il browser si iscrive (assente = push spente) e l'iscrizione che il server ha già per questa sessione. %>

@@ -1,6 +1,9 @@
-// Eventi dal server alle pagine aperte dell'installatore (Server-Sent Events): invece di far chiedere alla pagina "è cambiato qualcosa?" ogni pochi secondi,
-// la pagina tiene aperta UNA connessione (GET /api/eventi, in server.js) e il server le scrive solo quando succede qualcosa. Oggi: l'ordine è stato segnato
-// consegnato dal corriere (flusso_cliente.scriviConsegna) → la pagina dell'ordine diventa "Consegnato" e l'icona/scheda "Stato ordini" si aggiornano subito.
+// Eventi dal server alle pagine aperte dell'installatore e del banco (Server-Sent Events): invece di far chiedere alla pagina "è cambiato qualcosa?" ogni pochi
+// secondi, la pagina tiene aperta UNA connessione (GET /api/eventi, in server.js) e il server le scrive solo quando succede qualcosa. Oggi:
+//  · 'consegnato' (installatore): l'ordine è stato segnato consegnato dal corriere (flusso_cliente.scriviConsegna) → la pagina dell'ordine diventa "Consegnato" e
+//    l'icona/scheda "Stato ordini" si aggiornano subito;
+//  · 'notifica' (qualunque utente, la ascolta il banco): è nata una notifica (notifiche.notifica) → la pagina del banco fa partire il suono e mostra l'avviso subito,
+//    anche con la scheda nascosta, dove il browser rallenta i timer del controllo ogni 5 secondi.
 //
 // Vale dentro UN processo: se l'evento nasce in un altro (per esempio il voto del corriere letto da un server locale con la stessa base dati) la pagina non lo
 // riceve da qui, per questo le pagine tengono comunque un controllo lento di sicurezza (public/app.js). Niente di questo passa dal database: nessuna query.

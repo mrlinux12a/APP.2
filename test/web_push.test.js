@@ -371,6 +371,28 @@ test('notifica(): crea la riga e manda la push col tag "minuteria-<id>"; consegn
   assert.match(segna.s, /NOT EXISTS \(SELECT 1 FROM users WHERE id = \? AND ruolo = 'distributore'\)/, 'al banco no: le sue pagine usano quella lettura per avvisi e suoni');
 });
 
+test('notifica(): le pagine già aperte di quell\'utente lo sanno subito (evento "notifica": il banco fa partire il suono anche a scheda nascosta); le altre no', async () => {
+  configura({ PUSH_ATTIVO: '0' });
+  ripulisci();
+  const eventi = require('../src/eventi');
+  const scritto = [];
+  const paginaDelBanco = { write: (m) => { scritto.push(m); return true; }, end() {} };
+  const altraPagina = { write: () => { throw new Error('questa pagina non deve ricevere niente'); }, end() {} };
+  const togli = eventi.iscrivi(9, paginaDelBanco);
+  const togliAltra = eventi.iscrivi(10, altraPagina);
+  try {
+    await notifiche.notifica(9, { titolo: 'Nuova richiesta', testo: 'x', link: '/distributore/richieste/4', categoria: 'richieste', tipo: 'nuova_richiesta', request_id: 4 });
+    assert.deepEqual(scritto, ['event: notifica\ndata: {"id":77,"tipo":"nuova_richiesta"}\n\n']);
+    // una notifica senza tipo arriva lo stesso (la pagina rilegge l'elenco e basta)
+    await notifiche.notifica(9, { titolo: 'a', testo: 'b' });
+    assert.equal(scritto.length, 2);
+    assert.equal(scritto[1], 'event: notifica\ndata: {"id":77,"tipo":null}\n\n');
+  } finally {
+    togli();
+    togliAltra();
+  }
+});
+
 test('notifica(): se la push non viene consegnata la notifica resta da mostrare (il controllo della pagina aperta fa da rete di sicurezza); un guasto non la rompe', async () => {
   configura();
   ripulisci();

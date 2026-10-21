@@ -2013,6 +2013,43 @@ test('eventi in tempo reale: GET /api/eventi è una connessione che resta aperta
   assert.equal(eventi.connessioniAperte(1), 0, 'chiusa la pagina, la connessione si toglie');
 });
 
+test('eventi in tempo reale: anche il banco apre la connessione e riceve l\'evento "notifica" (suono subito, anche a scheda nascosta); un agente no', async () => {
+  const eventi = require('../src/eventi');
+  const salvato = cookie;
+  cookie = '';
+  banco.attivo = true;
+  const ac = new AbortController();
+  try {
+    assert.equal((await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }))).status, 302);
+    const r = await chiedi('/api/eventi', { signal: ac.signal });
+    assert.equal(r.status, 200);
+    assert.match(r.headers.get('content-type'), /^text\/event-stream/);
+    const lettore = r.body.getReader();
+    const decodifica = new TextDecoder();
+    let testo = '';
+    const leggiFinche = async (modello) => {
+      const scade = Date.now() + 3000;
+      while (!modello.test(testo) && Date.now() < scade) {
+        const { value, done } = await Promise.race([lettore.read(), new Promise((ok) => setTimeout(() => ok({ done: true }), 3000))]);
+        if (done) break;
+        testo += decodifica.decode(value);
+      }
+    };
+    await leggiFinche(/retry: 5000/);
+    assert.equal(eventi.connessioniAperte(9), 1, 'l\'utente del banco di prova ha id 9');
+    assert.equal(eventi.emetti(9, 'notifica', { id: 5, tipo: 'corriere_trovato' }), 1);
+    await leggiFinche(/event: notifica\ndata: \{"id":5,"tipo":"corriere_trovato"\}\n\n/);
+    assert.match(testo, /event: notifica\ndata: \{"id":5,"tipo":"corriere_trovato"\}\n\n/);
+  } finally {
+    ac.abort();
+    const scade = Date.now() + 2000;
+    while (eventi.connessioniAperte(9) > 0 && Date.now() < scade) await new Promise((ok) => setTimeout(ok, 20));
+    await chiedi('/logout', { method: 'POST' });
+    banco.attivo = false;
+    cookie = salvato;
+  }
+});
+
 test('l\'installatore NON conferma la consegna: nessun pulsante né rotta; la pagina in consegna attende da sola il corriere (WhatsApp)', async () => {
   ordiniProva.attivo = true;
   try {
@@ -2773,7 +2810,8 @@ test('home del banco: bacheca a tre colonne, senza interruttore né riquadri con
     assert.match(t, /col-conferma">Da confermare<\/h2>\s*<span class="colonna-conta" aria-label="2 richieste">2</);
     assert.match(t, /col-corriere">Attesa corriere<\/h2>\s*<span class="colonna-conta" aria-label="1 richieste">1</);
     assert.match(t, /col-preparare">Da preparare<\/h2>\s*<span class="colonna-conta" aria-label="2 ordini">2</);
-    for (const soglia of ['data-soglia-urgente="180"', 'data-soglia-arrivo="15"']) assert.ok(t.includes(soglia), soglia);
+    assert.ok(t.includes('data-soglia-urgente="180"'));
+    assert.doesNotMatch(t, /data-soglia-arrivo/, 'la scheda "Da preparare" non ha più una soglia rossa');
 
     // Da confermare: anello, timer, "Nuova" (447 s rimasti su 600: arrivata da 2 min 33 s), articoli, due pulsanti
     assert.equal(t.match(/data-richiesta /g).length, 2);
@@ -2806,10 +2844,10 @@ test('home del banco: bacheca a tre colonne, senza interruttore né riquadri con
     assert.match(t, /Confermato da te\. Non preparare ancora: aspetta che un corriere prenda la consegna\./);
     assert.match(t, /data-corriere data-trascorsi="190"/);
 
-    // Da preparare: pillola con minuti e ora solo se c'è il corriere; "Prepara" porta all'ordine
+    // Da preparare: pillola SOLO con i minuti che mancano (niente orario "ore HH:MM"), sempre verde (nemmeno sotto i 15 minuti diventa rossa), solo se c'è il corriere
     assert.match(t, /Ordine #1280 · ritira Marco/);
-    assert.match(t, /data-arrivo data-secondi="480">\s*<span class="pillola-min" data-arrivo-min>8 min</);
-    assert.match(t, /pillola-arrivo vicino/); // 8 minuti: sotto i 15
+    assert.match(t, /<div class="pillola-arrivo" data-arrivo data-secondi="480">\s*<span class="pillola-min" data-arrivo-min>8 min<\/span>\s*<\/div>/);
+    assert.doesNotMatch(t, /pillola-arrivo vicino|pillola-ora|>ore \d\d:\d\d</);
     assert.match(t, /Ordine #1281\s*<\/div>/); // senza corriere nessun "ritira", nessuna pillola
     assert.equal(t.match(/data-arrivo /g).length, 1);
     // ... con "Ispeziona" (la pagina dell'ordine, senza prenderlo in carico) e "Preparato" (toglie l'ordine dalla colonna: "In consegna")
@@ -2983,8 +3021,10 @@ test('banco: pagina del cliente a due colonne (da verificare, approvato, rifiuta
     assert.match(t, /href="https:\/\/ec\.europa\.eu\/taxation_customs\/vies\/[^"]*"\s+target="_blank" rel="noopener">Controlla su VIES/);
     assert.match(t, /Sede legale<\/dt>\s*<dd class="cli-dato-val">Pio 21<\/dd>\s*<dd class="cli-dato-det">16100 Genova \(GE\)<\/dd>/);
     assert.match(t, /Consegna abituale<\/dt>\s*<dd class="cli-dato-val">Via Puggia 22\/3<\/dd>\s*<dd class="cli-dato-det">16131 Genova \(GE\)<\/dd>/);
-    // contatti: due riquadri cliccabili
-    assert.match(t, /<a class="cli-contatto" href="tel:010123456">[\s\S]*?Telefono<\/span>\s*<span class="cli-contatto-val cli-cifre">010 123 456</);
+    // contatti: il telefono è un riquadro che NON si può toccare (richiesta esplicita del 21/10/2026), l'email resta un collegamento
+    assert.match(t, /<div class="cli-contatto cli-contatto-fisso">[\s\S]*?Telefono<\/span>\s*<span class="cli-contatto-val cli-cifre">010 123 456</);
+    assert.doesNotMatch(t, /href="tel:/);
+    assert.match(t, /<meta name="format-detection" content="telephone=no">/);
     assert.match(t, /<a class="cli-contatto" href="mailto:fra@example\.com">[\s\S]*?Email<\/span>\s*<span class="cli-contatto-val">fra@example\.com</);
     // riquadro di approvazione: stessi campi e stessi valori di sempre; la conferma c'è solo sul rifiuto
     assert.match(t, /<h2 id="cli-titolo-decisione">È un tuo cliente\?<\/h2>\s*<p>Se lo approvi potrà mandarti richieste e vedrà le condizioni che imposti\.<\/p>/);
@@ -3385,7 +3425,9 @@ test('banco: richiesta da confermare, a due colonne con timer, pulsanti, cliente
     assert.match(t, /<h2 class="ric-occhiello" id="ric-cliente-titolo">Cliente<\/h2>/);
     assert.match(t, /<strong>Prova S\.r\.l\.<\/strong>\s*<small>P\. IVA 01234567890<\/small>/);
     assert.match(t, /<span>Via Puggia 22\/3, 16131 Genova \(GE\)<\/span>/);
-    assert.match(t, /<a href="tel:010123456">010 123 456<\/a>/);
+    assert.match(t, /<span>010 123 456<\/span>/); // il telefono è solo testo, non un collegamento tel: (richiesta esplicita del 21/10/2026)
+    assert.doesNotMatch(t, /href="tel:/);
+    assert.match(t, /<meta name="format-detection" content="telephone=no">/);
     assert.match(t, /<a class="ric-apri-cliente" href="\/distributore\/clienti\/1">Apri scheda cliente/);
 
     // "Elimina dal banco": un link di testo in fondo, dopo il cliente, con la sua conferma
@@ -3853,7 +3895,26 @@ test('avvisi del banco: lo script e gli stili ci sono, il suono è un MP3 legger
   // stili: contenitore in basso a destra, tre visibili, strip a 48px, niente stampa, niente animazioni con "riduci movimento"
   assert.match(css, /\.banco-avvisi \{[^}]*right: 24px;[^}]*bottom: 24px;[^}]*width: 400px;/);
   assert.match(css, /\.banco-avviso \{[^}]*min-height: 48px;[^}]*background: #fbe6da;[^}]*border-bottom: 1px solid #f1c9b3;[^}]*color: #8a3a14;/);
-  assert.match(css, /@media print \{\s*\.banco-avviso, \.banco-avvisi \{ display: none !important; \}/);
+  assert.match(css, /@media print \{\s*\.banco-avviso, \.banco-avvisi, \.banco-config \{ display: none !important; \}/);
+  // il suono si riproduce con la Web Audio API (una sorgente nuova a ogni suono: non si taglia) e la ricarica automatica lo aspetta (richiesta esplicita del 21/10/2026:
+  // "a volte arriva solo un pezzo dello squillo", "il suono arriva solo se sono sopra Banco")
+  assert.match(js, /new ContestoAudio\(\)/);
+  assert.match(js, /createBufferSource\(\)/);
+  assert.match(js, /decodeAudioData/);
+  assert.match(js, /Minuteria\.banco = \{ primaDiRicaricare: primaDiRicaricare/);
+  assert.match(js, /const prima = typeof Minuteria !== 'undefined' && Minuteria\.banco \? Minuteria\.banco\.primaDiRicaricare : null;/);
+  assert.doesNotMatch(js, /window\.Minuteria/, '`Minuteria` è una const del file: window.Minuteria sarebbe sempre undefined');
+  assert.match(js, /Promise\.race\(\[daiPush\(\)\.then\(attendiFineSuono\), pausa\(4500\)\]\)/);
+  // e arriva anche da una scheda nascosta: connessione in tempo reale del server (src/eventi.js), con l'evento 'notifica'
+  assert.match(js, /new EventSource\('\/api\/eventi'\)/);
+  assert.match(js, /sorgente\.addEventListener\('notifica'/);
+  // audio bloccato dal browser + notifiche del computer attive: suona la notifica di sistema al posto del sito
+  assert.match(js, /esito === 'bloccato' && notificheSistemaConsentite\(\)/);
+  // gli avvisi azzurri "Attiva il suono" / "Attiva le notifiche" (nascosti di default) e i loro stili
+  assert.match(js, /Attiva il suono/);
+  assert.match(js, /Attiva le notifiche/);
+  assert.match(css, /\.banco-config \{ background: #e8f0f8;/);
+  assert.match(css, /\.banco-config\[hidden\], \.banco-config-riga\[hidden\] \{ display: none; \}/);
   assert.match(css, /prefers-reduced-motion: reduce\) \{\s*\.banco-voce-pallino-ordini, \.banco-avviso-punto, \.avv \{ animation: none; \}/);
   // il suono: un MP3 vero (ID3 o frame sync) e sotto i 30 KB
   const mp3 = fs.readFileSync(path.join(radice, 'public', 'suoni', 'avviso.mp3'));
@@ -3996,7 +4057,8 @@ test('banco: pagina dell\'ordine a due colonne: materiale a prezzo del banco, co
     assert.doesNotMatch(t, /Apri in Maps|google\.com\/maps/);
     assert.match(t, /<h2 class="ric-occhiello" id="ord-cli-et">Cliente<\/h2>\s*<div class="ric-cliente-testa">\s*<span class="avatar avatar-42" aria-hidden="true">PR<\/span>/);
     assert.match(t, /<strong>Prova S\.r\.l\.<\/strong>\s*<small>referente Mario · P\. IVA 01234567890<\/small>/);
-    assert.match(t, /<a href="tel:010123456">010 123 456<\/a>/);
+    assert.match(t, /<span>010 123 456<\/span>/); // telefono non cliccabile
+    assert.doesNotMatch(t, /href="tel:/);
     assert.match(t, /<a class="ric-apri-cliente" href="\/distributore\/clienti\/1">Apri scheda cliente/);
 
     // ----- avanzamento: confermato (con l'ora), corriere trovato, da preparare (attuale, blu, "Ritiro alle"), in consegna, consegnato -----
@@ -5443,7 +5505,9 @@ test('notifiche ad app chiusa: app.js e service worker contengono i pezzi che la
   // (`public/suoni/avviso.mp3`, interruttore "Suoni" dell'Anagrafica), che è un'altra funzione.
   assert.doesNotMatch(js, /suonaAvviso|audioAvviso|alPrimoTocco/);
   assert.doesNotMatch(js, /tipo === 'push'/);
-  assert.equal((js.match(/new Audio\(/g) || []).length, 1, 'un solo audio nel sito: quello del banco');
+  // L'unico suono del sito è quello del banco, con la Web Audio API (un contesto solo, creato nel blocco "Avvisi del banco"): niente più <audio> riusato.
+  assert.equal((js.match(/new Audio\(/g) || []).length, 0, 'nessun <audio> riusato');
+  assert.equal((js.match(/new ContestoAudio\(\)/g) || []).length, 1, 'un solo contesto audio nel sito: quello del banco');
   const vista = fs.readFileSync(path.join(radice, 'views', 'partials', 'app_head.ejs'), 'utf8');
   assert.match(vista, /name="push-chiave"/);
 });

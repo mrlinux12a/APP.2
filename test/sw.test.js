@@ -300,6 +300,21 @@ test('push: una richiesta da confermare resta sullo schermo del computer finché
   assert.equal(sw.chiamate.notifiche[0].opzioni.requireInteraction, true);
 });
 
+test('push: anche "corriere trovato" (prepara il materiale) resta sullo schermo del computer finché non la si tocca, col suono del sistema', async () => {
+  const sw = caricaSw();
+  await spingi(sw, { titolo: 'Nuovo ordine da preparare', testo: 'Rossi — ordine #12, già pagato.', link: '/distributore/ordini/12', tag: 'minuteria-31', tipo: 'corriere_trovato' });
+  const { opzioni } = sw.chiamate.notifiche[0];
+  assert.equal(opzioni.requireInteraction, true);
+  assert.equal(opzioni.silent, false, 'col suono del sistema');
+  assert.equal(opzioni.data.link, '/distributore/ordini/12');
+  // le altre notifiche del banco (nessun corriere, scaduta, consegnata) spariscono da sole come sempre
+  for (const tipo of ['nessun_corriere', 'richiesta_scaduta', 'ordine_consegnato']) {
+    const altro = caricaSw();
+    await spingi(altro, { titolo: 'x', testo: 'y', link: '/distributore', tag: 'minuteria-40', tipo });
+    assert.equal(altro.chiamate.notifiche[0].opzioni.requireInteraction, false, tipo);
+  }
+});
+
 test('push: senza tag niente `renotify` (il browser lo rifiuta) ma la notifica si mostra lo stesso', async () => {
   const sw = caricaSw();
   await spingi(sw, { titolo: 'Senza tag', testo: 'x' });

@@ -261,12 +261,13 @@ app.use(
 );
 app.use(salvaSessionePrimaDelRedirect);
 
-// Eventi dal server alla pagina dell'installatore (Server-Sent Events, src/eventi.js): una connessione per pagina aperta, il server scrive solo quando succede
-// qualcosa (oggi: il corriere ha segnato la consegna). Sta PRIMA del middleware qui sotto, che a ogni richiesta fa una decina di query per disegnare le pagine.
+// Eventi dal server alla pagina dell'installatore e del banco (Server-Sent Events, src/eventi.js): una connessione per pagina aperta, il server scrive solo quando
+// succede qualcosa (installatore: il corriere ha segnato la consegna; banco: è nata una notifica, e il suono parte subito anche con la scheda nascosta).
+// Sta PRIMA del middleware qui sotto, che a ogni richiesta fa una decina di query per disegnare le pagine.
 // Un messaggio vuoto ogni 25 s tiene viva la connessione attraverso proxy e reti mobili.
 app.get('/api/eventi', (req, res) => {
   const utente = req.session && req.session.user;
-  if (!utente || utente.ruolo !== 'cliente') return res.status(401).json({ errore: 'non autorizzato' });
+  if (!utente || (utente.ruolo !== 'cliente' && utente.ruolo !== 'distributore')) return res.status(401).json({ errore: 'non autorizzato' });
   res.set({
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-store, no-transform',
@@ -1666,7 +1667,7 @@ const BACHECA = {
   urgenteSec: 180, // richiesta da confermare: negli ultimi 3 minuti anello e timer diventano rossi
   nuovaSec: 180, // ...e per i primi 3 minuti ha l'etichetta "Nuova"
   appenaSec: 20, // arrivata da meno di 20 secondi: la scheda entra con un'animazione
-  arrivoVicinoMin: 15, // ordine da preparare: sotto i 15 minuti al corriere la pillola è rossa
+  arrivoVicinoMin: 15, // pagina dell'ordine: sotto i 15 minuti al ritiro il riquadro "Ritiro" è rosso (la scheda "Da preparare" della home è sempre verde dal 21/10/2026)
   righeVisibili: 3, // articoli mostrati su una scheda, gli altri sono "+N altri articoli"
 };
 

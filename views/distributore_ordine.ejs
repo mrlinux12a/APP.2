@@ -19,7 +19,7 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <%- include('partials/app_head', { titolo }) %>
+  <%- include('partials/app_head', { titolo, senzaTelefoni: true }) %>
 </head>
 <body class="pagina-richiesta pagina-ordine" data-loggato="1">
 
@@ -123,7 +123,7 @@
             </div>
             <% if (cliente.telefono) { %>
               <ul class="ric-cliente-dati">
-                <li><span class="ric-dato-icona" aria-hidden="true"><%- iconaTelefono %></span><a href="tel:<%= cliente.telefono.replace(/\s/g, '') %>"><%= cliente.telefono %></a></li>
+                <li><span class="ric-dato-icona" aria-hidden="true"><%- iconaTelefono %></span><span><%= cliente.telefono %></span></li>
               </ul>
             <% } %>
             <% if (schedaClienteAperta) { %>

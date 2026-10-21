@@ -1829,15 +1829,14 @@ const Minuteria = (function () {
    - richiesta da confermare: anello che si svuota e mm:ss; rosso negli ultimi minuti (data-soglia-urgente); etichetta
      "Nuova" per i primi minuti; allo scadere la scheda si spegne e la pagina si ricarica (la richiesta non c'è più);
    - corriere avvisato: "da N min", da quando il banco ha confermato;
-   - ordine da preparare: minuti all'arrivo del corriere, rossi sotto i data-soglia-arrivo minuti.
-   Le soglie le scrive il server (BACHECA in server.js): le stesse che ha usato per le classi iniziali. */
+   - ordine da preparare: solo i minuti che mancano al ritiro del corriere, sempre in verde (niente orario, niente rosso: richiesta esplicita del 21/10/2026).
+   La soglia della richiesta da confermare la scrive il server (BACHECA in server.js): la stessa che ha usato per le classi iniziali. */
 (function () {
   'use strict';
   const bacheca = document.querySelector('[data-bacheca]');
   if (!bacheca) return;
 
   const sogliaUrgente = parseInt(bacheca.getAttribute('data-soglia-urgente'), 10) || 180;
-  const sogliaArrivo = parseInt(bacheca.getAttribute('data-soglia-arrivo'), 10) || 15;
   const avvio = Date.now();
 
   function numero(el, nome) {
@@ -1912,7 +1911,6 @@ const Minuteria = (function () {
     arrivi.forEach(function (a) {
       const min = Math.ceil((a.fine - adesso) / 60000);
       scrivi(a.min, min <= 0 ? 'In ritardo' : durata(min));
-      a.el.classList.toggle('vicino', min <= sogliaArrivo);
     });
   }
 
@@ -2072,16 +2070,27 @@ window.addEventListener('pageshow', function (e) {
     return (!!attivo && ['INPUT', 'TEXTAREA', 'SELECT'].includes(attivo.tagName)) || conTestoNonInviato();
   }
 
+  // La ricarica vera. Sulle pagine del banco prima si fa sentire ciò che è appena arrivato e si aspetta la fine del suono ("Avvisi del banco", più sotto:
+  // Minuteria.banco.primaDiRicaricare): ricaricare subito tagliava lo squillo a metà, e la notifica già consumata dalla pagina che spariva non suonava più.
+  let ricaricando = false;
+  function ricaricaDavvero() {
+    if (ricaricando) return;
+    ricaricando = true;
+    // (`Minuteria` è una const del file, non una proprietà di window: cercarla lì darebbe sempre undefined e la ricarica non aspetterebbe mai il suono.)
+    const prima = typeof Minuteria !== 'undefined' && Minuteria.banco ? Minuteria.banco.primaDiRicaricare : null;
+    Promise.resolve(prima ? prima() : null).catch(function () { /* si ricarica lo stesso */ }).then(function () { window.location.reload(); });
+  }
+
   function ricarica() {
     if (document.hidden || suCampo()) {
       daRicaricare = true;
       return;
     }
-    window.location.reload();
+    ricaricaDavvero();
   }
 
   function riprendi() {
-    if (daRicaricare && !document.hidden && !suCampo()) window.location.reload();
+    if (daRicaricare && !document.hidden && !suCampo()) ricaricaDavvero();
   }
 
   function controlla() {
@@ -2715,17 +2724,24 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
       Passando il mouse sopra, il conto alla rovescia di chiusura si ferma. Aperta o chiusa, la notifica risulta letta (POST /api/notifiche/lette).
    4. scheda del browser: se ci sono richieste da confermare e la scheda non è in primo piano, il titolo alterna ogni 2 s con "(N) Nuova richiesta · ditta"
       e la favicon prende un pallino arancio; la notifica di sistema (Notification) parte solo se la pagina è nascosta e l'interruttore è acceso;
-   5. suono breve (public/suoni/avviso.mp3) per nuova richiesta e corriere trovato, sbloccato dal primo clic sulla pagina. Gli interruttori "Suoni" e
-      "Notifiche del computer" stanno nella scheda Notifiche della pagina "Anagrafica del banco" (non più nella tendina dell'account); localStorage.
+   5. suono morbido (public/suoni/avviso.mp3, scripts/genera_suono_avviso.js) per nuova richiesta e corriere trovato, su OGNI pagina del banco (home compresa), con la
+      Web Audio API (una sorgente nuova a ogni suono: non si taglia). Il browser lo lascia partire solo dopo un gesto dell'utente sulla pagina: finché manca compare
+      un avviso "Attiva il suono" sotto l'intestazione. Gli interruttori "Suoni" (con "Ascolta") e "Notifiche del computer" stanno nella scheda Notifiche della pagina
+      "Anagrafica del banco"; localStorage;
+   6. notifiche del computer (Web Push, src/web_push.js): con la pagina in secondo piano o chiusa è il sistema a suonare e a mostrare "Nuova richiesta" e "Corriere
+      trovato". Se non sono attive compare un avviso "Attiva le notifiche" (si può rimandare di 7 giorni), perché senza il suono arriva solo con questa pagina aperta.
    Dati: GET /distributore/stato-banco ogni 15 s (e subito quando arriva una notifica) per numeri, richieste ancora aperte e ordini da preparare; GET /api/notifiche/push ogni 5 s
-   per le notifiche nuove (src/banco_avvisi.js). Una richiesta che non c'è più nell'elenco (risposta di un collega, scaduta, annullata) fa sparire il suo avviso.
+   per le notifiche nuove (src/banco_avvisi.js). In più GET /api/eventi (Server-Sent Events, src/eventi.js): il server scrive alla pagina appena nasce una notifica e il
+   suono parte subito, anche con la scheda nascosta (dove il browser porta i timer a un giro al minuto). Una richiesta che non c'è più nell'elenco (risposta di un collega,
+   scaduta, annullata) fa sparire il suo avviso.
+   La ricarica automatica delle pagine del banco (blocco "Pagine del banco", più su) aspetta la fine del suono: Minuteria.banco.primaDiRicaricare.
    Questo blocco sostituisce, sulle pagine del banco, quello delle notifiche del browser qui sopra. */
 (function () {
   'use strict';
   const testa = document.querySelector('[data-banco-testa]');
   if (!testa) return;
 
-  const { leggiJson, mostraNotifica, iscriviPush, disiscriviPush } = Minuteria;
+  const { leggiJson, mostraNotifica, iscriviPush, disiscriviPush, pushDisponibile } = Minuteria;
   // La home del banco è /distributore (le colonne mostrano già tutto: lì niente striscia né avvisi a comparsa); è la stessa regola di partials/banco_testa.ejs.
   const eHome = window.location.pathname.replace(/\/+$/, '') === '/distributore';
   const ditta = testa.getAttribute('data-ditta') || '';
@@ -2749,42 +2765,124 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
   function richiestaUrl(id) { return '/distributore/richieste/' + id + '?torna=' + encodeURIComponent(window.location.pathname + window.location.search); }
   function ordineUrl(id) { return '/distributore/ordini/' + id + '?torna=' + encodeURIComponent(window.location.pathname + window.location.search); }
 
+  // Avvisi di configurazione (suono bloccato, notifiche del computer: sezione più sotto). Le variabili vanno dichiarate PRIMA di tutto il resto: `aggiornaConfig`
+  // viene chiamata già durante il caricamento (da `mostraInterruttoreSistema`) e con `let` più in basso scatterebbe l'errore "prima dell'inizializzazione".
+  const CHIAVE_NOTIFICHE_RIMANDATE = 'minuteria.banco.notificheRimandate';
+  const RIMANDA_NOTIFICHE_MS = 7 * 24 * 60 * 60 * 1000;
+  let config = null;
+  let rigaSuono = null;
+  let rigaNotifiche = null;
+  let rigaMessaggio = null;
+  let testoMessaggio = null;
+  let messaggioTimer = null;
+  let configPronta = false; // vero poco dopo il caricamento: nei browser che lasciano partire l'audio da soli l'avviso non deve nemmeno lampeggiare
+
   // ---------- Suono ----------
 
+  // Il suono (public/suoni/avviso.mp3, fatto da scripts/genera_suono_avviso.js) si riproduce con la Web Audio API: UN contesto, UN buffer decodificato e, a ogni suono,
+  // una "sorgente" nuova. Prima era un solo <audio> riusato: due suoni vicini si tagliavano a vicenda e lo "sblocco" del browser (l'audio parte solo dopo un gesto
+  // dell'utente su quella pagina) poteva interrompere un suono vero: "a volte arriva solo un pezzo dello squillo" (richiesta esplicita del 21/10/2026).
+  // `suonoFinoA` dice quando finisce il suono in corso: la ricarica automatica della pagina lo aspetta (primaDiRicaricare, più sotto).
   let suoniAttivi = leggi('localStorage', CHIAVE_SUONI) !== 'no';
-  let audio = null;
-  function preparaAudio() {
-    if (audio) return audio;
-    try { audio = new Audio('/suoni/avviso.mp3'); audio.preload = 'auto'; } catch (e) { audio = null; }
-    return audio;
-  }
-  // Il browser blocca l'audio finché l'utente non ha interagito con la pagina: al primo clic (o tasto) si riproduce il suono in silenzio, così da lì in poi
-  // può partire da solo (Safari lo vuole nello stesso gesto).
-  function sbloccaAudio() {
-    document.removeEventListener('pointerdown', sbloccaAudio, true);
-    document.removeEventListener('keydown', sbloccaAudio, true);
-    const a = preparaAudio();
-    if (!a) return;
-    try {
-      a.muted = true;
-      const p = a.play();
-      const fine = function () { try { a.pause(); a.currentTime = 0; } catch (e) { /* niente */ } a.muted = false; };
-      if (p && typeof p.then === 'function') p.then(fine, function () { a.muted = false; }); else fine();
-    } catch (e) { /* niente suono */ }
-  }
-  document.addEventListener('pointerdown', sbloccaAudio, true);
-  document.addEventListener('keydown', sbloccaAudio, true);
+  const ContestoAudio = window.AudioContext || window.webkitAudioContext;
+  let contesto = null;
+  let bufferSuono = null;
+  let caricamentoBuffer = null;
+  let suonoFinoA = 0;
+  let ultimoBloccato = 0; // Date.now() dell'ultimo suono che il browser non ha lasciato partire (nessun gesto su questa pagina)
 
-  function suono() {
-    if (!suoniAttivi) return;
-    const a = preparaAudio();
-    if (!a) return;
-    try {
-      a.currentTime = 0;
-      const p = a.play();
-      if (p && typeof p.catch === 'function') p.catch(function () { /* audio ancora bloccato: nessun clic su questa pagina */ });
-    } catch (e) { /* niente suono */ }
+  function pausa(ms) { return new Promise(function (ok) { setTimeout(ok, ms); }); }
+
+  function contestoAudio() {
+    if (contesto || !ContestoAudio) return contesto;
+    try { contesto = new ContestoAudio(); } catch (e) { contesto = null; }
+    if (contesto) {
+      try { contesto.addEventListener('statechange', function () { aggiornaConfig(); }); } catch (e) { /* senza, l'avviso si aggiorna al giro dopo */ }
+    }
+    return contesto;
   }
+
+  // Scarica e decodifica il suono una volta sola (anche col contesto ancora fermo: decodificare si può sempre). Ritorna il buffer, o null se non si riesce.
+  function caricaBuffer() {
+    if (bufferSuono) return Promise.resolve(bufferSuono);
+    if (caricamentoBuffer) return caricamentoBuffer;
+    const c = contestoAudio();
+    if (!c) return Promise.resolve(null);
+    caricamentoBuffer = fetch('/suoni/avviso.mp3', { credentials: 'same-origin' })
+      .then(function (r) { if (!r.ok) throw new Error('suono non trovato'); return r.arrayBuffer(); })
+      .then(function (dati) {
+        // I Safari più vecchi vogliono le funzioni di ritorno, gli altri la promessa: vanno bene tutte e due.
+        return new Promise(function (ok, no) {
+          const p = c.decodeAudioData(dati, ok, no);
+          if (p && typeof p.then === 'function') p.then(ok, no);
+        });
+      })
+      .then(function (b) { bufferSuono = b; return b; })
+      .catch(function () { caricamentoBuffer = null; return null; });
+    return caricamentoBuffer;
+  }
+
+  // Il browser tiene fermo l'audio finché l'utente non ha usato la pagina: al primo gesto (tocco, clic, tasto) si fa partire il contesto, con un suono vuoto dentro
+  // il gesto (è ciò che "sveglia" davvero l'audio di iPhone e iPad). Quando il contesto gira si smette di ascoltare i gesti.
+  const GESTI = ['pointerup', 'touchend', 'click', 'keydown'];
+  function sbloccaAudio() {
+    const c = contestoAudio();
+    if (!c) return;
+    const verifica = function () {
+      if (c.state !== 'running') return;
+      GESTI.forEach(function (g) { document.removeEventListener(g, sbloccaAudio, true); });
+      caricaBuffer();
+      aggiornaConfig();
+    };
+    try {
+      const p = c.resume();
+      const vuoto = c.createBufferSource();
+      vuoto.buffer = c.createBuffer(1, 1, 22050);
+      vuoto.connect(c.destination);
+      vuoto.start(0);
+      if (p && typeof p.then === 'function') p.then(verifica, verifica); else verifica();
+    } catch (e) { /* il gesto dopo riprova */ }
+  }
+  GESTI.forEach(function (g) { document.addEventListener(g, sbloccaAudio, true); });
+
+  // Fa partire il suono. Ritorna una promessa con l'esito: 'partito'; 'spento' (interruttore "Suoni"); 'bloccato' (il browser non lo lascia partire: nessun gesto
+  // su questa pagina, e compare l'avviso "Attiva il suono"); 'errore' (audio non disponibile o suono non caricato). `forza`: anche con l'interruttore spento (il
+  // pulsante "Ascolta" dell'Anagrafica).
+  function suono(opzioni) {
+    if (!suoniAttivi && !(opzioni && opzioni.forza)) return Promise.resolve('spento');
+    const c = contestoAudio();
+    if (!c) return Promise.resolve('errore');
+    let gira;
+    if (c.state === 'running') {
+      gira = Promise.resolve(true);
+    } else {
+      // Senza gesto il browser lascia in attesa resume(): si aspetta un attimo e, se non è partito, il suono è bloccato (non lo si recupera dopo, a gesto fatto:
+      // sarebbe uno squillo fuori tempo).
+      let r = null;
+      try { r = c.resume(); } catch (e) { r = null; }
+      gira = Promise.race([
+        r && typeof r.then === 'function' ? r.then(function () { return c.state === 'running'; }, function () { return false; }) : Promise.resolve(false),
+        pausa(400).then(function () { return c.state === 'running'; }),
+      ]);
+    }
+    return Promise.all([gira, caricaBuffer()]).then(function (esito) {
+      if (!esito[0]) { ultimoBloccato = Date.now(); aggiornaConfig(); return 'bloccato'; }
+      if (!esito[1]) return 'errore';
+      const sorgente = c.createBufferSource();
+      sorgente.buffer = esito[1];
+      sorgente.connect(c.destination);
+      sorgente.start(0);
+      suonoFinoA = Math.max(suonoFinoA, Date.now() + esito[1].duration * 1000 + 100);
+      return 'partito';
+    }).catch(function () { return 'errore'; });
+  }
+  // Si aspetta che il suono in corso finisca (anche se, nel frattempo, ne è partito un altro).
+  function attendiFineSuono() {
+    const resta = suonoFinoA - Date.now();
+    return resta > 0 ? pausa(resta).then(attendiFineSuono) : Promise.resolve();
+  }
+  contestoAudio();
+  caricaBuffer();
 
   // Interruttori della pagina "Anagrafica del banco" (scheda Notifiche; prima erano due voci della tendina dell'account: "Suoni notifiche" e
   // "Attiva le notifiche del computer"). Valgono per questo computer, non per il profilo. Sono bottoni role="switch": aria-checked dice se sono accesi.
@@ -2798,6 +2896,7 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
   const interruttoreSuoni = document.querySelector('[data-suoni-voce]');
   function mostraInterruttoreSuoni() {
     if (interruttoreSuoni) interruttoreSuoni.setAttribute('aria-checked', suoniAttivi ? 'true' : 'false');
+    aggiornaConfig(); // con i suoni spenti l'avviso "Attiva il suono" non serve
   }
   mostraInterruttoreSuoni();
   if (interruttoreSuoni) {
@@ -2808,12 +2907,16 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
       if (suoniAttivi) suono(); // il clic sblocca l'audio: si sente subito com'è
     });
   }
+  // "Ascolta" (Anagrafica del banco): il suono di adesso, anche con l'interruttore spento. Il clic è il gesto che sblocca l'audio.
+  const pulsanteAscolta = document.querySelector('[data-suoni-prova]');
+  if (pulsanteAscolta) pulsanteAscolta.addEventListener('click', function () { suono({ forza: true }); });
 
   const interruttoreSistema = document.querySelector('[data-notifiche-sistema]');
   const notaSistema = document.querySelector('[data-notifiche-nota]');
   // `notaProva`: dopo aver acceso l'interruttore, la riga dice che fra 10 secondi arriva una notifica di prova (con la scheda davanti non ne arrivano: bisogna uscire).
   let notaProva = '';
   function mostraInterruttoreSistema() {
+    aggiornaConfig(); // acceso o spento qui, l'avviso "Attiva le notifiche" si adegua
     if (!interruttoreSistema) return;
     const supportate = 'Notification' in window;
     interruttoreSistema.setAttribute('aria-checked', notificheSistemaConsentite() ? 'true' : 'false');
@@ -2857,6 +2960,88 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
       }).then(function (r) { if (!r.ok) throw new Error('non salvato'); })
         .catch(function () { interruttoreEmail.setAttribute('aria-checked', acceso ? 'false' : 'true'); });
     });
+  }
+
+  // ---------- Avvisi di configurazione: suono bloccato, notifiche del computer ----------
+
+  // Una striscia azzurra sotto l'intestazione (su tutte le pagine del banco, home compresa), con fino a tre righe:
+  //  · "Attiva il suono": il browser tiene fermo l'audio finché non si tocca la pagina; la riga sparisce da sola appena il suono può partire;
+  //  · "Attiva le notifiche": senza, suono e notifica arrivano solo con una pagina del banco aperta e davanti ("il suono arriva solo se sono sopra Banco"). Fino al
+  //    21/10/2026 nel database non c'era NESSUNA iscrizione del banco: l'interruttore stava solo nell'Anagrafica e nessuno lo aveva acceso. Si può rimandare di 7 giorni;
+  //  · un messaggio breve dopo aver provato ad attivare le notifiche.
+  // (Le variabili stanno in cima, prima del suono: `aggiornaConfig` può essere chiamata già durante il caricamento.)
+
+  function rigaDiConfig(testo, pulsanti) {
+    const riga = nodo('div', 'banco-config-riga');
+    riga.appendChild(nodo('span', 'banco-config-punto'));
+    riga.appendChild(nodo('p', 'banco-config-testo', testo));
+    if (pulsanti.length) {
+      const azioni = nodo('div', 'banco-config-azioni');
+      pulsanti.forEach(function (p) {
+        const b = nodo('button', 'banco-config-btn' + (p.pieno ? ' pieno' : ''), p.testo);
+        b.type = 'button';
+        b.addEventListener('click', p.azione);
+        azioni.appendChild(b);
+      });
+      riga.appendChild(azioni);
+    }
+    return riga;
+  }
+
+  function suonoDaSbloccare() {
+    return suoniAttivi && !!contesto && contesto.state !== 'running' && (configPronta || Date.now() - ultimoBloccato < 120000);
+  }
+  function notificheDaProporre() {
+    if (!('Notification' in window) || Notification.permission !== 'default' || !pushDisponibile()) return false;
+    const rimandate = parseInt(leggi('localStorage', CHIAVE_NOTIFICHE_RIMANDATE) || '0', 10) || 0;
+    return !(rimandate && Date.now() - rimandate < RIMANDA_NOTIFICHE_MS);
+  }
+  function aggiornaConfig() {
+    if (!config) return;
+    rigaSuono.hidden = !suonoDaSbloccare();
+    rigaNotifiche.hidden = !notificheDaProporre();
+    config.hidden = rigaSuono.hidden && rigaNotifiche.hidden && rigaMessaggio.hidden;
+  }
+  function mostraMessaggio(testo) {
+    if (!config) return;
+    testoMessaggio.textContent = testo;
+    rigaMessaggio.hidden = false;
+    clearTimeout(messaggioTimer);
+    messaggioTimer = setTimeout(function () { rigaMessaggio.hidden = true; aggiornaConfig(); }, 7000);
+    aggiornaConfig();
+  }
+
+  // "Attiva" le notifiche: il permesso si chiede solo con un clic. Poi il browser si iscrive alle push (il server può scrivere anche a pagina chiusa).
+  function attivaNotifiche() {
+    if (!('Notification' in window)) return;
+    Notification.requestPermission().then(function (permesso) {
+      if (permesso === 'denied') { mostraMessaggio('Le notifiche sono bloccate dal browser: si riattivano dalle impostazioni del sito.'); return null; }
+      if (permesso !== 'granted') return null;
+      scrivi('localStorage', CHIAVE_NOTIFICHE_SISTEMA, 'sì');
+      return iscriviPush({ forza: true }).then(function (ok) {
+        mostraMessaggio(ok
+          ? 'Notifiche attivate: richieste e corrieri arrivano anche con la pagina in secondo piano o chiusa.'
+          : 'Il permesso c’è, ma non sono riuscito ad attivare le notifiche a pagina chiusa. Riprova dall’Anagrafica del banco.');
+      });
+    }).catch(function () { /* resta com'era */ }).then(function () { mostraInterruttoreSistema(); aggiornaConfig(); });
+  }
+
+  function creaConfig() {
+    config = nodo('div', 'banco-config');
+    config.setAttribute('role', 'status');
+    rigaSuono = rigaDiConfig('Il suono parte dopo un tocco su questa pagina: finché non la usi il browser lo tiene fermo.', [
+      { testo: 'Attiva il suono', pieno: true, azione: function () { sbloccaAudio(); suono(); } },
+    ]);
+    rigaNotifiche = rigaDiConfig('Attiva le notifiche: con la pagina in secondo piano o chiusa ricevi lo stesso richieste e corrieri, con il suono del computer.', [
+      { testo: 'Attiva', pieno: true, azione: attivaNotifiche },
+      { testo: 'Non ora', azione: function () { scrivi('localStorage', CHIAVE_NOTIFICHE_RIMANDATE, String(Date.now())); aggiornaConfig(); } },
+    ]);
+    rigaMessaggio = rigaDiConfig('', []);
+    testoMessaggio = rigaMessaggio.querySelector('.banco-config-testo');
+    [rigaSuono, rigaNotifiche, rigaMessaggio].forEach(function (r) { r.hidden = true; config.appendChild(r); });
+    config.hidden = true;
+    testa.insertAdjacentElement('afterend', config);
+    setTimeout(function () { configPronta = true; aggiornaConfig(); }, 1500);
   }
 
   // ---------- Scheda del browser: titolo e favicon ----------
@@ -2936,7 +3121,7 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
   }
   document.addEventListener('visibilitychange', function () {
     aggiornaTitolo();
-    if (!document.hidden) { aggiornaStato(); daiPush(); }
+    if (!document.hidden) { aggiornaStato(); daiPush(); aggiornaConfig(); }
   });
 
   // ---------- Pallino su "Banco" e striscia ----------
@@ -3418,17 +3603,18 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
     });
   }
 
-  let pushInCorso = false;
+  // Ritorna una promessa che si chiude a notifiche trattate e suono PARTITO (non finito: per quello c'è attendiFineSuono). Se un giro è già in corso ritorna quello.
+  let pushInCorso = null;
   function daiPush() {
-    if (pushInCorso) return;
-    pushInCorso = true;
-    fetch('/api/notifiche/push', { cache: 'no-store', credentials: 'same-origin', headers: { Accept: 'application/json' } })
+    if (pushInCorso) return pushInCorso;
+    pushInCorso = fetch('/api/notifiche/push', { cache: 'no-store', credentials: 'same-origin', headers: { Accept: 'application/json' } })
       .then(leggiJson)
       .then(function (d) {
         const nuove = ((d && d.notifiche) || []).filter(function (n) { return !(n.eta_sec > NOTIFICA_VECCHIA_SEC); });
-        if (!nuove.length) return;
+        if (!nuove.length) return null;
         let suonare = false;
         let aggiornare = false;
+        const perSuono = []; // le notifiche che meritano un suono: se il browser blocca l'audio, suona la notifica di sistema al loro posto
         nuove.forEach(function (n) {
           // Notifica di sistema: solo se la pagina è nascosta (se si vede basta l'avviso a comparsa, per non avvisare due volte).
           if (document.hidden && notificheSistemaConsentite()) mostraNotifica(n.titolo, n.testo, n.link, 'minuteria-' + n.id);
@@ -3438,6 +3624,7 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
               if (!n.richiesta) break; // già risposta o scaduta: niente da fare
               aggiornare = true;
               suonare = true;
+              perSuono.push(n);
               if (!eHome && !sullaPagina) schedaRichiesta(n.richiesta, [n.id], false);
               else if (sullaPagina) segnaLette([n.id], n.request_id, null); // sulla pagina di quella richiesta c'è già tutto: letta
               break;
@@ -3445,6 +3632,7 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
               if (!n.ordine || !n.ordine.daPreparare) break;
               aggiornare = true;
               suonare = true;
+              perSuono.push(n);
               if (!eHome && !sullaPagina) schedaOrdine(n.ordine, [n.id], false);
               else if (sullaPagina) segnaLette([n.id], null, n.ordine.id);
               break;
@@ -3470,12 +3658,28 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
               break;
           }
         });
-        if (suonare) suono();
         if (aggiornare) aggiornaStato();
+        if (!suonare) return null;
+        return suono().then(function (esito) {
+          // Audio bloccato dal browser (nessun gesto su questa pagina) ma notifiche del computer attive: ci pensa il sistema, col suo suono. Con la scheda nascosta la
+          // notifica è già stata mostrata qui sopra (stesso tag: non se ne fa una seconda).
+          if (esito === 'bloccato' && notificheSistemaConsentite()) {
+            perSuono.forEach(function (n) { mostraNotifica(n.titolo, n.testo, n.link, 'minuteria-' + n.id); });
+          }
+        });
       })
       .catch(function () { /* nessuna notifica questo giro */ })
-      .then(function () { pushInCorso = false; });
+      .then(function () { pushInCorso = null; });
+    return pushInCorso;
   }
+
+  // La ricarica automatica delle pagine del banco (blocco "Pagine del banco") passa da qui: prima si prendono le notifiche appena nate, il suono parte e se ne aspetta la
+  // fine (al massimo 4,5 s), poi si ricarica. Senza, una ricarica nel momento sbagliato tagliava lo squillo a metà, o toglieva alla pagina nuova la notifica che la
+  // vecchia aveva già consumato senza farla suonare.
+  function primaDiRicaricare() {
+    return Promise.race([daiPush().then(attendiFineSuono), pausa(4500)]);
+  }
+  Minuteria.banco = { primaDiRicaricare: primaDiRicaricare, suono: suono };
 
   // ---------- Avvio ----------
 
@@ -3504,12 +3708,37 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
     } catch (e) { /* elenco rovinato: si riparte da zero */ }
   }
 
+  creaConfig();
   mostraNumeri(daConfermare, null);
   aggiornaStato();
   setTimeout(daiPush, 800);
   setInterval(aggiornaStato, STATO_MS);
   setInterval(daiPush, PUSH_MS);
   window.addEventListener('online', function () { aggiornaStato(); daiPush(); });
+
+  // In tempo reale (Server-Sent Events, GET /api/eventi, src/eventi.js): il server scrive a questa pagina appena nasce una notifica del banco, e il suono parte subito.
+  // I giri da 5 e 15 secondi qui sopra restano come rete di sicurezza, ma in una scheda NASCOSTA il browser rallenta i timer (fino a un giro al minuto dopo qualche
+  // minuto): era il motivo per cui "il suono arriva solo se sono sopra Banco". Gli eventi di rete invece non vengono rallentati. Se la notifica non è ancora visibile
+  // al database (l'evento parte appena scritta, a volte dentro una transazione) si riprova dopo un secondo e mezzo.
+  if ('EventSource' in window) {
+    let sorgente = null;
+    let apertaGiaUnaVolta = false;
+    const apriEventi = function () {
+      if (sorgente) return;
+      try { sorgente = new EventSource('/api/eventi'); } catch (e) { sorgente = null; return; }
+      sorgente.addEventListener('open', function () {
+        if (apertaGiaUnaVolta) { daiPush(); aggiornaStato(); } // riaperta dopo una caduta: si guarda cosa è successo nel frattempo
+        apertaGiaUnaVolta = true;
+      });
+      sorgente.addEventListener('notifica', function () {
+        daiPush();
+        setTimeout(daiPush, 1500);
+      });
+    };
+    apriEventi();
+    window.addEventListener('pagehide', function () { if (sorgente) { sorgente.close(); sorgente = null; } });
+    window.addEventListener('pageshow', function (e) { if (e.persisted) apriEventi(); });
+  }
   // Tornando con "indietro" il browser può rimostrare la pagina com'era: gli avvisi vanno rifatti da capo.
   window.addEventListener('pageshow', function (e) { if (e.persisted) window.location.reload(); });
 })();

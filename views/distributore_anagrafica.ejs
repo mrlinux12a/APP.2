@@ -253,7 +253,11 @@
           </header>
           <ul class="ab-interruttori">
             <li class="ab-riga-interruttore">
-              <div class="ab-riga-testi"><strong>Suoni</strong><span>Nuove richieste e corriere trovato</span></div>
+              <div class="ab-riga-testi">
+                <strong>Suoni</strong><span>Nuove richieste e corriere trovato</span>
+                <%# Il suono di adesso, anche a interruttore spento: il clic è il gesto che sblocca l'audio del browser. %>
+                <button type="button" class="ab-secondario ab-ascolta" data-suoni-prova>Ascolta il suono</button>
+              </div>
               <button type="button" class="ab-switch" role="switch" aria-checked="true" aria-label="Suoni" data-suoni-voce><span class="ab-switch-pallino"></span></button>
             </li>
             <li class="ab-riga-interruttore">

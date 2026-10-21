@@ -85,8 +85,9 @@ self.addEventListener('push', function (evento) {
   const opzioni = Object.assign({
     silent: false,
     vibrate: [250, 120, 250],
-    // Una richiesta da confermare nel banco aspetta una risposta: sul computer la notifica resta finché la si tocca (su telefono è ignorato).
-    requireInteraction: dati.tipo === 'nuova_richiesta',
+    // Una richiesta da confermare nel banco aspetta una risposta, e un corriere trovato vuol dire "prepara il materiale": sul computer la notifica resta finché la si
+    // tocca (su telefono è ignorato). Dal 21/10/2026 vale anche per "corriere trovato": prima spariva dopo pochi secondi e a banco lasciato un attimo non la vedeva nessuno.
+    requireInteraction: dati.tipo === 'nuova_richiesta' || dati.tipo === 'corriere_trovato',
   }, base);
   // `renotify` senza `tag` è un errore del browser, e senza notifica vale la regola sopra.
   if (tag) { opzioni.tag = tag; opzioni.renotify = true; }

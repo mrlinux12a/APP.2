@@ -17,8 +17,7 @@
   <%- include('partials/banco_testa') %>
 
   <main class="bacheca" data-bacheca
-        data-soglia-urgente="<%= bacheca.urgenteSec %>"
-        data-soglia-arrivo="<%= bacheca.arrivoVicinoMin %>">
+        data-soglia-urgente="<%= bacheca.urgenteSec %>">
 
     <%# ---------- Da confermare ---------- %>
     <section class="colonna colonna-conferma" aria-labelledby="col-conferma">
@@ -127,7 +126,6 @@
         <% daPreparare.forEach(function (o) {
              const minutiArrivo = o.arrivo ? Math.ceil(o.arrivo.secondi / 60) : 0;
              const inRitardo = o.arrivo && minutiArrivo <= 0;
-             const vicino = o.arrivo && minutiArrivo <= bacheca.arrivoVicinoMin;
         %>
           <article class="scheda scheda-ordine">
             <div class="scheda-testa scheda-testa-alto">
@@ -137,10 +135,10 @@
                   Ordine #<%= o.id %><% if (o.arrivo) { %> · ritira <%= o.corriere_nome || 'il corriere' %><% } %>
                 </div>
               </div>
+              <%# Solo i minuti che mancano al ritiro, sempre in verde (richiesta esplicita del 21/10/2026: niente orario "ore HH:MM", niente rosso negli ultimi minuti). %>
               <% if (o.arrivo) { %>
-                <div class="pillola-arrivo<%= vicino ? ' vicino' : '' %>" data-arrivo data-secondi="<%= o.arrivo.secondi %>">
+                <div class="pillola-arrivo" data-arrivo data-secondi="<%= o.arrivo.secondi %>">
                   <span class="pillola-min" data-arrivo-min><%= inRitardo ? 'In ritardo' : durata(minutiArrivo) %></span>
-                  <span class="pillola-ora">ore <%= fmt.oraRoma(o.ritiro_il) %></span>
                 </div>
               <% } %>
             </div>

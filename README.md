@@ -519,6 +519,11 @@ Le notifiche sono **solo di sistema, col suono del telefono, con l'app in second
 poi **Prova** per rifarla. Dal server: `node scripts/prova_push.js <nome-utente>` manda una prova ai suoi telefoni e scrive l'esito di ognuno.
 Senza chiavi, senza tabella o con `PUSH_ATTIVO=0` il sito funziona come prima: avvisi solo con l'app aperta. L'app Android nativa ha le sue push (`src/push.js`, Expo).
 
+**Banco** (richieste da confermare e "corriere trovato"): il suono arriva da ogni pagina del banco, anche con la scheda nascosta (il server avvisa la pagina in tempo reale, `GET /api/eventi`), e
+con la pagina chiusa o in secondo piano arriva la notifica di sistema, **ma solo se il banco le ha accese**: sotto l'intestazione compare l'avviso azzurro "Attiva le notifiche" (si rimanda di
+7 giorni con "Non ora"; l'interruttore sta anche in Anagrafica del banco › Notifiche). Se il browser tiene fermo l'audio compare "Attiva il suono": basta un tocco sulla pagina. Il suono
+(`public/suoni/avviso.mp3`, "din-don" morbido) si rigenera con `node scripts/genera_suono_avviso.js` (serve `ffmpeg` nel PATH); "Ascolta il suono" in Anagrafica lo fa sentire.
+
 ## Gruppo WhatsApp dei corrieri
 
 L'installatore ha già pagato quando manda la richiesta. Quando un banco **accetta**, nel gruppo
