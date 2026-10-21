@@ -53,6 +53,11 @@ function esegui(sql, p) {
     righe.find((x) => x.id === p[0]).preso_il = new Date();
     return { changes: 1 };
   }
+  // il messaggio e l'eventuale sondaggio della stessa risposta si segnano "presi" insieme
+  if (/^UPDATE whatsapp_messaggi SET preso_il = NOW\(\) WHERE response_id = \? AND tipo IN \('ritiro_consegna', 'sondaggio'\) AND preso_il IS NULL$/.test(s)) {
+    for (const r of righe) if (r.response_id === p[0] && ['ritiro_consegna', 'sondaggio'].includes(r.tipo) && !r.preso_il) r.preso_il = new Date();
+    return { changes: 1 };
+  }
   if (/^SELECT istanza FROM whatsapp_messaggi WHERE request_id = \? AND tipo = 'ritiro_consegna' ORDER BY id DESC LIMIT 1$/.test(s)) {
     const r = righe.filter((x) => x.request_id === p[0] && x.tipo === 'ritiro_consegna').pop();
     return r ? { istanza: r.istanza } : null;

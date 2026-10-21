@@ -731,3 +731,11 @@ CREATE TABLE IF NOT EXISTS iscrizioni_push (
   aggiornato_il TIMESTAMP NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_iscrizioni_push_user ON iscrizioni_push(user_id);
+
+-- WhatsApp: sondaggio per prendere la consegna (21/10/2026)
+-- Accanto al messaggio "nuova consegna" il bot puo' mandare nel gruppo un sondaggio WhatsApp (WHATSAPP_SONDAGGIO=1): ogni opzione sono i minuti per arrivare dal
+-- venditore, e il primo che vota prende la consegna. I voti arrivano CIFRATI e si leggono solo con la chiave del sondaggio (messageSecret, 32 byte, in base64):
+-- va conservata, altrimenti un riavvio del server a meta' richiesta farebbe perdere i voti. La riga del sondaggio e' una normale riga di whatsapp_messaggi con
+-- tipo = 'sondaggio' (testo = domanda e opzioni in JSON, wa_msg_id = id del sondaggio nel gruppo). Il blocco si puo' rilanciare. Senza la colonna il sondaggio
+-- non parte (il server lo scrive nel log) e la consegna si prende come prima, con "preso <minuti>".
+ALTER TABLE whatsapp_messaggi ADD COLUMN IF NOT EXISTS segreto_sondaggio TEXT;

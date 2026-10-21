@@ -564,6 +564,8 @@ che faccia parte del gruppo; WhatsApp può bloccare il numero in qualsiasi momen
 WHATSAPP_ATTIVO=1
 WHATSAPP_GRUPPO=...           # nome esatto del gruppo oppure il suo id (xxx@g.us)
 WHATSAPP_PAROLA_CHIAVE=preso  # facoltativa
+WHATSAPP_SONDAGGIO=1          # facoltativa: accompagna ogni "nuova consegna" con un sondaggio da votare (vedi sotto)
+WHATSAPP_SONDAGGIO_MINUTI=5,10,15,20,30,45,60,90  # facoltativa: le opzioni del sondaggio, in minuti (da 2 a 12)
 WHATSAPP_NUMERO=39333...      # facoltativa: collega con un codice invece del QR
 ```
 
@@ -573,6 +575,13 @@ caratteri). Sul telefono del numero dedicato: *Dispositivi collegati → Collega
 rinnova ogni 20 secondi: se non si legge, il codice è più comodo. Se si passa da un metodo all'altro
 dopo un tentativo fallito, cancellare prima `whatsapp_auth/`.
 Senza `WHATSAPP_GRUPPO` il server, una volta collegato, stampa nome e id dei gruppi del numero.
+
+**Sondaggio per prendere la consegna** (`WHATSAPP_SONDAGGIO=1`, spento di default): nel gruppo i pulsanti veri non si possono avere (l'API ufficiale di WhatsApp non li ha nei gruppi e quelli
+"interattivi" di Baileys sono un trucco non ufficiale). Si usa un **sondaggio WhatsApp**: subito dopo il messaggio "nuova consegna" il bot ne manda uno a scelta singola con i minuti per arrivare
+dal venditore ("5 minuti", "10 minuti"... "1 ora", "1 ora e mezza"), e **il primo che vota prende la consegna**, come chi scrive "preso 30" (che continua a funzionare). Il bot risponde nel gruppo
+("✅ Preso da Marco! ...") e a chi vota dopo ("già presa da Marco"). Alla scadenza o all'annullo il sondaggio sparisce dal gruppo come il messaggio. Serve il blocco di schema
+"WhatsApp: sondaggio per prendere la consegna" (una colonna: **applicato al DB il 21/10/2026**; senza, il sondaggio non parte e il server lo scrive nel log). Sulla VPS: `git pull`, le righe
+sopra nel `.env`, `pm2 restart minuteria` (il log dice "sondaggio per prendere la consegna ACCESO"). Nessuna libreria nuova.
 La sessione sta in `whatsapp_auth/` (non in git: sono le credenziali del numero; se si cancella
 bisogna ricollegare). I messaggi passano da una coda (`whatsapp_messaggi`): se il collegamento è
 giù partono appena torna. Prima del primo avvio vanno applicati i due blocchi WhatsApp in fondo a

@@ -1,5 +1,6 @@
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const db = require('../db');
 const consegna = require('./consegna');
 const format = require('./format');
@@ -19,6 +20,13 @@ const format = require('./format');
 //
 // La logica di stato ("preso", scadenza, ordine) sta in richieste.js: qui solo il gruppo, cioè
 // messaggi in uscita, risposte in ingresso e la connessione.
+//
+// SONDAGGIO (WHATSAPP_SONDAGGIO=1, dal 21/10/2026): l'API ufficiale di WhatsApp non ha i pulsanti nei gruppi (la documentazione dei gruppi elenca solo testo, media e modelli) e i
+// pulsanti "interattivi" di Baileys sono un trucco non ufficiale che WhatsApp può spegnere. L'unica cosa da toccare che in un gruppo funziona sempre, su ogni telefono, è un
+// SONDAGGIO: subito dopo il messaggio "nuova consegna" il bot ne manda uno (singola scelta) con le opzioni in minuti ("5 minuti", "10 minuti"... "1 ora e mezza"), e il primo che
+// vota prende la consegna, esattamente come chi scrive "preso 30". I voti arrivano cifrati (si leggono con la chiave del sondaggio, tenuta in whatsapp_messaggi.segreto_sondaggio:
+// senza, un riavvio a metà richiesta li perderebbe) e la versione di Baileys che usiamo non li decifra da sola: lo facciamo qui (decifraVoto). Scrivere "preso <minuti>" funziona
+// comunque. Spento di default: va acceso nel .env e serve il blocco di schema "WhatsApp: sondaggio per prendere la consegna".
 //
 // Libreria non ufficiale (Baileys): si collega come dispositivo del numero scelto e scrive nel
 // gruppo. Il modulo è spento finché non c'è WHATSAPP_ATTIVO=1 (0 o niente = spento: i banchi accettano
@@ -41,6 +49,8 @@ const format = require('./format');
 //                            un codice al posto del QR
 //   WHATSAPP_PAROLA_CHIAVE   parola con cui si risponde, default "preso"
 //   WHATSAPP_AUTH_DIR        cartella della sessione, default "whatsapp_auth" (fuori da git)
+//   WHATSAPP_SONDAGGIO       1 per accompagnare ogni "nuova consegna" con un sondaggio da votare (default spento)
+//   WHATSAPP_SONDAGGIO_MINUTI  le opzioni del sondaggio, in minuti separati da virgola (da 2 a 12; default 5,10,15,20,30,45,60,90)
 
 const MINUTI_MAX = 600; // oltre 10 ore non è un tempo per arrivare dal venditore: probabile errore di battitura
 const TENTATIVI_MAX = 5;
@@ -82,6 +92,82 @@ async function istanzaDellaRichiesta(requestId) {
 
 function parolaChiave() {
   return (process.env.WHATSAPP_PAROLA_CHIAVE || 'preso').trim() || 'preso';
+}
+
+// ---------- Sondaggio ----------
+
+const MINUTI_SONDAGGIO = [5, 10, 15, 20, 30, 45, 60, 90];
+const OPZIONI_SONDAGGIO_MAX = 12; // il massimo di WhatsApp
+
+function sondaggioAcceso() {
+  return String(process.env.WHATSAPP_SONDAGGIO || '').trim() === '1';
+}
+
+// Le opzioni: WHATSAPP_SONDAGGIO_MINUTI ("10,20,30"), senza doppioni né valori fuori misura; meno di due valide = quelle di default.
+function minutiDelSondaggio() {
+  const scritti = String(process.env.WHATSAPP_SONDAGGIO_MINUTI || '')
+    .split(',')
+    .map((x) => parseInt(x.trim(), 10))
+    .filter((n) => Number.isFinite(n) && n >= 1 && n <= MINUTI_MAX);
+  const unici = [...new Set(scritti)].slice(0, OPZIONI_SONDAGGIO_MAX);
+  return unici.length >= 2 ? unici : MINUTI_SONDAGGIO;
+}
+
+// "5 minuti", "1 minuto", "1 ora", "1 ora e mezza", "2 ore e 15 minuti": il testo che si vede nel sondaggio (e che, col suo SHA-256, identifica l'opzione votata).
+function etichettaMinuti(minuti) {
+  if (minuti === 1) return '1 minuto';
+  if (minuti < 60) return `${minuti} minuti`;
+  const ore = Math.floor(minuti / 60);
+  const resto = minuti % 60;
+  const parteOre = ore === 1 ? '1 ora' : `${ore} ore`;
+  if (!resto) return parteOre;
+  if (resto === 30) return `${parteOre} e mezza`;
+  return `${parteOre} e ${resto} minuti`;
+}
+
+// Domanda e opzioni del sondaggio di una richiesta: finiscono in JSON nel `testo` della riga, così il voto si interpreta con le opzioni di quando è stato mandato anche se nel
+// frattempo cambiano nel .env.
+function datiSondaggio(richiestaId) {
+  return {
+    domanda: `Richiesta #${richiestaId}: in quanti minuti arrivi dal venditore?`,
+    opzioni: minutiDelSondaggio().map((minuti) => ({ minuti, etichetta: etichettaMinuti(minuti) })),
+  };
+}
+
+// La colonna del blocco di schema c'è? Se manca il sondaggio non parte (e il messaggio non lo promette): si riprova a guardare ogni 5 minuti, così dopo aver applicato lo schema
+// parte da solo, senza riavviare.
+let colonnaSondaggio = { presente: null, letta: 0 };
+async function sondaggioPossibile() {
+  if (!sondaggioAcceso()) return false;
+  const ora = Date.now();
+  if (colonnaSondaggio.presente === null || (!colonnaSondaggio.presente && ora - colonnaSondaggio.letta > 5 * 60 * 1000)) {
+    try {
+      const r = await db
+        .prepare(
+          `SELECT 1 AS si FROM information_schema.columns
+            WHERE table_schema = current_schema() AND table_name = 'whatsapp_messaggi' AND column_name = 'segreto_sondaggio'`
+        )
+        .get();
+      colonnaSondaggio = { presente: !!r, letta: ora };
+    } catch (err) {
+      return false; // il database non risponde: non si ricorda, si riguarda al prossimo messaggio
+    }
+    if (!colonnaSondaggio.presente) {
+      console.error('WhatsApp: WHATSAPP_SONDAGGIO=1 ma manca la colonna whatsapp_messaggi.segreto_sondaggio: applica il blocco "WhatsApp: sondaggio per prendere la consegna" di db/postgres/schema.sql. Intanto la consegna si prende scrivendo "' + parolaChiave() + ' <minuti>".');
+    }
+  }
+  return colonnaSondaggio.presente;
+}
+
+// Quale opzione ha scelto un voto già decifrato: `selectedOptions` sono gli SHA-256 dei testi delle opzioni. Un voto vuoto (ritirato) o di un'opzione che non conosciamo = null.
+function opzioneVotata(voto, opzioni) {
+  const scelti = (voto && voto.selectedOptions) || [];
+  for (const hash of scelti) {
+    const hex = Buffer.from(hash).toString('hex');
+    const trovata = (opzioni || []).find((o) => crypto.createHash('sha256').update(Buffer.from(o.etichetta)).digest('hex') === hex);
+    if (trovata) return trovata;
+  }
+  return null;
 }
 
 // ---------- Lettura della risposta ----------
@@ -149,8 +235,11 @@ function tappa(titolo, nome, indirizzo, lat, lng) {
   return righe.join('\n');
 }
 
-function testoRitiroConsegna({ richiestaId, banco, consegnaA }) {
+function testoRitiroConsegna({ richiestaId, banco, consegnaA, conSondaggio = false }) {
   const p = parolaChiave();
+  const come = conSondaggio
+    ? `Per prenderla vota nel sondaggio qui sotto: scegli i minuti che ci metti ad arrivare dal venditore (tappa 1, prelievo merci). Oppure rispondi a questo messaggio con «${p} <minuti>» (es. ${p} 30).`
+    : `Per prenderla rispondi a questo messaggio con «${p} <minuti>» (es. ${p} 30). I minuti sono il tempo che ci metti ad arrivare dal venditore (tappa 1, prelievo merci).`;
   return [
     `🚚 Richiesta #${richiestaId}: nuova consegna`,
     '',
@@ -158,7 +247,7 @@ function testoRitiroConsegna({ richiestaId, banco, consegnaA }) {
     '',
     tappa('2️⃣ CONSEGNA MERCE', null, consegnaA.indirizzo, consegnaA.lat, consegnaA.lng),
     '',
-    `Per prenderla rispondi a questo messaggio con «${p} <minuti>» (es. ${p} 30). I minuti sono il tempo che ci metti ad arrivare dal venditore (tappa 1, prelievo merci).`,
+    come,
   ].join('\n');
 }
 
@@ -203,14 +292,27 @@ async function accodaRitiroConsegna(requestId, responseId) {
   const risposta = await db.prepare('SELECT * FROM request_responses WHERE id = ?').get(responseId);
   if (!richiesta || !risposta) return null;
 
-  const testo = testoRitiroConsegna({
+  const conSondaggio = await sondaggioPossibile();
+  const dati = {
     richiestaId: richiesta.id,
     banco: await datiRitiro(risposta.distributor_id),
     consegnaA: await datiConsegna(richiesta.cliente_id, richiesta.destinazione),
-  });
+  };
   const info = await db
     .prepare(`INSERT INTO whatsapp_messaggi (request_id, response_id, tipo, testo, istanza) VALUES (?, ?, 'ritiro_consegna', ?, ?)`)
-    .run(richiesta.id, risposta.id, testo, nomeIstanza());
+    .run(richiesta.id, risposta.id, testoRitiroConsegna({ ...dati, conSondaggio }), nomeIstanza());
+  if (conSondaggio) {
+    // Il sondaggio è una riga a sé, subito dopo (le righe partono in ordine di id): il segreto si sceglie e si salva QUI, prima dell'invio, così i voti sono leggibili anche
+    // se il server si riavvia dopo averlo mandato. Se non si riesce a scriverla il messaggio torna quello di sempre (senza promettere un sondaggio che non c'è).
+    try {
+      await db
+        .prepare(`INSERT INTO whatsapp_messaggi (request_id, response_id, tipo, testo, istanza, segreto_sondaggio) VALUES (?, ?, 'sondaggio', ?, ?, ?)`)
+        .run(richiesta.id, risposta.id, JSON.stringify(datiSondaggio(richiesta.id)), nomeIstanza(), crypto.randomBytes(32).toString('base64'));
+    } catch (err) {
+      console.error('WhatsApp, sondaggio non accodato:', err.message);
+      await db.prepare('UPDATE whatsapp_messaggi SET testo = ? WHERE id = ?').run(testoRitiroConsegna(dati), info.lastInsertRowid).catch(() => {});
+    }
+  }
   svuotaCoda().catch((err) => console.error('WhatsApp, invio:', err.message));
   return Number(info.lastInsertRowid);
 }
@@ -225,7 +327,7 @@ async function ritiraRichiesta(requestId, { motivo = null, tranne = null } = {})
     .prepare(
       `UPDATE whatsapp_messaggi
           SET stato = CASE WHEN stato = 'da_inviare' THEN 'annullato' ELSE 'da_eliminare' END
-        WHERE request_id = ? AND tipo = 'ritiro_consegna' AND preso_il IS NULL
+        WHERE request_id = ? AND tipo IN ('ritiro_consegna', 'sondaggio') AND preso_il IS NULL
           AND stato IN ('da_inviare', 'inviato')
           AND (?::int IS NULL OR response_id IS DISTINCT FROM ?::int)`
     )
@@ -270,6 +372,15 @@ async function avvisaAnnulloOrdine(ordine) {
   );
 }
 
+// Il sondaggio di una riga: singola scelta, con la chiave salvata (messageSecret: Baileys la userebbe a caso, noi la vogliamo conoscere per leggere i voti).
+async function inviaSondaggio(gruppo, riga) {
+  if (!riga.segreto_sondaggio) throw new Error('sondaggio senza chiave');
+  const dati = JSON.parse(riga.testo);
+  return sock.sendMessage(gruppo, {
+    poll: { name: dati.domanda, values: dati.opzioni.map((o) => o.etichetta), selectableCount: 1, messageSecret: Buffer.from(riga.segreto_sondaggio, 'base64') },
+  });
+}
+
 async function inviaMessaggiInCoda() {
   const gruppo = await gruppoId();
   if (!gruppo) return;
@@ -285,7 +396,7 @@ async function inviaMessaggiInCoda() {
     .all(TENTATIVI_MAX, ...paramMia);
   for (const riga of daInviare) {
     try {
-      const inviato = await sock.sendMessage(gruppo, { text: riga.testo });
+      const inviato = riga.tipo === 'sondaggio' ? await inviaSondaggio(gruppo, riga) : await sock.sendMessage(gruppo, { text: riga.testo });
       const ok = await db
         .prepare(
           `UPDATE whatsapp_messaggi SET stato = 'inviato', wa_msg_id = ?, inviato_il = NOW(), errore = NULL
@@ -363,9 +474,12 @@ function testoDelMessaggio(contenuto) {
 // numero di richiesta, quindi se tornassero indietro come messaggi "miei" verrebbero letti come risposte.
 const inviatiDalBot = new Set();
 
-async function rispondi(msg, testo) {
+async function rispondi(msg, testo, citare = true) {
   try {
-    const inviato = await sock.sendMessage(msg.key.remoteJid, { text: testo }, { quoted: msg });
+    // Una risposta a un voto di un sondaggio non cita niente (il voto non è un messaggio da citare): il testo dice già a quale richiesta si riferisce.
+    const inviato = citare
+      ? await sock.sendMessage(msg.key.remoteJid, { text: testo }, { quoted: msg })
+      : await sock.sendMessage(msg.key.remoteJid, { text: testo });
     if (inviato && inviato.key) {
       inviatiDalBot.add(inviato.key.id);
       if (inviatiDalBot.size > 200) inviatiDalBot.delete(inviatiDalBot.values().next().value);
@@ -388,6 +502,11 @@ async function gestisciMessaggio(msg) {
     if (nostro) return;
   }
   const contenuto = normalizzaContenuto(msg.message);
+  // Il voto di un sondaggio (non è un testo): lo legge gestisciVoto.
+  if (contenuto && contenuto.pollUpdateMessage) {
+    await gestisciVoto(msg, contenuto.pollUpdateMessage);
+    return;
+  }
   const testo = testoDelMessaggio(contenuto);
   const letta = leggiRisposta(testo);
   if (!letta.risposta) return;
@@ -418,23 +537,100 @@ async function gestisciMessaggio(msg) {
     return;
   }
 
-  const nome = (msg.pushName || (msg.key.fromMe && sock.user && sock.user.name) || '').trim().slice(0, 60);
-  const esito = await require('./richieste').corriereHaPreso(riga.response_id, letta.minuti, nome);
+  const nome = nomeDi(msg);
+  await prendiConsegna(msg, riga, letta.minuti, nome, true);
+}
+
+function nomeDi(msg) {
+  return (msg.pushName || (msg.key.fromMe && sock && sock.user && sock.user.name) || '').trim().slice(0, 60);
+}
+
+// Un corriere prende la consegna (scrivendo "preso 30" o votando il sondaggio): lo decide richieste.corriereHaPreso, atomica, e qui si risponde nel gruppo. `riga` è la riga
+// di whatsapp_messaggi a cui si riferisce (il messaggio o il sondaggio), `citare`: se la risposta cita il messaggio del corriere (i voti non si citano, e il nome lo dice la risposta).
+async function prendiConsegna(msg, riga, minuti, nome, citare) {
+  const esito = await require('./richieste').corriereHaPreso(riga.response_id, minuti, nome);
   if (esito.esito === 'preso') {
     await db.prepare('UPDATE whatsapp_messaggi SET preso_il = NOW() WHERE id = ?').run(riga.id);
+    // Il messaggio e il sondaggio della stessa risposta sono "presi" insieme: nessuno dei due va tolto dal gruppo alla chiusura della richiesta.
+    await db
+      .prepare(`UPDATE whatsapp_messaggi SET preso_il = NOW() WHERE response_id = ? AND tipo IN ('ritiro_consegna', 'sondaggio') AND preso_il IS NULL`)
+      .run(riga.response_id);
     // L'ordine è già confermato (il cliente ha pagato all'invio): dopo questa risposta il bot non
     // scrive più niente nel gruppo.
-    const entro = format.oraRoma(new Date(Date.now() + letta.minuti * 60 * 1000));
+    const entro = format.oraRoma(new Date(Date.now() + minuti * 60 * 1000));
+    const da = !citare && nome ? ` da ${nome}` : '';
     await rispondi(
       msg,
-      `✅ Preso! Richiesta #${riga.request_id}: arrivi dal venditore in ${consegna.inParole(letta.minuti)}, ritiro entro le ${entro}.`
+      `✅ Preso${da}! Richiesta #${riga.request_id}: arrivi dal venditore in ${consegna.inParole(minuti)}, ritiro entro le ${entro}.`,
+      citare
     );
   } else if (esito.esito === 'gia_preso') {
     const da = esito.nome ? ` da ${esito.nome}` : '';
-    await rispondi(msg, `La richiesta #${riga.request_id} è già stata presa${da}.`);
+    await rispondi(msg, `La richiesta #${riga.request_id} è già stata presa${da}.`, citare);
   } else {
-    await rispondi(msg, `La richiesta #${riga.request_id} è scaduta: non è più disponibile.`);
+    await rispondi(msg, `La richiesta #${riga.request_id} è scaduta: non è più disponibile.`, citare);
   }
+  return esito;
+}
+
+// ---------- Voti del sondaggio ----------
+
+// Il voto arriva cifrato: si decifra con la chiave del sondaggio, l'id del sondaggio e gli indirizzi di chi l'ha creato (questo numero) e di chi vota. Con gli indirizzi
+// "nuovi" di WhatsApp (LID) lo stesso numero può comparire in due forme e non si sa quale abbia usato chi ha cifrato: si provano tutte le combinazioni (la cifratura è
+// autenticata, quella sbagliata non decifra mai niente di falso). Ritorna il voto ({ selectedOptions }) o null.
+async function decifraVoto(msg, aggiornamento, riga) {
+  if (!riga.segreto_sondaggio || !aggiornamento.vote) return null;
+  baileys = baileys || (await import('baileys'));
+  const { decryptPollVote, jidNormalizedUser } = baileys;
+  const normalizza = (jid) => (jid ? jidNormalizedUser(jid) : null);
+  const unici = (lista) => [...new Set(lista.filter(Boolean))];
+  const miei = unici([sock && sock.user && sock.user.id, sock && sock.user && sock.user.lid].map(normalizza));
+  const votanti = msg.key.fromMe ? miei : unici([msg.key.participantAlt, msg.key.participant, msg.key.remoteJidAlt].map(normalizza));
+  const segreto = Buffer.from(riga.segreto_sondaggio, 'base64');
+  for (const creatore of miei) {
+    for (const votante of votanti) {
+      try {
+        return decryptPollVote(aggiornamento.vote, { pollCreatorJid: creatore, pollMsgId: riga.wa_msg_id, pollEncKey: segreto, voterJid: votante });
+      } catch (err) {
+        /* un'altra combinazione */
+      }
+    }
+  }
+  return null;
+}
+
+// Chi ha già votato questo sondaggio e ha già avuto la sua risposta: un voto cambiato o ripetuto non fa rispondere due volte (né toglie la consegna a chi l'ha presa).
+const votiGestiti = new Set();
+
+// Un voto in un sondaggio nostro: il primo che sceglie un'opzione prende la consegna con quei minuti. Un voto ritirato, di un sondaggio che non conosciamo o di un'altra istanza
+// non fa niente.
+async function gestisciVoto(msg, aggiornamento) {
+  const chiave = aggiornamento && aggiornamento.pollCreationMessageKey;
+  if (!chiave || !chiave.id || !aggiornamento.vote) return;
+  const riga = await db.prepare(`SELECT * FROM whatsapp_messaggi WHERE wa_msg_id = ? AND tipo = 'sondaggio'`).get(chiave.id);
+  if (!riga || !miaRiga(riga)) return;
+  let dati;
+  try {
+    dati = JSON.parse(riga.testo);
+  } catch (err) {
+    return;
+  }
+  const voto = await decifraVoto(msg, aggiornamento, riga);
+  if (!voto) {
+    console.error(`WhatsApp: voto del sondaggio della richiesta #${riga.request_id} non leggibile (indirizzi o chiave non coincidono).`);
+    return;
+  }
+  const scelta = opzioneVotata(voto, dati.opzioni);
+  if (!scelta) return; // voto ritirato
+  const votante = msg.key.fromMe ? 'io' : msg.key.participantAlt || msg.key.participant || '';
+  const gia = `${riga.id}|${votante}`;
+  if (votiGestiti.has(gia)) return;
+  votiGestiti.add(gia);
+  if (votiGestiti.size > 500) votiGestiti.delete(votiGestiti.values().next().value);
+
+  const nome = nomeDi(msg);
+  console.log(`WhatsApp, sondaggio della richiesta #${riga.request_id}: ${nome || 'un corriere'} ha scelto ${scelta.etichetta}.`);
+  await prendiConsegna(msg, riga, scelta.minuti, nome, false);
 }
 
 // ---------- Connessione ----------
@@ -583,6 +779,9 @@ function avvia() {
   if (Number.isFinite(accorciata) && accorciata > 0) {
     console.warn(`WhatsApp: FINESTRA_CONFERMA_SEC=${accorciata} è nel .env: il corriere ha al massimo ${accorciata} secondi per rispondere "${parolaChiave()} <minuti>" (togli la riga per avere la finestra vera).`);
   }
+  if (sondaggioAcceso()) {
+    console.log(`WhatsApp: sondaggio per prendere la consegna ACCESO (opzioni: ${minutiDelSondaggio().map(etichettaMinuti).join(', ')}).`);
+  }
   collega().catch((err) => console.error('WhatsApp, avvio:', err.message));
   // I messaggi rimasti in coda (collegamento caduto, riavvio) partono appena si può.
   setInterval(() => svuotaCoda().catch((err) => console.error('WhatsApp, invio:', err.message)), 60 * 1000).unref();
@@ -603,5 +802,10 @@ module.exports = {
   gestisciMessaggio,
   svuotaCoda,
   // Solo per le prove: mette un socket finto al posto di quello vero.
-  _prova: { impostaSocket(s, g) { sock = s; connesso = !!s; gruppo = g || null; }, nomeIstanza, miaRiga, condizioneMia, istanzaDellaRichiesta, inviaMessaggiInCoda },
+  _prova: {
+    impostaSocket(s, g) { sock = s; connesso = !!s; gruppo = g || null; },
+    nomeIstanza, miaRiga, condizioneMia, istanzaDellaRichiesta, inviaMessaggiInCoda,
+    sondaggioAcceso, sondaggioPossibile, minutiDelSondaggio, etichettaMinuti, datiSondaggio, opzioneVotata, decifraVoto, votiGestiti,
+    azzeraControlloColonna() { colonnaSondaggio = { presente: null, letta: 0 }; },
+  },
 };
