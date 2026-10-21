@@ -65,8 +65,7 @@
     <div class="stato-barra" aria-hidden="true"><span<%- conEta && v.durataSec ? ' data-eta-barra="da-meta"' : '' %> style="width: <%= conEta && v.durataSec ? ((v.progresso != null ? v.progresso : 0.5) * 100).toFixed(1) : Math.round((v.progresso != null ? v.progresso : 0.5) * 100) %>%"></span></div>
    </a>
     <%# La barra avanza col tempo fino all'arrivo previsto (a metà, "In viaggio", se non c'è l'orario). "Consegnato" qui è solo
-        un'etichetta: non si può toccare dalla home. Il pulsante PROVVISORIO che chiude l'ordine (POST
-        /ordini/:id/consegnato-prova) sta nella pagina dell'ordine, "Stato ordini". %>
+        un'etichetta: non si può toccare. La consegna la segna il corriere dal gruppo WhatsApp (nessun pulsante per l'installatore). %>
     <div class="stato-tappe" aria-hidden="true">
       <span>Accettato</span>
       <span>In viaggio</span>

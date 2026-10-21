@@ -52,6 +52,7 @@ const tokenApp = require('./src/token_app');
 const emailModulo = require('./src/email');
 const { conCache } = require('./src/memo');
 const flusso = require('./src/flusso_cliente');
+const eventi = require('./src/eventi');
 const storicoBanco = require('./src/storico_banco');
 const storicoDettaglio = require('./src/storico_dettaglio');
 const richiestaBanco = require('./src/richiesta_banco');
@@ -148,7 +149,8 @@ app.use((req, res, next) => {
 });
 // Comprime HTML, JSON, CSS e JS (sotto 1 KB no): la ricerca in JSON passa da ~46 KB a pochi KB,
 // che su rete mobile è la parte più lenta. Le foto sono già compresse (webp) e restano intatte.
-app.use(compression());
+// Gli eventi in tempo reale (GET /api/eventi) NON si comprimono: la compressione tratterrebbe i messaggi invece di mandarli subito.
+app.use(compression({ filter: (req, res) => (req.path === '/api/eventi' ? false : compression.filter(req, res)) }));
 
 // Webhook di Stripe (checkout.session.completed / expired). Prima dei parser del corpo: la firma si verifica sul testo
 // grezzo, e un JSON già interpretato non la farebbe più tornare. Niente sessione né controllo d'origine: la chiamata
@@ -258,6 +260,28 @@ app.use(
   })
 );
 app.use(salvaSessionePrimaDelRedirect);
+
+// Eventi dal server alla pagina dell'installatore (Server-Sent Events, src/eventi.js): una connessione per pagina aperta, il server scrive solo quando succede
+// qualcosa (oggi: il corriere ha segnato la consegna). Sta PRIMA del middleware qui sotto, che a ogni richiesta fa una decina di query per disegnare le pagine.
+// Un messaggio vuoto ogni 25 s tiene viva la connessione attraverso proxy e reti mobili.
+app.get('/api/eventi', (req, res) => {
+  const utente = req.session && req.session.user;
+  if (!utente || utente.ruolo !== 'cliente') return res.status(401).json({ errore: 'non autorizzato' });
+  res.set({
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-store, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no', // nginx: non trattenere
+  });
+  res.flushHeaders();
+  res.write('retry: 5000\n\n');
+  const togli = eventi.iscrivi(utente.id, res);
+  const cuore = setInterval(() => {
+    try { res.write(': \n\n'); } catch (e) { /* chiusa: la toglie 'close' */ }
+  }, 25000);
+  cuore.unref();
+  req.on('close', () => { clearInterval(cuore); togli(); });
+});
 
 // Ditta e filiale scritte nell'intestazione del banco (views/partials/banco_testa.ejs), che ha ogni pagina del
 // distributore: cambiano di rado, quindi si leggono una volta al minuto invece che a ogni pagina.
@@ -937,10 +961,13 @@ app.post('/api/carrello/imposta', requireRole('cliente'), async (req, res) => {
 });
 
 // Dalla posizione del dispositivo all'indirizzo: il carrello (blocco "Carrello: indirizzo di consegna" di public/app.js) ne precompila "Consegna in cantiere".
-// Senza una via trovata (o fuori dall'Italia) `indirizzo` è vuoto e il campo resta da scrivere a mano.
+// Senza una via trovata (o fuori dall'Italia) `indirizzo` è vuoto e il campo resta da scrivere a mano. `precisione` = i metri di incertezza che dichiara il dispositivo:
+// oltre geo.PRECISIONE_CIVICO_M il civico non si scrive (`civico: false`, `precisa: false`: sarebbe quello di un'altra casa) e il carrello lo chiede a chi paga.
 app.get('/api/indirizzo', requireRole('cliente'), async (req, res) => {
-  const indirizzo = await geo.indirizzoDaPosizione(Number(req.query.lat), Number(req.query.lng));
-  res.json({ ok: !!indirizzo, indirizzo: indirizzo || '' });
+  const precisioneM = req.query.precisione ? Number(req.query.precisione) : NaN;
+  const trovato = await geo.indirizzoDaPosizioneDettaglio(Number(req.query.lat), Number(req.query.lng), { precisioneM });
+  if (!trovato) return res.json({ ok: false, indirizzo: '' });
+  res.json({ ok: true, indirizzo: trovato.indirizzo, civico: trovato.civico, precisa: trovato.precisa });
 });
 
 app.post('/carrello', requireRole('cliente'), async (req, res) => {
@@ -1405,29 +1432,14 @@ app.get('/ordini/:id', requireLogin, async (req, res) => {
   });
 });
 
-app.post('/ordini/:id/consegnato', requireRole('cliente'), async (req, res) => {
+// L'installatore NON conferma la consegna (richiesta esplicita del 21/10/2026): la segna il corriere dal sondaggio nel gruppo WhatsApp
+// ("🚀 Segna come Consegnato", src/whatsapp.js → flusso.segnaConsegnatoDalCorriere). Questa rotta serve solo alla pagina dell'ordine in consegna,
+// che la interroga ogni pochi secondi (data-attendi-consegna in app.js) e, appena l'ordine risulta consegnato, si ricarica mostrando la pagina "Consegnato".
+app.get('/api/ordini/:id/consegnato', requireRole('cliente'), async (req, res) => {
   const ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
-  if (!ordine || ordine.cliente_id !== req.session.user.id) {
-    return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Ordine non trovato.' });
-  }
-  await flusso.segnaConsegnato(ordine);
-  // Come per la rotta provvisoria qui sotto: dopo "Ordine consegnato" si va in "Stato ordini".
-  res.redirect('/ordini');
-});
-
-// PROVVISORIO: "Consegnato" cliccabile sulla scheda della home, per non mostrare più l'ordine in consegna.
-// Vale per qualunque stato dell'ordine (vedi flusso.segnaConsegnatoProva); da togliere quando la consegna
-// verrà segnata da un evento vero.
-app.post('/ordini/:id/consegnato-prova', requireRole('cliente'), async (req, res) => {
-  const ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
-  if (!ordine || ordine.cliente_id !== req.session.user.id) {
-    return res.status(404).render('errore', { titolo: 'Non trovato', messaggio: 'Ordine non trovato.' });
-  }
-  await flusso.segnaConsegnatoProva(ordine);
-  // Dopo "Ordine consegnato" si va in "Stato ordini" (richiesta esplicita del 15/10/2026), non sulla pagina dell'ordine né in
-  // catalogo: lì c'è l'altro ordine in corso, se c'è, altrimenti la pagina "nessun ordine in corso". L'ordine appena chiuso si
-  // rivede dallo Storico. (Il pulsante sta solo nella pagina dell'ordine.)
-  res.redirect('/ordini');
+  if (!ordine || ordine.cliente_id !== req.session.user.id) return res.status(404).json({ errore: 'non trovato' });
+  res.set('Cache-Control', 'no-store');
+  res.json({ consegnato: !!ordine.consegnato_il });
 });
 
 // Elimina ordine (cliente) — globale
@@ -2382,6 +2394,7 @@ const server = app.listen(PORT, HOST, () => {
 // Dopo 10 secondi si esce comunque.
 function chiudiConGrazia(segnale) {
   console.log(`${segnale}: chiudo il server...`);
+  eventi.chiudiTutti(); // le connessioni degli eventi non finiscono da sole e terrebbero aperto il server
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 10 * 1000).unref();
 }

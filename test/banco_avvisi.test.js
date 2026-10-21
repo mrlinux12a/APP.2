@@ -168,31 +168,40 @@ test('una richiesta già chiusa non avvisa nessuno (la UPDATE atomica non cambia
   assert.equal(notifiche.length, 0);
 });
 
-test('consegna: il banco riceve "Ordine #N consegnato" una volta sola, anche se il cliente conferma due volte', async () => {
+test('consegna: il banco riceve "Ordine #N consegnato" una volta sola, anche se il corriere la segna due volte', async () => {
   notifiche.length = 0;
   dati.consegnaScritta = 0;
   dati.ordine.consegnato_il = null;
-  await flusso.segnaConsegnatoProva(dati.ordine);
+  // le pagine aperte dell'installatore (cliente 5) ricevono l'evento SUBITO, una volta sola
+  const eventiRicevuti = [];
+  const togli = require('../src/eventi').iscrivi(5, { write: (m) => eventiRicevuti.push(m), end() {} });
+  await flusso.segnaConsegnatoDalCorriere(dati.ordine);
+  assert.deepEqual(eventiRicevuti, ['event: consegnato\ndata: {"ordine":77}\n\n']);
   assert.equal(notifiche.length, 1);
   const n = notifiche[0];
   assert.equal(n.tipo, 'ordine_consegnato');
   assert.equal(n.user_id, 30, 'gli utenti della filiale dell\'ordine');
   assert.equal(n.titolo, 'Ordine #77 consegnato');
-  assert.match(n.testo, /^Rossi Impianti S\.r\.l\. ha confermato la consegna alle \d\d:\d\d\.$/);
+  assert.match(n.testo, /^Il corriere ha segnato la consegna a Rossi Impianti S\.r\.l\. alle \d\d:\d\d\.$/);
   assert.equal(n.order_id, 77);
   assert.equal(n.link, '/distributore/ordini/77');
 
-  // la seconda conferma (due schede aperte): la UPDATE non cambia niente, nessun secondo avviso
-  await flusso.segnaConsegnatoProva(dati.ordine);
+  // il secondo voto (due corrieri insieme): la UPDATE non cambia niente, nessun secondo avviso né secondo evento
+  await flusso.segnaConsegnatoDalCorriere(dati.ordine);
   assert.equal(notifiche.length, 1);
+  assert.equal(eventiRicevuti.length, 1);
+  togli();
 
-  // con la rotta vera (ordine evaso) vale lo stesso
+  // qualunque stato abbia l'ordine (anche 'evaso') vale lo stesso
   dati.consegnaScritta = 0;
-  await flusso.segnaConsegnato({ ...dati.ordine, stato: 'evaso', consegnato_il: null });
+  await flusso.segnaConsegnatoDalCorriere({ ...dati.ordine, stato: 'evaso', consegnato_il: null });
   assert.equal(notifiche.length, 2);
   // un ordine già consegnato non si tocca
-  await flusso.segnaConsegnato({ ...dati.ordine, stato: 'evaso', consegnato_il: new Date() });
+  await flusso.segnaConsegnatoDalCorriere({ ...dati.ordine, stato: 'evaso', consegnato_il: new Date() });
   assert.equal(notifiche.length, 2);
+  // l'installatore non ha più nessuna funzione per confermare la consegna
+  assert.equal(flusso.segnaConsegnato, undefined);
+  assert.equal(flusso.segnaConsegnatoProva, undefined);
 });
 
 test('richiesteInAttesa: solo le richieste da confermare di questa filiale, con cliente, articoli, pezzi, secondi e ora di scadenza', async () => {

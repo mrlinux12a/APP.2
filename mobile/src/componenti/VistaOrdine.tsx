@@ -3,11 +3,11 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { chiamaApi, ErroreApi, type Ordine } from '../api';
+import { ErroreApi, type Ordine } from '../api';
 import { riordina } from '../carrello';
 import { useContoAllaRovescia, useOrdine } from '../dati';
 import { FONT, RAGGIO, useTema } from '../tema';
-import { chiedi, informa } from './dialoghi';
+import { informa } from './dialoghi';
 import { Pagamenti } from './Pagamenti';
 import { Caricamento, Errore } from './Stato';
 import { Avviso, Bottone, Card, Forte, Nota, RigaArticolo, RigaInfo, SezioneTitolo } from './ui';
@@ -141,17 +141,6 @@ export function VistaOrdine({ id, nuovo = false }: { id: number; nuovo?: boolean
         </Card>
       ) : null}
 
-      {o.da_confermare_consegna ? (
-        <Bottone
-          titolo="Ho ricevuto il materiale"
-          onPress={() =>
-            chiedi('Hai ricevuto il materiale?', 'L’ordine risulterà consegnato.', 'Sì, ricevuto', () =>
-              esegui('consegnato', () => chiamaApi(`/ordini/${id}/consegnato`, { metodo: 'POST' }))
-            )
-          }
-          inCorso={azione === 'consegnato'}
-        />
-      ) : null}
       <Nota>Per problemi con l’ordine contatta l’assistenza: dopo la conferma del banco non si può più annullare.</Nota>
     </ScrollView>
   );

@@ -295,6 +295,44 @@ test('geocodifica: legge lat/lng, ritenta senza CAP, non lancia mai e rifiuta po
   assert.equal(interrotta, true);
 });
 
+test('indirizzoDaPosizione: il civico si scrive solo se la posizione è abbastanza precisa; altrimenti la sola via (zoom 17)', async () => {
+  const visti = [];
+  const inversa = (address) => async (url) => {
+    visti.push(String(url));
+    return { ok: true, json: async () => ({ address }) };
+  };
+  const puggia = { country_code: 'it', road: 'Via Puggia', house_number: '22', postcode: '16141', city: 'Genova', 'ISO3166-2-lvl6': 'IT-GE' };
+  const p = [44.4019645, 8.9742339];
+
+  // senza la precisione, o entro 30 m: la casa più vicina, e il CAP di OpenStreetMap non si scrive
+  for (const opzioni of [{}, { precisioneM: 5 }, { precisioneM: 30 }, { precisioneM: NaN }]) {
+    visti.length = 0;
+    assert.deepEqual(await geo.indirizzoDaPosizioneDettaglio(...p, { fetch: inversa(puggia), ...opzioni }), { indirizzo: 'Via Puggia 22, Genova (GE)', civico: true, precisa: true }, JSON.stringify(opzioni));
+    assert.match(visti[0], /^https:\/\/nominatim\.openstreetmap\.org\/reverse\?/);
+    assert.match(visti[0], /zoom=18/);
+  }
+  assert.equal(await geo.indirizzoDaPosizione(...p, { fetch: inversa(puggia) }), 'Via Puggia 22, Genova (GE)', 'la versione solo testo');
+
+  // oltre 30 m il numero sarebbe quello di un'altra casa (da Via Puggia 22, 106 m più in là c'è il 17): niente numero, via più vicina
+  for (const precisioneM of [31, 100, 4000]) {
+    visti.length = 0;
+    const r = await geo.indirizzoDaPosizioneDettaglio(...p, { fetch: inversa({ ...puggia, house_number: '17' }), precisioneM });
+    assert.deepEqual(r, { indirizzo: 'Via Puggia, Genova (GE)', civico: false, precisa: false }, String(precisioneM));
+    assert.match(visti[0], /zoom=17/);
+    assert.doesNotMatch(r.indirizzo, /17/);
+  }
+  assert.equal(geo.PRECISIONE_CIVICO_M, 30);
+
+  // posizione precisa ma OpenStreetMap non ha un numero lì: via sola, e `precisa` resta vero (il messaggio è un altro)
+  assert.deepEqual(await geo.indirizzoDaPosizioneDettaglio(...p, { fetch: inversa({ ...puggia, house_number: undefined }), precisioneM: 8 }), { indirizzo: 'Via Puggia, Genova (GE)', civico: false, precisa: true });
+
+  // senza una via, fuori dall'Italia, con coordinate che non valgono, con la rete giù: null, mai un'eccezione
+  assert.equal(await geo.indirizzoDaPosizioneDettaglio(...p, { fetch: inversa({ country_code: 'it', city: 'Genova' }) }), null);
+  assert.equal(await geo.indirizzoDaPosizioneDettaglio(...p, { fetch: inversa({ country_code: 'fr', road: 'Rue X' }) }), null);
+  assert.equal(await geo.indirizzoDaPosizioneDettaglio(51.5, -0.12, { fetch: async () => { throw new Error('non deve chiamare'); } }), null);
+  assert.equal(await geo.indirizzoDaPosizioneDettaglio(...p, { fetch: async () => { throw new Error('rete'); } }), null);
+});
+
 test('posizioneValida: un punto in Italia (isole comprese)', () => {
   assert.equal(geo.posizioneValida(44.4, 8.9), true);
   assert.equal(geo.posizioneValida(37.5, 15.1), true, 'Catania');

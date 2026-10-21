@@ -208,6 +208,8 @@
     // essere cambiato: per esempio con un ordine in consegna si restava a "In consegna" anche con una nuova richiesta
     // in attesa, fino al giro successivo (un minuto). Si rilegge subito.
     window.addEventListener('pageshow', function (e) { if (e.persisted) aggiorna(); });
+    // Un evento dal server (public/app.js, GET /api/eventi: per esempio il corriere ha segnato la consegna): lo stato si rilegge subito, senza aspettare il giro.
+    window.addEventListener('minuteria:stato-ordini', aggiorna);
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) fermaGiro(); else { aggiorna(); avviaGiro(); }
     });

@@ -868,12 +868,25 @@ test('posizione di consegna: l\'indirizzo del carrello parte VUOTO, due modi per
   assert.match(t, /<button type="button" class="btn-cambia" data-consegna-cambia>Fatto<\/button>/, 'senza indirizzo il campo è aperto');
   await chiedi('/api/carrello/imposta', json({ id: 1, qty: 0 }));
 
-  // dalla posizione all'indirizzo: la geocodifica inversa, già nel formato del campo ("Via, civico, CAP città (provincia)")
+  // dalla posizione all'indirizzo: la geocodifica inversa, già nel formato del campo ("Via, civico, città (provincia)", SENZA il CAP di OpenStreetMap: spesso sbagliato)
   nominatim.chiamate.length = 0;
   let r = await chiedi('/api/indirizzo?lat=44.4019&lng=8.9742');
   assert.equal(r.status, 200);
-  assert.deepEqual(await r.json(), { ok: true, indirizzo: 'Via Puggia 22/3, 16131 Genova (GE)' });
+  assert.deepEqual(await r.json(), { ok: true, indirizzo: 'Via Puggia 22/3, Genova (GE)', civico: true, precisa: true });
   assert.match(nominatim.chiamate[0], /\/reverse\?.*lat=44\.4019.*lon=8\.9742/);
+  assert.match(nominatim.chiamate[0], /zoom=18/, 'senza la precisione del dispositivo ci si fida: la casa più vicina');
+  // con la precisione dichiarata dal dispositivo: fino a 30 m il civico vale; oltre sarebbe quello di un'altra casa (da Via Puggia 22 usciva il 17, 106 m più in là),
+  // quindi si prende solo la via più vicina (zoom 17), senza numero, e si dice che la posizione non bastava
+  for (const [precisione, giusto] of [['5', true], ['30', true], ['31', false], ['100', false], ['5000', false]]) {
+    nominatim.chiamate.length = 0;
+    r = await chiedi('/api/indirizzo?lat=44.4019&lng=8.9742&precisione=' + precisione);
+    assert.deepEqual(await r.json(), giusto
+      ? { ok: true, indirizzo: 'Via Puggia 22/3, Genova (GE)', civico: true, precisa: true }
+      : { ok: true, indirizzo: 'Via Puggia, Genova (GE)', civico: false, precisa: false }, 'precisione ' + precisione);
+    assert.match(nominatim.chiamate[0], giusto ? /zoom=18/ : /zoom=17/, 'precisione ' + precisione);
+  }
+  // una precisione che non è un numero non cambia nulla (come se mancasse)
+  assert.equal((await (await chiedi('/api/indirizzo?lat=44.4019&lng=8.9742&precisione=abc')).json()).civico, true);
   // senza una via, fuori dall'Italia o con coordinate che non valgono: nessun indirizzo, il campo resta da scrivere
   const inversaPrima = nominatim.inversa;
   try {
@@ -900,10 +913,20 @@ test('posizione di consegna: l\'indirizzo del carrello parte VUOTO, due modi per
     cookie = conSessione;
   }
 
-  // lo script: la posizione si legge SOLO al clic sul pulsante (mai all'apertura della pagina), con un secondo tentativo meno preciso; coordinate tolte
-  // se si modifica l'indirizzo; messaggi per permesso negato, HTTPS mancante, iPhone e Android; nessun invio senza indirizzo
+  // lo script: la posizione si legge SOLO al clic sul pulsante (mai all'apertura della pagina), tenendo il rilevamento migliore di qualche secondo (non il primo,
+  // spesso grossolano o in cache) e con un secondo tentativo meno preciso; la precisione parte col server; coordinate tolte se si modifica l'indirizzo; messaggi
+  // per permesso negato, HTTPS mancante, iPhone e Android; nessun invio senza indirizzo, né con una via senza numero civico
   const js = await (await chiedi('/app.js')).text();
   assert.match(js, /navigator\.geolocation\.getCurrentPosition\(ok, no, opzioni\)/);
+  assert.match(js, /navigator\.geolocation\.watchPosition\([\s\S]*?\{ enableHighAccuracy: true, maximumAge: 0, timeout: ATTESA_MASSIMA_MS \}\)/, 'si ascolta il GPS, mai una posizione in cache');
+  assert.match(js, /navigator\.geolocation\.clearWatch\(sorveglianza\)/, 'e si smette di ascoltare');
+  assert.match(js, /migliore = p;/);
+  assert.match(js, /if \(metri <= PRECISIONE_OTTIMA_M\) concludi\(\);/);
+  assert.match(js, /encodeURIComponent\(lng\) \+ '&precisione=' \+ encodeURIComponent\(metri\)/, 'il server sa quanto è incerta la posizione');
+  assert.doesNotMatch(js, /maximumAge: 300000/, 'niente posizioni vecchie di cinque minuti');
+  assert.match(js, /setTimeout\(function \(\) \{\s*\/\/[^\n]*\n\s*if \(e\.defaultPrevented\) return;\s*bottoni\.forEach/, 'un invio fermato (manca il civico) non lascia il pulsante "Paga" disabilitato');
+  assert.match(js, /senzaCivico = dati\.civico === false;/);
+  assert.match(js, /aggiungi il numero civico\./);
   assert.match(js, /bottonePos\.addEventListener\('click', cercaPosizione\)/);
   assert.doesNotMatch(js, /\n\s*cercaPosizione\(\);?\s*\n/, 'mai chiamata da sola all\'apertura');
   assert.doesNotMatch(js, /if \(!campo\.value\.trim\(\)\) cercaPosizione/);
@@ -913,7 +936,7 @@ test('posizione di consegna: l\'indirizzo del carrello parte VUOTO, due modi per
   assert.match(js, /!window\.isSecureContext/);
   assert.match(js, /Impostazioni › Privacy e sicurezza › Localizzazione/, 'come riattivare il permesso su iPhone');
   assert.match(js, /lucchetto accanto all’indirizzo/, 'e su Android');
-  assert.match(js, /form\.addEventListener\('submit'[\s\S]*?if \(campo\.value\.trim\(\)\) return;[\s\S]*?e\.preventDefault\(\);/);
+  assert.match(js, /form\.addEventListener\('submit'[\s\S]*?if \(campo\.value\.trim\(\) && !\(senzaCivico && campo\.value\.trim\(\) === daPosizione\)\) return;[\s\S]*?e\.preventDefault\(\);/);
   assert.doesNotMatch(js, /\/api\/posizione/, 'la posizione non si legge più in background: viaggia solo col pagamento');
 });
 
@@ -1952,23 +1975,73 @@ test('richiesta annullata da te in fase 1: UNA riga grigia "Hai annullato la ric
   });
 });
 
-test('"Ordine consegnato" riporta in "Stato ordini" (altro ordine in corso o pagina vuota), non sull\'ordine né in catalogo', async () => {
+test('eventi in tempo reale: GET /api/eventi è una connessione che resta aperta e riceve gli eventi del server (senza compressione); solo il cliente collegato', async () => {
+  const eventi = require('../src/eventi');
+  // senza sessione: 401, non una connessione
+  assert.equal((await fetch(base + '/api/eventi')).status, 401);
+
+  const ac = new AbortController();
+  const r = await chiedi('/api/eventi', { signal: ac.signal });
+  assert.equal(r.status, 200);
+  assert.match(r.headers.get('content-type'), /^text\/event-stream/);
+  assert.equal(r.headers.get('content-encoding'), null, 'compressa tratterrebbe i messaggi');
+  assert.match(r.headers.get('cache-control'), /no-store/);
+  assert.equal(r.headers.get('x-accel-buffering'), 'no');
+  const lettore = r.body.getReader();
+  const decodifica = new TextDecoder();
+  let testo = '';
+  const leggiFinche = async (modello) => {
+    const scade = Date.now() + 3000;
+    while (!modello.test(testo) && Date.now() < scade) {
+      const { value, done } = await Promise.race([lettore.read(), new Promise((ok) => setTimeout(() => ok({ done: true }), 3000))]);
+      if (done) break;
+      testo += decodifica.decode(value);
+    }
+  };
+  await leggiFinche(/retry: 5000/);
+  assert.match(testo, /retry: 5000/);
+  assert.equal(eventi.connessioniAperte(1), 1, 'il cliente di prova ha id 1');
+  // il server scrive solo quando succede qualcosa: arriva subito
+  assert.equal(eventi.emetti(1, 'consegnato', { ordine: 72 }), 1);
+  await leggiFinche(/event: consegnato\ndata: \{"ordine":72\}\n\n/);
+  assert.match(testo, /event: consegnato\ndata: \{"ordine":72\}\n\n/);
+  assert.equal(eventi.emetti(999, 'consegnato', {}), 0, 'un altro utente non riceve niente');
+  ac.abort();
+  const scade = Date.now() + 2000;
+  while (eventi.connessioniAperte(1) > 0 && Date.now() < scade) await new Promise((ok) => setTimeout(ok, 20));
+  assert.equal(eventi.connessioniAperte(1), 0, 'chiusa la pagina, la connessione si toglie');
+});
+
+test('l\'installatore NON conferma la consegna: nessun pulsante né rotta; la pagina in consegna attende da sola il corriere (WhatsApp)', async () => {
   ordiniProva.attivo = true;
   try {
-    // rotta provvisoria (qualunque stato): sempre /ordini, qualunque cosa dica il corpo
-    for (const corpo of [{}, { ritorno: '/ordini/72' }, { ritorno: '/home' }, { ritorno: '//sito.esempio/x' }]) {
-      const r = await chiedi('/ordini/72/consegnato-prova', form(corpo));
-      assert.equal(r.status, 302);
-      assert.equal(r.headers.get('location'), '/ordini', JSON.stringify(corpo));
+    // le vecchie rotte di conferma non esistono più
+    for (const url of ['/ordini/72/consegnato-prova', '/ordini/70/consegnato']) {
+      const r = await chiedi(url, form({}));
+      assert.equal(r.status, 404, url);
     }
-    // rotta vera (ordine partito dal banco): lo stesso
-    const r = await chiedi('/ordini/70/consegnato', form({}));
-    assert.equal(r.status, 302);
-    assert.equal(r.headers.get('location'), '/ordini');
-    // la pagina dell'ordine in consegna ha il pulsante, senza campi per scegliere dove tornare
+    // la pagina dell'ordine in consegna non ha nessun pulsante di conferma, ma l'attesa della consegna (script di app.js)
     const inConsegna = await (await chiedi('/ordini/72')).text();
-    assert.match(inConsegna, /action="\/ordini\/72\/consegnato-prova"/);
-    assert.doesNotMatch(inConsegna, /name="ritorno"/);
+    assert.doesNotMatch(inConsegna, /consegnato-prova|Ho ricevuto il materiale|\/ordini\/72\/consegnato"/);
+    assert.match(inConsegna, /<span data-attendi-consegna="72" hidden><\/span>/);
+    // lo stato che la pagina interroga: non consegnato -> false, consegnato -> true, ordine di un altro -> 404
+    ordiniProva.ordini[72].consegnato_il = null;
+    let s = await chiedi('/api/ordini/72/consegnato');
+    assert.equal(s.status, 200);
+    assert.deepEqual(await s.json(), { consegnato: false });
+    assert.equal(s.headers.get('cache-control'), 'no-store');
+    ordiniProva.ordini[72].consegnato_il = consegnatoIl;
+    try {
+      assert.deepEqual(await (await chiedi('/api/ordini/72/consegnato')).json(), { consegnato: true });
+    } finally {
+      ordiniProva.ordini[72].consegnato_il = null;
+    }
+    assert.equal((await chiedi('/api/ordini/9999/consegnato')).status, 404);
+    // lo script che ricarica la pagina c'è
+    const js = await (await chiedi('/app.js')).text();
+    assert.match(js, /querySelector\('\[data-attendi-consegna\]'\)/);
+    // nessun pulsante nemmeno nella pagina "Consegnato" né nella vista dell'ordine consegnato
+    assert.doesNotMatch(await (await chiedi('/ordini/71')).text(), /Ho ricevuto il materiale/);
     // l'ordine già consegnato resta consultabile (dallo Storico): la sua pagina "Consegnato" c'è ancora
     const t = await (await chiedi('/ordini/71')).text();
     assert.match(t, /<h2 class="att-titolo">Consegnato<\/h2>/);
@@ -2173,8 +2246,9 @@ test('ordine in consegna: righe a prezzo del banco, "Merce · IVA esclusa", sche
     assert.match(dettaglio, /Consegna · pagata<\/h3>[\s\S]*?Corriere<\/span> <span class="pg-sp">· costo fisso<\/span><\/dt><dd>€ 10,00<\/dd>[\s\S]*?Servizio<\/span> <span class="pg-sp">· 10% della merce<\/span><\/dt><dd>€ 6,45<\/dd>[\s\S]*?IVA 22%<\/span> <span class="pg-sp">· su € 16,45<\/span><\/dt><dd>€ 3,62<\/dd>/);
     assert.match(dettaglio, /Materiale · a BOREA<\/h3>[\s\S]*?Merce<\/span> <span class="pg-sp">· prezzo del banco<\/span><\/dt><dd>€ 64,50<\/dd>[\s\S]*?IVA 22%<\/span> <span class="pg-sp">· su € 64,50<\/span><\/dt><dd>€ 14,19<\/dd>/);
     assert.doesNotMatch(dettaglio, /Contributo RAEE/, 'senza RAEE la riga non c\'è');
-    // il pulsante: stessa azione, nuovo testo
-    assert.match(t, /<form method="POST" action="\/ordini\/74\/consegnato-prova">\s*<button class="btn btn-primary btn-blocco" type="submit" title="[^"]*">Ho ricevuto il materiale<\/button>/);
+    // nessun pulsante di conferma: la consegna la segna il corriere da WhatsApp
+    assert.doesNotMatch(t, /Ho ricevuto il materiale|consegnato-prova/);
+    assert.match(t, /data-attendi-consegna="74"/);
     assert.doesNotMatch(t, />Ordine consegnato</);
     // niente "Annulla ordine": il banco ha già confermato e la carta è stata incassata, quindi l'ordine non si annulla più
     assert.doesNotMatch(t, /Annulla ordine|att-annulla|\/elimina/);

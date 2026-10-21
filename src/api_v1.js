@@ -640,19 +640,7 @@ router.get('/ordini/:id', richiedeCliente, async (req, res) => {
     stato_pagamento: statoPagamentoJson(d.statoPag),
     // Sempre false: il cliente non annulla un ordine (il banco ha già confermato). Non c'è più il pulsante.
     annullabile: d.annullabile,
-    // "Ho ricevuto il materiale": come sul sito, il pulsante c'è finché l'ordine non è segnato consegnato.
-    da_confermare_consegna: !ordine.consegnato_il,
   });
-});
-
-// "Ho ricevuto il materiale". Come sul sito: un ordine 'evaso' (stato degli ordini vecchi) ha la conferma vera; per tutti gli altri vale quella provvisoria
-// (flusso.segnaConsegnatoProva), perché la consegna non è ancora segnata da un evento vero.
-router.post('/ordini/:id/consegnato', richiedeCliente, async (req, res) => {
-  const ordine = await ordineDelCliente(req, res);
-  if (!ordine) return;
-  if (ordine.stato === 'evaso') await flusso.segnaConsegnato(ordine);
-  else await flusso.segnaConsegnatoProva(ordine);
-  res.json({ ok: true });
 });
 
 // "Riordina gli stessi pezzi" (sugli ordini consegnati, come sul sito): gli articoli di un ordine che si possono rimettere nel carrello, nella forma delle

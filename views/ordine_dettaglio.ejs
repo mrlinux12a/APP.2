@@ -114,18 +114,9 @@
         <%# 4. Pagamenti: la consegna (pagata in app) e il materiale (da pagare a BOREA), divisi come nel carrello, mai sommati. %>
         <%- include('partials/pagamenti', { importi, stato: 'ordine', ditta: fmt.nomeCommerciale(distributore ? distributore.nome : ''), statoPag, ordineId: ordine.id }) %>
 
-        <%# "Consegnato": si segna da qui, non dalla home. Con l'ordine evaso vale la rotta vera (/consegnato); negli
-            altri stati la rotta PROVVISORIA (/consegnato-prova, vale per qualunque stato), da togliere quando la
-            consegna verrà segnata da un evento vero. Entrambe riportano in "Stato ordini" (/ordini). %>
-        <% if (ordine.stato === 'evaso') { %>
-          <form method="POST" action="/ordini/<%= ordine.id %>/consegnato">
-            <button class="btn btn-primary btn-blocco" type="submit">Ho ricevuto il materiale</button>
-          </form>
-        <% } else { %>
-          <form method="POST" action="/ordini/<%= ordine.id %>/consegnato-prova">
-            <button class="btn btn-primary btn-blocco" type="submit" title="Provvisorio: segna l'ordine come consegnato">Ho ricevuto il materiale</button>
-          </form>
-        <% } %>
+        <%# Nessun pulsante "Ho ricevuto il materiale": la consegna la segna il corriere dal gruppo WhatsApp. Questo contenitore fa ricaricare la pagina
+            (che diventa "Consegnato") appena succede: lo script "Ordine in consegna: attende la consegna" di app.js. %>
+        <span data-attendi-consegna="<%= ordine.id %>" hidden></span>
 
         <%# Niente "Annulla ordine": il banco ha già confermato e la carta è stata incassata, quindi l'ordine non si annulla più (la rotta lo rifiuta
             comunque). Per un problema si contatta l'assistenza. %>
@@ -276,12 +267,6 @@
             <% } %>
           </div>
         </details>
-
-        <% if (ordine.stato === 'evaso' && !ordine.consegnato_il) { %>
-          <form method="POST" action="/ordini/<%= ordine.id %>/consegnato">
-            <button class="btn btn-primary btn-blocco" type="submit">Ho ricevuto il materiale</button>
-          </form>
-        <% } %>
 
       <% } else { %>
         <%# Vista di BANCO e AGENTE: NON cambia (stesso markup di prima). Mostra i valori salvati in order_items col prezzo del cliente

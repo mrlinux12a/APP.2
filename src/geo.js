@@ -95,30 +95,47 @@ function posizioneValida(lat, lng) {
 }
 
 // Dalla posizione del dispositivo all'indirizzo (Nominatim, geocodifica inversa): serve al carrello, che con la posizione precompila "Consegna in cantiere".
-// Ritorna "Via Puggia 22/3, 16131 Genova (GE)" o null (fuori dall'Italia, senza una via, rete assente). NON lancia mai. `opzioni.fetch` serve alle prove.
+// Ritorna { indirizzo: "Via Puggia 22/3, Genova (GE)" (senza CAP: vedi sotto), civico: c'è il numero civico?, precisa: la posizione bastava per sceglierlo? } o null
+// (fuori dall'Italia, senza una via, rete assente). NON lancia mai. `opzioni.fetch` serve alle prove.
+//
+// Il civico è il punto delicato: Nominatim dà il numero della casa PIÙ VICINA al punto, e i civici di una via stanno a 20-40 m uno dall'altro. Con una posizione
+// che sbaglia di 50-100 m (un computer con la sola Wi-Fi, un telefono al chiuso, il GPS appena acceso) il numero è quello di un'altra casa: in Via Puggia, dal 22,
+// 106 m portano al 17 e 50 m al 10, mentre le coordinate esatte del 22 danno 22 (provato su OpenStreetMap il 21/10/2026). Un civico sbagliato che nessuno nota
+// manda il corriere a un altro indirizzo, quindi con `opzioni.precisioneM` oltre PRECISIONE_CIVICO_M (i metri di incertezza che dichiara il dispositivo) il civico
+// NON si scrive: si prende la via più vicina (zoom 17, senza numero) e chi chiama chiede di aggiungerlo. Senza `precisioneM` si fida, come prima.
 const NOMINATIM_INVERSA_URL = 'https://nominatim.openstreetmap.org/reverse';
-async function indirizzoDaPosizione(lat, lng, opzioni = {}) {
+const PRECISIONE_CIVICO_M = 30;
+async function indirizzoDaPosizioneDettaglio(lat, lng, opzioni = {}) {
   const chiama = opzioni.fetch || (typeof fetch === 'function' ? fetch : null);
   if (!chiama || !posizioneValida(lat, lng)) return null;
+  const precisa = !(Number.isFinite(opzioni.precisioneM) && opzioni.precisioneM > PRECISIONE_CIVICO_M);
   const controllo = new AbortController();
   const timer = setTimeout(() => controllo.abort(), opzioni.attesaMs || ATTESA_GEOCODIFICA_MS);
   try {
-    const url = NOMINATIM_INVERSA_URL + '?' + new URLSearchParams({ lat: String(lat), lon: String(lng), format: 'jsonv2', zoom: '18', addressdetails: '1' }).toString();
+    const url = NOMINATIM_INVERSA_URL + '?' + new URLSearchParams({ lat: String(lat), lon: String(lng), format: 'jsonv2', zoom: precisa ? '18' : '17', addressdetails: '1' }).toString();
     const risposta = await chiama(url, { signal: controllo.signal, headers: { 'User-Agent': 'Minuteria/1.0 (indirizzo di consegna)', 'Accept-Language': 'it' } });
     if (!risposta || !risposta.ok) return null;
     const a = (await risposta.json()).address;
     if (!a || a.country_code !== 'it') return null;
     const via = a.road || a.pedestrian || a.footway || a.path || '';
     if (!via) return null;
+    const civico = precisa ? String(a.house_number || '').trim() : '';
     const citta = a.city || a.town || a.village || a.municipality || '';
     const provincia = String(a['ISO3166-2-lvl6'] || '').replace(/^IT-/, '');
-    const luogo = [a.postcode, citta].filter(Boolean).join(' ') + (provincia && citta ? ' (' + provincia + ')' : '');
-    return [[via, a.house_number].filter(Boolean).join(' '), luogo].filter(Boolean).join(', ');
+    // Senza CAP: quello di OpenStreetMap spesso è di un'altra zona (a Genova 16141 al posto di 16138) e non serve al tragitto, che usa le coordinate. Lo aggiunge chi conosce quello giusto.
+    const luogo = citta + (provincia && citta ? ' (' + provincia + ')' : '');
+    return { indirizzo: [[via, civico].filter(Boolean).join(' '), luogo].filter(Boolean).join(', '), civico: !!civico, precisa };
   } catch (e) {
     return null;
   } finally {
     clearTimeout(timer);
   }
+}
+
+// Come sopra, ma solo il testo dell'indirizzo (o null).
+async function indirizzoDaPosizione(lat, lng, opzioni = {}) {
+  const trovato = await indirizzoDaPosizioneDettaglio(lat, lng, opzioni);
+  return trovato ? trovato.indirizzo : null;
 }
 
 // La posizione dell'indirizzo di consegna che l'installatore manda col pagamento: quella del dispositivo se il carrello ha mandato le coordinate (valgono solo
@@ -152,4 +169,4 @@ async function salvaPosizioneCliente(userId, lat, lng, precisione) {
   return info.changes > 0;
 }
 
-module.exports = { statoUtente, distanzaKm, formattaDistanza, geocodifica, ricercheGeocodifica, posizioneValida, salvaPosizioneCliente, indirizzoDaPosizione, posizioneDellaDestinazione };
+module.exports = { statoUtente, distanzaKm, formattaDistanza, geocodifica, ricercheGeocodifica, posizioneValida, salvaPosizioneCliente, indirizzoDaPosizione, indirizzoDaPosizioneDettaglio, PRECISIONE_CIVICO_M, posizioneDellaDestinazione };

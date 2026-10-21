@@ -557,6 +557,7 @@ const Minuteria = (function () {
       const bottonePos = consegna.querySelector('[data-consegna-pos-usa]');
       if (form && destLat && destLng && posizione && posizioneTesto && bottonePos) {
         let daPosizione = ''; // l'indirizzo ricavato dalla posizione, per accorgersi che è stato cambiato
+        let senzaCivico = false; // quell'indirizzo è solo la via: il numero civico lo aggiunge chi paga (la posizione non basta a sceglierlo)
         const dice = function (testo) {
           posizione.hidden = !testo;
           posizioneTesto.textContent = testo || '';
@@ -577,6 +578,50 @@ const Minuteria = (function () {
         };
         const leggi = function (opzioni) {
           return new Promise(function (ok, no) { navigator.geolocation.getCurrentPosition(ok, no, opzioni); });
+        };
+        // Il primo rilevamento che il dispositivo dà è spesso grossolano (Wi-Fi, celle, o una posizione vecchia in cache): il GPS ci mette qualche secondo a stringere,
+        // e una posizione sbagliata di 100 m dà il civico di un'altra casa (da Via Puggia 22 usciva il 17). Si ascolta quindi per un po' tenendo il rilevamento con
+        // l'incertezza minore, e ci si ferma quando è buono (PRECISIONE_OTTIMA_M), quando non migliora più (ATTESA_SENZA_MIGLIORAMENTI_MS: un computer ne dà uno solo)
+        // o allo scadere del tempo massimo. `avanza(metri)` racconta i progressi. Permesso negato: subito errore. Nessun rilevamento: l'ultimo errore.
+        const PRECISIONE_OTTIMA_M = 15;
+        const ATTESA_MASSIMA_MS = 12000;
+        const ATTESA_SENZA_MIGLIORAMENTI_MS = 4000;
+        const leggiMigliore = function (avanza) {
+          return new Promise(function (ok, no) {
+            let migliore = null;
+            let ultimoErrore = null;
+            let sorveglianza = null;
+            let finito = false;
+            let tMassimo = null;
+            let tFermo = null;
+            const concludi = function () {
+              if (finito) return;
+              finito = true;
+              clearTimeout(tMassimo);
+              clearTimeout(tFermo);
+              if (sorveglianza !== null) navigator.geolocation.clearWatch(sorveglianza);
+              if (migliore) ok(migliore); else no(ultimoErrore || { code: 2 });
+            };
+            tMassimo = setTimeout(concludi, ATTESA_MASSIMA_MS);
+            sorveglianza = navigator.geolocation.watchPosition(function (p) {
+              const metri = p.coords.accuracy;
+              if (!migliore || metri < migliore.coords.accuracy) {
+                migliore = p;
+                clearTimeout(tFermo);
+                tFermo = setTimeout(concludi, ATTESA_SENZA_MIGLIORAMENTI_MS);
+                if (avanza) avanza(metri);
+              }
+              if (metri <= PRECISIONE_OTTIMA_M) concludi();
+            }, function (errore) {
+              ultimoErrore = errore;
+              if (errore && errore.code === 1) concludi();
+            }, { enableHighAccuracy: true, maximumAge: 0, timeout: ATTESA_MASSIMA_MS });
+          });
+        };
+        const metriInTesto = function (metri) {
+          if (metri >= 10000) return Math.round(metri / 1000) + ' km';
+          if (metri >= 1000) return (Math.round(metri / 100) / 10).toString().replace('.', ',') + ' km';
+          return Math.max(1, Math.round(metri)) + ' m';
         };
 
         let incorso = false;
@@ -599,18 +644,18 @@ const Minuteria = (function () {
           bottonePos.disabled = true;
           bottonePos.classList.add('cerca');
           dice('Cerco la tua posizione…');
-          // Prima un rilevamento preciso (GPS); se non arriva in tempo, o il dispositivo non lo dà, si riprova con quello approssimato (Wi-Fi e celle), che
-          // basta per un indirizzo. Se il permesso è negato inutile riprovare.
-          leggi({ enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 })
+          // Prima si ascolta il GPS tenendo il rilevamento migliore (leggiMigliore); se non ne arriva nessuno in tempo, o il dispositivo non lo dà, si riprova con quello
+          // approssimato (Wi-Fi e celle, al massimo di un minuto fa), che basta per la via. Se il permesso è negato inutile riprovare.
+          leggiMigliore(function (metri) { dice('Cerco la tua posizione… (precisione circa ' + metriInTesto(metri) + ')'); })
             .catch(function (errore) {
               if (errore && errore.code === 1) throw errore;
-              return leggi({ enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 });
+              return leggi({ enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 });
             })
             .then(function (p) {
               const lat = p.coords.latitude;
               const lng = p.coords.longitude;
               const metri = Math.round(p.coords.accuracy || 0);
-              return fetch('/api/indirizzo?lat=' + encodeURIComponent(lat) + '&lng=' + encodeURIComponent(lng))
+              return fetch('/api/indirizzo?lat=' + encodeURIComponent(lat) + '&lng=' + encodeURIComponent(lng) + '&precisione=' + encodeURIComponent(metri))
                 .then(leggiJson)
                 .then(function (dati) {
                   fine();
@@ -621,15 +666,19 @@ const Minuteria = (function () {
                   }
                   campo.value = dati.indirizzo;
                   daPosizione = dati.indirizzo;
+                  senzaCivico = dati.civico === false;
                   destLat.value = String(lat);
                   destLng.value = String(lng);
-                  if (metri > 1000) {
-                    // Posizione molto approssimata (di solito un computer senza GPS): l'indirizzo va controllato, quindi il campo resta aperto.
-                    apri(true);
-                    dice('Posizione poco precisa (circa ' + (metri >= 10000 ? Math.round(metri / 1000) + ' km' : (Math.round(metri / 100) / 10).toString().replace('.', ',') + ' km') + '): controlla l’indirizzo.');
-                  } else {
+                  if (!senzaCivico) {
                     dice('');
                     conferma();
+                  } else if (dati.precisa === false) {
+                    // La posizione sbaglia di troppo per scegliere il numero (il server non lo scrive: sarebbe quello di un'altra casa): il campo resta aperto.
+                    apri(true);
+                    dice('Posizione precisa solo a circa ' + metriInTesto(metri) + ': controlla la via e aggiungi il numero civico.');
+                  } else {
+                    apri(true);
+                    dice('Non trovo il numero civico di questo punto: aggiungilo all’indirizzo.');
                   }
                 }, function (errore) {
                   fine();
@@ -649,11 +698,12 @@ const Minuteria = (function () {
 
         // Senza indirizzo non si invia: il campo si apre e dice cosa manca. Il gestore del form sta sul form (prima di quello sul documento) e ferma la propagazione.
         form.addEventListener('submit', function (e) {
-          if (campo.value.trim()) return;
+          // Un indirizzo preso dalla posizione senza il numero civico, lasciato com'è, non si paga: il corriere non saprebbe a che casa andare.
+          if (campo.value.trim() && !(senzaCivico && campo.value.trim() === daPosizione)) return;
           e.preventDefault();
           e.stopPropagation();
           apri();
-          dice('Scrivi l’indirizzo di consegna, oppure tocca il mirino per usare la tua posizione.');
+          dice(campo.value.trim() ? 'Aggiungi il numero civico all’indirizzo di consegna.' : 'Scrivi l’indirizzo di consegna, oppure tocca il mirino per usare la tua posizione.');
         });
       }
     }
@@ -1516,6 +1566,58 @@ const Minuteria = (function () {
   }
 
 
+  // Ordine in consegna: attende la consegna. La segna il corriere dal gruppo WhatsApp (l'installatore non ha nessun pulsante): la pagina chiede ogni 8 secondi se l'ordine
+  // risulta consegnato (GET /api/ordini/:id/consegnato) e, appena è così, si ricarica e il server disegna la pagina "Consegnato". Controlla anche appena la pagina torna in
+  // primo piano (telefono sbloccato, scheda riaperta). Mai più di una richiesta alla volta; un errore di rete si ignora e si riprova al giro dopo.
+  const attendeConsegna = document.querySelector('[data-attendi-consegna]');
+  // Il server avvisa la pagina da sé (Server-Sent Events, GET /api/eventi, src/eventi.js): appena il corriere segna la consegna la pagina dell'ordine si ricarica ("Consegnato")
+  // e l'icona e la scheda "Stato ordini" si rileggono (evento 'minuteria:stato-ordini', lo ascolta partials/nav_ordini.ejs). Niente richieste a vuoto. Il controllo qui sotto resta
+  // solo come rete di sicurezza (una volta al minuto, e quando la pagina torna in primo piano o la connessione si riapre dopo una caduta), per il caso in cui l'evento nasca in un
+  // altro processo o la connessione sia caduta senza che il browser se ne accorga.
+  let aggiornaConsegna = function () {};
+  if ('EventSource' in window && document.body && document.body.dataset.loggato === '1' && (attendeConsegna || document.querySelector('a.nav-ordini'))) {
+    let sorgente = null;
+    let apertaGiaUnaVolta = false;
+    const apri = function () {
+      if (sorgente) return;
+      sorgente = new EventSource('/api/eventi');
+      sorgente.addEventListener('open', function () {
+        if (apertaGiaUnaVolta) aggiornaConsegna(); // riaperta dopo una caduta: si guarda cosa è successo nel frattempo
+        apertaGiaUnaVolta = true;
+      });
+      sorgente.addEventListener('consegnato', function (e) {
+        let ordine = null;
+        try { ordine = JSON.parse(e.data).ordine; } catch (err) { /* messaggio rovinato: basta rileggere lo stato */ }
+        if (attendeConsegna && String(ordine) === attendeConsegna.getAttribute('data-attendi-consegna')) { window.location.reload(); return; }
+        window.dispatchEvent(new Event('minuteria:stato-ordini'));
+      });
+    };
+    apri();
+    // La pagina che va in cache per il tasto "indietro" chiude la connessione e la riapre quando riappare.
+    window.addEventListener('pagehide', function () { if (sorgente) { sorgente.close(); sorgente = null; } });
+    window.addEventListener('pageshow', function (e) { if (e.persisted) apri(); });
+  }
+  if (attendeConsegna) {
+    const idOrdine = attendeConsegna.getAttribute('data-attendi-consegna');
+    let inCorso = false;
+    let finito = false;
+    const controlla = function () {
+      if (inCorso || finito || document.visibilityState === 'hidden') return;
+      inCorso = true;
+      fetch('/api/ordini/' + encodeURIComponent(idOrdine) + '/consegnato', { credentials: 'same-origin', headers: { Accept: 'application/json' }, cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (d && d.consegnato) { finito = true; window.location.reload(); }
+        })
+        .catch(function () { /* niente rete: al prossimo giro */ })
+        .then(function () { inCorso = false; });
+    };
+    aggiornaConsegna = controlla;
+    setInterval(controlla, 60000);
+    document.addEventListener('visibilitychange', controlla);
+    window.addEventListener('pageshow', controlla);
+  }
+
   // Un messaggio dal service worker (public/sw.js): è stata toccata una notifica ma la finestra non si è lasciata portare sulla pagina ("vai": ci va da sola,
   // solo dentro il sito).
   if ('serviceWorker' in navigator) {
@@ -1921,6 +2023,8 @@ document.addEventListener('submit', function (e) {
   // diversi (es. "Conferma" / "Rifiuta") e disabilitarli subito, in modo sincrono, rischia
   // di far perdere quale dei due ha davvero avviato l'invio.
   setTimeout(function () {
+    // Un invio fermato da qualcuno (un controllo dei campi, una conferma annullata) non è partito: i pulsanti restano usabili.
+    if (e.defaultPrevented) return;
     bottoni.forEach(function (b) {
       // Solo quelli attivi: un pulsante già disabilitato dal server (es. "Paga" sotto il minimo) deve restarlo.
       if (b.disabled) return;

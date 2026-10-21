@@ -11,6 +11,7 @@ const whatsapp = require('./whatsapp');
 const pagamenti = require('./pagamenti');
 const consegna = require('./consegna');
 const format = require('./format');
+const eventi = require('./eventi');
 const orari = require('./orari');
 const { QUANTITA_MASSIMA, leggiId, leggiQuantita } = require('./input');
 
@@ -588,19 +589,17 @@ async function dettaglioOrdine(ordine) {
   };
 }
 
-// Il cliente conferma di aver ricevuto la merce: non cambia lo stato DB (resta 'evaso'),
-// valorizza solo consegnato_il, che è quanto basta per mostrare "Consegnato".
-async function segnaConsegnato(ordine) {
-  if (ordine.stato === 'evaso' && !ordine.consegnato_il) {
-    await scriviConsegna(ordine);
-  }
-}
+// La consegna la segna SOLO il corriere, dal sondaggio nel gruppo WhatsApp (segnaConsegnatoDalCorriere, più sotto): l'installatore non ha nessun pulsante né
+// rotta per confermarla (richiesta esplicita del 21/10/2026). Non cambia lo stato DB dell'ordine: valorizza solo consegnato_il, che basta per mostrare "Consegnato".
 
 // Scrive la consegna (solo se ancora non c'è: due conferme insieme non avvisano il banco due volte) e avvisa il banco. Un guasto dell'avviso
 // non deve far fallire la conferma del cliente: finisce nel log.
-async function scriviConsegna(ordine, { dalCorriere = false } = {}) {
+async function scriviConsegna(ordine, { dalCorriere = true } = {}) {
   const info = await db.prepare('UPDATE orders SET consegnato_il = NOW() WHERE id = ? AND consegnato_il IS NULL').run(ordine.id);
-  if (!info.changes || !ordine.distributor_id) return;
+  if (!info.changes) return;
+  // Le pagine aperte dell'installatore (pagina dell'ordine, icona e scheda "Stato ordini") lo sanno subito, senza chiedere (src/eventi.js, GET /api/eventi).
+  eventi.emetti(ordine.cliente_id, 'consegnato', { ordine: ordine.id });
+  if (!ordine.distributor_id) return;
   try {
     const cliente = await db.prepare('SELECT ragione_sociale FROM users WHERE id = ?').get(ordine.cliente_id);
     await notifiche.notificaDistributore(ordine.distributor_id, {
@@ -625,15 +624,6 @@ async function scriviConsegna(ordine, { dalCorriere = false } = {}) {
 async function segnaConsegnatoDalCorriere(ordine) {
   if (!ordine.consegnato_il) {
     await scriviConsegna(ordine, { dalCorriere: true });
-  }
-}
-
-// PROVVISORIO (prova della home): l'installatore chiude l'ordine come consegnato qualunque sia il suo
-// stato, così la scheda "in consegna" sparisce. Non tocca lo stato dell'ordine per il banco. A regime la
-// consegna la segnerà un evento vero (corriere, GPS...): da collegare, poi questa funzione va tolta.
-async function segnaConsegnatoProva(ordine) {
-  if (!ordine.consegnato_il) {
-    await scriviConsegna(ordine);
   }
 }
 
@@ -1080,8 +1070,6 @@ module.exports = {
   eliminaRichiesta,
   creaOrdineDaRisposta,
   dettaglioOrdine,
-  segnaConsegnato,
-  segnaConsegnatoProva,
   segnaConsegnatoDalCorriere,
   eliminaOrdine,
   ordineAnnullabileDalCliente,

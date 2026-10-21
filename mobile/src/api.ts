@@ -256,7 +256,6 @@ export type Ordine = {
   pagamento: Pagamento | null;
   stato_pagamento: StatoPagamento | null;
   annullabile: boolean;
-  da_confermare_consegna: boolean;
 };
 
 export type VoceStorico = {
