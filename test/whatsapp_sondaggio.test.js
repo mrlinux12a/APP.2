@@ -13,6 +13,7 @@ const righe = []; // whatsapp_messaggi
 let prossimoId = 1;
 let colonnaPresente = true; // la colonna del blocco di schema c'è?
 let insertSondaggioFallisce = false;
+let destinazioneRichiesta = undefined; // requests.destinazione (l'indirizzo scritto nel carrello)
 const interrogazioniSchema = [];
 
 function esegui(sql, p) {
@@ -28,6 +29,40 @@ function esegui(sql, p) {
     righe.push(riga);
     return { changes: 1, lastInsertRowid: riga.id };
   }
+  if ((m = /^INSERT INTO whatsapp_messaggi \(request_id, response_id, order_id, tipo, testo, istanza, segreto_sondaggio\) VALUES \(\?, \?, \?, 'consegna', \?, \?, \?\)$/.exec(s))) {
+    const riga = { id: prossimoId++, stato: 'da_inviare', tentativi: 0, wa_msg_id: null, preso_il: null, tipo: 'consegna', request_id: p[0], response_id: p[1], order_id: p[2], testo: p[3], istanza: p[4], segreto_sondaggio: p[5] };
+    righe.push(riga);
+    return { changes: 1, lastInsertRowid: riga.id };
+  }
+  if (/^INSERT INTO whatsapp_messaggi \(request_id, response_id, tipo, testo, istanza\) VALUES \(\?, \?, 'esito', \?, \?\)$/.test(s)) {
+    const riga = { id: prossimoId++, stato: 'da_inviare', tentativi: 0, wa_msg_id: null, preso_il: null, tipo: 'esito', request_id: p[0], response_id: p[1], testo: p[2], istanza: p[3], segreto_sondaggio: null };
+    righe.push(riga);
+    return { changes: 1, lastInsertRowid: riga.id };
+  }
+  if (/^SELECT istanza FROM whatsapp_messaggi WHERE request_id = \? AND tipo = 'ritiro_consegna' ORDER BY id DESC LIMIT 1$/.test(s)) return righe.filter((x) => x.request_id === p[0] && x.tipo === 'ritiro_consegna').pop() || null;
+  // dopo il "preso": il sondaggio dei minuti sparisce dal gruppo
+  if (/^UPDATE whatsapp_messaggi SET stato = CASE WHEN stato = 'da_inviare' THEN 'annullato' ELSE 'da_eliminare' END WHERE response_id = \? AND tipo = 'sondaggio' AND stato IN \('da_inviare', 'inviato'\)$/.test(s)) {
+    const toccate = righe.filter((r) => r.response_id === p[0] && r.tipo === 'sondaggio' && ['da_inviare', 'inviato'].includes(r.stato));
+    for (const r of toccate) r.stato = r.stato === 'da_inviare' ? 'annullato' : 'da_eliminare';
+    return { changes: toccate.length };
+  }
+  // voto sul sondaggio "consegna"
+  if (/^UPDATE whatsapp_messaggi SET preso_il = NOW\(\) WHERE id = \? AND preso_il IS NULL$/.test(s)) {
+    const r = righe.find((x) => x.id === p[0] && !x.preso_il);
+    if (!r) return { changes: 0 };
+    r.preso_il = new Date();
+    return { changes: 1 };
+  }
+  if (/^UPDATE whatsapp_messaggi SET preso_il = NULL WHERE id = \?$/.test(s)) {
+    righe.find((x) => x.id === p[0]).preso_il = null;
+    return { changes: 1 };
+  }
+  if (/^UPDATE whatsapp_messaggi SET stato = 'da_eliminare' WHERE id = \? AND stato = 'inviato'$/.test(s)) {
+    const r = righe.find((x) => x.id === p[0] && x.stato === 'inviato');
+    if (r) r.stato = 'da_eliminare';
+    return { changes: r ? 1 : 0 };
+  }
+  if (/^SELECT \* FROM orders WHERE id = \?$/.test(s)) return { id: p[0], cliente_id: 7, request_id: 5, distributor_id: 2, consegnato_il: null };
   if (/^UPDATE whatsapp_messaggi SET testo = \? WHERE id = \?$/.test(s)) {
     righe.find((x) => x.id === p[1]).testo = p[0];
     return { changes: 1 };
@@ -70,11 +105,11 @@ function esegui(sql, p) {
     for (const r of toccate) r.stato = r.stato === 'da_inviare' ? 'annullato' : 'da_eliminare';
     return { changes: toccate.length };
   }
-  if (/^SELECT \* FROM whatsapp_messaggi WHERE wa_msg_id = \? AND tipo = 'sondaggio'$/.test(s)) return righe.find((x) => x.wa_msg_id === p[0] && x.tipo === 'sondaggio') || null;
+  if (/^SELECT \* FROM whatsapp_messaggi WHERE wa_msg_id = \? AND tipo IN \('sondaggio', 'consegna'\)$/.test(s)) return righe.find((x) => x.wa_msg_id === p[0] && ['sondaggio', 'consegna'].includes(x.tipo)) || null;
   if (/^SELECT \* FROM whatsapp_messaggi WHERE wa_msg_id = \? AND tipo = 'ritiro_consegna'$/.test(s)) return righe.find((x) => x.wa_msg_id === p[0] && x.tipo === 'ritiro_consegna') || null;
   if (/^SELECT \* FROM whatsapp_messaggi WHERE request_id = \? AND tipo = 'ritiro_consegna' ORDER BY id DESC LIMIT 1$/.test(s)) return righe.filter((x) => x.request_id === p[0] && x.tipo === 'ritiro_consegna').pop() || null;
   if (/^SELECT 1 AS si FROM whatsapp_messaggi WHERE wa_msg_id = \?$/.test(s)) return righe.find((x) => x.wa_msg_id === p[0]) ? { si: 1 } : null;
-  if (/^SELECT \* FROM requests WHERE id = \?$/.test(s)) return { id: p[0], cliente_id: 7 };
+  if (/^SELECT \* FROM requests WHERE id = \?$/.test(s)) return { id: p[0], cliente_id: 7, destinazione: destinazioneRichiesta };
   if (/^SELECT \* FROM request_responses WHERE id = \?$/.test(s)) return { id: p[0], distributor_id: 2 };
   if (/^SELECT \* FROM distributors WHERE id = \?$/.test(s)) return { id: 2, nome: 'BOREA SRL', filiale: 'Fegino', indirizzo: 'Via Castel Morrone 1', zona: 'Genova', geo_lat: 44.44, geo_lng: 8.93 };
   if (/FROM store_locations/.test(s)) return null;
@@ -91,11 +126,20 @@ require.cache[percorsoDb] = { id: percorsoDb, filename: percorsoDb, loaded: true
 
 // richieste.corriereHaPreso: finto, registra le chiamate; `esitoPreso` decide cosa risponde
 const chiamatePreso = [];
-let esitoPreso = { esito: 'preso' };
+let esitoPreso = { esito: 'preso', ordineId: 300 };
 const percorsoRichieste = require.resolve(path.join(radice, 'src/richieste.js'));
 require.cache[percorsoRichieste] = {
   id: percorsoRichieste, filename: percorsoRichieste, loaded: true,
   exports: { corriereHaPreso: async (responseId, minuti, nome) => { chiamatePreso.push({ responseId, minuti, nome }); return esitoPreso; } },
+};
+
+// flusso_cliente.segnaConsegnatoDalCorriere: finto, registra gli ordini segnati; `consegnaFallisce` lo fa lanciare
+const ordiniSegnati = [];
+let consegnaFallisce = false;
+const percorsoFlusso = require.resolve(path.join(radice, 'src/flusso_cliente.js'));
+require.cache[percorsoFlusso] = {
+  id: percorsoFlusso, filename: percorsoFlusso, loaded: true,
+  exports: { segnaConsegnatoDalCorriere: async (ordine) => { if (consegnaFallisce) throw new Error('database non raggiungibile'); ordiniSegnati.push(ordine.id); } },
 };
 
 const wa = require(path.join(radice, 'src/whatsapp.js'));
@@ -118,7 +162,10 @@ function ambiente(variabili = {}) {
   prossimoId = 1;
   colonnaPresente = true;
   insertSondaggioFallisce = false;
-  esitoPreso = { esito: 'preso' };
+  esitoPreso = { esito: 'preso', ordineId: 300 };
+  ordiniSegnati.length = 0;
+  consegnaFallisce = false;
+  destinazioneRichiesta = undefined;
   wa._prova.azzeraControlloColonna();
   wa._prova.votiGestiti.clear();
 }
@@ -310,7 +357,7 @@ test('un voto: il primo che sceglie "30 minuti" prende la consegna con quei minu
   const risposta = sock.mandati[2];
   assert.match(risposta.contenuto.text, /^✅ Preso da Marco! Richiesta #5: arrivi dal venditore in 30 minuti, ritiro entro le \d\d:\d\d\.$/);
   assert.equal(risposta.opzioni, undefined, 'una risposta a un voto non cita il voto');
-  assert.deepEqual(righe.map((r) => !!r.preso_il), [true, true], 'il messaggio e il sondaggio della stessa risposta sono presi insieme');
+  assert.deepEqual(righe.filter((r) => r.tipo !== 'consegna' && r.tipo !== 'esito').map((r) => !!r.preso_il), [true, true], 'il messaggio e il sondaggio della stessa risposta sono presi insieme');
   wa._prova.impostaSocket(null);
 });
 
@@ -389,6 +436,8 @@ test('richiesta già scaduta: chi vota riceve "scaduta"', async () => {
   await wa.gestisciMessaggio(votoInArrivo(cifraVoto(['20 minuti'], { segreto, pollId, creatore: '39000111222@s.whatsapp.net', votante: MARCO }), { pollId }));
   assert.equal(sock.mandati.at(-1).contenuto.text, 'La richiesta #5 è scaduta: non è più disponibile.');
   assert.deepEqual(righe.map((r) => !!r.preso_il), [false, false], 'non è presa');
+  assert.deepEqual(righe.map((r) => r.tipo), ['ritiro_consegna', 'sondaggio'], 'e il sondaggio "consegnato" non parte');
+  assert.deepEqual(righe.map((r) => r.stato), ['inviato', 'inviato'], 'il sondaggio dei minuti resta');
   wa._prova.impostaSocket(null);
 });
 
@@ -459,6 +508,184 @@ test('richiesta scaduta o annullata: messaggio e sondaggio spariscono dal gruppo
   const { segreto, pollId } = await consegnaMandata(sock2);
   await wa.gestisciMessaggio(votoInArrivo(cifraVoto(['30 minuti'], { segreto, pollId, creatore: '39000111222@s.whatsapp.net', votante: MARCO }), { pollId }));
   await wa.ritiraRichiesta(5);
-  assert.deepEqual(righe.map((r) => r.stato), ['inviato', 'inviato']);
+  assert.deepEqual(righe.filter((r) => r.tipo === 'ritiro_consegna' || r.tipo === 'consegna').map((r) => r.stato), ['inviato', 'inviato']);
+  wa._prova.impostaSocket(null);
+});
+
+// ---------------- dopo il "preso": il sondaggio dei minuti sparisce, compare quello della consegna ----------------
+
+test('dopo il "preso": risposta nel gruppo, il sondaggio dei minuti viene eliminato (il messaggio resta) e subito dopo parte il sondaggio "Ordine #N: consegna"', async () => {
+  ambiente();
+  const sock = socketFinto();
+  const { segreto, pollId, sondaggio } = await consegnaMandata(sock);
+  await wa.gestisciMessaggio(votoInArrivo(cifraVoto(['10 minuti'], { segreto, pollId, creatore: '39000111222@s.whatsapp.net', votante: MARCO }), { pollId }));
+
+  assert.match(sock.mandati[2].contenuto.text, /^✅ Preso da Marco! Richiesta #5: arrivi dal venditore in 10 minuti, ritiro entro le \d\d:\d\d\.$/);
+  const poll = sock.mandati[3].contenuto.poll;
+  assert.equal(poll.name, 'Ordine #300: consegna');
+  assert.deepEqual(poll.values, ['🚀 Segna come Consegnato', '⏳ Ancora in viaggio']);
+  assert.equal(poll.selectableCount, 1);
+  assert.deepEqual(sock.mandati[4].contenuto.delete, { remoteJid: GRUPPO, fromMe: true, id: pollId }, 'il sondaggio dei minuti sparisce dal gruppo');
+  assert.equal(sock.mandati.length, 5, 'il messaggio "nuova consegna" non si tocca');
+  assert.equal(sondaggio.stato, 'eliminato');
+  const consegna = righe.find((r) => r.tipo === 'consegna');
+  assert.deepEqual([consegna.request_id, consegna.response_id, consegna.order_id, consegna.istanza, consegna.stato, consegna.wa_msg_id], [5, 50, 300, 'locale', 'inviato', 'WA4']);
+  assert.ok(poll.messageSecret.equals(Buffer.from(consegna.segreto_sondaggio, 'base64')) && poll.messageSecret.length === 32);
+  assert.notEqual(consegna.segreto_sondaggio, sondaggio.segreto_sondaggio);
+  assert.equal(righe.find((r) => r.tipo === 'ritiro_consegna').stato, 'inviato');
+  wa._prova.impostaSocket(null);
+});
+
+test('anche con "preso 30" scritto a mano il sondaggio dei minuti sparisce e parte quello della consegna', async () => {
+  ambiente();
+  const sock = socketFinto();
+  const { sondaggio } = await consegnaMandata(sock);
+  await wa.gestisciMessaggio({
+    key: { id: 'IN1', remoteJid: GRUPPO, fromMe: false, participant: MARCO },
+    pushName: 'Marco',
+    message: { extendedTextMessage: { text: 'preso 30', contextInfo: { stanzaId: 'WA1' } } },
+  });
+  assert.equal(sondaggio.stato, 'eliminato');
+  assert.equal(sock.mandati.some((m) => m.contenuto.poll && m.contenuto.poll.name === 'Ordine #300: consegna'), true);
+  wa._prova.impostaSocket(null);
+});
+
+test('senza ordine (non è ancora nato) il sondaggio dei minuti sparisce lo stesso ma quello della consegna non parte, e si scrive nel log', async () => {
+  ambiente();
+  esitoPreso = { esito: 'preso' };
+  const sock = socketFinto();
+  const { segreto, pollId, sondaggio } = await consegnaMandata(sock);
+  const errori = [];
+  const originale = console.error;
+  console.error = (...a) => errori.push(a.join(' '));
+  try {
+    await wa.gestisciMessaggio(votoInArrivo(cifraVoto(['10 minuti'], { segreto, pollId, creatore: '39000111222@s.whatsapp.net', votante: MARCO }), { pollId }));
+  } finally {
+    console.error = originale;
+  }
+  assert.equal(sondaggio.stato, 'eliminato');
+  assert.equal(righe.some((r) => r.tipo === 'consegna'), false);
+  assert.match(errori.join('\n'), /l'ordine non è ancora nato/);
+  wa._prova.impostaSocket(null);
+});
+
+test('con i sondaggi spenti "preso 30" funziona come prima: nessun sondaggio, né dei minuti né della consegna', async () => {
+  ambiente({ WHATSAPP_SONDAGGIO: '0' });
+  const sock = socketFinto();
+  await wa.accodaRitiroConsegna(5, 50);
+  wa._prova.impostaSocket(sock, GRUPPO);
+  await wa._prova.inviaMessaggiInCoda();
+  await wa.gestisciMessaggio({
+    key: { id: 'IN1', remoteJid: GRUPPO, fromMe: false, participant: MARCO },
+    pushName: 'Marco',
+    message: { extendedTextMessage: { text: 'preso 30', contextInfo: { stanzaId: 'WA1' } } },
+  });
+  assert.deepEqual(righe.map((r) => r.tipo), ['ritiro_consegna']);
+  assert.equal(sock.mandati.length, 2, 'il messaggio e la risposta');
+  wa._prova.impostaSocket(null);
+});
+
+// ---------------- sondaggio della consegna ----------------
+
+// Fino al sondaggio "consegna" mandato nel gruppo: ritorna quello che serve per votarlo.
+async function consegnaPresa(sock) {
+  const { segreto, pollId } = await consegnaMandata(sock);
+  await wa.gestisciMessaggio(votoInArrivo(cifraVoto(['10 minuti'], { segreto, pollId, creatore: '39000111222@s.whatsapp.net', votante: MARCO }), { pollId }));
+  const consegna = righe.find((r) => r.tipo === 'consegna');
+  return { consegna, segreto: Buffer.from(consegna.segreto_sondaggio, 'base64'), pollId: consegna.wa_msg_id };
+}
+const CREATORE = '39000111222@s.whatsapp.net';
+
+test('"🚀 Segna come Consegnato": l\'ordine risulta consegnato, il sondaggio sparisce e il bot scrive ora e indirizzo', async () => {
+  ambiente();
+  destinazioneRichiesta = 'Via Dodecaneso 35, 16146 Genova (GE)';
+  const sock = socketFinto();
+  const { consegna, segreto, pollId } = await consegnaPresa(sock);
+  const prima = sock.mandati.length;
+  await wa.gestisciMessaggio(votoInArrivo(cifraVoto(['🚀 Segna come Consegnato'], { segreto, pollId, creatore: CREATORE, votante: MARCO }), { pollId }));
+
+  assert.deepEqual(ordiniSegnati, [300], "l'ordine è segnato consegnato");
+  const dopo = sock.mandati.slice(prima);
+  assert.match(dopo[0].contenuto.text, /^📦 Ordine #300 consegnato alle \d\d:\d\d — Via Dodecaneso 35, 16146 Genova \(GE\)\.$/);
+  assert.deepEqual(dopo[1].contenuto.delete, { remoteJid: GRUPPO, fromMe: true, id: pollId }, 'il sondaggio sparisce dal gruppo');
+  assert.equal(dopo.length, 2);
+  assert.equal(consegna.stato, 'eliminato');
+  assert.ok(consegna.preso_il);
+  // chi vota dopo (o ripete) non fa niente di nuovo
+  await wa.gestisciMessaggio(votoInArrivo(cifraVoto(['🚀 Segna come Consegnato'], { segreto, pollId, creatore: CREATORE, votante: '39320000001@s.whatsapp.net' }), { pollId, partecipante: '39320000001@s.whatsapp.net', nome: 'Luca' }));
+  assert.deepEqual(ordiniSegnati, [300]);
+  assert.equal(sock.mandati.length, prima + 2);
+  wa._prova.impostaSocket(null);
+});
+
+test('senza indirizzo nella richiesta vale quello di consegna del cliente', async () => {
+  ambiente();
+  const sock = socketFinto();
+  const { segreto, pollId } = await consegnaPresa(sock);
+  const prima = sock.mandati.length;
+  await wa.gestisciMessaggio(votoInArrivo(cifraVoto(['🚀 Segna come Consegnato'], { segreto, pollId, creatore: CREATORE, votante: MARCO }), { pollId }));
+  assert.match(sock.mandati[prima].contenuto.text, /^📦 Ordine #300 consegnato alle \d\d:\d\d — Via Puggia 22\/3, 16131 Genova \(GE\)\.$/);
+  wa._prova.impostaSocket(null);
+});
+
+test('"⏳ Ancora in viaggio" non fa niente e si può ancora scegliere "Consegnato" dopo', async () => {
+  ambiente();
+  const sock = socketFinto();
+  const { consegna, segreto, pollId } = await consegnaPresa(sock);
+  const prima = sock.mandati.length;
+  await wa.gestisciMessaggio(votoInArrivo(cifraVoto(['⏳ Ancora in viaggio'], { segreto, pollId, creatore: CREATORE, votante: MARCO }), { pollId }));
+  assert.deepEqual(ordiniSegnati, []);
+  assert.equal(sock.mandati.length, prima);
+  assert.equal(consegna.preso_il, null);
+  // lo stesso corriere cambia voto: ora è consegnato
+  await wa.gestisciMessaggio(votoInArrivo(cifraVoto(['🚀 Segna come Consegnato'], { segreto, pollId, creatore: CREATORE, votante: MARCO }), { pollId }));
+  assert.deepEqual(ordiniSegnati, [300]);
+  assert.equal(sock.mandati.length, prima + 2);
+  wa._prova.impostaSocket(null);
+});
+
+test('voto ritirato, o sondaggio di un\'altra istanza: niente', async () => {
+  ambiente();
+  const sock = socketFinto();
+  const { consegna, segreto, pollId } = await consegnaPresa(sock);
+  const prima = sock.mandati.length;
+  await wa.gestisciMessaggio(votoInArrivo(cifraVoto([], { segreto, pollId, creatore: CREATORE, votante: MARCO }), { pollId }));
+  consegna.istanza = 'vps-1';
+  await wa.gestisciMessaggio(votoInArrivo(cifraVoto(['🚀 Segna come Consegnato'], { segreto, pollId, creatore: CREATORE, votante: MARCO }), { pollId }));
+  assert.deepEqual(ordiniSegnati, []);
+  assert.equal(sock.mandati.length, prima);
+  wa._prova.impostaSocket(null);
+});
+
+test('se l\'ordine non si riesce a segnare il bot non dice "consegnato": libera il voto e chiede di riprovare', async () => {
+  ambiente();
+  const sock = socketFinto();
+  const { consegna, segreto, pollId } = await consegnaPresa(sock);
+  const prima = sock.mandati.length;
+  consegnaFallisce = true;
+  const originale = console.error;
+  console.error = () => {};
+  try {
+    await wa.gestisciMessaggio(votoInArrivo(cifraVoto(['🚀 Segna come Consegnato'], { segreto, pollId, creatore: CREATORE, votante: MARCO }), { pollId }));
+  } finally {
+    console.error = originale;
+  }
+  assert.equal(sock.mandati.length, prima + 1);
+  assert.match(sock.mandati[prima].contenuto.text, /^Non sono riuscito a segnare l'ordine #300 come consegnato: togli il voto e votalo di nuovo\.$/);
+  assert.equal(consegna.preso_il, null, 'il voto è di nuovo libero');
+  assert.equal(consegna.stato, 'inviato', 'il sondaggio resta nel gruppo');
+  // riprovando funziona
+  consegnaFallisce = false;
+  await wa.gestisciMessaggio(votoInArrivo(cifraVoto(['🚀 Segna come Consegnato'], { segreto, pollId, creatore: CREATORE, votante: MARCO }), { pollId }));
+  assert.deepEqual(ordiniSegnati, [300]);
+  wa._prova.impostaSocket(null);
+});
+
+test('il sondaggio della consegna non sparisce con la chiusura della richiesta (ritiraRichiesta non lo tocca)', async () => {
+  ambiente();
+  const sock = socketFinto();
+  const { consegna } = await consegnaPresa(sock);
+  await wa.ritiraRichiesta(5);
+  assert.equal(consegna.stato, 'inviato');
   wa._prova.impostaSocket(null);
 });

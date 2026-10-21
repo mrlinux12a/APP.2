@@ -1125,6 +1125,10 @@ test('profilo: scheda "Sul telefono" con installazione (sempre disponibile, senz
   // un interruttore on/off, niente "Prova" né notifica di prova
   assert.match(t, /<button type="button" class="ab-switch" role="switch" aria-checked="false" aria-label="Avvisi sul telefono" data-abilita-notifiche>/);
   assert.doesNotMatch(t, /data-prova-notifica/);
+  // permesso negato dal telefono: riquadro giallo con i passi (nascosto finché serve, lo riempie app.js)
+  assert.match(t, /<div class="an-blocco-notifiche" data-notifiche-blocco hidden role="note">[\s\S]*data-notifiche-passi><\/span>/);
+  const js = await (await chiedi('/app.js')).text();
+  assert.match(js, /addEventListener\('visibilitychange', controllaPermessoTornando\)/);
 });
 
 test('menu del profilo (cliente): niente voce "Notifiche"', async () => {

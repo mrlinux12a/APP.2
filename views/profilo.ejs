@@ -181,6 +181,11 @@
           </div>
           <button type="button" class="ab-switch" role="switch" aria-checked="false" aria-label="Avvisi sul telefono" data-abilita-notifiche><span class="ab-switch-pallino"></span></button>
         </div>
+        <%# Permesso negato dal telefono: l'interruttore è spento e disabilitato, qui i passi per sbloccarlo (testo scritto da public/app.js per iPhone, Android o app installata). %>
+        <div class="an-blocco-notifiche" data-notifiche-blocco hidden role="note">
+          <strong>Le notifiche sono bloccate sul telefono</strong>
+          <span data-notifiche-passi></span>
+        </div>
       </section>
 
       <%# Eliminare l'account: una pagina a parte spiega cosa succede e chiede la password (GET/POST /profilo/elimina). %>

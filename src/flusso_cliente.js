@@ -598,14 +598,16 @@ async function segnaConsegnato(ordine) {
 
 // Scrive la consegna (solo se ancora non c'è: due conferme insieme non avvisano il banco due volte) e avvisa il banco. Un guasto dell'avviso
 // non deve far fallire la conferma del cliente: finisce nel log.
-async function scriviConsegna(ordine) {
+async function scriviConsegna(ordine, { dalCorriere = false } = {}) {
   const info = await db.prepare('UPDATE orders SET consegnato_il = NOW() WHERE id = ? AND consegnato_il IS NULL').run(ordine.id);
   if (!info.changes || !ordine.distributor_id) return;
   try {
     const cliente = await db.prepare('SELECT ragione_sociale FROM users WHERE id = ?').get(ordine.cliente_id);
     await notifiche.notificaDistributore(ordine.distributor_id, {
       titolo: `Ordine #${ordine.id} consegnato`,
-      testo: `${cliente ? cliente.ragione_sociale : 'Il cliente'} ha confermato la consegna alle ${format.oraRoma(new Date())}.`,
+      testo: dalCorriere
+        ? `Il corriere ha segnato la consegna a ${cliente ? cliente.ragione_sociale : 'il cliente'} alle ${format.oraRoma(new Date())}.`
+        : `${cliente ? cliente.ragione_sociale : 'Il cliente'} ha confermato la consegna alle ${format.oraRoma(new Date())}.`,
       link: '/distributore/ordini/' + ordine.id,
       categoria: 'ordini',
       sottostato: 'consegnato',
@@ -615,6 +617,14 @@ async function scriviConsegna(ordine) {
     });
   } catch (err) {
     console.error(`[ordini] avviso di consegna dell'ordine ${ordine.id} al banco non inviato:`, err.message);
+  }
+}
+
+// Il corriere segna la consegna dal gruppo WhatsApp (sondaggio "🚀 Segna come Consegnato", src/whatsapp.js): stessa scrittura della conferma del cliente, a qualunque stato
+// sia l'ordine, con l'avviso al banco che dice chi l'ha segnata. Se è già consegnato non fa niente.
+async function segnaConsegnatoDalCorriere(ordine) {
+  if (!ordine.consegnato_il) {
+    await scriviConsegna(ordine, { dalCorriere: true });
   }
 }
 
@@ -1072,6 +1082,7 @@ module.exports = {
   dettaglioOrdine,
   segnaConsegnato,
   segnaConsegnatoProva,
+  segnaConsegnatoDalCorriere,
   eliminaOrdine,
   ordineAnnullabileDalCliente,
   richiesteClienteConStato,

@@ -1430,6 +1430,15 @@ const Minuteria = (function () {
   function scriviStatoNotifiche(testo) {
     if (statoNotifiche) statoNotifiche.textContent = testo;
   }
+  const bloccoNotifiche = document.querySelector('[data-notifiche-blocco]');
+  const bloccoPassi = document.querySelector('[data-notifiche-passi]');
+  let bloccatoPrima = false; // l'ultima volta che si è guardato il permesso era "negato"?
+  // I passi per riattivare le notifiche dal telefono (solo il telefono può cambiare un permesso negato).
+  function passiPerSbloccare() {
+    if (eIos()) return "Esci dall'app, apri Impostazioni › Notifiche › Minuteria e attiva «Consenti notifiche». Poi torna qui: lo attiviamo da soli.";
+    if (eInstallata()) return "Esci dall'app, tieni premuta l'icona di Minuteria › Info app › Notifiche e attiva «Tutte le notifiche di Minuteria». Poi torna qui: lo attiviamo da soli.";
+    return "Tocca il lucchetto (o i tre puntini) accanto all'indirizzo › Impostazioni sito › Notifiche › Consenti. Poi torna su questa pagina: lo attiviamo da soli.";
+  }
   function mostraStatoNotifiche() {
     if (!pulsanteNotifiche) return;
     if (!('Notification' in window)) {
@@ -1447,10 +1456,15 @@ const Minuteria = (function () {
     const permesso = Notification.permission;
     const acceso = permesso === 'granted' && avvisiVoluti();
     pulsanteNotifiche.setAttribute('aria-checked', acceso ? 'true' : 'false');
+    // Permesso negato: l'interruttore resta spento e disabilitato (il telefono non chiede più niente) e sotto compare il riquadro giallo con i passi esatti per questo dispositivo.
+    pulsanteNotifiche.disabled = permesso === 'denied';
+    if (bloccoNotifiche) {
+      bloccoNotifiche.hidden = permesso !== 'denied';
+      if (permesso === 'denied' && bloccoPassi) bloccoPassi.textContent = passiPerSbloccare();
+    }
+    bloccatoPrima = permesso === 'denied';
     if (permesso === 'denied') {
-      scriviStatoNotifiche(eIos()
-        ? 'Bloccate: riattivale da Impostazioni › Notifiche › Minuteria.'
-        : 'Bloccate dal browser: riattivale dalle impostazioni del sito.');
+      scriviStatoNotifiche('Bloccate dal telefono: segui i passi qui sotto.');
     } else if (!acceso) {
       scriviStatoNotifiche('Spente: non ricevi avvisi quando un banco risponde.');
     } else if (!pushDisponibile()) {
@@ -1472,6 +1486,16 @@ const Minuteria = (function () {
       .then(function () { return iscriviPush({ forza: true }); })
       .then(mostraStatoNotifiche);
   }
+  // Tornando sulla pagina (visibilitychange; focus/pageshow per i browser che non lo mandano) si rilegge il permesso: se da "negato" è diventato "concesso" il riquadro
+  // giallo sparisce, il browser si iscrive alle notifiche e l'interruttore passa su ON da solo.
+  function controllaPermessoTornando() {
+    if (!pulsanteNotifiche || !('Notification' in window) || document.visibilityState === 'hidden') return;
+    if (bloccatoPrima && Notification.permission === 'granted') { accendiAvvisi(); return; }
+    if (bloccatoPrima !== (Notification.permission === 'denied')) mostraStatoNotifiche();
+  }
+  document.addEventListener('visibilitychange', controllaPermessoTornando);
+  window.addEventListener('focus', controllaPermessoTornando);
+  window.addEventListener('pageshow', controllaPermessoTornando);
   if (pulsanteNotifiche) {
     mostraStatoNotifiche();
     pulsanteNotifiche.addEventListener('click', function () {

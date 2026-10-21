@@ -27,6 +27,9 @@ const format = require('./format');
 // vota prende la consegna, esattamente come chi scrive "preso 30". I voti arrivano cifrati (si leggono con la chiave del sondaggio, tenuta in whatsapp_messaggi.segreto_sondaggio:
 // senza, un riavvio a metà richiesta li perderebbe) e la versione di Baileys che usiamo non li decifra da sola: lo facciamo qui (decifraVoto). Scrivere "preso <minuti>" funziona
 // comunque. Spento di default: va acceso nel .env e serve il blocco di schema "WhatsApp: sondaggio per prendere la consegna".
+// Quando qualcuno prende la consegna il sondaggio dei minuti sparisce dal gruppo (resta il messaggio "nuova consegna"), il bot scrive "✅ Preso da ...!" e, appena nasce l'ordine,
+// manda un SECONDO sondaggio ("Ordine #N: consegna", tipo 'consegna') con "🚀 Segna come Consegnato": il primo voto segna l'ordine consegnato (flusso_cliente.segnaConsegnatoDalCorriere),
+// il sondaggio sparisce e il bot scrive "📦 Ordine #N consegnato alle HH:MM — indirizzo". (La seconda opzione, "⏳ Ancora in viaggio", c'è solo perché un sondaggio ne vuole due.)
 //
 // Libreria non ufficiale (Baileys): si collega come dispositivo del numero scelto e scrive nel
 // gruppo. Il modulo è spento finché non c'è WHATSAPP_ATTIVO=1 (0 o niente = spento: i banchi accettano
@@ -157,6 +160,23 @@ async function sondaggioPossibile() {
     }
   }
   return colonnaSondaggio.presente;
+}
+
+// Le righe di whatsapp_messaggi che sono sondaggi: 'sondaggio' (i minuti per arrivare dal venditore) e 'consegna' (quello che compare dopo il "preso", per segnare l'ordine consegnato).
+const TIPI_SONDAGGIO = ['sondaggio', 'consegna'];
+const OPZIONE_CONSEGNATO = '🚀 Segna come Consegnato';
+// WhatsApp non ammette un sondaggio con una sola scelta: la seconda non fa niente (serve solo a poter toccare la prima).
+const OPZIONE_IN_VIAGGIO = '⏳ Ancora in viaggio';
+
+// Domanda e opzioni del sondaggio "consegnato" di un ordine (stessa forma di datiSondaggio, con l'`id` di ogni opzione al posto dei minuti).
+function datiSondaggioConsegna(ordineId) {
+  return {
+    domanda: `Ordine #${ordineId}: consegna`,
+    opzioni: [
+      { id: 'consegnato', etichetta: OPZIONE_CONSEGNATO },
+      { id: 'in_viaggio', etichetta: OPZIONE_IN_VIAGGIO },
+    ],
+  };
 }
 
 // Quale opzione ha scelto un voto già decifrato: `selectedOptions` sono gli SHA-256 dei testi delle opzioni. Un voto vuoto (ritirato) o di un'opzione che non conosciamo = null.
@@ -396,7 +416,7 @@ async function inviaMessaggiInCoda() {
     .all(TENTATIVI_MAX, ...paramMia);
   for (const riga of daInviare) {
     try {
-      const inviato = riga.tipo === 'sondaggio' ? await inviaSondaggio(gruppo, riga) : await sock.sendMessage(gruppo, { text: riga.testo });
+      const inviato = TIPI_SONDAGGIO.includes(riga.tipo) ? await inviaSondaggio(gruppo, riga) : await sock.sendMessage(gruppo, { text: riga.testo });
       const ok = await db
         .prepare(
           `UPDATE whatsapp_messaggi SET stato = 'inviato', wa_msg_id = ?, inviato_il = NOW(), errore = NULL
@@ -564,6 +584,7 @@ async function prendiConsegna(msg, riga, minuti, nome, citare) {
       `✅ Preso${da}! Richiesta #${riga.request_id}: arrivi dal venditore in ${consegna.inParole(minuti)}, ritiro entro le ${entro}.`,
       citare
     );
+    await dopoPreso(riga, esito).catch((err) => console.error(`WhatsApp, dopo il "preso" della richiesta #${riga.request_id}:`, err.message));
   } else if (esito.esito === 'gia_preso') {
     const da = esito.nome ? ` da ${esito.nome}` : '';
     await rispondi(msg, `La richiesta #${riga.request_id} è già stata presa${da}.`, citare);
@@ -571,6 +592,28 @@ async function prendiConsegna(msg, riga, minuti, nome, citare) {
     await rispondi(msg, `La richiesta #${riga.request_id} è scaduta: non è più disponibile.`, citare);
   }
   return esito;
+}
+
+// Dopo il "preso": il sondaggio dei minuti sparisce dal gruppo (il messaggio "nuova consegna" resta) e, appena nasce l'ordine, compare il sondaggio per segnarlo consegnato.
+// Solo con i sondaggi accesi. Un guasto qui non toglie la consegna al corriere (la risposta "Preso" è già partita): si scrive nel log.
+async function dopoPreso(riga, esito) {
+  await db
+    .prepare(
+      `UPDATE whatsapp_messaggi
+          SET stato = CASE WHEN stato = 'da_inviare' THEN 'annullato' ELSE 'da_eliminare' END
+        WHERE response_id = ? AND tipo = 'sondaggio' AND stato IN ('da_inviare', 'inviato')`
+    )
+    .run(riga.response_id);
+  if (await sondaggioPossibile()) {
+    if (esito.ordineId) {
+      await db
+        .prepare(`INSERT INTO whatsapp_messaggi (request_id, response_id, order_id, tipo, testo, istanza, segreto_sondaggio) VALUES (?, ?, ?, 'consegna', ?, ?, ?)`)
+        .run(riga.request_id, riga.response_id, esito.ordineId, JSON.stringify(datiSondaggioConsegna(esito.ordineId)), nomeIstanza(), crypto.randomBytes(32).toString('base64'));
+    } else {
+      console.error(`WhatsApp: la richiesta #${riga.request_id} è stata presa ma l'ordine non è ancora nato: il sondaggio "consegnato" non parte.`);
+    }
+  }
+  await svuotaCoda().catch((err) => console.error('WhatsApp, invio:', err.message));
 }
 
 // ---------- Voti del sondaggio ----------
@@ -607,7 +650,7 @@ const votiGestiti = new Set();
 async function gestisciVoto(msg, aggiornamento) {
   const chiave = aggiornamento && aggiornamento.pollCreationMessageKey;
   if (!chiave || !chiave.id || !aggiornamento.vote) return;
-  const riga = await db.prepare(`SELECT * FROM whatsapp_messaggi WHERE wa_msg_id = ? AND tipo = 'sondaggio'`).get(chiave.id);
+  const riga = await db.prepare(`SELECT * FROM whatsapp_messaggi WHERE wa_msg_id = ? AND tipo IN ('sondaggio', 'consegna')`).get(chiave.id);
   if (!riga || !miaRiga(riga)) return;
   let dati;
   try {
@@ -622,6 +665,10 @@ async function gestisciVoto(msg, aggiornamento) {
   }
   const scelta = opzioneVotata(voto, dati.opzioni);
   if (!scelta) return; // voto ritirato
+  if (riga.tipo === 'consegna') {
+    await gestisciVotoConsegna(msg, riga, scelta);
+    return;
+  }
   const votante = msg.key.fromMe ? 'io' : msg.key.participantAlt || msg.key.participant || '';
   const gia = `${riga.id}|${votante}`;
   if (votiGestiti.has(gia)) return;
@@ -631,6 +678,39 @@ async function gestisciVoto(msg, aggiornamento) {
   const nome = nomeDi(msg);
   console.log(`WhatsApp, sondaggio della richiesta #${riga.request_id}: ${nome || 'un corriere'} ha scelto ${scelta.etichetta}.`);
   await prendiConsegna(msg, riga, scelta.minuti, nome, false);
+}
+
+// Un voto nel sondaggio "consegna" di un ordine: "🚀 Segna come Consegnato" segna l'ordine consegnato (come il pulsante dell'installatore, ma lo fa il corriere), il sondaggio sparisce
+// dal gruppo e il bot scrive "Ordine #N consegnato alle HH:MM" con l'indirizzo. Vale il primo voto (preso_il è il segno che è già stato fatto); l'altra opzione non fa niente.
+async function gestisciVotoConsegna(msg, riga, scelta) {
+  if (scelta.id !== 'consegnato') return;
+  const preso = await db.prepare('UPDATE whatsapp_messaggi SET preso_il = NOW() WHERE id = ? AND preso_il IS NULL').run(riga.id);
+  if (!preso.changes) return;
+
+  const ordine = riga.order_id ? await db.prepare('SELECT * FROM orders WHERE id = ?').get(riga.order_id) : null;
+  const adesso = new Date();
+  console.log(`WhatsApp, ordine #${riga.order_id}: ${nomeDi(msg) || 'un corriere'} lo ha segnato consegnato.`);
+  try {
+    if (!ordine) throw new Error('ordine non trovato');
+    await require('./flusso_cliente').segnaConsegnatoDalCorriere(ordine);
+  } catch (err) {
+    // Non si scrive "consegnato" se l'ordine non è stato segnato: si libera il voto e si dice di riprovare.
+    console.error(`WhatsApp, ordine #${riga.order_id} non segnato consegnato:`, err.message);
+    await db.prepare('UPDATE whatsapp_messaggi SET preso_il = NULL WHERE id = ?').run(riga.id).catch(() => {});
+    await rispondi(msg, `Non sono riuscito a segnare l'ordine #${riga.order_id} come consegnato: togli il voto e votalo di nuovo.`, false);
+    return;
+  }
+
+  await db.prepare(`UPDATE whatsapp_messaggi SET stato = 'da_eliminare' WHERE id = ? AND stato = 'inviato'`).run(riga.id);
+  let dove = '';
+  try {
+    const richiesta = ordine.request_id ? await db.prepare('SELECT * FROM requests WHERE id = ?').get(ordine.request_id) : null;
+    dove = (await datiConsegna(ordine.cliente_id, richiesta && richiesta.destinazione)).indirizzo;
+  } catch (err) {
+    console.error(`WhatsApp, indirizzo dell'ordine #${riga.order_id}:`, err.message);
+  }
+  await accodaEsito(riga.request_id, riga.response_id, `📦 Ordine #${riga.order_id} consegnato alle ${format.oraRoma(adesso)}${dove ? ` — ${dove}` : ''}.`);
+  await svuotaCoda().catch((err) => console.error('WhatsApp, invio:', err.message));
 }
 
 // ---------- Connessione ----------
@@ -805,7 +885,7 @@ module.exports = {
   _prova: {
     impostaSocket(s, g) { sock = s; connesso = !!s; gruppo = g || null; },
     nomeIstanza, miaRiga, condizioneMia, istanzaDellaRichiesta, inviaMessaggiInCoda,
-    sondaggioAcceso, sondaggioPossibile, minutiDelSondaggio, etichettaMinuti, datiSondaggio, opzioneVotata, decifraVoto, votiGestiti,
+    sondaggioAcceso, sondaggioPossibile, minutiDelSondaggio, etichettaMinuti, datiSondaggio, datiSondaggioConsegna, opzioneVotata, decifraVoto, votiGestiti,
     azzeraControlloColonna() { colonnaSondaggio = { presente: null, letta: 0 }; },
   },
 };

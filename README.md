@@ -576,6 +576,8 @@ rinnova ogni 20 secondi: se non si legge, il codice è più comodo. Se si passa 
 dopo un tentativo fallito, cancellare prima `whatsapp_auth/`.
 Senza `WHATSAPP_GRUPPO` il server, una volta collegato, stampa nome e id dei gruppi del numero.
 
+**Dopo il "preso" (stesso interruttore, `WHATSAPP_SONDAGGIO=1`)**: il sondaggio dei minuti sparisce dal gruppo (resta il messaggio "nuova consegna"), il bot scrive "✅ Preso da Marco! Richiesta #N: arrivi dal venditore in 10 minuti, ritiro entro le …" e subito dopo manda un secondo sondaggio, "Ordine #N: consegna", con "🚀 Segna come Consegnato" (la seconda opzione, "⏳ Ancora in viaggio", c'è solo perché un sondaggio ne vuole due e non fa niente). Il primo voto su "Consegnato" segna l'ordine consegnato (come il pulsante dell'installatore: l'ordine passa a "Consegnato" e il banco riceve l'avviso "Il corriere ha segnato la consegna…"), il sondaggio sparisce e il bot scrive "📦 Ordine #N consegnato alle HH:MM — indirizzo di consegna". Non serve altro schema.
+
 **Sondaggio per prendere la consegna** (`WHATSAPP_SONDAGGIO=1`, spento di default): nel gruppo i pulsanti veri non si possono avere (l'API ufficiale di WhatsApp non li ha nei gruppi e quelli
 "interattivi" di Baileys sono un trucco non ufficiale). Si usa un **sondaggio WhatsApp**: subito dopo il messaggio "nuova consegna" il bot ne manda uno a scelta singola con i minuti per arrivare
 dal venditore ("5 minuti", "10 minuti"... "1 ora", "1 ora e mezza"), e **il primo che vota prende la consegna**, come chi scrive "preso 30" (che continua a funzionare). Il bot risponde nel gruppo

@@ -58,6 +58,10 @@ function esegui(sql, p) {
     for (const r of righe) if (r.response_id === p[0] && ['ritiro_consegna', 'sondaggio'].includes(r.tipo) && !r.preso_il) r.preso_il = new Date();
     return { changes: 1 };
   }
+  // dopo il "preso" il sondaggio dei minuti (se c'è) sparisce dal gruppo
+  if (/^UPDATE whatsapp_messaggi SET stato = CASE WHEN stato = 'da_inviare' THEN 'annullato' ELSE 'da_eliminare' END WHERE response_id = \? AND tipo = 'sondaggio' AND stato IN \('da_inviare', 'inviato'\)$/.test(s)) {
+    return { changes: 0 };
+  }
   if (/^SELECT istanza FROM whatsapp_messaggi WHERE request_id = \? AND tipo = 'ritiro_consegna' ORDER BY id DESC LIMIT 1$/.test(s)) {
     const r = righe.filter((x) => x.request_id === p[0] && x.tipo === 'ritiro_consegna').pop();
     return r ? { istanza: r.istanza } : null;
