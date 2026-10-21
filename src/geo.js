@@ -1,8 +1,9 @@
 const db = require('../db');
 
 // Posizione e distanze. La posizione di un installatore è quella dell'indirizzo di consegna che manda col pagamento (posizioneDellaDestinazione, salvata da
-// salvaPosizioneCliente); finché non ne ha mandata una vale la sede fissa di src/sede_installatori.js. Quella dei banchi è del punto vendita. Qui anche la
-// lettura e il calcolo delle distanze.
+// salvaPosizioneCliente): scritto a mano oppure preso dal pulsante accanto al campo, che lo ricava dalla posizione del dispositivo (indirizzoDaPosizione). Non
+// si chiede all'ingresso, solo a quel clic. Finché non ne ha mandata una vale la sede fissa di src/sede_installatori.js. La posizione di un banco (Borea) è
+// FISSA, quella scritta nel DB (distributors.geo_* e store_locations): nessun codice la ricalcola né la sposta. Qui anche la lettura e il calcolo delle distanze.
 
 async function statoUtente(userId) {
   const u = await db

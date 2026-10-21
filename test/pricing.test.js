@@ -19,6 +19,8 @@ const dbFinto = {
 const percorsoDb = require.resolve(path.join(__dirname, '..', 'db', 'index.js'));
 require.cache[percorsoDb] = { id: percorsoDb, filename: percorsoDb, loaded: true, exports: dbFinto };
 
+// Le prove non dipendono dal .env del PC: l'importo di prova (PAGAMENTO_APP_PROVA) e il modo di Stripe partono da zero.
+for (const nome of ['PAGAMENTO_APP_PROVA', 'STRIPE_MODO', 'STRIPE_SECRET_KEY', 'NODE_ENV']) delete process.env[nome];
 const pricing = require('../src/pricing');
 const arrotonda = pricing.round2;
 // La cache della configurazione (60 s) tiene i valori: per provare un'altra percentuale si sostituiscono le due letture.
@@ -190,4 +192,47 @@ test('ivaPctOrdine: dai valori SALVATI dell\'ordine, non da quelli di oggi', () 
   // niente di salvato: la configurazione
   assert.equal(pricing.ivaPctOrdine({ totale_finale: 70.95, iva: 0 }, 22), 22);
   assert.equal(pricing.ivaPctOrdine({}, 22), 22);
+});
+
+test('PAGAMENTO_APP_PROVA: l\'installatore paga ORA solo la cifra di prova, la formula e il materiale al banco restano', async () => {
+  const carrello = () => [riga(prodotto(1, 54.5), 1), riga(prodotto(2, 10), 1)];
+  const normale = await pricing.calcolaOrdine(carrello(), { costoConsegna: 10 });
+  try {
+    process.env.PAGAMENTO_APP_PROVA = '0,01'; // anche con la virgola
+    const t = await pricing.calcolaOrdine(carrello(), { costoConsegna: 10 });
+    assert.equal(t.da_pagare_app, 0.01);
+    assert.equal(t.app.totale, 0.01, 'una sola cifra: addebito e riepilogo dicono lo stesso');
+    // la formula non cambia: le voci sono quelle di sempre, e il materiale che si paga dopo a BOREA pure
+    assert.deepEqual([t.app.corriere, t.app.servizio, t.app.imponibile, t.app.iva], [10, 6.45, 16.45, 3.62]);
+    assert.deepEqual(t.banco, normale.banco);
+    assert.equal(t.materiale_banco, 78.69);
+    assert.equal(t.totale_ivato, 78.7, 'spesa complessiva = 0,01 in app + 78,69 al banco');
+
+    // valori che non valgono (zero, testo, negativo) = spenta
+    for (const v of ['0', 'abc', '-5', '  ']) {
+      process.env.PAGAMENTO_APP_PROVA = v;
+      assert.equal((await pricing.calcolaOrdine(carrello(), { costoConsegna: 10 })).da_pagare_app, 20.07, v);
+    }
+
+    // sulla VPS non vale mai: Stripe in modo reale o NODE_ENV=production la ignorano
+    process.env.PAGAMENTO_APP_PROVA = '0.01';
+    process.env.STRIPE_SECRET_KEY = 'sk_live_x';
+    const avvisi = [];
+    const warnOriginale = console.warn;
+    console.warn = (m) => avvisi.push(String(m));
+    try {
+      assert.equal((await pricing.calcolaOrdine(carrello(), { costoConsegna: 10 })).da_pagare_app, 20.07, 'chiave reale');
+    } finally {
+      console.warn = warnOriginale;
+      delete process.env.STRIPE_SECRET_KEY;
+    }
+    assert.match(avvisi.join(' '), /PAGAMENTO_APP_PROVA ignorata/);
+    process.env.NODE_ENV = 'production';
+    assert.equal((await pricing.calcolaOrdine(carrello(), { costoConsegna: 10 })).da_pagare_app, 20.07, 'NODE_ENV=production');
+  } finally {
+    delete process.env.PAGAMENTO_APP_PROVA;
+    delete process.env.NODE_ENV;
+    delete process.env.STRIPE_SECRET_KEY;
+  }
+  assert.equal((await pricing.calcolaOrdine(carrello(), { costoConsegna: 10 })).da_pagare_app, 20.07, 'spenta: di nuovo la formula');
 });

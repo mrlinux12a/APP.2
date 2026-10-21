@@ -580,7 +580,7 @@ require.cache[percorsoDb] = { id: percorsoDb, filename: percorsoDb, loaded: true
 // chiavi Stripe e indirizzo del sito vuoti = spenti, come su un PC senza configurazione.
 for (const nome of ['STRIPE_SECRET_KEY', 'STRIPE_PUBLISHABLE_KEY', 'STRIPE_PUBLIC_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_MODO',
   'STRIPE_LIVE_SECRET_KEY', 'STRIPE_LIVE_PUBLISHABLE_KEY', 'STRIPE_LIVE_PUBLIC_KEY', 'STRIPE_LIVE_WEBHOOK_SECRET',
-  'STRIPE_TEST_SECRET_KEY', 'STRIPE_TEST_PUBLISHABLE_KEY', 'STRIPE_TEST_PUBLIC_KEY', 'STRIPE_TEST_WEBHOOK_SECRET', 'APP_URL', 'APPROVAZIONE_AUTOMATICA', 'DISTRIBUTORE_PREDEFINITO', 'PAGAMENTO_SIMULATO', 'PAGAMENTO_SIMULATO_FORZA', 'FINESTRA_CONFERMA_SEC']) {
+  'STRIPE_TEST_SECRET_KEY', 'STRIPE_TEST_PUBLISHABLE_KEY', 'STRIPE_TEST_PUBLIC_KEY', 'STRIPE_TEST_WEBHOOK_SECRET', 'APP_URL', 'APPROVAZIONE_AUTOMATICA', 'DISTRIBUTORE_PREDEFINITO', 'PAGAMENTO_SIMULATO', 'PAGAMENTO_SIMULATO_FORZA', 'PAGAMENTO_APP_PROVA', 'FINESTRA_CONFERMA_SEC']) {
   process.env[nome] = '';
 }
 process.env.HOST = '127.0.0.1'; // il .env del PC può avere 0.0.0.0 (telefono sulla stessa rete): le prove restano sul computer
@@ -825,16 +825,16 @@ test('carrello: imposta, tetto sulla quantità, id non valido o inesistente', as
   assert.equal((await r.json()).pezzi, 0);
 });
 
-test('posizione di consegna: l\'indirizzo del carrello parte VUOTO e si precompila dalla posizione (GET /api/indirizzo); non si invia senza un indirizzo', async () => {
+test('posizione di consegna: l\'indirizzo del carrello parte VUOTO, due modi per darlo (scriverlo o il pulsante accanto al campo che usa la posizione del dispositivo); non si invia senza un indirizzo', async () => {
   await chiedi('/api/carrello/imposta', json({ id: 1, qty: 5 }));
   const t = await (await chiedi('/carrello')).text();
-  // il campo non è più precompilato con l'indirizzo abituale (Via Puggia): vuoto e obbligatorio, con le coordinate nascoste e la riga di stato della posizione
+  // il campo non è precompilato (nemmeno con l'indirizzo dell'account): vuoto e obbligatorio, aperto, con il pulsante accanto e le coordinate nascoste
   assert.match(t, /<input type="text" id="destinazione" name="destinazione" value="" required/);
   assert.doesNotMatch(t, /value="Via Puggia 22\/3, Genova"/);
+  assert.match(t, /<div class="consegna-input-riga">\s*<input type="text" id="destinazione"[^>]*>\s*<button type="button" class="consegna-pos-btn" data-consegna-pos-usa\s+aria-label="Usa la mia posizione" title="Usa la mia posizione"><svg/, 'il pulsante sta accanto al campo');
   assert.match(t, /<input type="hidden" name="dest_lat" value="" data-dest-lat>/);
   assert.match(t, /<input type="hidden" name="dest_lng" value="" data-dest-lng>/);
-  assert.match(t, /<div class="consegna-pos" data-consegna-pos hidden>/);
-  assert.match(t, /data-consegna-pos-usa>Usa la mia posizione<\/button>/);
+  assert.match(t, /<div class="consegna-pos" data-consegna-pos role="status" hidden>/);
   assert.match(t, /<button type="button" class="btn-cambia" data-consegna-cambia>Fatto<\/button>/, 'senza indirizzo il campo è aperto');
   await chiedi('/api/carrello/imposta', json({ id: 1, qty: 0 }));
 
@@ -870,16 +870,24 @@ test('posizione di consegna: l\'indirizzo del carrello parte VUOTO e si precompi
     cookie = conSessione;
   }
 
-  // lo script: coordinate nascoste, tolte se si modifica l'indirizzo, e nessun invio senza indirizzo
+  // lo script: la posizione si legge SOLO al clic sul pulsante (mai all'apertura della pagina), con un secondo tentativo meno preciso; coordinate tolte
+  // se si modifica l'indirizzo; messaggi per permesso negato, HTTPS mancante, iPhone e Android; nessun invio senza indirizzo
   const js = await (await chiedi('/app.js')).text();
-  assert.match(js, /navigator\.geolocation\.getCurrentPosition/);
+  assert.match(js, /navigator\.geolocation\.getCurrentPosition\(ok, no, opzioni\)/);
+  assert.match(js, /bottonePos\.addEventListener\('click', cercaPosizione\)/);
+  assert.doesNotMatch(js, /\n\s*cercaPosizione\(\);?\s*\n/, 'mai chiamata da sola all\'apertura');
+  assert.doesNotMatch(js, /if \(!campo\.value\.trim\(\)\) cercaPosizione/);
+  assert.match(js, /enableHighAccuracy: true[\s\S]*?enableHighAccuracy: false/, 'prima preciso, poi approssimato');
   assert.match(js, /fetch\('\/api\/indirizzo\?lat='/);
   assert.match(js, /if \(campo\.value\.trim\(\) !== daPosizione\) \{ destLat\.value = ''; destLng\.value = ''; \}/);
+  assert.match(js, /!window\.isSecureContext/);
+  assert.match(js, /Impostazioni › Privacy e sicurezza › Localizzazione/, 'come riattivare il permesso su iPhone');
+  assert.match(js, /lucchetto accanto all’indirizzo/, 'e su Android');
   assert.match(js, /form\.addEventListener\('submit'[\s\S]*?if \(campo\.value\.trim\(\)\) return;[\s\S]*?e\.preventDefault\(\);/);
   assert.doesNotMatch(js, /\/api\/posizione/, 'la posizione non si legge più in background: viaggia solo col pagamento');
 });
 
-test('posizione di consegna: col pagamento parte la posizione di quell\'indirizzo (quella del dispositivo, o ricavata dall\'indirizzo scritto); senza indirizzo non si invia nulla', async () => {
+test('posizione di consegna: col pagamento vale la posizione dell\'account se l\'indirizzo è il suo, altrimenti quella ricavata dall\'indirizzo scritto; senza indirizzo non si invia nulla', async () => {
   const conCarrello = async (prova) => {
     await chiedi('/api/carrello/imposta', json({ id: 3, qty: 1 }));
     try { await prova(); } finally { await chiedi('/api/carrello/imposta', json({ id: 3, qty: 0 })); }
@@ -901,7 +909,7 @@ test('posizione di consegna: col pagamento parte la posizione di quell\'indirizz
     assert.deepEqual(posizioniProva, []);
     assert.deepEqual(nominatim.chiamate, []);
 
-    // 2. indirizzo ricavato dalla posizione del dispositivo: le sue coordinate vanno salvate così come sono, senza altre chiamate alla mappa
+    // 2. indirizzo ricavato dalla posizione del dispositivo (pulsante accanto al campo): le sue coordinate vanno salvate così come sono, senza altre chiamate alla mappa
     prima = registro.length;
     let r = await chiedi('/richieste', form({ modo: 'imposta', chiave_invio: 'pos-dispositivo-1', destinazione: 'Via Puggia 22/3, 16131 Genova (GE)', dest_lat: '44.4019', dest_lng: '8.9742' }));
     assert.equal(r.status, 302);
@@ -2351,6 +2359,9 @@ test('sicurezza: CSP "leggera" (niente cornici, niente <base>, moduli solo qui),
   assert.match(csp, /form-action 'self'/);
   assert.doesNotMatch(csp, /script-src/, 'le pagine usano script in linea: niente script-src');
   assert.match(r.headers.get('permissions-policy'), /camera=\(\)/);
+  // la posizione è permessa solo a questo sito (il pulsante del carrello): con `geolocation=()` il browser la bloccava sempre, su qualunque dispositivo
+  assert.match(r.headers.get('permissions-policy'), /geolocation=\(self\)/);
+  assert.doesNotMatch(r.headers.get('permissions-policy'), /geolocation=\(\)/);
   assert.equal(r.headers.get('strict-transport-security'), null, 'HSTS solo quando la richiesta è HTTPS');
   // Dietro il proxy (trust proxy 1) X-Forwarded-Proto dice che la richiesta è arrivata in HTTPS: lì l'intestazione c'è.
   const https = await chiedi('/login', { headers: { 'x-forwarded-proto': 'https' } });
@@ -4615,14 +4626,14 @@ test('banco: "Anagrafica del banco": schede a sinistra e a destra, dati in lettu
     assert.match(t, /<dt>Partita IVA<\/dt><dd>—<\/dd>/);
     assert.match(t, /<dt>Codice SDI \/ PEC<\/dt><dd>—<\/dd>/);
     assert.match(t, /<dt>Sede legale<\/dt><dd>—<\/dd>/);
-    // Questa filiale: nome, telefono, indirizzo di ritiro, email e zona; la posizione c'è: riga verde con "Sposta"
+    // Questa filiale: nome, telefono, indirizzo di ritiro, email e zona; la posizione c'è: riga verde in SOLA LETTURA (è fissa: niente "Sposta", niente mappa)
     assert.match(t, /<dt>Nome del banco<\/dt><dd>Banco Genova Fegino<\/dd>/);
     assert.match(t, /<dt>Telefono del banco<\/dt><dd>010 123456<\/dd>/);
     assert.match(t, /<dt>Indirizzo di ritiro \(dove passa il corriere\)<\/dt><dd>Via Castel Morrone 1\/7 rosso, 16161 Genova \(GE\)<\/dd>/);
     assert.match(t, /<dt>Email per gli avvisi<\/dt><dd>fegino@borea\.example<\/dd>/);
     assert.match(t, /<dt>Zona servita<\/dt><dd>Genova e provincia<\/dd>/);
-    assert.match(t, /<div class="ab-posizione ab-posizione-ok">[\s\S]*?<strong>Posizione sulla mappa impostata\.<\/strong> Serve ai corrieri e per calcolare le distanze\.[\s\S]*?data-sposta>Sposta<\/button>/);
-    assert.match(t, /data-mappa-sposta data-lat="44\.4521" data-lng="8\.9055"/);
+    assert.match(t, /<div class="ab-posizione ab-posizione-ok">[\s\S]*?<strong>Posizione sulla mappa impostata\.<\/strong> Serve ai corrieri e per calcolare le distanze\.<\/span>\s*<\/div>/);
+    assert.doesNotMatch(t, /data-sposta|data-mappa-sposta|data-mappa-dialog|mappa\.js|Sposta/);
     // Orari: senza orari impostati vale "sempre aperto"
     assert.match(t, /<span class="ab-orari-giorni">Tutti i giorni<\/span><span class="ab-orari-fasce">Sempre aperto<\/span>/);
     // Accesso: email dell'utente e password nascosta, e il pulsante "Cambia password"
@@ -4651,7 +4662,7 @@ test('banco: "Anagrafica del banco": schede a sinistra e a destra, dati in lettu
   }
 });
 
-test('banco: anagrafica, la posizione manca: riga arancio con "Imposta"; il cliente e chi non ha fatto l\'accesso non entrano', async () => {
+test('banco: anagrafica, la posizione manca: riga arancio senza pulsanti; il cliente e chi non ha fatto l\'accesso non entrano', async () => {
   cookie = '';
   banco.attivo = true;
   const senza = { geo_lat: anagraficaProva.filiale.geo_lat, geo_lng: anagraficaProva.filiale.geo_lng };
@@ -4660,8 +4671,8 @@ test('banco: anagrafica, la posizione manca: riga arancio con "Imposta"; il clie
     anagraficaProva.filiale.geo_lat = null;
     anagraficaProva.filiale.geo_lng = null;
     const t = await (await chiedi('/distributore/anagrafica')).text();
-    assert.match(t, /<div class="ab-posizione ab-posizione-manca">[\s\S]*?<strong>Posizione non impostata:<\/strong> i corrieri non vedono dove ritirare\.[\s\S]*?data-sposta>Imposta<\/button>/);
-    assert.doesNotMatch(t, /data-mappa-sposta data-lat/, 'la mappa parte dall\'Italia, senza un segnaposto');
+    assert.match(t, /<div class="ab-posizione ab-posizione-manca">[\s\S]*?<strong>Posizione non impostata:<\/strong> i corrieri non vedono dove ritirare\.<\/span>\s*<\/div>/);
+    assert.doesNotMatch(t, /data-sposta|Imposta<\/button>/);
   } finally {
     Object.assign(anagraficaProva.filiale, senza);
     banco.attivo = false;
@@ -4671,7 +4682,6 @@ test('banco: anagrafica, la posizione manca: riga arancio con "Imposta"; il clie
   assert.equal((await chiedi('/login', form({ username: 'prova', password: 'password-di-prova' }))).status, 302);
   assert.equal((await chiedi('/distributore/anagrafica')).status, 403);
   assert.equal((await chiedi('/distributore/anagrafica/ditta', form({ ragione_sociale: 'X' }))).status, 403);
-  assert.equal((await chiedi('/distributore/anagrafica/posizione', json({ lat: 44, lng: 9 }))).status, 403);
   cookie = '';
   assert.equal((await chiedi('/distributore/anagrafica')).status, 302, 'senza accesso: al login');
 });
@@ -4723,45 +4733,27 @@ test('banco: anagrafica, "Ditta" e "Questa filiale" salvano e tornano in lettura
     assert.match(t, /<section class="ab-card" id="filiale" data-scheda="filiale" data-aperta>/);
     assert.equal(scrittureAnagrafica.length, 0);
 
-    // ---- Indirizzo uguale: nessuna geocodifica, la posizione non si tocca
+    // ---- LA POSIZIONE DI BOREA È FISSA (la solita, nel DB): né con l'indirizzo uguale né con uno cambiato si ricalcola o si scrive, e la geocodifica non parte
     geoModulo.geocodifica = async (dati) => { ricerche.push(dati); return { lat: 44.405, lng: 8.941, descrizione: 'Via XX Settembre, Genova' }; };
     const uguale = { filiale: 'Banco Genova Fegino', telefono: '010 999999', email: 'fegino@borea.example', zona: 'Genova e provincia', indirizzo: 'Via Castel Morrone 1/7 rosso', cap: '16161', citta: 'Genova', provincia: 'GE' };
     r = await chiedi('/distributore/anagrafica/filiale', form(uguale));
     assert.equal(r.status, 302);
-    assert.equal(r.headers.get('location'), '/distributore/anagrafica?ok=filiale&pos=invariata#filiale');
-    assert.equal(ricerche.length, 0, 'indirizzo invariato: niente geocodifica');
+    assert.equal(r.headers.get('location'), '/distributore/anagrafica?ok=filiale#filiale');
     assert.deepEqual(scrittureAnagrafica.map((w) => w.s.split(' SET ')[0]), ['UPDATE distributors', 'UPDATE store_locations'], 'la filiale e il suo punto vendita insieme');
     assert.deepEqual(scrittureAnagrafica[0].p, ['Banco Genova Fegino', '010 999999', 'fegino@borea.example', 'Genova e provincia', 'Via Castel Morrone 1/7 rosso', '16161', 'Genova', 'GE', 2]);
 
-    // ---- Indirizzo cambiato (posizione non spostata a mano): si ricalcola dall'indirizzo, su entrambe le tabelle
     scrittureAnagrafica.length = 0;
     r = await chiedi('/distributore/anagrafica/filiale', form({ ...uguale, indirizzo: 'Via XX Settembre 10', cap: '16121' }));
     assert.equal(r.status, 302);
-    assert.equal(r.headers.get('location'), '/distributore/anagrafica?ok=filiale&pos=ricalcolata#filiale');
-    assert.deepEqual(ricerche, [{ indirizzo: 'Via XX Settembre 10', cap: '16121', citta: 'Genova', provincia: 'GE' }]);
-    const posizioni = scrittureAnagrafica.filter((w) => /geo_lat/.test(w.s));
-    assert.deepEqual(posizioni.map((w) => w.s.split(' SET ')[0]), ['UPDATE distributors', 'UPDATE store_locations']);
-    assert.deepEqual(posizioni[0].p, [44.405, 8.941, 0, 2], 'ricalcolata: non è "a mano"');
-    t = await (await chiedi('/distributore/anagrafica?ok=filiale&pos=ricalcolata')).text();
-    assert.match(t, /Posizione sulla mappa aggiornata dal nuovo indirizzo\./);
-
-    // ---- Indirizzo cambiato ma la geocodifica non lo trova: la posizione resta com'era, con un avviso
-    ricerche.length = 0;
-    scrittureAnagrafica.length = 0;
-    geoModulo.geocodifica = async () => null;
-    r = await chiedi('/distributore/anagrafica/filiale', form({ ...uguale, indirizzo: 'Via Che Non Esiste 1' }));
-    assert.equal(r.headers.get('location'), '/distributore/anagrafica?ok=filiale&pos=non_trovata#filiale');
-    assert.equal(scrittureAnagrafica.filter((w) => /geo_lat/.test(w.s)).length, 0);
-    assert.match(await (await chiedi('/distributore/anagrafica?ok=filiale&pos=non_trovata')).text(), /Non ho trovato il nuovo indirizzo sulla mappa: la posizione è rimasta quella di prima/);
-
-    // ---- Posizione spostata a mano: un cambio d'indirizzo NON la ricalcola
-    ricerche.length = 0;
-    anagraficaProva.filiale.geo_manuale = 1;
-    geoModulo.geocodifica = async (dati) => { ricerche.push(dati); return { lat: 1, lng: 1, descrizione: '' }; };
-    r = await chiedi('/distributore/anagrafica/filiale', form({ ...uguale, indirizzo: 'Via Balbi 5' }));
-    assert.equal(r.headers.get('location'), '/distributore/anagrafica?ok=filiale&pos=manuale#filiale');
-    assert.equal(ricerche.length, 0, 'spostata a mano: niente geocodifica');
-    assert.match(await (await chiedi('/distributore/anagrafica?ok=filiale&pos=manuale')).text(), /resta quella che hai scelto tu/);
+    assert.equal(r.headers.get('location'), '/distributore/anagrafica?ok=filiale#filiale');
+    assert.equal(ricerche.length, 0, 'indirizzo cambiato: nessuna geocodifica');
+    assert.deepEqual(scrittureAnagrafica.map((w) => w.s.split(' SET ')[0]), ['UPDATE distributors', 'UPDATE store_locations']);
+    assert.equal(scrittureAnagrafica.filter((w) => /geo_lat|geo_lng|geo_manuale|geocodifica/.test(w.s)).length, 0, 'la posizione non si tocca');
+    assert.equal(scrittureAnagrafica[0].p[4], 'Via XX Settembre 10', 'l\'indirizzo di ritiro sì');
+    t = await (await chiedi('/distributore/anagrafica?ok=filiale')).text();
+    assert.match(t, /Dati della filiale salvati\./);
+    assert.doesNotMatch(t, /Posizione sulla mappa aggiornata|Sposta|resta quella che hai scelto tu/);
+    assert.match(t, /Cambiare l'indirizzo non sposta il punto sulla mappa: la posizione del banco è fissa\./);
   } finally {
     geoModulo.geocodifica = geocodificaOriginale;
     Object.assign(anagraficaProva.filiale, originale);
@@ -4769,27 +4761,20 @@ test('banco: anagrafica, "Ditta" e "Questa filiale" salvano e tornano in lettura
   }
 });
 
-test('banco: anagrafica, "Sposta" salva la posizione su entrambe le tabelle e la segna "a mano"; coordinate assurde rifiutate', async () => {
+test('banco: anagrafica, la posizione è FISSA: nessuna rotta la sposta; l\'interruttore dell\'email salva subito', async () => {
   cookie = '';
   banco.attivo = true;
   try {
     assert.equal((await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }))).status, 302);
     scrittureAnagrafica.length = 0;
-    let r = await chiedi('/distributore/anagrafica/posizione', json({ lat: 44.4056, lng: 8.9463 }));
-    assert.equal(r.status, 200);
-    assert.deepEqual(await r.json(), { ok: true });
-    assert.deepEqual(scrittureAnagrafica.map((w) => w.s.split(' SET ')[0]), ['UPDATE distributors', 'UPDATE store_locations']);
-    assert.deepEqual(scrittureAnagrafica[0].p, [44.4056, 8.9463, 1, 2], 'geo_manuale = 1');
-    assert.deepEqual(scrittureAnagrafica[1].p.slice(0, 3), [44.4056, 8.9463, 'Posizione impostata dal banco']);
-    scrittureAnagrafica.length = 0;
-    for (const corpo of [{ lat: 0, lng: 0 }, { lat: 'abc', lng: 8.9 }, { lat: 51.5, lng: -0.12 }, { lat: null, lng: null }, {}, { lat: [44], lng: [9] }]) {
-      r = await chiedi('/distributore/anagrafica/posizione', json(corpo));
-      assert.equal(r.status, 400, JSON.stringify(corpo));
-      assert.equal((await r.json()).ok, false);
+    // la rotta "Sposta" non esiste più: né con coordinate giuste né con altro, e non si scrive niente
+    for (const corpo of [{ lat: 44.4056, lng: 8.9463 }, { lat: 0, lng: 0 }, {}]) {
+      const sposta = await chiedi('/distributore/anagrafica/posizione', json(corpo));
+      assert.equal(sposta.status, 404, JSON.stringify(corpo));
     }
-    assert.equal(scrittureAnagrafica.length, 0);
+    assert.equal(scrittureAnagrafica.length, 0, 'la posizione del banco non si tocca');
     // l'interruttore dell'email salva subito (la riga non si vede ancora, ma la rotta c'è)
-    r = await chiedi('/distributore/anagrafica/email-richieste', json({ acceso: true }));
+    const r = await chiedi('/distributore/anagrafica/email-richieste', json({ acceso: true }));
     assert.deepEqual(await r.json(), { ok: true });
     assert.deepEqual(scrittureAnagrafica[0].p, [1, 2]);
   } finally {

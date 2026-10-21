@@ -399,10 +399,11 @@ const Minuteria = (function () {
     const citta = consegna && consegna.querySelector('[data-consegna-citta]');
     // Se manca un solo pezzo della scheda non si fa niente: un errore qui fermerebbe tutto il resto dello script.
     if (campo && zonaCampo && bottone && via && citta) {
-      const apri = function () {
+      // `senzaFuoco`: dal pulsante della posizione il campo si apre ma la tastiera no (sul telefono si coprirebbe il messaggio).
+      const apri = function (senzaFuoco) {
         zonaCampo.hidden = false;
         bottone.textContent = 'Fatto';
-        campo.focus();
+        if (senzaFuoco !== true) campo.focus();
       };
       const conferma = function () {
         const testo = campo.value.trim();
@@ -418,67 +419,108 @@ const Minuteria = (function () {
         if (e.key === 'Enter') { e.preventDefault(); conferma(); }
       });
 
-      // Posizione di consegna: se il dispositivo la dà, l'indirizzo si precompila da lì (geocodifica inversa, GET /api/indirizzo) e le sue coordinate partono con la
-      // richiesta (dest_lat/dest_lng: da quelle il server calcola il tragitto del corriere). Se non c'è, il campo resta vuoto e l'indirizzo lo scrive l'installatore
-      // (il server ne ricava la posizione). Appena si modifica il testo le coordinate si tolgono: non descrivono più quell'indirizzo. Non si paga senza un indirizzo.
+      // Posizione di consegna: due modi. O l'installatore scrive l'indirizzo (il server ne ricava la posizione), oppure tocca il mirino accanto al campo:
+      // solo allora il browser legge la posizione del dispositivo (mai all'apertura della pagina), la geocodifica inversa (GET /api/indirizzo) la
+      // trasforma in indirizzo e le coordinate partono con la richiesta (dest_lat/dest_lng: da quelle il server calcola il tragitto del corriere).
+      // Appena si modifica il testo le coordinate si tolgono: non descrivono più quell'indirizzo. Non si paga senza un indirizzo.
+      // Funziona da sito e da web app installata, su iPhone, Android e computer, ma solo in HTTPS (o su localhost): è una regola dei browser.
       const form = campo.form;
       const destLat = consegna.querySelector('[data-dest-lat]');
       const destLng = consegna.querySelector('[data-dest-lng]');
       const posizione = consegna.querySelector('[data-consegna-pos]');
       const posizioneTesto = consegna.querySelector('[data-consegna-pos-testo]');
-      const posizioneUsa = consegna.querySelector('[data-consegna-pos-usa]');
-      if (form && destLat && destLng && posizione && posizioneTesto && posizioneUsa) {
+      const bottonePos = consegna.querySelector('[data-consegna-pos-usa]');
+      if (form && destLat && destLng && posizione && posizioneTesto && bottonePos) {
         let daPosizione = ''; // l'indirizzo ricavato dalla posizione, per accorgersi che è stato cambiato
-        const dice = function (testo, conPulsante, etichetta) {
+        const dice = function (testo) {
           posizione.hidden = !testo;
           posizioneTesto.textContent = testo || '';
-          posizioneUsa.hidden = !conPulsante;
-          if (etichetta) posizioneUsa.textContent = etichetta;
         };
         campo.addEventListener('input', function () {
           if (campo.value.trim() !== daPosizione) { destLat.value = ''; destLng.value = ''; }
+          dice('');
         });
 
+        // Come riattivare il permesso, detto per il dispositivo che si ha davanti (iPad con Safari "desktop" compreso).
+        const ua = navigator.userAgent || '';
+        const suIos = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+        const suAndroid = /Android/i.test(ua);
+        const testoNegata = function () {
+          if (suIos) return 'Posizione non consentita. Su iPhone e iPad: Impostazioni › Privacy e sicurezza › Localizzazione › Safari (o questa app), poi riprova. Oppure scrivi l’indirizzo.';
+          if (suAndroid) return 'Posizione non consentita. Dalle impostazioni del sito (il lucchetto accanto all’indirizzo) o dell’app consenti la Posizione, poi riprova. Oppure scrivi l’indirizzo.';
+          return 'Posizione non consentita dal browser: abilitala per questo sito e riprova. Oppure scrivi l’indirizzo.';
+        };
+        const leggi = function (opzioni) {
+          return new Promise(function (ok, no) { navigator.geolocation.getCurrentPosition(ok, no, opzioni); });
+        };
+
         let incorso = false;
-        const cercaPosizione = function (daClic) {
+        const fine = function () {
+          incorso = false;
+          bottonePos.disabled = false;
+          bottonePos.classList.remove('cerca');
+        };
+        const cercaPosizione = function () {
           if (incorso) return;
-          if (!('geolocation' in navigator) || !window.isSecureContext) {
-            if (daClic) dice('Il browser non legge la posizione su questa connessione: scrivi l’indirizzo.', false);
+          if (!window.isSecureContext) {
+            dice('Il browser legge la posizione solo su un sito sicuro (HTTPS). Scrivi l’indirizzo.');
+            return;
+          }
+          if (!('geolocation' in navigator)) {
+            dice('Questo dispositivo non può dare la posizione. Scrivi l’indirizzo.');
             return;
           }
           incorso = true;
-          dice('Cerco la tua posizione…', false);
-          navigator.geolocation.getCurrentPosition(function (p) {
-            const lat = p.coords.latitude;
-            const lng = p.coords.longitude;
-            fetch('/api/indirizzo?lat=' + encodeURIComponent(lat) + '&lng=' + encodeURIComponent(lng))
-              .then(leggiJson)
-              .then(function (dati) {
-                incorso = false;
-                if (!dati || !dati.ok || !dati.indirizzo) {
-                  dice('Ho trovato la posizione ma non l’indirizzo: scrivilo qui sopra.', true, 'Riprova');
-                  return;
-                }
-                // Col clic si sostituisce quello che c'era; da sola la pagina non sovrascrive mai un indirizzo già scritto.
-                if (campo.value.trim() && !daClic) { dice('', false); return; }
-                campo.value = dati.indirizzo;
-                daPosizione = dati.indirizzo;
-                destLat.value = String(lat);
-                destLng.value = String(lng);
-                dice('', false);
-                conferma();
-              })
-              .catch(function (errore) {
-                incorso = false;
-                if (!errore || !errore.sessioneScaduta) dice('Non riesco a ricavare l’indirizzo dalla posizione: scrivilo qui sopra.', true, 'Riprova');
-              });
-          }, function (errore) {
-            incorso = false;
-            if (errore && errore.code === 1) dice('Posizione non attiva: scrivi l’indirizzo, oppure attivala e tocca il pulsante.', true, 'Usa la mia posizione');
-            else dice('Non riesco a leggere la posizione: scrivi l’indirizzo.', true, 'Riprova');
-          }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+          bottonePos.disabled = true;
+          bottonePos.classList.add('cerca');
+          dice('Cerco la tua posizione…');
+          // Prima un rilevamento preciso (GPS); se non arriva in tempo, o il dispositivo non lo dà, si riprova con quello approssimato (Wi-Fi e celle), che
+          // basta per un indirizzo. Se il permesso è negato inutile riprovare.
+          leggi({ enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 })
+            .catch(function (errore) {
+              if (errore && errore.code === 1) throw errore;
+              return leggi({ enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 });
+            })
+            .then(function (p) {
+              const lat = p.coords.latitude;
+              const lng = p.coords.longitude;
+              const metri = Math.round(p.coords.accuracy || 0);
+              return fetch('/api/indirizzo?lat=' + encodeURIComponent(lat) + '&lng=' + encodeURIComponent(lng))
+                .then(leggiJson)
+                .then(function (dati) {
+                  fine();
+                  if (!dati || !dati.ok || !dati.indirizzo) {
+                    apri(true);
+                    dice('Ho trovato la posizione ma non l’indirizzo: scrivilo qui sopra.');
+                    return;
+                  }
+                  campo.value = dati.indirizzo;
+                  daPosizione = dati.indirizzo;
+                  destLat.value = String(lat);
+                  destLng.value = String(lng);
+                  if (metri > 1000) {
+                    // Posizione molto approssimata (di solito un computer senza GPS): l'indirizzo va controllato, quindi il campo resta aperto.
+                    apri(true);
+                    dice('Posizione poco precisa (circa ' + (metri >= 10000 ? Math.round(metri / 1000) + ' km' : (Math.round(metri / 100) / 10).toString().replace('.', ',') + ' km') + '): controlla l’indirizzo.');
+                  } else {
+                    dice('');
+                    conferma();
+                  }
+                }, function (errore) {
+                  fine();
+                  if (errore && errore.sessioneScaduta) return;
+                  apri(true);
+                  dice('Non riesco a ricavare l’indirizzo dalla posizione: scrivilo qui sopra.');
+                });
+            }, function (errore) {
+              fine();
+              apri(true);
+              if (errore && errore.code === 1) dice(testoNegata());
+              else if (errore && errore.code === 3) dice('La posizione non arriva: prova all’aperto o scrivi l’indirizzo.');
+              else dice('Non riesco a leggere la posizione di questo dispositivo: scrivi l’indirizzo.');
+            });
         };
-        posizioneUsa.addEventListener('click', function () { cercaPosizione(true); });
+        bottonePos.addEventListener('click', cercaPosizione);
 
         // Senza indirizzo non si invia: il campo si apre e dice cosa manca. Il gestore del form sta sul form (prima di quello sul documento) e ferma la propagazione.
         form.addEventListener('submit', function (e) {
@@ -486,10 +528,8 @@ const Minuteria = (function () {
           e.preventDefault();
           e.stopPropagation();
           apri();
-          dice('Scrivi l’indirizzo di consegna (o attiva la posizione) per poter pagare.', true, 'Usa la mia posizione');
+          dice('Scrivi l’indirizzo di consegna, oppure tocca il mirino per usare la tua posizione.');
         });
-
-        if (!campo.value.trim()) cercaPosizione(false);
       }
     }
 

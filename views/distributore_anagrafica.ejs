@@ -101,9 +101,6 @@
             <a class="ab-modifica" href="/distributore/anagrafica?modifica=filiale#filiale" data-modifica<%- aperta === 'filiale' ? ' hidden' : '' %>><%- matita %>Modifica</a>
           </header>
           <%- salvato('filiale', 'Dati della filiale salvati.') %>
-          <% if (ok === 'filiale' && posizione === 'ricalcolata') { %><p class="ab-ok" role="status">Posizione sulla mappa aggiornata dal nuovo indirizzo.</p><% } %>
-          <% if (ok === 'filiale' && posizione === 'non_trovata') { %><p class="ab-avviso" role="status">Non ho trovato il nuovo indirizzo sulla mappa: la posizione è rimasta quella di prima. Controllala con «Sposta».</p><% } %>
-          <% if (ok === 'filiale' && posizione === 'manuale') { %><p class="ab-avviso" role="status">La posizione sulla mappa resta quella che hai scelto tu. Se l'indirizzo è cambiato, controllala con «Sposta».</p><% } %>
 
           <div class="ab-lettura" data-lettura<%- aperta === 'filiale' ? ' hidden' : '' %>>
             <dl class="ab-dati ab-dati-2">
@@ -117,21 +114,18 @@
               <div><dt>Email per gli avvisi</dt><dd><%= vuoto(f.email) %></dd></div>
               <div><dt>Zona servita</dt><dd><%= vuoto(f.zona) %></dd></div>
             </dl>
-            <%# Posizione sulla mappa: verde se c'è, arancio se manca. "Sposta"/"Imposta" apre la mappa con il segnaposto da trascinare (public/mappa.js). %>
+            <%# Posizione sulla mappa: FISSA, quella del DB (richiesta esplicita del 21/10/2026). Si legge soltanto: verde se c'è, arancio se manca. %>
             <% if (dati.posizioneImpostata) { %>
               <div class="ab-posizione ab-posizione-ok">
                 <span class="ab-posizione-ico" aria-hidden="true"><%- iconaPosizione %></span>
                 <span class="ab-posizione-testo"><strong>Posizione sulla mappa impostata.</strong> Serve ai corrieri e per calcolare le distanze.</span>
-                <button type="button" class="ab-posizione-link" data-sposta>Sposta</button>
               </div>
             <% } else { %>
               <div class="ab-posizione ab-posizione-manca">
                 <span class="ab-posizione-ico" aria-hidden="true"><%- iconaPosizione %></span>
                 <span class="ab-posizione-testo"><strong>Posizione non impostata:</strong> i corrieri non vedono dove ritirare.</span>
-                <button type="button" class="ab-posizione-link" data-sposta>Imposta</button>
               </div>
             <% } %>
-            <% if (ok === 'posizione') { %><p class="ab-ok" role="status">Posizione salvata.</p><% } %>
           </div>
 
           <form class="ab-modulo" method="POST" action="/distributore/anagrafica/filiale" data-modulo novalidate<%- aperta === 'filiale' ? '' : ' hidden' %>>
@@ -150,7 +144,7 @@
               <%- campo('filiale', 'email', 'Email per gli avvisi', { ripiego: f.email, maxlength: 200, tipo: 'email', autocomplete: 'email' }) %>
               <%- campo('filiale', 'zona', 'Zona servita', { ripiego: f.zona, maxlength: 100 }) %>
             </div>
-            <p class="ab-nota">Se cambi l'indirizzo, la posizione sulla mappa si aggiorna da sola, a meno che tu non l'abbia spostata a mano.</p>
+            <p class="ab-nota">Cambiare l'indirizzo non sposta il punto sulla mappa: la posizione del banco è fissa.</p>
             <div class="ab-azioni">
               <a class="ab-annulla" href="/distributore/anagrafica#filiale" data-annulla>Annulla</a>
               <button class="ab-salva" type="submit">Salva</button>
@@ -291,20 +285,7 @@
     </div>
   </main>
 
-  <%# Mappa per spostare il segnaposto del banco (public/mappa.js, blocco [data-sposta]): si apre da "Sposta" / "Imposta". %>
-  <dialog class="ab-mappa-dialog" data-mappa-dialog aria-labelledby="ab-mappa-titolo">
-    <h2 class="ab-titolo" id="ab-mappa-titolo">Posizione del banco</h2>
-    <p class="ab-spiega">Trascina il segnaposto sul punto in cui passa il corriere, oppure tocca la mappa.</p>
-    <div class="ab-mappa" data-mappa-sposta<% if (dati.posizioneImpostata) { %> data-lat="<%= f.geo_lat %>" data-lng="<%= f.geo_lng %>"<% } %>></div>
-    <p class="ab-errore" data-mappa-errore role="alert" hidden></p>
-    <div class="ab-azioni">
-      <button type="button" class="ab-annulla" data-mappa-annulla>Annulla</button>
-      <button type="button" class="ab-salva" data-mappa-salva>Salva posizione</button>
-    </div>
-  </dialog>
-
   <%- include('partials/nav_distributore', { attivo: '' }) %>
   <script src="<%= asset('/app.js') %>" defer></script>
-  <script src="<%= asset('/mappa.js') %>" defer></script>
 </body>
 </html>

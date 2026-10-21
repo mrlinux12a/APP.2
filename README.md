@@ -441,8 +441,8 @@ con tutti i permessi.
 - **Orari**: fuori orario (ora di Roma) le richieste non arrivano a quella filiale. Senza orari impostati è sempre aperta. Se **tutte** le filiali sono chiuse
   l'installatore non può pagare: nel carrello il pulsante dice "Il banco è chiuso · riapre giovedì alle 07:30" e il server rifiuta comunque l'invio (anche
   "Rinvia richiesta").
-- **Posizione**: se cambia l'indirizzo di ritiro si ricalcola da sola (Nominatim/OpenStreetMap, serve la rete); se il banco l'ha spostata a mano con "Sposta" resta com'è.
-- **Schema**: servono le colonne `distributors.orari`, `email_nuove_richieste` e `geo_manuale` (blocco "Anagrafica del banco" in fondo a
+- **Posizione**: è **fissa**, quella scritta nel DB (`distributors.geo_*` e `store_locations.geo_*`). Cambiare l'indirizzo di ritiro dalla pagina non la ricalcola e non c'è nessun modo di spostarla da lì.
+- **Schema**: servono le colonne `distributors.orari` ed `email_nuove_richieste` (`geo_manuale` c'è ma non si usa più; blocco "Anagrafica del banco" in fondo a
   `db/postgres/schema.sql`): sulla VPS applicarlo **prima** di riavviare, con
   `node scripts/applica_blocco_schema.js "-- Anagrafica del banco: orari"` (a secco) e poi con `--applica`.
 
@@ -464,9 +464,11 @@ importa insieme al prodotto e compare come **voce separata** in riepilogo e ordi
 ## Posizione
 
 **Sul sito** la posizione dell'installatore è quella dell'**indirizzo di consegna che manda nel form di pagamento** del carrello.
-L'indirizzo parte vuoto: se il dispositivo dà la posizione (`navigator.geolocation`, serve HTTPS o localhost) il campo si
-precompila da lì (`GET /api/indirizzo`, OpenStreetMap) e le coordinate partono col pagamento; altrimenti lo scrive
-l'installatore e il server ricava la posizione dall'indirizzo. **Senza un indirizzo non si può inviare.** Da quella posizione,
+L'indirizzo parte vuoto e **la posizione non si chiede all'ingresso**: l'installatore ha due modi per darlo, scriverlo (il server ne
+ricava la posizione) oppure toccare il **mirino accanto al campo**, che legge la posizione del dispositivo
+(`navigator.geolocation`, da sito e da web app, su iPhone, Android e computer; serve HTTPS o localhost), la trasforma in indirizzo
+(`GET /api/indirizzo`, OpenStreetMap) e manda le coordinate col pagamento. Il sito deve permettere la posizione al browser:
+l'intestazione `Permissions-Policy` ha `geolocation=(self)` (con `geolocation=()` non funzionerebbe mai). **Senza un indirizzo non si può inviare.** Da quella posizione,
 quando il banco accetta, si calcola il tragitto banco → installatore che si somma ai minuti del corriere. **L'app Android non
 la manda ancora.**
 

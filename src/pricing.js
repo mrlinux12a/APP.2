@@ -1,5 +1,6 @@
 const db = require('../db');
 const { conCache } = require('./memo');
+const stripeConfig = require('./stripe_config');
 
 function round2(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
@@ -36,6 +37,31 @@ if (FINESTRA_FORZATA_MIN !== null) {
 async function getFinestraMinuti() {
   if (FINESTRA_FORZATA_MIN !== null) return FINESTRA_FORZATA_MIN;
   return getConfigNum('finestra_conferma_min', 10);
+}
+
+// SOLO PER PROVARE (richiesta esplicita del 21/10/2026): `PAGAMENTO_APP_PROVA=0.01` nel .env di UN computer fa valere quella cifra come importo che
+// l'installatore paga ORA in app (`app.totale`, cioè `da_pagare_app`: carrello, addebito, ordine, Storico). La formula di dividiTotale non cambia e le
+// sue voci (corriere, servizio, IVA) restano com'erano; cambia solo il totale addebitato. Il materiale da pagare dopo a BOREA non si tocca.
+// Sulla VPS non vale mai: con Stripe in modo reale o NODE_ENV=production la riga è ignorata (e il log lo dice). Per toglierla: via la riga e riavvio.
+// Con Stripe vero (non il pagamento simulato del PC) Stripe rifiuta importi sotto i 0,50 €.
+let avvisoProvaIgnorata = false;
+function importoProvaApp() {
+  const grezzo = String(process.env.PAGAMENTO_APP_PROVA || '').trim().replace(',', '.');
+  if (!grezzo) return null;
+  const importo = Number(grezzo);
+  if (!Number.isFinite(importo) || importo <= 0) return null;
+  if (stripeConfig.modo() === 'live' || process.env.NODE_ENV === 'production') {
+    if (!avvisoProvaIgnorata) {
+      avvisoProvaIgnorata = true;
+      console.warn('[config] PAGAMENTO_APP_PROVA ignorata: con Stripe in modo reale o NODE_ENV=production l’importo si calcola sempre con la formula.');
+    }
+    return null;
+  }
+  return Math.round(importo * 100) / 100;
+}
+{
+  const prova = importoProvaApp();
+  if (prova !== null) console.log(`[config] PAGAMENTO_APP_PROVA=${prova}: l'installatore paga ORA ${prova} € in app (la formula resta, il materiale al banco non cambia).`);
 }
 
 // Ordine minimo, calcolato sui prezzi già maggiorati del servizio e IVA esclusa.
@@ -139,6 +165,8 @@ async function calcolaOrdine(righeCarrello, { costoConsegna = 0 } = {}) {
   const costo_consegna = round2(costoConsegna || 0);
 
   const { servizio, app, banco } = dividiTotale({ netto: totale_netto, raee: contributo_raee, consegna: costo_consegna, servizioPct, ivaPct });
+  const prova = importoProvaApp();
+  if (prova !== null) app.totale = prova; // solo prove sul PC, vedi importoProvaApp
 
   return {
     righe,

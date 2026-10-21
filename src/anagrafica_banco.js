@@ -2,13 +2,12 @@
 // Il banco ha UN SOLO profilo, con tutti i permessi: niente ruoli, colleghi o inviti. Le schede:
 //  · Ditta      -> tabella `ditte` (tramite distributors.ditta_id); senza ditta_id valgono ragione_sociale e partita_iva di `distributors`.
 //  · Filiale    -> riga di `distributors` (+ la riga di `store_locations` della filiale, che leggono /punti-vendita, la stima della consegna e il messaggio
-//                  ai corrieri: i due indirizzi non devono mai divergere).
+//                  ai corrieri: i due indirizzi non devono mai divergere). La posizione sulla mappa NON si modifica da qui: è fissa, quella del DB.
 //  · Orari      -> distributors.orari (src/orari.js).
 //  · Accesso    -> users.email dell'utente loggato e la sua password.
 //  · Notifiche  -> solo l'email per ogni nuova richiesta sta sul DB (distributors.email_nuove_richieste); suoni e notifiche del computer sono del browser.
 // I controlli sono funzioni pure che ritornano gli errori PER CAMPO ({ campo: 'testo' }): la pagina li mostra sotto il campo, in rosso.
 const db = require('../db');
-const geo = require('./geo');
 const orari = require('./orari');
 // Il cambio password è condiviso con l'installatore e con il recupero della password: sta in src/password_account.js.
 const { controllaCambioPassword, cambiaPassword, chiudiAltreSessioni } = require('./password_account');
@@ -126,26 +125,13 @@ async function salvaDitta(distributorId, valori) {
   return true;
 }
 
-// Salva la filiale. Se cambia l'indirizzo di ritiro la posizione sulla mappa si ricalcola dall'indirizzo (src/geo.js), ma SOLO se il banco non l'ha
-// spostata a mano (distributors.geo_manuale): in quel caso resta com'è. Se la geocodifica non trova l'indirizzo (o la rete non risponde) la posizione
-// vecchia resta e si avvisa. Ritorna:
-//   { ok: true, posizione: 'invariata' | 'ricalcolata' | 'non_trovata' | 'manuale' }   (`manuale`: l'indirizzo è cambiato ma la posizione è quella scelta a mano)
-//   { ok: false, errori: { filiale: '...' } }                                          (un'altra filiale della ditta ha già questo nome)
-// `opzioni.geocodifica`: per le prove.
-async function salvaFiliale(distributorId, valori, opzioni = {}) {
+// Salva la filiale. LA POSIZIONE SULLA MAPPA È FISSA (richiesta esplicita del 21/10/2026: quella di Borea è la solita, scritta nel DB): cambiare l'indirizzo
+// di ritiro NON la ricalcola e nessuna pagina la sposta; `distributors.geo_*` e `store_locations.geo_*` non si toccano da qui. Ritorna:
+//   { ok: true }
+//   { ok: false, errori: { filiale: '...' } }   (un'altra filiale della ditta ha già questo nome)
+async function salvaFiliale(distributorId, valori) {
   const attuale = await db.prepare('SELECT * FROM distributors WHERE id = ?').get(distributorId);
   if (!attuale) return { ok: false, errori: { filiale: 'Banco non trovato.' } };
-
-  const cambiato = ['indirizzo', 'cap', 'citta', 'provincia'].some((k) => String(attuale[k] || '') !== valori[k]);
-  const manuale = Number(attuale.geo_manuale) === 1;
-  let posizione = 'invariata';
-  let trovata = null;
-  if (cambiato && manuale) {
-    posizione = 'manuale';
-  } else if (cambiato) {
-    trovata = await (opzioni.geocodifica || geo.geocodifica)({ indirizzo: valori.indirizzo, cap: valori.cap, citta: valori.citta, provincia: valori.provincia });
-    posizione = trovata ? 'ricalcolata' : 'non_trovata';
-  }
 
   try {
     await db.transaction(async () => {
@@ -162,40 +148,13 @@ async function salvaFiliale(distributorId, valori, opzioni = {}) {
             WHERE id = (SELECT id FROM store_locations WHERE distributor_id = ? ORDER BY id LIMIT 1)`
         )
         .run(attuale.filiale, valori.filiale, valori.indirizzo, valori.cap, valori.citta, valori.provincia, valori.telefono, valori.email, distributorId);
-      if (trovata) await scriviPosizione(distributorId, trovata.lat, trovata.lng, { manuale: false, descrizione: trovata.descrizione });
     })();
   } catch (e) {
     // 23505 = indice unico (nome della ditta + nome della filiale): un'altra filiale ha già questo nome.
     if (e && e.code === '23505') return { ok: false, errori: { filiale: 'Un’altra filiale della tua ditta ha già questo nome.' } };
     throw e;
   }
-  return { ok: true, posizione };
-}
-
-// La posizione sulla mappa: sulla riga del distributore e su quella del punto vendita (`store_locations`), sempre insieme.
-async function scriviPosizione(distributorId, lat, lng, { manuale, descrizione }) {
-  await db
-    .prepare('UPDATE distributors SET geo_lat = ?, geo_lng = ?, geo_manuale = ? WHERE id = ?')
-    .run(lat, lng, manuale ? 1 : 0, distributorId);
-  await db
-    .prepare(
-      `UPDATE store_locations SET geo_lat = ?, geo_lng = ?, geocodifica = ?
-        WHERE id = (SELECT id FROM store_locations WHERE distributor_id = ? ORDER BY id LIMIT 1)`
-    )
-    .run(lat, lng, String(descrizione || '').slice(0, 300), distributorId);
-}
-
-// "Sposta" / "Imposta": il banco trascina il segnaposto. Da quel momento un cambio d'indirizzo non la ricalcola più. false se le coordinate non valgono.
-async function spostaPosizione(distributorId, lat, lng) {
-  // Solo numeri (o testo numerico): un elenco come [44] diventerebbe 44 con Number().
-  const numero = (v) => (typeof v === 'number' || (typeof v === 'string' && v.trim() !== '') ? Number(v) : NaN);
-  const la = numero(lat);
-  const lo = numero(lng);
-  if (!geo.posizioneValida(la, lo)) return false;
-  await db.transaction(async () => {
-    await scriviPosizione(distributorId, la, lo, { manuale: true, descrizione: 'Posizione impostata dal banco' });
-  })();
-  return true;
+  return { ok: true };
 }
 
 async function salvaOrari(distributorId, valore) {
@@ -209,5 +168,5 @@ async function salvaEmailNuoveRichieste(distributorId, acceso) {
 module.exports = {
   controllaDitta, controllaFiliale, controllaCambioPassword,
   leggi, indirizzoInRiga,
-  salvaDitta, salvaFiliale, spostaPosizione, salvaOrari, salvaEmailNuoveRichieste, cambiaPassword, chiudiAltreSessioni,
+  salvaDitta, salvaFiliale, salvaOrari, salvaEmailNuoveRichieste, cambiaPassword, chiudiAltreSessioni,
 };

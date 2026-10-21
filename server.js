@@ -137,9 +137,10 @@ app.use((req, res, next) => {
     'X-Frame-Options': 'SAMEORIGIN',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
     'Content-Security-Policy': "frame-ancestors 'self'; base-uri 'self'; object-src 'none'; form-action 'self'",
-    // Il sito non usa fotocamera, microfono né posizione: niente script (nemmeno iniettato) può chiederli. `payment` resta com'è
-    // (Stripe lo usa per Apple Pay e Google Pay) e non si imposta Cross-Origin-Opener-Policy, che romperebbe le finestre di Google Pay e Link.
-    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+    // Il sito non usa fotocamera né microfono: niente script (nemmeno iniettato) può chiederli. La posizione sì, ma solo a questo sito (`self`) e solo
+    // dal pulsante accanto all'indirizzo di consegna del carrello: con `geolocation=()` il browser la bloccava sempre, su iPhone, Android e PC. `payment`
+    // resta com'è (Stripe lo usa per Apple Pay e Google Pay) e non si imposta Cross-Origin-Opener-Policy, che romperebbe le finestre di Google Pay e Link.
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=(self)',
   });
   if (req.secure) res.set('Strict-Transport-Security', 'max-age=15552000');
   next();
@@ -937,9 +938,10 @@ app.get('/carrello', requireRole('cliente'), async (req, res) => {
   const righe = await righeCarrello(req);
   // Il banco è aperto? Fuori dagli orari impostati nella sua "Anagrafica" il pulsante di pagamento dice quando riapre e non si può premere (lo stesso
   // controllo lo rifà il server al momento di pagare). A carrello vuoto non serve: niente query in più.
-  const [riepilogo, statoBanco] = await Promise.all([
+  const [riepilogo, statoBanco, cliente] = await Promise.all([
     flusso.riepilogoCarrello(righe),
     righe.length ? richieste.statoBanchiAttivi() : { aperto: true, riapre: null },
+    db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id),
   ]);
 
   // Gli articoli che "Riordina" ha saltato (POST /storico/:id/riordina): l'avviso si mostra una volta sola.
@@ -955,7 +957,7 @@ app.get('/carrello', requireRole('cliente'), async (req, res) => {
     bancoChiuso: !statoBanco.aperto,
     fraseBancoChiuso: orari.frasePerCarrello(statoBanco),
     ...riepilogo,
-    cliente: await db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id),
+    cliente,
     // Solo a carrello vuoto: la scheda "Il tuo ultimo ordine" con "Rimetti nel carrello" (una lettura sola).
     ultimoOrdine: righe.length ? null : await flusso.ultimoOrdineConsegnato(req.session.user.id),
   });
@@ -1003,7 +1005,7 @@ app.post('/richieste', requireRole('cliente'), async (req, res) => {
       throw new flusso.ErroreFlusso('destinazione', 'Manca l’indirizzo di consegna', 'Scrivi dove consegnare il materiale (via, numero, CAP, città) prima di pagare.');
     }
     // La posizione per il tragitto banco -> installatore è quella di questo indirizzo: le coordinate del dispositivo, se la pagina le ha mandate (indirizzo
-    // preso dalla posizione), altrimenti quelle dell'indirizzo scritto. Se non si trovano resta l'ultima posizione nota (o la sede provvisoria).
+    // preso dal pulsante "posizione" accanto al campo), altrimenti quelle dell'indirizzo scritto. Se non si trovano resta l'ultima posizione nota (o la sede provvisoria).
     const posizione = await geo.posizioneDellaDestinazione(destinazione, req.body.dest_lat, req.body.dest_lng);
     if (posizione) await geo.salvaPosizioneCliente(req.session.user.id, posizione.lat, posizione.lng, null);
     // `chiave_invio` è scritta nella pagina del carrello: la stessa pagina dà una richiesta sola, comunque si clicchi.
@@ -1866,8 +1868,7 @@ app.post('/distributore/richieste/:id/rispondi', requireRole('distributore'), as
 // Ogni scheda ha il suo POST: con errori la pagina si ripropone (400) con la scheda aperta, i valori scritti e gli errori sotto i campi; con il salvataggio
 // si torna alla pagina (`?ok=<scheda>`), che lo conferma.
 const SCHEDE_ANAGRAFICA = ['ditta', 'filiale', 'orari', 'password'];
-const SALVATI_ANAGRAFICA = ['ditta', 'filiale', 'orari', 'password', 'posizione'];
-const ESITI_POSIZIONE = ['ricalcolata', 'non_trovata', 'manuale', 'invariata'];
+const SALVATI_ANAGRAFICA = ['ditta', 'filiale', 'orari', 'password'];
 
 async function paginaAnagraficaBanco(req, res, extra = {}) {
   const dati = extra.dati || (await anagraficaBanco.leggi(req.session.user.distributor_id, req.session.user.id));
@@ -1882,7 +1883,6 @@ async function paginaAnagraficaBanco(req, res, extra = {}) {
     valori: extra.valori || {},
     errori: extra.errori || {},
     ok: SALVATI_ANAGRAFICA.includes(req.query.ok) ? req.query.ok : '',
-    posizione: ESITI_POSIZIONE.includes(req.query.pos) ? req.query.pos : '',
     riassuntoOrari: orari.riassunto(dati.orari),
     moduloOrari: extra.moduloOrari || orari.valoriPerModulo(dati.orari),
     // Senza orari salvati la casella "sempre aperto" parte spuntata (i giorni mostrano solo una proposta, spenta).
@@ -1914,11 +1914,11 @@ app.post('/distributore/anagrafica/filiale', requireRole('distributore'), async 
   const { valori, errori } = anagraficaBanco.controllaFiliale(req.body);
   const riproponi = (e) => paginaAnagraficaBanco(req, res, { dati, stato: 400, aperta: 'filiale', valori: { filiale: valori }, errori: { filiale: e } });
   if (Object.keys(errori).length) return riproponi(errori);
-  // Se cambia l'indirizzo la posizione sulla mappa si ricalcola (geocodifica di OpenStreetMap), salvo che il banco l'abbia spostata a mano.
+  // La posizione sulla mappa è fissa (quella del DB): cambiare l'indirizzo non la tocca.
   const esito = await anagraficaBanco.salvaFiliale(idBanco, valori);
   if (!esito.ok) return riproponi(esito.errori);
   rileggiIntestazioneBanco(idBanco);
-  res.redirect('/distributore/anagrafica?ok=filiale&pos=' + esito.posizione + '#filiale');
+  res.redirect('/distributore/anagrafica?ok=filiale#filiale');
 });
 
 app.post('/distributore/anagrafica/orari', requireRole('distributore'), async (req, res) => {
@@ -1948,13 +1948,6 @@ app.post('/distributore/anagrafica/password', requireRole('distributore'), async
   }
   accessoRiuscito(req, chiaveLimite);
   res.redirect('/distributore/anagrafica?ok=password#accesso');
-});
-
-// "Sposta" / "Imposta": il segnaposto trascinato sulla mappa (public/mappa.js). Da qui un cambio d'indirizzo non ricalcola più la posizione.
-app.post('/distributore/anagrafica/posizione', requireRole('distributore'), async (req, res) => {
-  const salvata = await anagraficaBanco.spostaPosizione(req.session.user.distributor_id, req.body.lat, req.body.lng);
-  if (!salvata) return res.status(400).json({ ok: false, errore: 'Posizione non valida: scegli un punto in Italia.' });
-  res.json({ ok: true });
 });
 
 // L'interruttore "Email per ogni nuova richiesta" salva subito (fetch).

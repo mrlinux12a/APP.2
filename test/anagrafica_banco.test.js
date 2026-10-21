@@ -1,4 +1,4 @@
-// Prove di src/anagrafica_banco.js e della geocodifica (src/geo.js): controlli dei moduli, salvataggio di filiale/posizione/orari, cambio password.
+// Prove di src/anagrafica_banco.js e della geocodifica (src/geo.js): controlli dei moduli, salvataggio di filiale/orari (la posizione del banco è fissa), cambio password.
 // DB e rete sono finti: nessun accesso al database vero né a Nominatim. Si lancia con `npm test`.
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -153,75 +153,52 @@ test('salvaDitta: scrive su `ditte`; senza ditta solo ragione sociale e partita 
   assert.equal(await banco.salvaDitta(99, {}), true, 'con la riga trovata dal DB finto');
 });
 
-test('salvaFiliale: indirizzo invariato = nessuna geocodifica; cambiato = si ricalcola e si scrive su distributori e punto vendita', async () => {
-  let chiamate = [];
-  const geocodifica = async (dati) => { chiamate.push(dati); return { lat: 44.405, lng: 8.941, descrizione: 'Via XX Settembre, Genova' }; };
+test('salvaFiliale: la posizione è FISSA — con l\'indirizzo uguale o cambiato non si ricalcola, non si scrive e non parte nessuna geocodifica', async () => {
+  // se qualcuno richiamasse la geocodifica per sbaglio, la prova lo vede: ogni chiamata a fetch fa fallire il test
+  const fetchOriginale = global.fetch;
+  global.fetch = async () => { throw new Error('la posizione del banco non si cerca sulla mappa'); };
+  try {
+    prepara();
+    let r = await banco.salvaFiliale(2, { ...VALORI, telefono: '010 1' });
+    assert.deepEqual(r, { ok: true });
+    assert.deepEqual(scritture.map((w) => w.s.split(' SET ')[0]), ['UPDATE distributors', 'UPDATE store_locations']);
 
-  prepara();
-  let r = await banco.salvaFiliale(2, { ...VALORI, telefono: '010 1' }, { geocodifica });
-  assert.deepEqual(r, { ok: true, posizione: 'invariata' });
-  assert.equal(chiamate.length, 0);
-  assert.deepEqual(scritture.map((w) => w.s.split(' SET ')[0]), ['UPDATE distributors', 'UPDATE store_locations']);
+    prepara();
+    r = await banco.salvaFiliale(2, { ...VALORI, indirizzo: 'Via XX Settembre 10', cap: '16121' });
+    assert.deepEqual(r, { ok: true });
+    // niente scritture di posizione: né geo_lat/geo_lng, né geo_manuale, né la descrizione della geocodifica
+    assert.equal(scritture.filter((w) => /geo_lat|geo_lng|geo_manuale|geocodifica/.test(w.s)).length, 0);
+    // il punto vendita prende il nuovo indirizzo, telefono ed email; il nome solo se era quello della filiale
+    const punto = scritture.find((w) => /^UPDATE store_locations SET nome = CASE/.test(w.s));
+    assert.deepEqual(punto.p, ['Banco Genova Fegino', 'Banco Genova Fegino', 'Via XX Settembre 10', '16121', 'Genova', 'GE', '010 123456', 'fegino@borea.example', 2]);
 
-  prepara();
-  r = await banco.salvaFiliale(2, { ...VALORI, indirizzo: 'Via XX Settembre 10', cap: '16121' }, { geocodifica });
-  assert.deepEqual(r, { ok: true, posizione: 'ricalcolata' });
-  assert.deepEqual(chiamate, [{ indirizzo: 'Via XX Settembre 10', cap: '16121', citta: 'Genova', provincia: 'GE' }]);
-  const geoScritte = scritture.filter((w) => /geo_lat = \?/.test(w.s));
-  assert.equal(geoScritte.length, 2, 'distributors e store_locations');
-  assert.match(geoScritte[0].s, /^UPDATE distributors SET geo_lat = \?, geo_lng = \?, geo_manuale = \? WHERE id = \?/);
-  assert.deepEqual(geoScritte[0].p, [44.405, 8.941, 0, 2]);
-  assert.match(geoScritte[1].s, /^UPDATE store_locations SET geo_lat = \?, geo_lng = \?, geocodifica = \?/);
-  assert.deepEqual(geoScritte[1].p, [44.405, 8.941, 'Via XX Settembre, Genova', 2]);
-  // il punto vendita prende anche il nuovo indirizzo, telefono ed email; il nome solo se era quello della filiale
-  const punto = scritture.find((w) => /^UPDATE store_locations SET nome = CASE/.test(w.s));
-  assert.deepEqual(punto.p, ['Banco Genova Fegino', 'Banco Genova Fegino', 'Via XX Settembre 10', '16121', 'Genova', 'GE', '010 123456', 'fegino@borea.example', 2]);
-
-  // la geocodifica non trova niente: la posizione resta (nessuna UPDATE di geo_lat)
-  prepara();
-  r = await banco.salvaFiliale(2, { ...VALORI, indirizzo: 'Via Che Non Esiste 1' }, { geocodifica: async () => null });
-  assert.deepEqual(r, { ok: true, posizione: 'non_trovata' });
-  assert.equal(scritture.filter((w) => /geo_lat = \?/.test(w.s)).length, 0);
-
-  // spostata a mano: l'indirizzo cambia, la geocodifica nemmeno parte
-  prepara();
-  righe.filiale.geo_manuale = 1;
-  chiamate = [];
-  r = await banco.salvaFiliale(2, { ...VALORI, indirizzo: 'Via Balbi 5' }, { geocodifica });
-  assert.deepEqual(r, { ok: true, posizione: 'manuale' });
-  assert.equal(chiamate.length, 0);
-  assert.equal(scritture.filter((w) => /geo_lat = \?/.test(w.s)).length, 0);
-  // ma se l'indirizzo è lo stesso, con la posizione a mano, è semplicemente "invariata"
-  prepara();
-  righe.filiale.geo_manuale = 1;
-  assert.deepEqual(await banco.salvaFiliale(2, VALORI, { geocodifica }), { ok: true, posizione: 'invariata' });
+    // anche con un banco che in passato l'aveva spostata a mano: stesso comportamento, la posizione resta quella del DB
+    prepara();
+    righe.filiale.geo_manuale = 1;
+    r = await banco.salvaFiliale(2, { ...VALORI, indirizzo: 'Via Balbi 5' });
+    assert.deepEqual(r, { ok: true });
+    assert.equal(scritture.filter((w) => /geo_lat|geo_lng|geo_manuale|geocodifica/.test(w.s)).length, 0);
+  } finally {
+    global.fetch = fetchOriginale;
+  }
 
   // un'altra filiale della stessa ditta ha già il nome (indice unico): errore sotto il campo, non un 500
   prepara();
   erroreSulProssimoUpdate = Object.assign(new Error('duplicate key'), { code: '23505' });
-  r = await banco.salvaFiliale(2, { ...VALORI, filiale: 'Banco Genova Staglieno' }, { geocodifica });
+  let r = await banco.salvaFiliale(2, { ...VALORI, filiale: 'Banco Genova Staglieno' });
   assert.equal(r.ok, false);
   assert.match(r.errori.filiale, /già questo nome/);
   // qualunque altro errore del DB sale
   prepara();
   erroreSulProssimoUpdate = Object.assign(new Error('rete caduta'), { code: '08006' });
-  await assert.rejects(banco.salvaFiliale(2, VALORI, { geocodifica }), /rete caduta/);
+  await assert.rejects(banco.salvaFiliale(2, VALORI), /rete caduta/);
   // banco che non esiste
   righe.filiale = null;
-  assert.equal((await banco.salvaFiliale(2, VALORI, { geocodifica })).ok, false);
+  assert.equal((await banco.salvaFiliale(2, VALORI)).ok, false);
 });
 
-test('spostaPosizione: scrive su entrambe le tabelle con geo_manuale = 1; rifiuta chi non è un punto in Italia o non è un numero', async () => {
-  prepara();
-  assert.equal(await banco.spostaPosizione(2, 44.4056, 8.9463), true);
-  assert.deepEqual(scritture[0].p, [44.4056, 8.9463, 1, 2]);
-  assert.deepEqual(scritture[1].p, [44.4056, 8.9463, 'Posizione impostata dal banco', 2]);
-  assert.equal(await banco.spostaPosizione(2, '44.4056', '8.9463'), true, 'testo numerico');
-  scritture.length = 0;
-  for (const [lat, lng] of [[0, 0], ['abc', 8], [51.5, -0.12], [null, null], [undefined, undefined], [[44], [9]], ['', ''], [NaN, 9], [Infinity, 9], [44, 30], [{}, {}], [true, true]]) {
-    assert.equal(await banco.spostaPosizione(2, lat, lng), false, JSON.stringify([lat, lng]));
-  }
-  assert.equal(scritture.length, 0);
+test('la posizione del banco non ha più modi di essere spostata da qui (niente spostaPosizione)', () => {
+  assert.equal(banco.spostaPosizione, undefined);
 });
 
 test('salvaOrari e salvaEmailNuoveRichieste', async () => {

@@ -157,6 +157,11 @@ const iconaPosizione = svg(
   '<path d="M12 21s-6.5-6.1-6.5-11A6.5 6.5 0 0 1 18.5 10c0 4.9-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.2"/>'
 );
 
+// Mirino ("usa la mia posizione"): cerchio con quattro tacche e punto al centro, come nelle mappe.
+const iconaMirino = svg(
+  '<circle cx="12" cy="12" r="6.2"/><circle cx="12" cy="12" r="1.6"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3"/>'
+);
+
 const iconaAzienda = svg(
   '<rect x="4.5" y="3" width="11" height="18" rx="1"/>' +
   '<path d="M8 7.2h1M8 11h1M8 14.8h1M12.5 7.2h1M12.5 11h1M12.5 14.8h1"/>' +
@@ -312,6 +317,7 @@ module.exports = {
   iconaClienti,
   iconaNotifiche,
   iconaPosizione,
+  iconaMirino,
   iconaAzienda,
   iconaFiscale,
   iconaDestinazione,
