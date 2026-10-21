@@ -121,8 +121,10 @@ async function nonLette(userId) {
   return row ? Number(row.n) : 0;
 }
 
-// Notifiche non ancora mostrate come push dal browser; le marca come mostrate.
-async function daMostrare(userId) {
+// Notifiche non ancora mostrate come push dal browser; le marca come mostrate. `massimoEtaSec`: se c'è, quelle nate da più tempo si marcano come mostrate
+// ma NON si restituiscono (una notifica di ieri non deve suonare adesso: succedeva appena si attivava il permesso, perché fino a lì nessuno le aveva mai
+// segnate). Senza, si restituiscono tutte (il banco filtra da sé le vecchie, vedi public/app.js "Avvisi del banco").
+async function daMostrare(userId, { massimoEtaSec = null } = {}) {
   const righe = await db
     .prepare(
       `SELECT id, titolo, testo, link, tipo, request_id, order_id, EXTRACT(EPOCH FROM (NOW() - creato_il))::int AS eta_sec FROM notifications
@@ -135,7 +137,12 @@ async function daMostrare(userId) {
       `UPDATE notifications SET notificata = 1 WHERE user_id = ? AND notificata = 0 AND id = ANY(?::int[])`
     ).run(userId, righe.map((r) => r.id));
   }
-  return righe;
+  return massimoEtaSec ? righe.filter((r) => Number(r.eta_sec) <= massimoEtaSec) : righe;
+}
+
+// Si attivano gli avvisi sul telefono: tutto quello che c'è già è storia e non deve arrivare come notifica.
+async function segnaTutteNotificate(userId) {
+  await db.prepare(`UPDATE notifications SET notificata = 1 WHERE user_id = ? AND notificata = 0`).run(userId);
 }
 
 async function segnaLette(userId) {
@@ -184,6 +191,7 @@ module.exports = {
   nonLette,
   nonLetteCategoria,
   daMostrare,
+  segnaTutteNotificate,
   segnaLette,
   segnaLettePerId,
   segnaLetteCategoria,

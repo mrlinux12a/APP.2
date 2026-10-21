@@ -1490,8 +1490,16 @@ app.get('/notifiche', requireLogin, async (req, res) => {
 // anche `tipo`, `request_id`, `order_id` e i dati del suo avviso (src/banco_avvisi.js: la richiesta con i secondi che mancano, il corriere...).
 app.get('/api/notifiche/push', requireLogin, async (req, res) => {
   const utente = req.session.user;
-  const nuove = await notifiche.daMostrare(utente.id);
-  res.json({ notifiche: utente.ruolo === 'distributore' && utente.distributor_id ? await bancoAvvisi.arricchisciPush(utente.distributor_id, nuove) : nuove });
+  const alBanco = utente.ruolo === 'distributore' && utente.distributor_id;
+  // Cliente e agente: solo le notifiche degli ultimi 10 minuti (le vecchie si segnano e basta). Il banco le riceve tutte e filtra da sé.
+  const nuove = await notifiche.daMostrare(utente.id, alBanco ? {} : { massimoEtaSec: 600 });
+  res.json({ notifiche: alBanco ? await bancoAvvisi.arricchisciPush(utente.distributor_id, nuove) : nuove });
+});
+
+// "Attiva" gli avvisi sul telefono: le notifiche già presenti sono storia, non devono arrivare tutte insieme.
+app.post('/api/notifiche/attiva', requireLogin, async (req, res) => {
+  await notifiche.segnaTutteNotificate(req.session.user.id);
+  res.json({ ok: true });
 });
 
 // Un avviso a comparsa del banco, aperto o chiuso, risulta letto (public/app.js, "Avvisi del banco"): il browser manda gli id delle notifiche e, perché un avviso

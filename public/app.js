@@ -27,9 +27,43 @@ const Minuteria = (function () {
 
   // Mostra una notifica di sistema. `new Notification(...)` esiste su desktop e iOS, ma Chrome per Android lo
   // rifiuta (TypeError): lì si passa dal service worker (/sw.js), che gestisce anche il tocco sulla notifica.
+  // `silent: false` e `vibrate` chiedono al sistema di far suonare e vibrare (il suono vero lo decide il telefono: su Android vale il canale "Notifiche" del
+  // browser o dell'app, su iPhone la suoneria delle notifiche; non si può forzare da una pagina). `renotify` fa suonare anche se il tag si ripete.
+  const OPZIONI_SUONO = { silent: false, vibrate: [250, 120, 250], renotify: true };
+
+  // Il suono "ding" del sito (public/suoni/avviso.mp3) per quando la pagina è aperta: i browser lo permettono solo dopo che l'utente ha toccato la pagina, quindi
+  // al primo tocco lo si "sblocca" riproducendolo a volume zero.
+  let audioAvviso = null;
+  function suonaAvviso() {
+    try {
+      if (!audioAvviso) audioAvviso = new Audio('/suoni/avviso.mp3');
+      audioAvviso.volume = 1;
+      audioAvviso.currentTime = 0;
+      const p = audioAvviso.play();
+      if (p && p.catch) p.catch(function () { /* il browser non lo permette ancora: resta la notifica di sistema */ });
+    } catch (err) { /* nessun suono */ }
+  }
+  function sbloccaAudio() {
+    try {
+      if (!audioAvviso) audioAvviso = new Audio('/suoni/avviso.mp3');
+      audioAvviso.volume = 0;
+      const p = audioAvviso.play();
+      const rimetti = function () { audioAvviso.pause(); audioAvviso.currentTime = 0; audioAvviso.volume = 1; };
+      if (p && p.then) p.then(rimetti).catch(function () {}); else rimetti();
+    } catch (err) { /* niente */ }
+  }
+  let audioSbloccato = false;
+  function alPrimoTocco() {
+    if (audioSbloccato) return;
+    audioSbloccato = true;
+    ['pointerdown', 'keydown', 'touchstart'].forEach(function (nome) { document.removeEventListener(nome, alPrimoTocco); });
+    sbloccaAudio();
+  }
+  ['pointerdown', 'keydown', 'touchstart'].forEach(function (nome) { document.addEventListener(nome, alPrimoTocco, { passive: true }); });
+
   function mostraNotifica(titolo, testo, link, tag) {
     try {
-      const notifica = new Notification(titolo, { body: testo, tag: tag });
+      const notifica = new Notification(titolo, Object.assign({ body: testo, tag: tag }, OPZIONI_SUONO));
       if (link) {
         notifica.onclick = function () {
           window.focus();
@@ -41,7 +75,7 @@ const Minuteria = (function () {
     if (!('serviceWorker' in navigator)) return;
     navigator.serviceWorker.ready
       .then(function (registrazione) {
-        return registrazione.showNotification(titolo, { body: testo, tag: tag, data: { link: link || '/' } });
+        return registrazione.showNotification(titolo, Object.assign({ body: testo, tag: tag, data: { link: link || '/' } }, OPZIONI_SUONO));
       })
       .catch(function () { /* niente notifica: l'avviso resta comunque in "Stato ordini" */ });
   }
@@ -70,6 +104,7 @@ const Minuteria = (function () {
     limitaQuantita: limitaQuantita,
     leggiJson: leggiJson,
     mostraNotifica: mostraNotifica,
+    suonaAvviso: suonaAvviso,
     durataMinuti: durataMinuti,
     daMinuti: daMinuti,
     tempoTrascorso: tempoTrascorso,
@@ -79,7 +114,7 @@ const Minuteria = (function () {
 (function () {
   'use strict';
 
-  const { QUANTITA_MASSIMA, limitaQuantita, leggiJson, mostraNotifica } = Minuteria;
+  const { QUANTITA_MASSIMA, limitaQuantita, leggiJson, mostraNotifica, suonaAvviso } = Minuteria;
 
   // ---------- Selettore quantità (+ / -) e Aggiungi globale ----------
   function aggiornaBadgeCarrello(pezzi) {
@@ -1300,7 +1335,15 @@ const Minuteria = (function () {
     mostraStatoNotifiche();
     pulsanteNotifiche.addEventListener('click', function () {
       Notification.requestPermission().then(function (p) {
-        if (p === 'granted') mostraNotifica('Avvisi attivi', 'Ti avviseremo quando i distributori rispondono.', null, 'minuteria-attive');
+        if (p === 'granted') {
+          // Prima si segnano come già viste le notifiche di prima (altrimenti arriverebbero tutte insieme), poi la notifica di prova, col suono.
+          fetch('/api/notifiche/attiva', { method: 'POST', credentials: 'same-origin', headers: { Accept: 'application/json' } })
+            .catch(function () { /* il filtro dei 10 minuti sul server evita comunque il peggio */ })
+            .then(function () {
+              suonaAvviso();
+              mostraNotifica('Avvisi attivi', 'Ti avviseremo quando i distributori rispondono.', null, 'minuteria-attive');
+            });
+        }
         mostraStatoNotifiche();
       });
     });
@@ -1313,7 +1356,9 @@ const Minuteria = (function () {
       fetch('/api/notifiche/push')
         .then(leggiJson)
         .then(function (dati) {
-          (dati.notifiche || []).forEach(function (n) {
+          const nuove = dati.notifiche || [];
+          if (nuove.length) suonaAvviso(); // un solo suono anche se ne arrivano più d'una insieme
+          nuove.forEach(function (n) {
             mostraNotifica(n.titolo, n.testo, n.link, 'minuteria-' + n.id);
           });
         })

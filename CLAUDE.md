@@ -45,7 +45,7 @@ già scritto lì.
   fino in fondo e lanciarlo da solo (è così che si è applicato "Ditte e filiali"): lo fa
   `node scripts/applica_blocco_schema.js "<commento d'inizio>" [--applica]` (a secco senza il flag).
 - Mai `pool.on('connect', async ...)`: causa query concorrenti sullo stesso client.
-- **Finestra di conferma delle richieste = 30 s sul PC, "per adesso"** (richiesta esplicita del 16/10/2026): `FINESTRA_CONFERMA_SEC=30` nel `.env`
+- **Finestra di conferma delle richieste: la riga `FINESTRA_CONFERMA_SEC=30` è stata TOLTA dal `.env` del PC il 21/10/2026** (richiesta esplicita: il testo "I banchi rispondono entro N min" in pagamento diceva "1 min", cioè i 30 s arrotondati). Ora vale il DB (10 min) anche sul PC. Quanto segue descrive come si rimette (era: 30 s sul PC, "per adesso", richiesta del 16/10/2026): `FINESTRA_CONFERMA_SEC=30` nel `.env`
   **locale** (non in git) fa leggere a `pricing.getFinestraMinuti` 0,5 minuti invece di `config.finestra_conferma_min` (DB condiviso con la VPS: 10 min,
   **non toccato**, i banchi veri di Borea hanno sempre i loro 10 minuti). Vale solo per l'istanza che ha la riga; all'avvio scrive `[config] FINESTRA_CONFERMA_SEC=...`.
   Per toglierla: via la riga e riavvio. `test/server.test.js` la svuota prima di caricare `server.js`. I testi che dicono "N minuti" arrotondano
@@ -1354,7 +1354,7 @@ Solo sito/PWA (`mobile/` non toccata, schema DB e logica di business invariati).
   nascosta e il blocco "Installa l'app" di `app.js` la mostra solo con `beforeinstallprompt` (Chrome/Edge/Samsung, HTTPS) o, su iPhone/iPad con Safari,
   con la spiegazione "Condividi → Aggiungi alla schermata Home"; mai se è già aperta da installata. Nella scheda "Sul telefono" c'è anche "Avvisi sul telefono"
   (`[data-abilita-notifiche]`, che prima non stava in nessuna vista): chiede il permesso del browser, **ma gli avvisi arrivano solo finché l'app è aperta**
-  (controllo ogni 10 s): **non esiste Web Push** (servirebbero chiavi VAPID, un archivio delle iscrizioni e `web-push`). Prove: `test/sw.test.js` (il
+  (controllo ogni 10 s; **21/10/2026**: all'attivazione `POST /api/notifiche/attiva` segna come già viste tutte le notifiche esistenti, e `GET /api/notifiche/push` per cliente e agente restituisce solo quelle degli ultimi 10 minuti (`daMostrare(id, { massimoEtaSec: 600 })`; le più vecchie si segnano e non arrivano): prima, attivando il permesso, arrivavano tutte quelle mai "mostrate", anche di giorni prima. Le notifiche hanno `silent: false`, `vibrate`, `renotify` e, a pagina aperta, il suono `public/suoni/avviso.mp3` (sbloccato al primo tocco); il suono di sistema vero lo decide il telefono e **non si può forzare da una pagina**): **non esiste Web Push** (servirebbero chiavi VAPID, un archivio delle iscrizioni e `web-push`). Prove: `test/sw.test.js` (il
   service worker in un contesto isolato con `caches`/`fetch` finti: il pannello browser incorporato non registra service worker, quindi **cache offline e
   installazione vera non sono provate su un telefono**) e due test in `test/server.test.js`.
 - **Browser**: `leggiJson` (in `Minuteria`, testa di `public/app.js`) gestisce il 401 delle chiamate `/api` tornando
