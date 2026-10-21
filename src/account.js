@@ -66,6 +66,7 @@ async function eliminaAccount(utente) {
   await elimina();
   // Fuori dalla transazione e senza che un guasto la annulli: il telefono non riceve più nulla (il token si cancellerebbe comunque alla prima push).
   await push.rimuoviUtente(utente.id).catch((err) => console.error('[account] telefoni non rimossi:', err.message));
+  await require('./web_push').rimuoviUtente(utente.id).catch((err) => console.error('[account] browser non rimossi:', err.message));
   return true;
 }
 

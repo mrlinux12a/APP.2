@@ -513,9 +513,7 @@ async function creaOrdineDaRisposta(richiesta, risposta) {
   // dice con il tempo stimato.
   await notifiche.notifica(richiesta.cliente_id, {
     titolo: 'Ordine confermato',
-    testo: conCorriere
-      ? `${distributore.nome} prepara il tuo ordine #${orderId}. Consegna prevista entro le ${arrivo} (${consegna.inParole(minutiTotali)}).`
-      : `${distributore.nome} prepara il tuo ordine #${orderId}. Consegna stimata in ${consegna.inParole(risposta.consegna_minuti_stimati)}.`,
+    testo: testoOrdineConfermato({ orderId, distributoreNome: distributore && distributore.nome, arrivo: conCorriere ? arrivo : null, minutiStimati: risposta.consegna_minuti_stimati }),
     link: '/ordini/' + orderId,
     categoria: 'ordini',
     sottostato: 'in_approvazione',
@@ -531,6 +529,15 @@ async function creaOrdineDaRisposta(richiesta, risposta) {
   }
 
   return orderId;
+}
+
+// Il testo della notifica "Ordine confermato" dell'installatore, nella forma di tutte le sue notifiche (richiesta esplicita del 21/10/2026):
+// "Ordine #312 — BOREA prepara il tuo ordine. Consegna prevista entro le 10:45." Il nome è quello della ditta, senza "SRL" e mai la filiale. `arrivo` (HH:MM) c'è
+// quando un corriere ha preso la consegna; senza, vale la stima del banco ("Consegna stimata in 2 ore").
+function testoOrdineConfermato({ orderId, distributoreNome, arrivo = null, minutiStimati = 0 }) {
+  const ditta = format.nomeCommerciale(distributoreNome) || 'Il banco';
+  const consegnaTesto = arrivo ? `Consegna prevista entro le ${arrivo}.` : `Consegna stimata in ${consegna.inParole(minutiStimati)}.`;
+  return `Ordine #${orderId} — ${ditta} prepara il tuo ordine. ${consegnaTesto}`;
 }
 
 // L'ordine nasce quando una risposta del banco diventa valida (vedi richieste.assegnaOrdine), subito e
@@ -1043,6 +1050,7 @@ async function statoIconaOrdini(clienteId) {
 
 module.exports = {
   ErroreFlusso,
+  testoOrdineConfermato,
   statoIconaOrdini,
   ordinaVociIcona,
   secondiAllaScomparsa,

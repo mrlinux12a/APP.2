@@ -710,3 +710,24 @@ CREATE TABLE IF NOT EXISTS recupero_password (
   usato_il TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_recupero_password_user ON recupero_password(user_id);
+
+-- Notifiche push del sito e della web app (21/10/2026)
+-- Un browser (o la web app installata sul telefono) che accetta le notifiche si iscrive al servizio push del suo produttore (Google, Apple, Mozilla...) e
+-- ci manda il suo indirizzo (`endpoint`) con le chiavi per cifrare il messaggio: src/web_push.js li usa per consegnare la notifica anche con l'app CHIUSA
+-- (Web Push, chiavi VAPID nel .env). `endpoint` e' unico: se lo stesso browser entra con un altro utente la riga passa a lui (ON CONFLICT sull'endpoint).
+-- `chiave` e' la chiave pubblica VAPID con cui e' nata l'iscrizione: un server con un'altra coppia di chiavi (il PC di sviluppo, che parla col DB di
+-- produzione) la lascia stare invece di provare a usarla. Si cancella con l'uscita (logout), con l'eliminazione dell'account e quando il servizio push dice
+-- che l'iscrizione non esiste piu' (404/410). Nessuna FK su user_id: non deve bloccare mai l'anonimizzazione. Il blocco si puo' rilanciare.
+-- Senza questa tabella tutto il resto funziona: gli avvisi arrivano solo con l'app aperta (il server lo scrive una volta nel log).
+CREATE TABLE IF NOT EXISTS iscrizioni_push (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  endpoint TEXT NOT NULL UNIQUE,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  chiave TEXT NOT NULL DEFAULT '',
+  user_agent TEXT NOT NULL DEFAULT '',
+  creato_il TIMESTAMP NOT NULL DEFAULT NOW(),
+  aggiornato_il TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_iscrizioni_push_user ON iscrizioni_push(user_id);

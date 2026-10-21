@@ -25,59 +25,144 @@ const Minuteria = (function () {
     return risposta.json();
   }
 
-  // Mostra una notifica di sistema. `new Notification(...)` esiste su desktop e iOS, ma Chrome per Android lo
-  // rifiuta (TypeError): lì si passa dal service worker (/sw.js), che gestisce anche il tocco sulla notifica.
-  // `silent: false` e `vibrate` chiedono al sistema di far suonare e vibrare (il suono vero lo decide il telefono: su Android vale il canale "Notifiche" del
-  // browser o dell'app, su iPhone la suoneria delle notifiche; non si può forzare da una pagina). `renotify` fa suonare anche se il tag si ripete.
+  // Le notifiche sono SOLO notifiche di sistema, col suono del telefono: nessun suono del sito dentro la pagina (richiesta esplicita del 21/10/2026), e con l'app
+  // aperta in primo piano nessuna notifica (si vede già tutto sullo schermo). `silent: false` e `vibrate` chiedono al sistema di far suonare e vibrare (il suono
+  // vero lo decide il telefono: su Android vale il canale "Notifiche" del browser o dell'app, su iPhone la suoneria delle notifiche; non si può forzare da una
+  // pagina). `renotify` fa suonare anche se il tag si ripete. `new Notification(...)` esiste su desktop e solo in certi casi su iOS, e Chrome per Android lo
+  // rifiuta (TypeError): si passa dal service worker (/sw.js), che gestisce anche il tocco sulla notifica.
   const OPZIONI_SUONO = { silent: false, vibrate: [250, 120, 250], renotify: true };
 
-  // Il suono "ding" del sito (public/suoni/avviso.mp3) per quando la pagina è aperta: i browser lo permettono solo dopo che l'utente ha toccato la pagina, quindi
-  // al primo tocco lo si "sblocca" riproducendolo a volume zero.
-  let audioAvviso = null;
-  function suonaAvviso() {
-    try {
-      if (!audioAvviso) audioAvviso = new Audio('/suoni/avviso.mp3');
-      audioAvviso.volume = 1;
-      audioAvviso.currentTime = 0;
-      const p = audioAvviso.play();
-      if (p && p.catch) p.catch(function () { /* il browser non lo permette ancora: resta la notifica di sistema */ });
-    } catch (err) { /* nessun suono */ }
+  // Il service worker pronto, o null se non c'è (pagina non sicura, registrazione fallita, browser senza) o non lo diventa entro `attesaMs`:
+  // `navigator.serviceWorker.ready` da solo non si risolve mai se nessun service worker si registra, e chi lo aspettava restava appeso.
+  function registrazioneSw(attesaMs) {
+    if (!('serviceWorker' in navigator)) return Promise.resolve(null);
+    return Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise(function (ok) { setTimeout(function () { ok(null); }, attesaMs); }),
+    ]).catch(function () { return null; });
   }
-  function sbloccaAudio() {
-    try {
-      if (!audioAvviso) audioAvviso = new Audio('/suoni/avviso.mp3');
-      audioAvviso.volume = 0;
-      const p = audioAvviso.play();
-      const rimetti = function () { audioAvviso.pause(); audioAvviso.currentTime = 0; audioAvviso.volume = 1; };
-      if (p && p.then) p.then(rimetti).catch(function () {}); else rimetti();
-    } catch (err) { /* niente */ }
-  }
-  let audioSbloccato = false;
-  function alPrimoTocco() {
-    if (audioSbloccato) return;
-    audioSbloccato = true;
-    ['pointerdown', 'keydown', 'touchstart'].forEach(function (nome) { document.removeEventListener(nome, alPrimoTocco); });
-    sbloccaAudio();
-  }
-  ['pointerdown', 'keydown', 'touchstart'].forEach(function (nome) { document.addEventListener(nome, alPrimoTocco, { passive: true }); });
 
+  // Mostra una notifica di sistema. Ritorna una promessa: true se l'ha mostrata, false se no (già visibile, o nessun modo di mostrarla).
+  // La via normale è il service worker (`showNotification`): funziona su Android, su computer e su iPhone/iPad (web app installata), dove `new Notification` c'è
+  // solo in certi casi e altrove lancia. Il costruttore resta come ripiego quando il service worker manca.
+  // Se la notifica con lo stesso tag ("minuteria-<id>") è già sullo schermo (per esempio perché è arrivata come push ad app chiusa un attimo prima) non se ne
+  // fa una seconda, che con `renotify` farebbe suonare di nuovo.
   function mostraNotifica(titolo, testo, link, tag) {
-    try {
-      const notifica = new Notification(titolo, Object.assign({ body: testo, tag: tag }, OPZIONI_SUONO));
-      if (link) {
-        notifica.onclick = function () {
-          window.focus();
-          window.location.href = link;
-        };
+    const opzioni = Object.assign({ body: testo, data: { link: link || '/' }, icon: '/icons/icona-192.png', badge: '/icons/icona-distintivo-96.png' }, OPZIONI_SUONO);
+    if (tag) opzioni.tag = tag;
+    else delete opzioni.renotify; // `renotify` senza `tag` è un errore del browser
+    const comeFinestra = function () {
+      try {
+        const notifica = new Notification(titolo, opzioni);
+        if (link) {
+          notifica.onclick = function () {
+            window.focus();
+            window.location.href = link;
+          };
+        }
+        return true;
+      } catch (err) {
+        return false; // nessuna notifica: l'avviso resta comunque in "Stato ordini"
       }
-      return;
-    } catch (err) { /* si prova con il service worker */ }
-    if (!('serviceWorker' in navigator)) return;
-    navigator.serviceWorker.ready
-      .then(function (registrazione) {
-        return registrazione.showNotification(titolo, Object.assign({ body: testo, tag: tag, data: { link: link || '/' } }, OPZIONI_SUONO));
-      })
-      .catch(function () { /* niente notifica: l'avviso resta comunque in "Stato ordini" */ });
+    };
+    return registrazioneSw(3000).then(function (registrazione) {
+      if (!registrazione || typeof registrazione.showNotification !== 'function') return comeFinestra();
+      const mostra = function () {
+        return registrazione.showNotification(titolo, opzioni).then(function () { return true; });
+      };
+      if (!/^minuteria-\d+$/.test(tag || '') || typeof registrazione.getNotifications !== 'function') return mostra();
+      return registrazione.getNotifications({ tag: tag }).then(function (aperte) { return aperte.length ? false : mostra(); });
+    }).catch(comeFinestra);
+  }
+
+  // ---------- Notifiche anche ad app chiusa (Web Push, src/web_push.js) ----------
+  // Il browser si iscrive al servizio push (Google, Apple, Mozilla...) con la chiave pubblica del sito (<meta name="push-chiave">, assente se sul server le push
+  // sono spente) e manda l'iscrizione al server, che da quel momento può far arrivare le notifiche anche con l'app chiusa: le mostra il service worker.
+  // <meta name="push-endpoint"> è l'iscrizione che il server ha già per questa sessione: se coincide con quella del browser non si manda niente.
+  // Su iPhone/iPad funziona solo per la web app installata sulla schermata Home (iOS 16.4 o successivo); in una scheda di Safari manca proprio `Notification`.
+  function meta(nome) {
+    const m = document.querySelector('meta[name="' + nome + '"]');
+    return m ? m.getAttribute('content') || '' : '';
+  }
+  function eIos() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
+  function eInstallata() {
+    return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  }
+  function pushDisponibile() {
+    return !!meta('push-chiave') && window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  }
+  function chiaveInBytes(base64url) {
+    const b64 = base64url.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((base64url.length + 3) % 4);
+    const testo = atob(b64);
+    const byte = new Uint8Array(testo.length);
+    for (let i = 0; i < testo.length; i++) byte[i] = testo.charCodeAt(i);
+    return byte;
+  }
+  // Due chiavi uguali? Se il browser non dice con quale chiave si era iscritto (alcuni non lo espongono) si dà per buona: meglio non disiscrivere per niente.
+  function stessaChiave(vecchia, nuova) {
+    if (!vecchia) return true;
+    const a = new Uint8Array(vecchia);
+    if (a.length !== nuova.length) return false;
+    for (let i = 0; i < a.length; i++) if (a[i] !== nuova[i]) return false;
+    return true;
+  }
+  function postJson(url, corpo) {
+    return fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(corpo) });
+  }
+  function ricordaEndpoint(endpoint) {
+    let m = document.querySelector('meta[name="push-endpoint"]');
+    if (!m) { m = document.createElement('meta'); m.setAttribute('name', 'push-endpoint'); document.head.appendChild(m); }
+    m.setAttribute('content', endpoint);
+  }
+
+  // Iscrive questo browser (serve il permesso già concesso). `forza`: manda l'iscrizione al server anche se sembra che ce l'abbia già (clic su "Attiva").
+  // Ritorna una promessa: true se il server ha l'iscrizione, false in ogni altro caso (push spente, non supportate, errore). Non lancia mai.
+  function iscriviPush(opzioni) {
+    const forza = !!(opzioni && opzioni.forza);
+    if (!pushDisponibile() || Notification.permission !== 'granted') return Promise.resolve(false);
+    const chiave = chiaveInBytes(meta('push-chiave'));
+    return registrazioneSw(8000).then(function (registrazione) {
+      if (!registrazione || !registrazione.pushManager) return false;
+      return registrazione.pushManager.getSubscription().then(function (esistente) {
+        // Iscrizione fatta con un'altra chiave (le chiavi del sito sono state cambiate): non funzionerebbe più, si rifà.
+        if (esistente && !stessaChiave(esistente.options && esistente.options.applicationServerKey, chiave)) return esistente.unsubscribe().then(function () { return null; });
+        return esistente;
+      }).then(function (esistente) {
+        return esistente || registrazione.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: chiave });
+      }).then(function (iscrizione) {
+        if (!forza && iscrizione.endpoint === meta('push-endpoint')) return true;
+        return postJson('/api/push/iscrivi', { subscription: iscrizione.toJSON() }).then(function (r) {
+          if (r.ok) ricordaEndpoint(iscrizione.endpoint);
+          return r.ok;
+        });
+      });
+    }).catch(function () { return false; });
+  }
+
+  // Toglie l'iscrizione di questo browser (interruttore spento): non arriverà più niente ad app chiusa. Non lancia mai.
+  function disiscriviPush() {
+    if (!pushDisponibile()) return Promise.resolve(false);
+    return registrazioneSw(3000).then(function (registrazione) {
+      if (!registrazione || !registrazione.pushManager) return false;
+      return registrazione.pushManager.getSubscription().then(function (iscrizione) {
+        if (!iscrizione) return postJson('/api/push/disiscrivi', {}).then(function () { return true; });
+        const endpoint = iscrizione.endpoint;
+        return iscrizione.unsubscribe().then(function () { return postJson('/api/push/disiscrivi', { endpoint: endpoint }); }).then(function () {
+          ricordaEndpoint('');
+          return true;
+        });
+      });
+    }).catch(function () { return false; });
+  }
+
+  // La notifica di prova passa dal server come una vera (arriva dal servizio push): se arriva, tutto il percorso funziona, anche ad app chiusa.
+  // `dopoSec` (0-30): quanti secondi aspettare, per avere il tempo di chiudere l'app. Ritorna { ok, errore }.
+  function provaPush(dopoSec) {
+    return postJson('/api/push/prova', { dopoSec: dopoSec || 0 })
+      .then(function (r) { return r.json().catch(function () { return {}; }); })
+      .catch(function () { return { ok: false, errore: 'Il server non risponde.' }; });
   }
 
   // "8 min", "1 h 05": una durata in minuti come la scrive la home del banco (uguale a format.durataMinuti sul server).
@@ -104,7 +189,12 @@ const Minuteria = (function () {
     limitaQuantita: limitaQuantita,
     leggiJson: leggiJson,
     mostraNotifica: mostraNotifica,
-    suonaAvviso: suonaAvviso,
+    pushDisponibile: pushDisponibile,
+    iscriviPush: iscriviPush,
+    disiscriviPush: disiscriviPush,
+    provaPush: provaPush,
+    eIos: eIos,
+    eInstallata: eInstallata,
     durataMinuti: durataMinuti,
     daMinuti: daMinuti,
     tempoTrascorso: tempoTrascorso,
@@ -114,7 +204,7 @@ const Minuteria = (function () {
 (function () {
   'use strict';
 
-  const { QUANTITA_MASSIMA, limitaQuantita, leggiJson, mostraNotifica, suonaAvviso } = Minuteria;
+  const { QUANTITA_MASSIMA, limitaQuantita, leggiJson, mostraNotifica, pushDisponibile, iscriviPush, provaPush, eIos, eInstallata } = Minuteria;
 
   // ---------- Selettore quantità (+ / -) e Aggiungi globale ----------
   function aggiornaBadgeCarrello(pezzi) {
@@ -1316,54 +1406,140 @@ const Minuteria = (function () {
 
   // ---------- Notifiche del browser ----------
 
-  // Il pulsante "Attiva" della scheda "Sul telefono" del profilo (views/profilo.ejs): chiede il permesso con un clic e dice com'è messa la cosa. Gli avvisi
-  // arrivano però solo finché l'app (o la scheda) è aperta: il controllo qui sotto gira ogni 10 secondi nella pagina, non c'è ancora una notifica che
-  // arrivi a telefono chiuso (servirebbe Web Push: chiavi VAPID e un archivio delle iscrizioni).
+  // Come arrivano le notifiche (richiesta esplicita del 21/10/2026): SOLO come notifiche di sistema, col suono del telefono, quando l'app è in secondo piano o
+  // chiusa. Con l'app aperta in primo piano non arriva nessuna notifica e il sito non fa nessun suono: si vede già tutto sullo schermo.
+  // Il pulsante "Attiva" della scheda "Sul telefono" del profilo (views/profilo.ejs) chiede il permesso con un clic, iscrive il browser alle notifiche push e dice
+  // com'è messa la cosa. Con le push (chiavi VAPID sul server, browser che le supportano) gli avvisi arrivano ANCHE AD APP CHIUSA; dopo "Attiva" e col pulsante
+  // "Prova" ne arriva una di prova dopo 10 secondi, il tempo di uscire dall'app (la prova il service worker la mostra sempre, anche con l'app davanti).
+  // Senza push arrivano solo con l'app (o la scheda) aperta in secondo piano: un controllo ogni 5 secondi, vedi sotto.
+  // Su iPhone e iPad le notifiche esistono solo per la web app installata sulla schermata Home (iOS 16.4 o successivo): in Safari `Notification` manca, e la
+  // scheda lo spiega invece di sparire.
   const pulsanteNotifiche = document.querySelector('[data-abilita-notifiche]');
+  const pulsanteProva = document.querySelector('[data-prova-notifica]');
   const statoNotifiche = document.querySelector('[data-notifiche-stato]');
   const schedaNotifiche = document.querySelector('[data-notifiche-scheda]');
+  function scriviStatoNotifiche(testo) {
+    if (statoNotifiche) statoNotifiche.textContent = testo;
+  }
+  let esitoProva = null; // l'ultima notifica di prova dal server ({ ok, errore }): la scheda non dice "anche ad app chiusa" se non è arrivata
+  const TESTO_PROVA = "Tra 10 secondi ti arriva una notifica di prova. Esci dall'app (o blocca lo schermo) per vederla: con l'app aperta davanti a te non arriva nessuna notifica.";
   function mostraStatoNotifiche() {
     if (!pulsanteNotifiche) return;
-    if (!('Notification' in window)) { if (schedaNotifiche) schedaNotifiche.hidden = true; return; } // browser senza notifiche: niente scheda
+    if (!('Notification' in window)) {
+      pulsanteNotifiche.hidden = true;
+      if (pulsanteProva) pulsanteProva.hidden = true;
+      if (eIos()) {
+        // iPhone/iPad: in Safari non c'è `Notification`; nella web app installata c'è solo da iOS 16.4.
+        scriviStatoNotifiche(eInstallata()
+          ? 'Per ricevere le notifiche serve iOS 16.4 o successivo: aggiorna il telefono.'
+          : "Su iPhone le notifiche funzionano dall'app installata: tocca Condividi › Aggiungi alla schermata Home, aprila da lì e attivale qui (serve iOS 16.4 o successivo).");
+      } else if (schedaNotifiche) {
+        schedaNotifiche.hidden = true; // browser senza notifiche: niente scheda
+      }
+      return;
+    }
     const permesso = Notification.permission;
     pulsanteNotifiche.hidden = permesso !== 'default';
-    if (!statoNotifiche) return;
-    if (permesso === 'granted') statoNotifiche.textContent = "Attivi: ti avvisiamo quando un banco risponde, finché l'app è aperta.";
-    else if (permesso === 'denied') statoNotifiche.textContent = 'Bloccati dal browser: riattivali dalle impostazioni del sito.';
+    if (pulsanteProva) pulsanteProva.hidden = true;
+    if (permesso === 'denied') {
+      scriviStatoNotifiche(eIos()
+        ? 'Bloccate: riattivale da Impostazioni › Notifiche › Minuteria.'
+        : 'Bloccate dal browser: riattivale dalle impostazioni del sito.');
+    } else if (permesso === 'default') {
+      scriviStatoNotifiche(pushDisponibile()
+        ? "Ricevi una notifica sul telefono quando un banco risponde, con l'app in secondo piano o chiusa."
+        : "Ricevi una notifica sul telefono quando un banco risponde, con l'app in secondo piano.");
+    } else {
+      // Permesso concesso: si controlla (e se serve si rifà) l'iscrizione del browser, poi si dice la verità su cosa arriverà.
+      if (!pushDisponibile()) {
+        scriviStatoNotifiche("Attive: ti avvisiamo quando un banco risponde, con l'app in secondo piano.");
+      } else {
+        scriviStatoNotifiche('Controllo le notifiche…');
+        iscriviPush().then(function (ok) {
+          if (ok) {
+            // Se la prova appena fatta non è passata dal servizio di notifiche (rifiutata, non raggiungibile) non si promette il contrario.
+            scriviStatoNotifiche(esitoProva && !esitoProva.ok
+              ? 'Attive, ma la notifica di prova non è arrivata (' + String(esitoProva.errore || 'errore').replace(/\.$/, '') + '). Riprova con «Prova».'
+              : esitoProva && esitoProva.ok
+                ? TESTO_PROVA
+                : "Attive: ti avvisiamo con l'app in secondo piano o chiusa. Se non ti arrivano, controlla le impostazioni di notifica del telefono.");
+            if (pulsanteProva) pulsanteProva.hidden = false;
+          } else {
+            scriviStatoNotifiche("Attive solo con l'app in secondo piano: non sono riuscito ad attivarle anche ad app chiusa. Riprova più tardi.");
+          }
+        });
+      }
+    }
   }
   if (pulsanteNotifiche) {
     mostraStatoNotifiche();
     pulsanteNotifiche.addEventListener('click', function () {
       Notification.requestPermission().then(function (p) {
-        if (p === 'granted') {
-          // Prima si segnano come già viste le notifiche di prima (altrimenti arriverebbero tutte insieme), poi la notifica di prova, col suono.
-          fetch('/api/notifiche/attiva', { method: 'POST', credentials: 'same-origin', headers: { Accept: 'application/json' } })
-            .catch(function () { /* il filtro dei 10 minuti sul server evita comunque il peggio */ })
-            .then(function () {
-              suonaAvviso();
-              mostraNotifica('Avvisi attivi', 'Ti avviseremo quando i distributori rispondono.', null, 'minuteria-attive');
-            });
-        }
-        mostraStatoNotifiche();
+        if (p !== 'granted') { mostraStatoNotifiche(); return; }
+        // Prima si segnano come già viste le notifiche di prima (altrimenti arriverebbero tutte insieme), poi si iscrive il browser, poi si manda la prova dal server
+        // (fra 10 secondi: a "Attiva" l'app è aperta davanti all'utente, e con l'app aperta non arriva nessuna notifica).
+        fetch('/api/notifiche/attiva', { method: 'POST', credentials: 'same-origin', headers: { Accept: 'application/json' } })
+          .catch(function () { /* il filtro dei 10 minuti sul server evita comunque il peggio */ })
+          .then(function () { return iscriviPush({ forza: true }); })
+          .then(function (conPush) {
+            if (!conPush) return null;
+            return provaPush(10).then(function (r) { esitoProva = r; });
+          })
+          .then(mostraStatoNotifiche);
       });
+    });
+  }
+  if (pulsanteProva) {
+    pulsanteProva.addEventListener('click', function () {
+      pulsanteProva.disabled = true;
+      provaPush(10).then(function (r) {
+        esitoProva = r;
+        scriviStatoNotifiche(r && r.ok ? TESTO_PROVA : (r && r.errore) || 'Non sono riuscito a mandare la prova.');
+        setTimeout(function () { pulsanteProva.disabled = false; }, 12000);
+      });
+    });
+  }
+
+  // Un messaggio dal service worker (public/sw.js): è stata toccata una notifica ma la finestra non si è lasciata portare sulla pagina ("vai": ci va da sola,
+  // solo dentro il sito).
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', function (evento) {
+      const dati = evento.data || {};
+      if (dati.tipo === 'vai' && typeof dati.url === 'string') {
+        try {
+          const url = new URL(dati.url, window.location.href);
+          if (url.origin === window.location.origin) window.location.href = url.href;
+        } catch (err) { /* indirizzo rovinato: si resta dove si è */ }
+      }
     });
   }
 
   // Sulle pagine del banco (intestazione [data-banco-testa]) le notifiche le gestisce il blocco "Avvisi del banco", in fondo a questo file.
   if ('Notification' in window && document.body.dataset.loggato === '1' && !document.querySelector('[data-banco-testa]')) {
+    // Chi ha già dato il permesso è iscritto alle push su ogni dispositivo che usa (primo accesso dopo l'aggiornamento, nuovo login, chiavi cambiate): si controlla a ogni
+    // apertura, senza chiamate al server se è già tutto a posto (il confronto è col <meta name="push-endpoint">).
+    if (Notification.permission === 'granted' && !pulsanteNotifiche) window.addEventListener('load', function () { iscriviPush(); }); // dove c'è la scheda "Sul telefono" lo fa già lei
+
+    // Per i browser senza push (e come rete di sicurezza se una push non arriva): il server si interroga ogni 5 secondi SOLO mentre c'è una richiesta in attesa
+    // (l'icona "Stato ordini" in fase "richiesta"), cioè da quando si invia l'ordine a quando un banco accetta o nessuno risponde; più un ultimo controllo appena
+    // finita, per prendere la notifica di chiusura. Senza richieste in corso non parte NESSUNA chiamata (il timer da 5 s è solo locale, non tocca la rete).
+    // Con l'app in primo piano le notifiche lette qui si scartano senza mostrarle (si vede già tutto: la pagina della richiesta si aggiorna da sola e porta
+    // all'ordine); con la scheda in secondo piano (o nascosta) arrivano come notifiche di sistema. Con le push attive di norma qui non c'è niente: sono già
+    // arrivate dal servizio push e il server le ha segnate come mostrate.
+    let eraAttiva = false;
     setInterval(function () {
       if (Notification.permission !== 'granted') return;
+      const attiva = !!document.querySelector('.navbar .fase-richiesta, .navbar [data-fasi*="richiesta"]');
+      if (!attiva && !eraAttiva) return;
+      eraAttiva = attiva;
       fetch('/api/notifiche/push')
         .then(leggiJson)
         .then(function (dati) {
-          const nuove = dati.notifiche || [];
-          if (nuove.length) suonaAvviso(); // un solo suono anche se ne arrivano più d'una insieme
-          nuove.forEach(function (n) {
-            mostraNotifica(n.titolo, n.testo, n.link, 'minuteria-' + n.id);
-          });
+          if (document.visibilityState === 'visible') return; // in primo piano: nessuna notifica
+          (dati.notifiche || []).forEach(function (n) { mostraNotifica(n.titolo, n.testo, n.link, 'minuteria-' + n.id); });
         })
         .catch(function () { /* nessuna notifica questo giro */ });
-    }, 10000);
+    }, 5000);
   }
 })();
 
@@ -2405,7 +2581,7 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
   const testa = document.querySelector('[data-banco-testa]');
   if (!testa) return;
 
-  const { leggiJson, mostraNotifica } = Minuteria;
+  const { leggiJson, mostraNotifica, iscriviPush, disiscriviPush, provaPush } = Minuteria;
   // La home del banco è /distributore (le colonne mostrano già tutto: lì niente striscia né avvisi a comparsa); è la stessa regola di partials/banco_testa.ejs.
   const eHome = window.location.pathname.replace(/\/+$/, '') === '/distributore';
   const ditta = testa.getAttribute('data-ditta') || '';
@@ -2491,6 +2667,8 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
 
   const interruttoreSistema = document.querySelector('[data-notifiche-sistema]');
   const notaSistema = document.querySelector('[data-notifiche-nota]');
+  // `notaProva`: dopo aver acceso l'interruttore, la riga dice che fra 10 secondi arriva una notifica di prova (con la scheda davanti non ne arrivano: bisogna uscire).
+  let notaProva = '';
   function mostraInterruttoreSistema() {
     if (!interruttoreSistema) return;
     const supportate = 'Notification' in window;
@@ -2498,20 +2676,33 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
     if (!notaSistema) return;
     // Permesso negato: l'interruttore resta spento e dice come sbloccarlo (solo il browser può farlo).
     const bloccate = supportate && Notification.permission === 'denied';
-    notaSistema.hidden = supportate && !bloccate;
-    notaSistema.textContent = !supportate ? 'Questo browser non supporta le notifiche.' : bloccate ? 'Bloccate dal browser: riattivale dalle impostazioni del sito' : '';
+    const prova = supportate && !bloccate && notificheSistemaConsentite() ? notaProva : '';
+    notaSistema.hidden = supportate && !bloccate && !prova;
+    notaSistema.textContent = !supportate ? 'Questo browser non supporta le notifiche.' : bloccate ? 'Bloccate dal browser: riattivale dalle impostazioni del sito' : prova;
   }
   mostraInterruttoreSistema();
+  // Notifiche ad app chiusa (Web Push, src/web_push.js): l'interruttore acceso iscrive questo browser alle push, e il service worker le mostra anche con la scheda
+  // o il browser chiusi (la scheda non deve restare aperta); spento, toglie l'iscrizione. A ogni pagina, se l'interruttore è acceso, si controlla che l'iscrizione
+  // ci sia ancora (nessuna chiamata al server se è tutto a posto). Le notifiche di sistema "da pagina nascosta" qui sotto (`daiPush`) restano per i browser senza push.
+  if (notificheSistemaConsentite()) window.addEventListener('load', function () { iscriviPush(); });
   if (interruttoreSistema) {
     interruttoreSistema.addEventListener('click', function () {
       if (!('Notification' in window)) return;
-      if (notificheSistemaConsentite()) { scrivi('localStorage', CHIAVE_NOTIFICHE_SISTEMA, 'no'); mostraInterruttoreSistema(); return; }
-      if (Notification.permission === 'granted') { scrivi('localStorage', CHIAVE_NOTIFICHE_SISTEMA, 'sì'); mostraInterruttoreSistema(); return; }
+      if (notificheSistemaConsentite()) { scrivi('localStorage', CHIAVE_NOTIFICHE_SISTEMA, 'no'); disiscriviPush(); mostraInterruttoreSistema(); return; }
+      if (Notification.permission === 'granted') { scrivi('localStorage', CHIAVE_NOTIFICHE_SISTEMA, 'sì'); iscriviPush({ forza: true }); mostraInterruttoreSistema(); return; }
       if (Notification.permission === 'denied') { mostraInterruttoreSistema(); return; }
       Notification.requestPermission().then(function (permesso) {
         if (permesso === 'granted') {
           scrivi('localStorage', CHIAVE_NOTIFICHE_SISTEMA, 'sì');
-          mostraNotifica('Notifiche attive', 'Ti avviseremo quando arrivano richieste e ordini.', null, 'minuteria-attive');
+          // Con le push la notifica di prova arriva dal server fra 10 secondi (prova di tutto il percorso, anche a scheda chiusa): con la scheda davanti non arriva
+          // nessuna notifica, quindi lo si dice e si lascia il tempo di cambiare scheda o chiudere il browser.
+          iscriviPush({ forza: true }).then(function (conPush) {
+            if (!conPush) return null;
+            return provaPush(10).then(function (r) {
+              notaProva = r && r.ok ? 'Fra 10 secondi ti arriva una notifica di prova: cambia scheda o chiudi il browser per vederla.' : '';
+              mostraInterruttoreSistema();
+            });
+          });
         }
         mostraInterruttoreSistema();
       });

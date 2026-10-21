@@ -35,11 +35,13 @@ function dentroArrotondato(x, y, r) {
   return Math.hypot(x - cx, y - cy) <= r;
 }
 
-function disegna(dimensione, { maskable }) {
+// `distintivo`: solo la lettera, bianca su trasparente, per il distintivo piccolo delle notifiche di Android (la barra di stato usa solo il canale
+// alfa: con lo sfondo blu pieno verrebbe fuori un quadrato pieno).
+function disegna(dimensione, { maskable, distintivo }) {
   const campioni = 4;
-  const scala = maskable ? 0.72 : 1;
+  const scala = maskable ? 0.72 : distintivo ? 0.86 : 1;
   const punti = tratti(scala);
-  const mezzoSpessore = 0.045 * scala * 1.0;
+  const mezzoSpessore = (distintivo ? 0.075 : 0.045) * scala * 1.0;
   const raw = Buffer.alloc((dimensione * 4 + 1) * dimensione);
   for (let py = 0; py < dimensione; py++) {
     raw[py * (dimensione * 4 + 1)] = 0; // filtro "nessuno"
@@ -49,7 +51,7 @@ function disegna(dimensione, { maskable }) {
         for (let sx = 0; sx < campioni; sx++) {
           const x = (px + (sx + 0.5) / campioni) / dimensione;
           const y = (py + (sy + 0.5) / campioni) / dimensione;
-          const dentro = maskable ? true : dentroArrotondato(x, y, 0.22);
+          const dentro = maskable || distintivo ? true : dentroArrotondato(x, y, 0.22);
           if (dentro) {
             sfondo++;
             if (sulleLettera(x, y, punti, mezzoSpessore)) lettera++;
@@ -57,8 +59,8 @@ function disegna(dimensione, { maskable }) {
         }
       }
       const totale = campioni * campioni;
-      const a = sfondo / totale;
-      const mix = sfondo ? lettera / sfondo : 0;
+      const a = distintivo ? lettera / totale : sfondo / totale;
+      const mix = distintivo ? 1 : sfondo ? lettera / sfondo : 0;
       const o = py * (dimensione * 4 + 1) + 1 + px * 4;
       raw[o] = Math.round(BLU[0] + (BIANCO[0] - BLU[0]) * mix);
       raw[o + 1] = Math.round(BLU[1] + (BIANCO[1] - BLU[1]) * mix);
@@ -98,9 +100,10 @@ const file = [
   ['icona-512.png', 512, false],
   ['icona-maskable-512.png', 512, true],
   ['apple-touch-icon.png', 180, true], // iOS arrotonda da solo gli angoli: sfondo pieno
+  ['icona-distintivo-96.png', 96, false, true], // notifiche di Android: la "M" bianca su trasparente
 ];
-for (const [nome, dim, maskable] of file) {
-  const png = disegna(dim, { maskable });
+for (const [nome, dim, maskable, distintivo] of file) {
+  const png = disegna(dim, { maskable, distintivo });
   fs.writeFileSync(path.join(USCITA, nome), png);
   console.log(nome, dim + 'x' + dim, png.length + ' byte');
 }

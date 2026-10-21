@@ -41,8 +41,11 @@ PAGAMENTO_SIMULATO=1  # SOLO nel .env del PC, MAI sulla VPS: "Paga e invia" salt
 PAGAMENTO_SIMULATO_FORZA=1  # SOLO se vuoi il bypass ANCHE sulla VPS (con PAGAMENTO_SIMULATO=1): salta Stripe pure con sk_live_ e produzione,
                       #   quindi i clienti veri ordinano SENZA pagare. All'avvio il log scrive ATTENZIONE. Per spegnerlo: togli una riga e riavvia pm2
 APP_URL=https://tuodominio.it        # indirizzo pubblico del sito, per il ritorno da Stripe
-PUSH_ATTIVO=0         # facoltativa: spegne le notifiche push dell'app (di default accese; senza la tabella dispositivi_push non partono)
+PUSH_ATTIVO=0         # facoltativa: spegne le notifiche push (app Android e notifiche ad app chiusa del sito); di default accese
 EXPO_ACCESS_TOKEN=... # facoltativa: solo se nel progetto Expo è attiva la "sicurezza avanzata" delle push
+VAPID_PUBLIC_KEY=...  # notifiche ad app chiusa del sito/web app (Android e iPhone): una coppia di chiavi per ogni ambiente, la genera
+VAPID_PRIVATE_KEY=... #   `node scripts/genera_chiavi_vapid.js` (la privata è un segreto: solo nel .env, mai in git né in chat)
+VAPID_SUBJECT=mailto:contatto@tuodominio.it  # contatto per i servizi push (Google, Apple, Mozilla): mailto: o https://; se APP_URL è https si può omettere
 ```
 
 **Il proxy davanti al sito deve passare l'indirizzo vero del cliente** (`X-Forwarded-For`) e il protocollo (`X-Forwarded-Proto`): il server si fida di UN solo proxy
@@ -496,8 +499,25 @@ OpenStreetMap, ma **oggi le mappe sono nascoste** via CSS (ultima regola di
 ## Notifiche
 
 In-app (campanella in alto a destra); diventano notifiche di sistema se l'utente concede il
-permesso al browser, ma solo mentre l'app è aperta in una scheda. Le notifiche push a telefono
-spento arriveranno con l'app nativa.
+permesso al browser. **Anche con l'app chiusa** (Web Push, dal 21/10/2026): sito e web app installata
+su Android, iPhone/iPad (solo la web app installata sulla schermata Home, iOS 16.4 o successivo),
+computer. L'installatore le attiva da Profilo › Sul telefono › Attiva, il banco dall'Anagrafica del
+banco › Notifiche del computer. Il browser si iscrive al servizio push (Google, Apple, Mozilla) e il
+server (`src/web_push.js`) gli manda ogni notifica nuova; la mostra il service worker (`public/sw.js`).
+
+**Per accenderle sul server** (una volta):
+
+1. applicare il blocco di schema (crea la tabella `iscrizioni_push`; **prima** del riavvio):
+   `node scripts/applica_blocco_schema.js "-- Notifiche push del sito e della web app"` (a secco), poi con `--applica`;
+2. `git pull` e `npm ci` (dipendenza nuova: `web-push`);
+3. generare le chiavi con `node scripts/genera_chiavi_vapid.js` e scrivere nel `.env` della VPS `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` e `VAPID_SUBJECT`
+   (il PC ha le sue, diverse: ogni server usa solo le iscrizioni nate con la propria chiave);
+4. `pm2 restart minuteria`: nel log compare `[web push] accese`. Serve HTTPS.
+
+Le notifiche sono **solo di sistema, col suono del telefono, con l'app in secondo piano o chiusa**: con l'app aperta davanti non arriva nessuna notifica e il sito non fa nessun suono
+(il banco ha ancora i suoi avvisi dentro la pagina). Per provarle: dal telefono Profilo › Sul telefono › Attiva (dopo 10 secondi arriva una notifica di prova dal server: esci dall'app per vederla),
+poi **Prova** per rifarla. Dal server: `node scripts/prova_push.js <nome-utente>` manda una prova ai suoi telefoni e scrive l'esito di ognuno.
+Senza chiavi, senza tabella o con `PUSH_ATTIVO=0` il sito funziona come prima: avvisi solo con l'app aperta. L'app Android nativa ha le sue push (`src/push.js`, Expo).
 
 ## Gruppo WhatsApp dei corrieri
 
@@ -660,6 +680,7 @@ src/notifiche.js       notifiche in-app
 src/prodotto_json.js   formato JSON dei prodotti (ricerca live, scroll infinito, app)
 src/limite_login.js    limiti ai tentativi di login (per utente e per indirizzo, web e app) e alle registrazioni
 src/push.js            notifiche push dell'app (Expo Push Service), registrazione dei telefoni
+src/web_push.js        notifiche push del sito e della web app (Web Push, chiavi VAPID), iscrizioni dei browser
 src/account.js         eliminazione (anonimizzazione) dell'account dell'installatore
 src/testi_legali.js    informativa sulla privacy e "come eliminare l'account" (/privacy, /elimina-account)
 src/icone.js           icone SVG (sorgente anche per l'app)

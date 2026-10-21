@@ -40,7 +40,7 @@ const CATEGORIE = {
 // `tipo` e `request_id` servono agli avvisi a comparsa del banco (public/app.js, "Avvisi del banco"): il browser sa così di che genere è la
 // notifica e a quale richiesta si riferisce. Senza `tipo` la notifica è una notifica e basta, com'era.
 async function notifica(userId, { titolo, testo, link = null, categoria = 'generale', sottostato = '', order_id = null, tipo = null, request_id = null }) {
-  await db.prepare(
+  const info = await db.prepare(
     `INSERT INTO notifications (user_id, titolo, testo, link, categoria, sottostato, order_id, tipo, request_id)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(userId, titolo, testo, link, CATEGORIE[categoria] ? categoria : 'generale', sottostato, order_id, tipo, request_id);
@@ -49,6 +49,24 @@ async function notifica(userId, { titolo, testo, link = null, categoria = 'gener
   // (Fuori da un'eventuale transazione in corso: il lavoro differito non deve ereditarne la connessione, vedi db.fuoriDallaTransazione.)
   const fuori = typeof db.fuoriDallaTransazione === 'function' ? db.fuoriDallaTransazione : (fn) => fn();
   fuori(() => require('./push').inviaAUtente(userId, { titolo, testo, link, orderId: order_id }).catch(() => {}));
+  // Le stesse notifiche arrivano anche ai browser iscritti (src/web_push.js), con l'app chiusa. Stesse regole: senza aspettare, senza mai far fallire nessuno.
+  const id = info && info.lastInsertRowid ? Number(info.lastInsertRowid) : null;
+  fuori(() =>
+    require('./web_push')
+      .inviaAUtente(userId, { titolo, testo, link, id, tipo })
+      .then((consegne) => (consegne > 0 && id ? segnaConsegnataAlBrowser(userId, id) : null))
+      .catch(() => {})
+  );
+}
+
+// Una notifica già consegnata come push al browser non deve arrivare una seconda volta dal controllo della pagina aperta (GET /api/notifiche/push):
+// si segna come già mostrata. NON per il banco: le sue pagine usano quella stessa lettura per gli avvisi a comparsa, il suono e l'aggiornamento
+// immediato (public/app.js, "Avvisi del banco"), e la notifica di sistema che la pagina nascosta potrebbe aggiungere la scarta il tag (stesso id).
+async function segnaConsegnataAlBrowser(userId, id) {
+  await db.prepare(
+    `UPDATE notifications SET notificata = 1
+      WHERE id = ? AND user_id = ? AND notificata = 0 AND NOT EXISTS (SELECT 1 FROM users WHERE id = ? AND ruolo = 'distributore')`
+  ).run(id, userId, userId);
 }
 
 async function notificaDistributore(distributorId, payload) {
@@ -191,6 +209,7 @@ module.exports = {
   nonLette,
   nonLetteCategoria,
   daMostrare,
+  segnaConsegnataAlBrowser,
   segnaTutteNotificate,
   segnaLette,
   segnaLettePerId,

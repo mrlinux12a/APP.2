@@ -3,6 +3,7 @@ const { calcolaOrdine, calcolaDaRigheDb, getFinestraMinuti, getSpedizioneFissa, 
 const whatsapp = require('./whatsapp');
 const pagamenti = require('./pagamenti');
 const orari = require('./orari');
+const format = require('./format');
 
 // Con il corriere via WhatsApp il banco accetta, ma l'offerta esiste per l'installatore solo quando
 // nel gruppo qualcuno prende la consegna (corriere_stato 'preso'). NULL = nessun corriere richiesto.
@@ -259,9 +260,7 @@ async function creaRichiesta(
   if (!candidati.length) {
     await notifica(cliente.id, {
       titolo: 'Nessun distributore disponibile',
-      testo:
-        'Nessun distributore attivo può ricevere la richiesta in questo momento.' +
-        (incasso ? ' Il pagamento è stato rimborsato.' : ''),
+      testo: `Richiesta #${requestId} — Nessun distributore attivo può ricevere la richiesta in questo momento. Nessun addebito: puoi rinviarla più tardi.`,
       link: `/richieste/${requestId}`,
     });
   }
@@ -377,18 +376,18 @@ async function assegnaOrdine(requestId, rispostaScelta = null) {
 }
 
 // La richiesta non porta a nessun ordine: si chiude e il pagamento torna all'installatore (se c'era).
-// `notificaCliente` { titolo, testo } è facoltativa. false se nel frattempo è cambiata (ordinata, annullata).
+// `notificaCliente` { titolo, testo } è facoltativa (il testo comincia da solo con "Richiesta #N — "). false se nel frattempo è cambiata (ordinata, annullata).
 async function chiudiSenzaOrdine(richiesta, notificaCliente = null) {
   const chiusa = await db
     .prepare(`UPDATE requests SET stato = 'nessuna_offerta' WHERE id = ? AND stato IN ('in_attesa', 'con_offerte')`)
     .run(richiesta.id);
   if (!chiusa.changes) return false;
-  const rimborsato = await pagamenti.rimborsa(richiesta.id);
+  await pagamenti.rimborsa(richiesta.id);
   if (notificaCliente) {
     const { notifica } = require('./notifiche');
     await notifica(richiesta.cliente_id, {
       titolo: notificaCliente.titolo,
-      testo: notificaCliente.testo + (rimborsato ? ' Il pagamento è stato rimborsato.' : ''),
+      testo: `Richiesta #${richiesta.id} — ${notificaCliente.testo}`,
       link: `/richieste/${richiesta.id}`,
       categoria: 'richieste',
     });
@@ -408,6 +407,20 @@ async function aggiornaScadenza(requestId) {
   }
   if (richiesta.stato !== 'in_attesa') return richiesta;
   return (await chiudiFinestraRisposte(richiesta)) ? getRichiesta(requestId) : richiesta;
+}
+
+// Il nome della ditta a cui è andata la richiesta, come lo vede l'installatore ("BOREA": senza forma giuridica, mai la filiale); null se le ditte sono più d'una
+// o non si riesce a leggerlo (la notifica ripiega su "Nessun banco"). Non lancia mai: serve solo al testo di un avviso.
+async function nomeDittaRichiesta(requestId) {
+  try {
+    const righe = await db.prepare(
+      `SELECT DISTINCT d.nome FROM request_responses rr JOIN distributors d ON d.id = rr.distributor_id WHERE rr.request_id = ?`
+    ).all(requestId);
+    const nomi = [...new Set((righe || []).map((r) => format.nomeCommerciale(r.nome)).filter(Boolean))];
+    return nomi.length === 1 ? nomi[0] : null;
+  } catch (err) {
+    return null;
+  }
 }
 
 // La non risposta NON e' una disponibilita': allo scadere della finestra le risposte rimaste in
@@ -457,18 +470,18 @@ async function chiudiFinestraRisposte(richiesta) {
   if (esito.corrieriScaduti) {
     await whatsapp.ritiraRichiesta(requestId).catch((err) => console.error('[richieste] WhatsApp, ritiro messaggio:', err.message));
   }
-  const minuti = await getFinestraMinuti();
   const { notifica, notificaDistributore } = require('./notifiche');
   // Un banco che aveva accettato e aspettava il corriere (corriere_stato 'in_attesa', ora 'scaduto') = nessun corriere ha preso la consegna.
+  // I testi (richiesta esplicita del 21/10/2026): "BOREA non ha confermato" / "Richiesta #177 — La richiesta non è stata accettata. Nessun addebito: puoi rinviarla." e
+  // "Nessun corriere disponibile" / "Richiesta #177 — BOREA aveva il materiale, ma nessun corriere ha preso la consegna. Puoi rinviarla." La carta era solo bloccata:
+  // non c'è nessun rimborso, e il testo non lo dice. Con più ditte (oggi una sola) il nome diventa "Nessun banco" / "Il banco".
   const senzaCorriere = esito.corrieriScaduti > 0;
+  const ditta = await nomeDittaRichiesta(requestId);
   await notifica(richiesta.cliente_id, {
-    titolo: senzaCorriere ? 'Nessun corriere ha confermato' : 'Nessuna conferma ricevuta',
-    testo:
-      (senzaCorriere
-        ? `Nessun corriere ha confermato la consegna entro i ${Math.round(minuti)} minuti.`
-        : `Nessun distributore ha confermato entro i ${Math.round(minuti)} minuti.`) +
-      (esito.rimborsato ? ' Il pagamento è stato rimborsato.' : '') +
-      ' Puoi ripetere la richiesta.',
+    titolo: senzaCorriere ? 'Nessun corriere disponibile' : ditta ? `${ditta} non ha confermato` : 'Nessun banco ha confermato',
+    testo: senzaCorriere
+      ? `Richiesta #${requestId} — ${ditta || 'Il banco'} aveva il materiale, ma nessun corriere ha preso la consegna. Puoi rinviarla.`
+      : `Richiesta #${requestId} — La richiesta non è stata accettata. Nessun addebito: puoi rinviarla.`,
     link: `/richieste/${requestId}`,
     categoria: 'richieste',
   });
@@ -842,7 +855,7 @@ async function rispondi(
     if (restano === 0 && conferme === 0 && richiesta.stato === 'in_attesa') {
       await chiudiSenzaOrdine(richiesta, {
         titolo: 'Materiale non disponibile',
-        testo: 'Nessun distributore ha il materiale disponibile.',
+        testo: 'Nessun distributore ha il materiale disponibile. Nessun addebito: puoi rinviarla.',
       });
     }
   }

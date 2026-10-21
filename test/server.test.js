@@ -473,9 +473,32 @@ function eseguiRicevute(s, p) {
   return undefined;
 }
 
+// Iscrizioni alle notifiche push dei browser (src/web_push.js): la tabella in memoria, con le stesse regole delle query vere (endpoint unico, utente, chiave).
+const iscrizioniPush = [];
+function eseguiIscrizioniPush(s, p) {
+  if (/^INSERT INTO iscrizioni_push/.test(s)) {
+    const [userId, endpoint, p256dh, auth, chiave, userAgent] = p;
+    const esistente = iscrizioniPush.find((r) => r.endpoint === endpoint);
+    if (esistente) Object.assign(esistente, { user_id: userId, p256dh, auth, chiave, user_agent: userAgent });
+    else iscrizioniPush.push({ id: iscrizioniPush.length + 1, user_id: userId, endpoint, p256dh, auth, chiave, user_agent: userAgent });
+    return { changes: 1, lastInsertRowid: 1 };
+  }
+  if (/^SELECT id, endpoint, p256dh, auth FROM iscrizioni_push WHERE user_id = \? AND chiave = \?/.test(s)) return iscrizioniPush.filter((r) => r.user_id === p[0] && r.chiave === p[1]);
+  const tolte = (fn) => { const prima = iscrizioniPush.length; for (let i = iscrizioniPush.length - 1; i >= 0; i--) if (fn(iscrizioniPush[i])) iscrizioniPush.splice(i, 1); return { changes: prima - iscrizioniPush.length }; };
+  if (/^DELETE FROM iscrizioni_push WHERE endpoint = \? AND user_id = \?/.test(s)) return tolte((r) => r.endpoint === p[0] && r.user_id === p[1]);
+  if (/^DELETE FROM iscrizioni_push WHERE endpoint = \?/.test(s)) return tolte((r) => r.endpoint === p[0]);
+  if (/^DELETE FROM iscrizioni_push WHERE user_id = \? AND id NOT IN/.test(s)) return { changes: 0 }; // il tetto delle dieci iscrizioni: provato in test/web_push.test.js
+  if (/^DELETE FROM iscrizioni_push WHERE user_id = \?/.test(s)) return tolte((r) => r.user_id === p[0]);
+  return undefined;
+}
+
 function esegui(sql, p, modo) {
   const s = sql.replace(/\s+/g, ' ');
   registro.push(s.slice(0, 90));
+  if (/\biscrizioni_push\b/.test(s)) {
+    const r = eseguiIscrizioniPush(s, p);
+    if (r !== undefined) return modo === 'all' ? (Array.isArray(r) ? r : []) : Array.isArray(r) ? r[0] || null : r;
+  }
   if (/\bricevute\b/.test(s)) {
     const r = eseguiRicevute(s, p);
     if (r !== undefined) return r;
@@ -583,6 +606,13 @@ for (const nome of ['STRIPE_SECRET_KEY', 'STRIPE_PUBLISHABLE_KEY', 'STRIPE_PUBLI
   'STRIPE_TEST_SECRET_KEY', 'STRIPE_TEST_PUBLISHABLE_KEY', 'STRIPE_TEST_PUBLIC_KEY', 'STRIPE_TEST_WEBHOOK_SECRET', 'APP_URL', 'APPROVAZIONE_AUTOMATICA', 'DISTRIBUTORE_PREDEFINITO', 'PAGAMENTO_SIMULATO', 'PAGAMENTO_SIMULATO_FORZA', 'PAGAMENTO_APP_PROVA', 'PAGAMENTO_APP_PROVA_LIVE', 'FINESTRA_CONFERMA_SEC']) {
   process.env[nome] = '';
 }
+// Notifiche ad app chiusa: chiavi VAPID di prova (generate qui, mai quelle del .env) e un contatto, così le rotte /api/push/... funzionano; l'invio vero è
+// sostituito da un finto nelle prove che lo usano (impostaInvio) e nessuna prova esce sulla rete.
+const chiaviVapidProva = require('web-push').generateVAPIDKeys();
+process.env.VAPID_PUBLIC_KEY = chiaviVapidProva.publicKey;
+process.env.VAPID_PRIVATE_KEY = chiaviVapidProva.privateKey;
+process.env.VAPID_SUBJECT = 'mailto:prova@example.com';
+process.env.PUSH_ATTIVO = '';
 process.env.HOST = '127.0.0.1'; // il .env del PC può avere 0.0.0.0 (telefono sulla stessa rete): le prove restano sul computer
 
 const consoleOriginale = { log: console.log, warn: console.warn, error: console.error };
@@ -1091,8 +1121,10 @@ test('profilo: scheda "Sul telefono" con installazione (sempre disponibile, senz
   assert.match(t, /<h2 class="an-titolo">Sul telefono<\/h2>/);
   assert.match(t, /<section class="installa installa-profilo" data-installa data-installa-sempre hidden/);
   assert.doesNotMatch(t.slice(t.indexOf('Sul telefono')), /data-installa-chiudi/, 'nel profilo non scompare mai');
-  assert.match(t, /data-notifiche-stato>Ricevi un avviso quando un banco risponde alla tua richiesta, finché l'app è aperta\.<\/div>/);
+  assert.match(t, /data-notifiche-stato>Ricevi un avviso quando un banco risponde alla tua richiesta\.<\/div>/);
   assert.match(t, /<button type="button" class="installa-btn" data-abilita-notifiche>Attiva<\/button>/);
+  // "Prova": la notifica di prova dal server, nascosta finché le notifiche ad app chiusa non sono attive
+  assert.match(t, /<button type="button" class="installa-btn" data-prova-notifica hidden>Prova<\/button>/);
 });
 
 test('menu del profilo (cliente): niente voce "Notifiche"', async () => {
@@ -5174,4 +5206,139 @@ test('Apple Pay: il file di verifica del dominio sta a /.well-known/..., in test
   } finally {
     cookie = prima;
   }
+});
+
+// ---------------- Notifiche ad app chiusa: rotte /api/push/... (src/web_push.js) ----------------
+
+test('notifiche ad app chiusa: le pagine portano la chiave del sito e l\'iscrizione già nota; senza accesso o con le push spente niente', async () => {
+  const webPush = require(path.join(radice, 'src/web_push'));
+  const crypto = require('crypto');
+  const nuova = (endpoint) => {
+    const ecdh = crypto.createECDH('prime256v1');
+    ecdh.generateKeys();
+    return { endpoint, keys: { p256dh: ecdh.getPublicKey().toString('base64url'), auth: crypto.randomBytes(16).toString('base64url') } };
+  };
+  const sub = nuova('https://fcm.googleapis.com/fcm/send/prova-1');
+  const metaChiave = new RegExp('<meta name="push-chiave" content="' + chiaviVapidProva.publicKey + '"><meta name="push-endpoint" content="([^"]*)">');
+  iscrizioniPush.length = 0;
+
+  // la pagina di accesso (nessuno è entrato) non porta niente
+  cookie = '';
+  assert.doesNotMatch(await (await chiedi('/login')).text(), /name="push-chiave"/);
+  // senza accesso le rotte rispondono 401, non fanno niente
+  for (const rotta of ['/api/push/iscrivi', '/api/push/disiscrivi', '/api/push/prova']) assert.equal((await chiedi(rotta, json({ subscription: sub }))).status, 401, rotta);
+  assert.equal(iscrizioniPush.length, 0);
+
+  assert.equal((await chiedi('/login', form({ username: 'prova', password: 'password-di-prova' }))).status, 302);
+  // entrato: la chiave c'è, l'iscrizione nota è vuota (primo accesso)
+  let t = await (await chiedi('/home')).text();
+  assert.equal((metaChiave.exec(t) || [])[1], '', 'il server non ha ancora l\'iscrizione di questa sessione: il browser la manda');
+
+  // iscrizione non valida (indirizzo che non è di un servizio push), vuota o con le chiavi rovinate: 400, niente salvato
+  for (const cattiva of [{ ...sub, endpoint: 'https://sito-cattivo.example/x' }, { ...sub, endpoint: 'http://fcm.googleapis.com/x' }, { endpoint: sub.endpoint, keys: { p256dh: 'x', auth: 'y' } }, null]) {
+    const r = await chiedi('/api/push/iscrivi', json({ subscription: cattiva }));
+    assert.equal(r.status, 400, JSON.stringify(cattiva));
+    assert.equal((await r.json()).ok, false);
+  }
+  assert.equal((await chiedi('/api/push/iscrivi', json({}))).status, 400);
+  assert.equal(iscrizioniPush.length, 0);
+
+  // iscrizione buona: salvata per l'utente con la chiave del sito e ricordata in sessione
+  let r = await chiedi('/api/push/iscrivi', { ...json({ subscription: sub }), headers: { 'content-type': 'application/json', 'user-agent': 'Safari iPhone prova' } });
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), { ok: true });
+  assert.equal(iscrizioniPush.length, 1);
+  assert.deepEqual([iscrizioniPush[0].user_id, iscrizioniPush[0].endpoint, iscrizioniPush[0].chiave, iscrizioniPush[0].user_agent],
+    [1, sub.endpoint, chiaviVapidProva.publicKey, 'Safari iPhone prova']);
+  t = await (await chiedi('/home')).text();
+  assert.equal((metaChiave.exec(t) || [])[1], sub.endpoint, 'da ora la pagina sa che il server ha questo browser: non lo rimanda a ogni pagina');
+  // rimandarla (stesso browser) aggiorna la riga, non ne crea un'altra
+  assert.equal((await chiedi('/api/push/iscrivi', json({ subscription: sub }))).status, 200);
+  assert.equal(iscrizioniPush.length, 1);
+
+  // notifica di prova: dal server, subito (dopoSec assente) o fra un po'; al massimo una ogni 10 secondi
+  const consegne = [];
+  webPush.impostaInvio(async (iscrizione, payload) => { consegne.push({ endpoint: iscrizione.endpoint, payload: JSON.parse(payload) }); });
+  r = await chiedi('/api/push/prova', json({}));
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), { ok: true, inviate: 1 });
+  assert.equal(consegne.length, 1);
+  assert.equal(consegne[0].endpoint, sub.endpoint);
+  assert.equal(consegne[0].payload.tag, 'minuteria-prova');
+  r = await chiedi('/api/push/prova', json({ dopoSec: 10 }));
+  assert.equal(r.status, 429, 'troppo presto');
+  assert.equal(consegne.length, 1);
+
+  // disiscrizione: toglie la riga di questo utente per quell'indirizzo (un indirizzo altrui non lo tocca)
+  iscrizioniPush.push({ id: 99, user_id: 5, endpoint: 'https://fcm.googleapis.com/fcm/send/altrui', p256dh: 'a', auth: 'b', chiave: chiaviVapidProva.publicKey, user_agent: '' });
+  assert.deepEqual(await (await chiedi('/api/push/disiscrivi', json({ endpoint: 'https://fcm.googleapis.com/fcm/send/altrui' }))).json(), { ok: true });
+  assert.equal(iscrizioniPush.length, 2, 'l\'iscrizione di un altro utente resta');
+  assert.deepEqual(await (await chiedi('/api/push/disiscrivi', json({ endpoint: sub.endpoint }))).json(), { ok: true });
+  assert.deepEqual(iscrizioniPush.map((x) => x.user_id), [5]);
+  t = await (await chiedi('/home')).text();
+  assert.equal((metaChiave.exec(t) || [])[1], '', 'dopo la disiscrizione la sessione non ricorda più l\'iscrizione');
+
+  // uscita: il browser non riceve più le notifiche di questo account
+  await chiedi('/api/push/iscrivi', json({ subscription: sub }));
+  assert.equal(iscrizioniPush.length, 2);
+  assert.equal((await chiedi('/logout', { method: 'POST' })).status, 302);
+  assert.deepEqual(iscrizioniPush.map((x) => x.user_id), [5], 'l\'iscrizione di questo browser è stata tolta all\'uscita');
+
+  // push spente sul server (PUSH_ATTIVO=0): le pagine non portano la chiave, le rotte rispondono 503 e non salvano niente
+  process.env.PUSH_ATTIVO = '0';
+  try {
+    cookie = '';
+    await chiedi('/login', form({ username: 'prova', password: 'password-di-prova' }));
+    assert.doesNotMatch(await (await chiedi('/home')).text(), /name="push-chiave"/);
+    r = await chiedi('/api/push/iscrivi', json({ subscription: nuova('https://fcm.googleapis.com/fcm/send/spente') }));
+    assert.equal(r.status, 503);
+    assert.equal((await r.json()).ok, false);
+    assert.deepEqual(iscrizioniPush.map((x) => x.user_id), [5]);
+  } finally {
+    process.env.PUSH_ATTIVO = '';
+    iscrizioniPush.length = 0;
+    await chiedi('/logout', { method: 'POST' });
+    cookie = '';
+  }
+});
+
+test('notifiche ad app chiusa: la notifica di prova senza dispositivi iscritti dice di attivare prima le notifiche (409), e il banco ha le stesse rotte', async () => {
+  iscrizioniPush.length = 0;
+  cookie = '';
+  banco.attivo = true;
+  try {
+    assert.equal((await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }))).status, 302);
+    // il banco non ha un'iscrizione: la prova non parte
+    let r = await chiedi('/api/push/prova', json({}));
+    assert.equal(r.status, 409);
+    assert.match((await r.json()).errore, /attiva prima le notifiche/);
+    // e può iscriversi come gli altri ruoli (nell'Anagrafica del banco, "Notifiche del computer")
+    const ecdh = require('crypto').createECDH('prime256v1');
+    ecdh.generateKeys();
+    const sub = { endpoint: 'https://updates.push.services.mozilla.com/wpush/v2/banco-1', keys: { p256dh: ecdh.getPublicKey().toString('base64url'), auth: require('crypto').randomBytes(16).toString('base64url') } };
+    assert.equal((await chiedi('/api/push/iscrivi', json({ subscription: sub }))).status, 200);
+    assert.deepEqual(iscrizioniPush.map((x) => x.user_id), [9]);
+  } finally {
+    banco.attivo = false;
+    iscrizioniPush.length = 0;
+    await chiedi('/logout', { method: 'POST' });
+    cookie = '';
+  }
+});
+
+test('notifiche ad app chiusa: app.js e service worker contengono i pezzi che la rotta si aspetta (iscrizione, prova, disiscrizione, messaggi del service worker)', () => {
+  const fs = require('fs');
+  const js = fs.readFileSync(path.join(radice, 'public', 'app.js'), 'utf8');
+  for (const pezzo of ["'/api/push/iscrivi'", "'/api/push/disiscrivi'", "'/api/push/prova'", 'userVisibleOnly: true', 'applicationServerKey', "'push-chiave'", "'push-endpoint'",
+    "tipo === 'vai'", 'getNotifications', 'registrazioneSw(', "document.visibilityState === 'visible'", 'icona-distintivo-96.png']) {
+    assert.ok(js.includes(pezzo), pezzo);
+  }
+  // Solo notifiche di sistema col suono del telefono (richiesta esplicita del 21/10/2026): il sito non fa NESSUN suono dentro la pagina dell'installatore (il "ding" è
+  // stato tolto: niente audio, niente sblocco al primo tocco) e dal service worker non parte più il messaggio che lo faceva suonare. Il banco ha ancora il suo
+  // (`public/suoni/avviso.mp3`, interruttore "Suoni" dell'Anagrafica), che è un'altra funzione.
+  assert.doesNotMatch(js, /suonaAvviso|audioAvviso|alPrimoTocco/);
+  assert.doesNotMatch(js, /tipo === 'push'/);
+  assert.equal((js.match(/new Audio\(/g) || []).length, 1, 'un solo audio nel sito: quello del banco');
+  const vista = fs.readFileSync(path.join(radice, 'views', 'partials', 'app_head.ejs'), 'utf8');
+  assert.match(vista, /name="push-chiave"/);
 });

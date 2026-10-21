@@ -177,9 +177,11 @@
           <span class="an-icona an-icona-blu" aria-hidden="true"><%- iconaNotifiche %></span>
           <div class="an-testi">
             <div class="an-valore">Avvisi sul telefono</div>
-            <div class="an-dettaglio" data-notifiche-stato>Ricevi un avviso quando un banco risponde alla tua richiesta, finché l'app è aperta.</div>
+            <div class="an-dettaglio" data-notifiche-stato>Ricevi un avviso quando un banco risponde alla tua richiesta.</div>
           </div>
           <button type="button" class="installa-btn" data-abilita-notifiche>Attiva</button>
+          <%# "Prova": una notifica di prova dal server dopo 10 secondi (si mostra solo con le notifiche ad app chiusa attive), il tempo di chiudere l'app. %>
+          <button type="button" class="installa-btn" data-prova-notifica hidden>Prova</button>
         </div>
       </section>
 

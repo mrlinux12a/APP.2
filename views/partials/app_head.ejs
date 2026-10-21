@@ -3,6 +3,8 @@
 <meta name="theme-color" content="#f3f1ec">
 <%# L'utente collegato: public/app.js ci lega le quantità scelte e non ancora aggiunte al carrello (un altro utente sulla stessa scheda non le vede). %>
 <% if (typeof currentUser !== 'undefined' && currentUser) { %><meta name="utente" content="<%= currentUser.id %>"><% } %>
+<%# Notifiche ad app chiusa (src/web_push.js, public/app.js "Notifiche anche ad app chiusa"): la chiave con cui il browser si iscrive (assente = push spente) e l'iscrizione che il server ha già per questa sessione. %>
+<% if (typeof pushChiave !== 'undefined' && pushChiave) { %><meta name="push-chiave" content="<%= pushChiave %>"><meta name="push-endpoint" content="<%= typeof pushEndpoint !== 'undefined' ? pushEndpoint : '' %>"><% } %>
 <%# PWA: manifest e icone (public/manifest.webmanifest, public/icons). Senza <link rel="icon"> il browser chiede /favicon.ico a ogni pagina. %>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icons/icona-192.png" type="image/png">

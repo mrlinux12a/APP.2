@@ -18,6 +18,7 @@ const dati = {
   daPreparare: [{ id: 70 }, { id: 71 }], // ordini della filiale ancora da preparare
   ordine: { id: 77, distributor_id: 3, cliente_id: 5, request_id: 10, stato: 'evaso', consegnato_il: null },
   consegnaScritta: 0, // quante UPDATE della consegna sono riuscite
+  ditte: ['BOREA SRL'], // i nomi delle ditte dei banchi a cui è andata la richiesta
 };
 const notifiche = []; // le righe scritte in notifications
 const viste = []; // { s, p } di ogni query
@@ -54,6 +55,8 @@ function esegui(sql, p, modo) {
     return { changes: dati.consegnaScritta === 1 ? 1 : 0 };
   }
   if (/^SELECT ragione_sociale FROM users WHERE id = \?$/.test(s)) return { ragione_sociale: 'Rossi Impianti S.r.l.' };
+  // Il nome della ditta a cui è andata la richiesta (per il testo della notifica dell'installatore): una sola ditta, oppure più d'una (`dati.ditte`).
+  if (/^SELECT DISTINCT d\.nome FROM request_responses rr JOIN distributors d ON d\.id = rr\.distributor_id WHERE rr\.request_id = \?$/.test(s)) return dati.ditte.map((nome) => ({ nome }));
   return modo === 'all' ? [] : modo === 'get' ? null : { changes: 0 };
 }
 const dbFinto = {
@@ -119,7 +122,36 @@ test('finestra scaduta: chi non ha risposto riceve "Richiesta scaduta", chi avev
   const cliente = notifiche.filter((n) => n.user_id === 5);
   assert.equal(cliente.length, 1);
   assert.equal(cliente[0].tipo, null);
-  assert.equal(cliente[0].titolo, 'Nessun corriere ha confermato');
+  // il testo come nel mockup delle notifiche (richiesta esplicita del 21/10/2026): titolo corto, "Richiesta #N — ..." nel corpo, niente rimborso (la carta era solo bloccata)
+  assert.equal(cliente[0].titolo, 'Nessun corriere disponibile');
+  assert.equal(cliente[0].testo, 'Richiesta #10 — BOREA aveva il materiale, ma nessun corriere ha preso la consegna. Puoi rinviarla.');
+  assert.equal(cliente[0].link, '/richieste/10');
+});
+
+test('finestra scaduta senza nessuna risposta: "BOREA non ha confermato" e il corpo della foto; con più ditte "Nessun banco ha confermato"', async () => {
+  preparaChiusura([{ distributor_id: 2, esito: 'in_attesa' }, { distributor_id: 3, esito: 'in_attesa' }]);
+  await richieste.aggiornaScadenza(10);
+  let cliente = notifiche.filter((n) => n.user_id === 5);
+  assert.equal(cliente.length, 1);
+  assert.equal(cliente[0].titolo, 'BOREA non ha confermato', 'la ditta senza forma giuridica, mai la filiale');
+  assert.equal(cliente[0].testo, 'Richiesta #10 — La richiesta non è stata accettata. Nessun addebito: puoi rinviarla.');
+
+  dati.ditte = ['BOREA SRL', 'Cambielli S.p.A.'];
+  try {
+    preparaChiusura([{ distributor_id: 2, esito: 'in_attesa' }]);
+    await richieste.aggiornaScadenza(10);
+    cliente = notifiche.filter((n) => n.user_id === 5);
+    assert.equal(cliente[0].titolo, 'Nessun banco ha confermato');
+    assert.equal(cliente[0].testo, 'Richiesta #10 — La richiesta non è stata accettata. Nessun addebito: puoi rinviarla.');
+    // un banco che aveva accettato: "Il banco" al posto del nome
+    preparaChiusura([{ distributor_id: 3, esito: 'confermato', corriere_stato: 'in_attesa' }]);
+    await richieste.aggiornaScadenza(10);
+    cliente = notifiche.filter((n) => n.user_id === 5);
+    assert.equal(cliente[0].titolo, 'Nessun corriere disponibile');
+    assert.equal(cliente[0].testo, 'Richiesta #10 — Il banco aveva il materiale, ma nessun corriere ha preso la consegna. Puoi rinviarla.');
+  } finally {
+    dati.ditte = ['BOREA SRL'];
+  }
 });
 
 test('finestra scaduta senza nessun banco in attesa del corriere: solo "Richiesta scaduta", mai "Nessun corriere"', async () => {
@@ -249,4 +281,17 @@ test('arricchisciPush: ogni notifica porta i dati del suo avviso; una richiesta 
   const semplici = await bancoAvvisi.arricchisciPush(2, [nuove[4], nuove[5]]);
   assert.equal(semplici.length, 2);
   assert.equal(viste.length, 0);
+});
+
+test('"Ordine confermato" per l\'installatore: la forma del mockup ("Ordine #312 — BOREA prepara il tuo ordine. Consegna prevista entro le 10:45.")', () => {
+  // col corriere: l'orario d'arrivo, senza il "(in N min)" di prima e senza ripetere il numero dopo "ordine"
+  assert.equal(flusso.testoOrdineConfermato({ orderId: 312, distributoreNome: 'BOREA SRL', arrivo: '10:45' }),
+    'Ordine #312 — BOREA prepara il tuo ordine. Consegna prevista entro le 10:45.');
+  // la ditta senza forma giuridica, comunque sia scritta
+  assert.match(flusso.testoOrdineConfermato({ orderId: 1, distributoreNome: 'Borea S.r.l.', arrivo: '08:00' }), /^Ordine #1 — Borea prepara/);
+  // senza corriere (WhatsApp spento): la stima del banco
+  assert.equal(flusso.testoOrdineConfermato({ orderId: 313, distributoreNome: 'BOREA SRL', minutiStimati: 120 }),
+    'Ordine #313 — BOREA prepara il tuo ordine. Consegna stimata in 2 ore.');
+  // nome sconosciuto: "Il banco"
+  assert.match(flusso.testoOrdineConfermato({ orderId: 314, distributoreNome: null, minutiStimati: 45 }), /^Ordine #314 — Il banco prepara il tuo ordine\./);
 });

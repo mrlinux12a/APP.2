@@ -40,6 +40,7 @@ const catalogo = require('./src/catalogo');
 const richieste = require('./src/richieste');
 const orari = require('./src/orari');
 const notifiche = require('./src/notifiche');
+const webPush = require('./src/web_push');
 const bancoAvvisi = require('./src/banco_avvisi');
 const geo = require('./src/geo');
 const anagrafiche = require('./src/anagrafiche');
@@ -335,6 +336,11 @@ app.use(async (req, res, next) => {
   res.locals.profiloCliente = profiloCliente;
   res.locals.bancoTesta = bancoTesta;
   res.locals.percorso = req.path; // la voce attiva dell'intestazione del banco si sceglie da qui
+  // Notifiche ad app chiusa (src/web_push.js): la chiave pubblica con cui il browser si iscrive (vuota = le push sono spente) e l'iscrizione che il server
+  // già ha per QUESTA sessione. Le legge public/app.js dai <meta> di partials/app_head.ejs: se l'iscrizione del browser è un'altra (primo accesso, nuovo
+  // login, uscita e rientro) la manda di nuovo; senza questo confronto servirebbe una chiamata a ogni pagina.
+  res.locals.pushChiave = utente ? webPush.chiavePubblica() : '';
+  res.locals.pushEndpoint = (req.session && req.session.pushEndpoint) || '';
   res.locals.geo = geoStato;
   // I contatori del banco servono alla barra di navigazione di tutte le pagine distributore.
   res.locals.contatori = letturaContatori ? letturaContatori.contatori : null;
@@ -665,6 +671,9 @@ app.post('/login', async (req, res) => {
 });
 
 app.post('/logout', async (req, res) => {
+  // Chi esce non deve più ricevere le notifiche di questo account su questo telefono o computer (se poi entra qualcun altro, l'iscrizione passa a lui).
+  const utenteUscente = req.session.user;
+  if (utenteUscente && req.session.pushEndpoint) await webPush.rimuovi(req.session.pushEndpoint, utenteUscente.id).catch(() => {});
   req.session.destroy(() => res.redirect('/login'));
 });
 
@@ -1455,7 +1464,7 @@ app.post('/distributore/ordini/:id/elimina', requireRole('distributore'), async 
   // L'installatore deve saperlo: altrimenti l'ordine sparisce dal suo "Stato ordini" senza una parola.
   await notifiche.notifica(ordine.cliente_id, {
     titolo: 'Ordine annullato dal banco',
-    testo: `Il banco ha annullato l'ordine #${ordine.id}.` + (rimborsato ? ' Il pagamento è stato rimborsato.' : ''),
+    testo: `Ordine #${ordine.id} — Il banco ha annullato l'ordine.` + (rimborsato ? ' Il pagamento è stato rimborsato.' : ''),
     link: '/ordini',
     categoria: 'ordini',
   }).catch((err) => console.error('[ordini] notifica di annullamento non inviata:', err.message));
@@ -1500,6 +1509,52 @@ app.get('/api/notifiche/push', requireLogin, async (req, res) => {
 app.post('/api/notifiche/attiva', requireLogin, async (req, res) => {
   await notifiche.segnaTutteNotificate(req.session.user.id);
   res.json({ ok: true });
+});
+
+// ---------- Notifiche ad app chiusa (Web Push, src/web_push.js) ----------
+
+const ERRORI_PUSH = {
+  spente: 'Le notifiche ad app chiusa non sono attive su questo server.',
+  non_valida: 'Iscrizione del browser non valida.',
+  tabella: 'Le notifiche ad app chiusa non sono ancora pronte su questo server.',
+};
+
+// Il browser si è iscritto al servizio push (public/app.js, "Notifiche anche ad app chiusa"): si salva e si ricorda in sessione, così la pagina sa che il server
+// ha già questo browser (meta push-endpoint) e il logout sa quale iscrizione togliere.
+app.post('/api/push/iscrivi', requireLogin, async (req, res) => {
+  const esito = await webPush.registra(req.session.user.id, req.body && req.body.subscription, { userAgent: req.get('user-agent') });
+  if (!esito.ok) return res.status(esito.motivo === 'non_valida' ? 400 : 503).json({ ok: false, errore: ERRORI_PUSH[esito.motivo] || ERRORI_PUSH.spente });
+  req.session.pushEndpoint = esito.endpoint;
+  res.json({ ok: true });
+});
+
+// Il browser non vuole più le notifiche (interruttore spento) o si è disiscritto.
+app.post('/api/push/disiscrivi', requireLogin, async (req, res) => {
+  const endpoint = req.body && typeof req.body.endpoint === 'string' ? req.body.endpoint : '';
+  if (endpoint) await webPush.rimuovi(endpoint, req.session.user.id);
+  if (!endpoint || req.session.pushEndpoint === endpoint) delete req.session.pushEndpoint;
+  res.json({ ok: true });
+});
+
+// Notifica di prova ("Prova" nella scheda Sul telefono): passa dal server come una vera, quindi prova anche l'app chiusa. `dopoSec` (0-30) lascia il tempo di
+// chiudere l'app prima che arrivi. Al massimo una ogni 10 secondi per utente.
+const provePush = new Map();
+app.post('/api/push/prova', requireLogin, async (req, res) => {
+  const utenteId = req.session.user.id;
+  const ultima = provePush.get(utenteId) || 0;
+  if (Date.now() - ultima < 10000) return res.status(429).json({ ok: false, errore: 'Aspetta qualche secondo prima di riprovare.' });
+  provePush.set(utenteId, Date.now());
+  const dopoSec = Math.min(30, Math.max(0, Math.floor(Number(req.body && req.body.dopoSec) || 0)));
+  if (!webPush.attivo()) return res.status(503).json({ ok: false, errore: ERRORI_PUSH.spente });
+  const iscrizioni = await webPush.iscrizioniDi(utenteId);
+  if (!iscrizioni.length) return res.status(409).json({ ok: false, errore: 'Nessun dispositivo iscritto: attiva prima le notifiche.' });
+  if (dopoSec > 0) {
+    setTimeout(() => webPush.inviaProva(utenteId).catch(() => {}), dopoSec * 1000).unref();
+    return res.json({ ok: true, dopoSec });
+  }
+  const inviate = await webPush.inviaProva(utenteId);
+  if (!inviate) return res.status(502).json({ ok: false, errore: 'Il servizio di notifiche del telefono non ha accettato il messaggio.' });
+  res.json({ ok: true, inviate });
 });
 
 // Un avviso a comparsa del banco, aperto o chiuso, risulta letto (public/app.js, "Avvisi del banco"): il browser manda gli id delle notifiche e, perché un avviso
@@ -2108,9 +2163,13 @@ async function prendiInCarico(ordine) {
     `UPDATE orders SET stato = 'in_evasione', in_evasione_il = NOW(), preso_in_carico_il = NOW()
       WHERE id = ?`
   ).run(ordine.id);
+  // Il nome della ditta come lo vede l'installatore ("BOREA"); un guasto nella lettura non deve fermare "Preparato".
+  const dittaOrdine = ordine.distributor_id
+    ? await db.prepare('SELECT nome FROM distributors WHERE id = ?').get(ordine.distributor_id).catch(() => null)
+    : null;
   await notifiche.notifica(ordine.cliente_id, {
     titolo: 'Ordine in preparazione',
-    testo: `Il banco sta preparando il tuo ordine #${ordine.id}.`,
+    testo: `Ordine #${ordine.id} — ${format.nomeCommerciale(dittaOrdine && dittaOrdine.nome) || 'Il banco'} sta preparando il tuo materiale.`,
     link: '/ordini/' + ordine.id,
     categoria: 'ordini',
     order_id: ordine.id,
@@ -2298,6 +2357,7 @@ setInterval(controllaScadenze, 30 * 1000).unref();
 // Stripe acceso ma con il .env incompleto: meglio dirlo subito che al primo cliente.
 if (stripePagamenti.attivo()) console.log('[stripe] ' + stripePagamenti.descrizioneModo());
 for (const avviso of stripePagamenti.controllaConfigurazione()) console.warn('[stripe] ' + avviso);
+console.log(webPush.descriviConfigurazione());
 
 // Gruppo WhatsApp dei corrieri: si collega solo con WHATSAPP_ATTIVO=1 (vedi src/whatsapp.js).
 whatsapp.avvia();
