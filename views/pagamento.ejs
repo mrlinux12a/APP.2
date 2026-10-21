@@ -16,7 +16,8 @@
 
     <div class="contenuto pag">
       <section class="pag-scheda" data-pagamento
-               data-chiave="<%= chiavePubblica %>" data-segreto="<%= clientSecret %>" data-ritorno="<%= ritorno %>">
+               data-chiave="<%= chiavePubblica %>" data-segreto="<%= clientSecret %>" data-ritorno="<%= ritorno %>"
+               data-email="<%= emailCliente %>" data-telefono="<%= telefonoCliente %>">
         <div class="pag-testa">
           <div class="pag-totale">
             <span class="pag-label">Paghi ora · IVA inclusa</span>
@@ -40,7 +41,7 @@
         <button class="btn-paga pag-paga" type="button" data-pag-paga disabled>Paga € <%= importo %></button>
         <p class="barra-paga-nota">
           <span class="scudo"><%- iconaScudo %></span>
-          <span>I banchi rispondono entro <%= Math.round(minutiRisposta) %> min · se nessuno accetta, non ti viene addebitato nulla</span>
+          <span>I banchi rispondono entro <%= Math.round(minutiTesto) %> min · se nessuno accetta, non ti viene addebitato nulla</span>
         </p>
       </section>
 

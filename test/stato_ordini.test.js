@@ -32,6 +32,7 @@ const pricing = require('../src/pricing');
 
 // La finestra di conferma (10 minuti): qui non c'è un DB vero che la legga dalla configurazione.
 pricing.getFinestraMinuti = async () => 10;
+pricing.getFinestraMinutiTesto = async () => 10;
 
 // Moduli collegati: nessuna scrittura, nessuna chiusura di scadenze (le prove danno già lo stato che serve).
 const aggiornate = [];
@@ -349,7 +350,8 @@ test('icona: `voci` elenca tutte le attività nell\'ordine dell\'alternanza, i c
   assert.ok(Math.abs(icona.voci[2].etaSec - 25 * 60) <= 2);
   assert.ok(Math.abs(icona.voci[2].durataSec - 85 * 60) <= 2);
   assert.equal(icona.voci[2].inArrivo, false);
-  assert.deepEqual(Object.keys(icona.voci[0]).sort(), ['durata', 'fase', 'href', 'id', 'richiestaId', 'secondi', 'tipo', 'voce']);
+  assert.deepEqual(Object.keys(icona.voci[0]).sort(), ['durata', 'fase', 'href', 'id', 'minutiTesto', 'richiestaId', 'secondi', 'tipo', 'voce']);
+  assert.equal(icona.voci[0].minutiTesto, 10); // i minuti scritti nella scheda della home: la configurazione (10), non la durata dell'anello
   assert.equal(icona.voci[2].href, '/ordini/1060');
   assert.equal(icona.voci[2].voce, 'ordine-1060');
 });

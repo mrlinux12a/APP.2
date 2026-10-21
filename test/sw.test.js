@@ -14,7 +14,7 @@ const ORIGINE = 'https://minuteria.example';
 // Per le notifiche push: `senzaNavigate` = la finestra non ha `navigate` (capita su iPhone), `navigateFallisce` = c'è ma rifiuta, `focusFallisce` = non si
 // riesce a metterla in primo piano; `mostraRifiutaLaPrima` = il browser rifiuta le opzioni della prima notifica; `sottoscrizioneVecchia` = le opzioni con cui
 // il browser si era iscritto (per `pushsubscriptionchange`).
-function caricaSw({ finestre = [], rete = true, cacheEsistenti = [], scaricabile = true, senzaNavigate = false, navigateFallisce = false, focusFallisce = false, mostraRifiutaLaPrima = false, messaggioLancia = false, matchAllRifiuta = false } = {}) {
+function caricaSw({ finestre = [], rete = true, cacheEsistenti = [], scaricabile = true, senzaNavigate = false, navigateFallisce = false, focusFallisce = false, mostraRifiutaLaPrima = false, messaggioLancia = false, matchAllRifiuta = false, notificheRifiutano = false } = {}) {
   const gestori = {};
   const chiamate = { openWindow: [], focus: [], navigate: [], messaggi: [], notifiche: [], chiuse: [], iscrizioni: [], skipWaiting: 0, claim: 0, fetch: [], fetchOpzioni: [], cacheAggiunte: [], cacheEliminate: [] };
   const nomiCache = new Set(cacheEsistenti);
@@ -67,8 +67,8 @@ function caricaSw({ finestre = [], rete = true, cacheEsistenti = [], scaricabile
         chiamate.notifiche.push({ titolo, opzioni });
         return Promise.resolve();
       },
-      // Le notifiche ancora sullo schermo con quel tag (non chiuse): ognuna si può chiudere.
-      getNotifications: ({ tag }) => Promise.resolve(chiamate.notifiche.filter((n) => n.opzioni && n.opzioni.tag === tag && !n.chiusa).map((n) => ({ close() { n.chiusa = true; chiamate.chiuse.push(tag); } }))),
+      // Le notifiche ancora sullo schermo (non chiuse), con quel tag se c'è un filtro, tutte senza: ognuna si può chiudere.
+      getNotifications: ({ tag } = {}) => notificheRifiutano ? Promise.reject(new Error('getNotifications')) : Promise.resolve(chiamate.notifiche.filter((n) => (tag === undefined || (n.opzioni && n.opzioni.tag === tag)) && !n.chiusa).map((n) => ({ close() { n.chiusa = true; chiamate.chiuse.push(n.opzioni && n.opzioni.tag); } }))),
       pushManager: { subscribe: (opzioni) => { chiamate.iscrizioni.push(opzioni); return Promise.resolve({ toJSON: () => ({ endpoint: 'https://fcm.googleapis.com/x', keys: { p256dh: 'a', auth: 'b' } }) }); } },
     },
   };
@@ -167,6 +167,21 @@ test('tocco su una notifica: apre la pagina indicata se non c\'è già una fines
   const sw = caricaSw();
   const evento = await tocca(sw, '/ordini/12');
   assert.equal(evento.chiusa, true);
+  assert.deepEqual(sw.chiamate.openWindow, [ORIGINE + '/ordini/12']);
+});
+
+test('tocco su una notifica: spariscono dalla tendina anche TUTTE le altre del sito (si entra nell\'app)', async () => {
+  const sw = caricaSw({ finestre: [ORIGINE + '/home'] });
+  sw.chiamate.notifiche.push({ titolo: 'A', opzioni: { tag: 'minuteria-1' } }, { titolo: 'B', opzioni: { tag: 'minuteria-2' } }, { titolo: 'C', opzioni: {} });
+  await tocca(sw, '/richieste/7');
+  assert.deepEqual(sw.chiamate.notifiche.map((n) => !!n.chiusa), [true, true, true]);
+  assert.deepEqual(sw.chiamate.navigate, [ORIGINE + '/richieste/7'], 'e la pagina si apre lo stesso');
+});
+
+test('tocco su una notifica: se la tendina non si lascia leggere la pagina si apre comunque', async () => {
+  const sw = caricaSw({ notificheRifiutano: true });
+  sw.chiamate.notifiche.push({ titolo: 'A', opzioni: { tag: 'minuteria-1' } });
+  await tocca(sw, '/ordini/12');
   assert.deepEqual(sw.chiamate.openWindow, [ORIGINE + '/ordini/12']);
 });
 

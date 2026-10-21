@@ -39,6 +39,13 @@ async function getFinestraMinuti() {
   return getConfigNum('finestra_conferma_min', 10);
 }
 
+// I minuti che si SCRIVONO nei testi ("I banchi rispondono entro 10 min", "Hai 10 minuti per confermare"): sempre il valore vero della configurazione,
+// anche quando FINESTRA_CONFERMA_SEC accorcia il timer di un'istanza per provare (richiesta esplicita del 21/10/2026: "deve esserci 10, ovunque, anche se
+// per ora il timer è di 1m"). Timer, anelli e scadenze continuano a usare getFinestraMinuti.
+async function getFinestraMinutiTesto() {
+  return getConfigNum('finestra_conferma_min', 10);
+}
+
 // IMPORTO DI PROVA — TEMPORANEO (richieste esplicite del 21/10/2026). `PAGAMENTO_APP_PROVA=0.50` nel .env di UN server fa valere quella cifra come importo
 // che l'installatore paga ORA in app (`app.totale`, cioè `da_pagare_app`: carrello, addebito Stripe, ordine, Storico). La formula di dividiTotale non cambia e
 // le sue voci (corriere, servizio, IVA) restano com'erano; cambia solo il totale addebitato, e mai in più della formula (`Math.min`). Il materiale da pagare
@@ -394,6 +401,7 @@ module.exports = {
   getServizioPct,
   getIvaPct,
   getFinestraMinuti,
+  getFinestraMinutiTesto,
   getOrdineMinimo,
   getSpedizioneFissa,
   prezzoNetto,

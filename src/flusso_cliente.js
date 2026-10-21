@@ -98,6 +98,7 @@ async function riepilogoCarrello(righe) {
     mancaAlMinimo: pricing.round2(Math.max(0, minimo - totali.totale_netto)),
     raggiunto: totali.totale_netto >= minimo,
     minutiRisposta: await pricing.getFinestraMinuti(),
+    minutiTesto: await pricing.getFinestraMinutiTesto(), // il numero da SCRIVERE ("risponde entro 10 minuti"), vedi pricing.getFinestraMinutiTesto
   };
 }
 
@@ -221,13 +222,14 @@ function senzaFiliale(distributore) {
 async function dettaglioRichiesta(richiesta) {
   // Nessuna delle letture dipende da un'altra: partono insieme (ognuna è un giro di rete verso il DB, e questa pagina
   // si apre a ogni passaggio fra gli ordini di "Stato ordini").
-  const [, , righe, risposte, secondi, minutiRisposta, spedizione, rigaPagamento] = await Promise.all([
+  const [, , righe, risposte, secondi, minutiRisposta, minutiTesto, spedizione, rigaPagamento] = await Promise.all([
     notifiche.segnaLetteCategoria(richiesta.cliente_id, 'richieste'),
     notifiche.segnaLetteCategoria(richiesta.cliente_id, 'ordini'),
     richieste.righeRichiesta(richiesta.id),
     richieste.risposteRichiesta(richiesta.id),
     richieste.secondiRimasti(richiesta),
     pricing.getFinestraMinuti(),
+    pricing.getFinestraMinutiTesto(),
     pricing.getSpedizioneFissa(),
     pagamenti.rigaPagamento(richiesta.id),
   ]);
@@ -245,6 +247,7 @@ async function dettaglioRichiesta(richiesta) {
     risposte: risposteDitta,
     secondi,
     minutiRisposta,
+    minutiTesto, // il numero da SCRIVERE nei testi (10), che col timer accorciato per le prove non coincide con minutiRisposta
     // Consegna pagata in app e materiale da pagare a BOREA (stessa forma di dettaglioOrdine: la legge partials/pagamenti).
     importi: pricing.importi({ richiesta, calcolato: oggi }),
     // Cosa dice la carta: bloccata, pagata, annullata o rimborsata (pagamenti.calcolaStatoPagamento), per la scheda "Pagamenti" e la pillola.
@@ -923,7 +926,7 @@ function ordinaVociIcona(voci) {
 // che mancano a farla sparire: 10 minuti dalla scadenza), solo `consegna` ha minuti (null se il corriere non ha scritto l'orario), il nome
 // del corriere ('' se manca) e l'avanzamento 0-1 della barra della home.
 // Le schede della home (partials/stato_home.ejs) sono una per voce, quindi leggono tutto da qui.
-function costruisciVoce(fase, card, finestra) {
+function costruisciVoce(fase, card, finestra, minutiTesto = null) {
   const r = card.richiesta;
   if (fase === 'consegna') {
     // corriere_arrivo_il è TIMESTAMPTZ (un istante vero), a differenza degli altri orari dello schema.
@@ -957,6 +960,8 @@ function costruisciVoce(fase, card, finestra) {
   if (fase === 'richiesta') {
     voce.secondi = secondiAllaScadenza(card);
     voce.durata = format.durataFinestraSec(r.creato_il, r.scade_il, finestra);
+    // Il numero scritto nella scheda della home ("entro 10 min"): quello della configurazione, non la durata dell'anello (col timer accorciato per le prove sarebbe "1 min").
+    if (minutiTesto) voce.minutiTesto = Math.max(1, Math.round(minutiTesto));
   } else if (fase === 'scaduta') {
     voce.scompareTraSec = secondiAllaScomparsa(r);
   }
@@ -973,13 +978,13 @@ function firmaVoci(voci) {
 // Legge una volta sola quello che serve a icona e striscia: le voci nell'ordine di alternanza (ordinaVociIcona) e le attività da cui
 // vengono. Nessuna query per voce: richieste recenti, ordini e finestra in un giro.
 async function leggiVoci(clienteId) {
-  const [recenti, finestra] = await Promise.all([leggiRichiesteRecenti(clienteId), pricing.getFinestraMinuti()]);
+  const [recenti, finestra, minutiTesto] = await Promise.all([leggiRichiesteRecenti(clienteId), pricing.getFinestraMinuti(), pricing.getFinestraMinutiTesto()]);
   const cards = await richiesteAttiveClienteLeggere(recenti);
   const attive = attiveOrdinate(cards);
   const scadute = scaduteRecenti(cards);
   const voci = ordinaVociIcona([
     ...scadute.map((card) => costruisciVoce('scaduta', card, finestra)),
-    ...attive.map(({ fase, card }) => costruisciVoce(fase === FASE_ATTESA ? 'richiesta' : 'consegna', card, finestra)),
+    ...attive.map(({ fase, card }) => costruisciVoce(fase === FASE_ATTESA ? 'richiesta' : 'consegna', card, finestra, minutiTesto)),
   ]);
   return { attive, scadute, voci, finestra };
 }

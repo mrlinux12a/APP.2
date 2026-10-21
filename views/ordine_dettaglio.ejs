@@ -60,6 +60,11 @@
             ? 'Arriva entro le ' + fmt.oraRoma(ordine.corriere_arrivo_il)
             : (ordine.consegna_ore ? 'Arriva entro ' + fmt.tempoConsegna(ordine.consegna_ore) : 'Tempi di consegna da confermare');
           const titoloConsegna = arrivoIl && fmt.inArrivo(rimanenteSec) ? 'In arrivo' : titoloNormale;
+          // Sotto il titolo, quando c'è un orario d'arrivo, "Mancano 18 min": scende da solo ogni minuto (stesso blocco "Consegna in arrivo" di app.js, segnaposto {t})
+          // e sparisce a 3 minuti o meno (data-eta-nascondi), dove il titolo dice già solo "In arrivo". Richiesta esplicita del 21/10/2026: oltre all'orario ("Arriva entro
+          // le 10:45") i minuti che mancano.
+          const inArrivoOra = !!arrivoIl && fmt.inArrivo(rimanenteSec);
+          const minutiMancano = arrivoIl ? Math.max(1, Math.ceil(rimanenteSec / 60)) : null;
           // Chi porta la merce: il corriere se c'è, altrimenti il banco (consegna con il suo mezzo).
           const portatoDa = (ordine.corriere_nome || '').trim() || (distributore ? distributore.nome : '');
           const spunta = '<span class="att-spunta" aria-hidden="true"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>';
@@ -74,7 +79,8 @@
             </svg>
             <span class="att-furgone" aria-hidden="true"><span><%- iconaFurgone %></span></span>
           </div>
-          <h2 class="att-titolo<%= portatoDa ? '' : ' att-titolo-solo' %>"><span class="att-punto" aria-hidden="true"></span><% if (arrivoIl) { %><span data-eta-testo="<%= titoloNormale %>"><%= titoloConsegna %></span><% } else { %><%= titoloConsegna %><% } %></h2>
+          <h2 class="att-titolo<%= portatoDa || arrivoIl ? '' : ' att-titolo-solo' %>"><span class="att-punto" aria-hidden="true"></span><% if (arrivoIl) { %><span data-eta-testo="<%= titoloNormale %>"><%= titoloConsegna %></span><% } else { %><%= titoloConsegna %><% } %></h2>
+          <% if (arrivoIl) { %><p class="att-minuti<%= portatoDa ? '' : ' att-minuti-solo' %>" data-eta-testo="Mancano {t}" data-eta-nascondi<%- inArrivoOra ? ' style="display: none"' : '' %>>Mancano <%= fmt.durataMinuti(minutiMancano) %></p><% } %>
           <% if (portatoDa) { %><p class="att-sotto">Te lo porta <strong><%= portatoDa %></strong></p><% } %>
           <ol class="att-passi">
             <li class="att-passo att-fatto">

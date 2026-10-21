@@ -143,6 +143,13 @@ self.addEventListener('pushsubscriptionchange', function (evento) {
 // se non si riesce neppure a metterla in primo piano se ne apre una nuova.
 self.addEventListener('notificationclick', function (evento) {
   evento.notification.close();
+  // Si entra nell'app: spariscono dalla tendina anche tutte le altre notifiche del sito (richiesta esplicita del 21/10/2026; la pagina fa lo stesso quando si apre
+  // o torna in primo piano, public/app.js). Un errore qui non deve impedire di aprire la pagina.
+  const chiudiLeAltre = Promise.resolve().then(function () {
+    return self.registration.getNotifications();
+  }).then(function (aperte) {
+    aperte.forEach(function (notifica) { notifica.close(); });
+  }).catch(function () { /* restano com'erano */ });
   const dati = evento.notification.data || {};
   let destinazione = new URL('/', self.location.origin).href;
   try {
@@ -153,7 +160,7 @@ self.addEventListener('notificationclick', function (evento) {
   const vaDaSola = function (finestra) {
     try { finestra.postMessage({ tipo: 'vai', url: destinazione }); } catch (err) { /* niente da fare */ }
   };
-  evento.waitUntil(
+  evento.waitUntil(Promise.all([chiudiLeAltre,
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (finestre) {
       for (const finestra of finestre) {
         if (finestra.url.indexOf(self.location.origin) === 0 && 'focus' in finestra) {
@@ -166,5 +173,5 @@ self.addEventListener('notificationclick', function (evento) {
       }
       return self.clients.openWindow(destinazione);
     })
-  );
+  ]));
 });

@@ -1,5 +1,5 @@
 const db = require('../db');
-const { calcolaOrdine, calcolaDaRigheDb, getFinestraMinuti, getSpedizioneFissa, round2 } = require('./pricing');
+const { calcolaOrdine, calcolaDaRigheDb, getFinestraMinuti, getFinestraMinutiTesto, getSpedizioneFissa, round2 } = require('./pricing');
 const whatsapp = require('./whatsapp');
 const pagamenti = require('./pagamenti');
 const orari = require('./orari');
@@ -245,10 +245,11 @@ async function creaRichiesta(
 
   const nArticoli = righeCarrello.reduce((acc, r) => acc + r.quantita, 0);
   const { notificaDistributore, notifica } = require('./notifiche');
+  const minutiTesto = Math.round(await getFinestraMinutiTesto()); // il numero scritto (10), non quello del timer: vedi pricing.getFinestraMinutiTesto
   for (const d of candidati) {
     await notificaDistributore(d.id, {
       titolo: 'Nuova richiesta di disponibilità',
-      testo: `${cliente.ragione_sociale} — ${nArticoli} pz. Hai ${Math.round(minuti)} minuti per confermare.`,
+      testo: `${cliente.ragione_sociale} — ${nArticoli} pz. Hai ${minutiTesto} minuti per confermare.`,
       link: `/distributore/richieste/${requestId}`,
       categoria: 'richieste',
       sottostato: 'inviata',
@@ -319,10 +320,11 @@ async function reinviaRichiesta(requestId, { metodoPagamento = pagamenti.METODO_
   const risposte = await risposteRichiesta(requestId);
   const nArticoli = righe.reduce((acc, r) => acc + r.quantita, 0);
   const { notificaDistributore } = require('./notifiche');
+  const minutiTesto = Math.round(await getFinestraMinutiTesto());
   for (const r of risposte) {
     await notificaDistributore(r.distributor_id, {
       titolo: 'Richiesta rinviata',
-      testo: `${nArticoli} pz. Hai ${Math.round(minuti)} minuti per confermare.`,
+      testo: `${nArticoli} pz. Hai ${minutiTesto} minuti per confermare.`,
       link: `/distributore/richieste/${requestId}`,
       categoria: 'richieste',
       sottostato: 'inviata',
@@ -778,7 +780,7 @@ async function rispondi(
     if (fresca && fresca.esito !== 'in_attesa') {
       return { ok: false, errore: 'Hai già risposto a questa richiesta.' };
     }
-    const minuti = await getFinestraMinuti();
+    const minuti = await getFinestraMinutiTesto();
     return { ok: false, errore: `La finestra di ${Math.round(minuti)} minuti è chiusa: non è più possibile rispondere.` };
   }
 

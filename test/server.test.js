@@ -915,7 +915,7 @@ test('posizione di consegna: l\'indirizzo del carrello parte VUOTO, due modi per
 
   // lo script: la posizione si legge SOLO al clic sul pulsante (mai all'apertura della pagina), tenendo il rilevamento migliore di qualche secondo (non il primo,
   // spesso grossolano o in cache) e con un secondo tentativo meno preciso; la precisione parte col server; coordinate tolte se si modifica l'indirizzo; messaggi
-  // per permesso negato, HTTPS mancante, iPhone e Android; nessun invio senza indirizzo, né con una via senza numero civico
+  // per permesso negato, HTTPS mancante, iPhone e Android; nessun invio senza indirizzo (il civico mancante invece non blocca)
   const js = await (await chiedi('/app.js')).text();
   assert.match(js, /navigator\.geolocation\.getCurrentPosition\(ok, no, opzioni\)/);
   assert.match(js, /navigator\.geolocation\.watchPosition\([\s\S]*?\{ enableHighAccuracy: true, maximumAge: 0, timeout: ATTESA_MASSIMA_MS \}\)/, 'si ascolta il GPS, mai una posizione in cache');
@@ -925,8 +925,9 @@ test('posizione di consegna: l\'indirizzo del carrello parte VUOTO, due modi per
   assert.match(js, /encodeURIComponent\(lng\) \+ '&precisione=' \+ encodeURIComponent\(metri\)/, 'il server sa quanto è incerta la posizione');
   assert.doesNotMatch(js, /maximumAge: 300000/, 'niente posizioni vecchie di cinque minuti');
   assert.match(js, /setTimeout\(function \(\) \{\s*\/\/[^\n]*\n\s*if \(e\.defaultPrevented\) return;\s*bottoni\.forEach/, 'un invio fermato (manca il civico) non lascia il pulsante "Paga" disabilitato');
-  assert.match(js, /senzaCivico = dati\.civico === false;/);
+  assert.match(js, /if \(dati\.civico !== false\) \{/);
   assert.match(js, /aggiungi il numero civico\./);
+  assert.doesNotMatch(js, /senzaCivico/, 'nessun blocco del pagamento per il civico mancante: chi scrive "via puggia" paga lo stesso');
   assert.match(js, /bottonePos\.addEventListener\('click', cercaPosizione\)/);
   assert.doesNotMatch(js, /\n\s*cercaPosizione\(\);?\s*\n/, 'mai chiamata da sola all\'apertura');
   assert.doesNotMatch(js, /if \(!campo\.value\.trim\(\)\) cercaPosizione/);
@@ -936,7 +937,7 @@ test('posizione di consegna: l\'indirizzo del carrello parte VUOTO, due modi per
   assert.match(js, /!window\.isSecureContext/);
   assert.match(js, /Impostazioni › Privacy e sicurezza › Localizzazione/, 'come riattivare il permesso su iPhone');
   assert.match(js, /lucchetto accanto all’indirizzo/, 'e su Android');
-  assert.match(js, /form\.addEventListener\('submit'[\s\S]*?if \(campo\.value\.trim\(\) && !\(senzaCivico && campo\.value\.trim\(\) === daPosizione\)\) return;[\s\S]*?e\.preventDefault\(\);/);
+  assert.match(js, /form\.addEventListener\('submit'[\s\S]*?if \(campo\.value\.trim\(\)\) return;[\s\S]*?e\.preventDefault\(\);/);
   assert.doesNotMatch(js, /\/api\/posizione/, 'la posizione non si legge più in background: viaggia solo col pagamento');
 });
 
@@ -2092,7 +2093,7 @@ test('home: una scheda per ogni richiesta in attesa e ordine in consegna, nello 
     assert.match(slot, /<a class="stato-corpo" href="\/ordini\/50">/);
     // formato di sempre: la richiesta con anello, conto alla rovescia e frase del rimborso; la consegna con furgone, barra e tappe
     assert.match(slot, /<span class="stato-tempo" data-countdown>0[45]:\d\d<\/span>/);
-    assert.match(slot, /<span class="stato-occhiello">Richiesta inviata<\/span>\s*<span class="stato-titolo">Aspettiamo che un banco accetti<\/span>\s*<span class="stato-sub">Se nessuno accetta entro 6 min, ti rimborsiamo\.<\/span>/);
+    assert.match(slot, /<span class="stato-occhiello">Richiesta inviata<\/span>\s*<span class="stato-titolo">Aspettiamo che un banco accetti<\/span>\s*<span class="stato-sub">Se nessuno accetta entro 10 min, ti rimborsiamo\.<\/span>/); // 10 = la configurazione, anche se l'anello di questa richiesta dura 6 min (data-durata="360"): il testo non segue il timer accorciato per le prove
     assert.match(slot, /<span class="stato-occhiello">Accettato · In consegna<\/span>\s*<span class="stato-titolo">In consegna<\/span>/);
     assert.match(slot, /<div class="stato-barra" aria-hidden="true"><span style="width: 50%"><\/span><\/div>/);
     assert.match(slot, /<div class="stato-tappe" aria-hidden="true">\s*<span>Accettato<\/span>\s*<span>In viaggio<\/span>\s*<span>Consegnato<\/span>/);
@@ -2253,6 +2254,33 @@ test('ordine in consegna: righe a prezzo del banco, "Merce · IVA esclusa", sche
     // niente "Annulla ordine": il banco ha già confermato e la carta è stata incassata, quindi l'ordine non si annulla più
     assert.doesNotMatch(t, /Annulla ordine|att-annulla|\/elimina/);
   } finally {
+    ordiniProva.attivo = false;
+  }
+});
+
+test('ordine in consegna: oltre all\'orario ("Arriva entro le HH:MM") i minuti che mancano ("Mancano N min"), che scendono da soli e spariscono a 3 minuti o meno', async () => {
+  ordiniProva.attivo = true;
+  const ordine = ordiniProva.ordini[74];
+  const prima = { corriere_arrivo_il: ordine.corriere_arrivo_il, corriere_nome: ordine.corriere_nome };
+  try {
+    // senza corriere: l'arrivo è la stima del banco (6 ore dalla nascita, nata 1 ora fa): titolo in ore e sotto quanto manca
+    let t = await (await chiedi('/ordini/74')).text();
+    assert.match(t, /<p class="att-minuti" data-eta-testo="Mancano \{t\}" data-eta-nascondi>Mancano [45] h(?: \d+)?<\/p>/);
+
+    // con il corriere: titolo con l'orario e i minuti sotto, nello stesso blocco che li fa scendere ogni secondo (data-eta-sec)
+    ordine.corriere_nome = 'Marco';
+    ordine.corriere_arrivo_il = new Date(Date.now() + 18 * 60000 + 30000);
+    t = await (await chiedi('/ordini/74')).text();
+    assert.match(t, /<span data-eta-testo="Arriva entro le \d\d:\d\d">Arriva entro le \d\d:\d\d<\/span><\/h2>\s*<p class="att-minuti" data-eta-testo="Mancano \{t\}" data-eta-nascondi>Mancano 19 min<\/p>/);
+    assert.match(t, /att-timer att-verde" data-eta-sec="\d+"/);
+
+    // a 3 minuti o meno il titolo dice solo "In arrivo" e la riga dei minuti non si vede (display: none: il blocco di app.js la tiene nascosta)
+    ordine.corriere_arrivo_il = new Date(Date.now() + 2 * 60000);
+    t = await (await chiedi('/ordini/74')).text();
+    assert.match(t, /<span data-eta-testo="Arriva entro le \d\d:\d\d">In arrivo<\/span>/);
+    assert.match(t, /<p class="att-minuti" data-eta-testo="Mancano \{t\}" data-eta-nascondi style="display: none">Mancano 2 min<\/p>/);
+  } finally {
+    Object.assign(ordine, prima);
     ordiniProva.attivo = false;
   }
 });
@@ -4892,7 +4920,7 @@ test('banco: anagrafica, la posizione è FISSA: nessuna rotta la sposta; l\'inte
   }
 });
 
-test('banco: anagrafica, orari: salva le fasce (o "sempre aperto"), raggruppa i giorni uguali e segnala gli errori giorno per giorno', async () => {
+test('banco: anagrafica, orari: salva le fasce, raggruppa i giorni uguali e segnala gli errori giorno per giorno', async () => {
   cookie = '';
   banco.attivo = true;
   const originale = anagraficaProva.filiale.orari;
@@ -4919,13 +4947,13 @@ test('banco: anagrafica, orari: salva le fasce (o "sempre aperto"), raggruppa i 
     assert.match(t, /<span class="ab-orari-giorni">Sabato<\/span><span class="ab-orari-fasce">07:30 – 12:00<\/span>/);
     assert.match(t, /<span class="ab-orari-giorni">Domenica<\/span><span class="ab-orari-fasce ab-orari-chiuso">Chiuso<\/span>/);
     assert.match(t, /<p class="ab-ok" role="status">Orari salvati\.<\/p>/);
-    // il modulo ha i valori salvati e l'interruttore dei giorni aperti; "sempre aperto" non è spuntato
+    // il modulo ha i valori salvati e l'interruttore dei giorni aperti; niente "sempre aperto" né "Copia su tutti i giorni feriali" (tolti il 21/10/2026)
     t = await (await chiedi('/distributore/anagrafica?modifica=orari')).text();
     assert.match(t, /name="aperto_lun" value="1" data-aperto checked/);
     assert.doesNotMatch(t, /name="aperto_dom" value="1" data-aperto checked/);
     assert.match(t, /name="da2_lun" value="14:00"/);
-    assert.doesNotMatch(t, /data-sempre-aperto checked/);
-    assert.match(t, /data-copia-feriali>Copia su tutti i giorni feriali<\/button>/);
+    assert.doesNotMatch(t, /sempre_aperto|data-sempre-aperto|Nessun orario: sempre aperto/);
+    assert.doesNotMatch(t, /data-copia-feriali|Copia su tutti i giorni feriali/);
 
     // errori: fine prima dell'inizio, ora scritta male, giorno aperto senza fasce: sotto il giorno giusto, nulla viene scritto
     scrittureAnagrafica.length = 0;
@@ -4941,13 +4969,12 @@ test('banco: anagrafica, orari: salva le fasce (o "sempre aperto"), raggruppa i 
     // tutto chiuso: non si salva (il banco non riceverebbe mai niente)
     r = await chiedi('/distributore/anagrafica/orari', form({}));
     assert.equal(r.status, 400);
-    assert.match(await r.text(), /Segna almeno un giorno come aperto, oppure scegli «Sempre aperto»\./);
+    assert.match(await r.text(), /Segna almeno un giorno come aperto\./);
     assert.equal(scrittureAnagrafica.length, 0);
-
-    // "sempre aperto": gli orari tornano NULL
+    // un `sempre_aperto` scritto a mano non rimette gli orari a NULL: si salvano quelli del modulo
     r = await chiedi('/distributore/anagrafica/orari', form({ sempre_aperto: '1', ...modulo }));
     assert.equal(r.status, 302);
-    assert.equal(scrittureAnagrafica[0].p[0], null);
+    assert.notEqual(scrittureAnagrafica[0].p[0], null);
   } finally {
     anagraficaProva.filiale.orari = originale;
     banco.attivo = false;

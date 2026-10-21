@@ -45,8 +45,19 @@
   // dispositivo: Apple Pay e Google Pay si vedono solo in HTTPS e con un dispositivo che li ha configurati.
   // Elenco in verticale (una riga per metodo, si sceglie scorrendo la pagina), non a schede: con le schede Stripe mostra
   // 3 metodi e nasconde gli altri dietro un menu "altro" (un <select> che sul telefono è scomodo e taglia il logo).
+  // Email e telefono NON si chiedono (richiesta esplicita del 21/10/2026): sono già nell'account dell'installatore e il server li mette nella pagina
+  // (data-email / data-telefono). Si nascondono i campi di Stripe e gli stessi valori si passano alla conferma (billing_details): con un campo "never" Stripe
+  // pretende il dato in confirmPayment. Se l'account non ha un dato valido (stringa vuota) quel campo resta com'era, così il pagamento non si blocca.
+  const email = (radice.dataset.email || '').trim();
+  const telefono = (radice.dataset.telefono || '').trim();
+  const datiFatturazione = {};
+  const campiNascosti = {};
+  if (email) { datiFatturazione.email = email; campiNascosti.email = 'never'; }
+  if (telefono) { datiFatturazione.phone = telefono; campiNascosti.phone = 'never'; }
   const pagamento = elements.create('payment', {
     layout: { type: 'accordion', defaultCollapsed: true, radios: true, spacedAccordionItems: true, visibleAccordionItemsCount: 10 },
+    defaultValues: { billingDetails: datiFatturazione },
+    fields: { billingDetails: campiNascosti },
   });
   pagamento.mount('#elemento-pagamento');
   pagamento.on('ready', function () { pulsante.disabled = false; });
@@ -64,7 +75,7 @@
 
     const esito = await stripe.confirmPayment({
       elements: elements,
-      confirmParams: { return_url: radice.dataset.ritorno },
+      confirmParams: { return_url: radice.dataset.ritorno, payment_method_data: { billing_details: datiFatturazione } },
       redirect: 'if_required',
     });
 

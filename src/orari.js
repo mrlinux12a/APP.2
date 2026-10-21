@@ -55,13 +55,12 @@ function leggiOrari(valore) {
   return completi;
 }
 
-// Dal modulo della pagina agli orari. Per ogni giorno: `aperto_<g>` (casella), `da1_<g>`, `a1_<g>`, `da2_<g>`, `a2_<g>`. `sempre_aperto` = nessun
-// orario (NULL). Ritorna { orari, errori: { <giorno>: 'testo' }, errore: 'testo generale' | null, valori }: `valori` rimette nel modulo quello che era
-// stato scritto, anche se sbagliato.
+// Dal modulo della pagina agli orari. Per ogni giorno: `aperto_<g>` (casella), `da1_<g>`, `a1_<g>`, `da2_<g>`, `a2_<g>`. Il modulo non ha più "sempre aperto"
+// (tolto il 21/10/2026): si salva sempre un orario vero, con almeno un giorno aperto. Ritorna { orari, errori: { <giorno>: 'testo' }, errore: 'testo
+// generale' | null, valori }: `valori` rimette nel modulo quello che era stato scritto, anche se sbagliato.
 function orariDaModulo(corpo) {
   const c = corpo && typeof corpo === 'object' ? corpo : {};
   const testo = (v) => (typeof v === 'string' ? v.trim() : '');
-  const sempre = c.sempre_aperto === '1' || c.sempre_aperto === 'on';
   const valori = {};
   const errori = {};
   const orari = {};
@@ -86,10 +85,9 @@ function orariDaModulo(corpo) {
     if (!errore && fasce.length === 2 && minutiDi(fasce[1][0]) < minutiDi(fasce[0][1])) errore = 'La seconda fascia deve cominciare dopo la fine della prima.';
     if (errore) errori[g] = errore; else orari[g] = fasce;
   }
-  if (sempre) return { orari: null, errori: {}, errore: null, valori };
   if (Object.keys(errori).length) return { orari: null, errori, errore: null, valori };
   if (!GIORNI.some((g) => orari[g].length)) {
-    return { orari: null, errori: {}, errore: 'Segna almeno un giorno come aperto, oppure scegli «Sempre aperto».', valori };
+    return { orari: null, errori: {}, errore: 'Segna almeno un giorno come aperto.', valori };
   }
   return { orari, errori: {}, errore: null, valori };
 }

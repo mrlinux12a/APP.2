@@ -1127,7 +1127,7 @@ app.get('/pagamento/:id', requireRole('cliente'), async (req, res) => {
     titolo: 'Pagamento',
     ...pagina,
     ritorno: urlBase(req) + '/pagamento/esito',
-    minutiRisposta: await pricing.getFinestraMinuti(),
+    minutiTesto: await pricing.getFinestraMinutiTesto(), // il numero scritto sotto il pulsante: 10, anche se il timer è accorciato per le prove
     riprova: req.query.riprova === '1',
     // In sandbox la pagina lo dice (carta di prova, nessun addebito): su un sito pubblico lasciato per sbaglio in prova nessuno deve credere di aver pagato.
     modoProva: pagamenti.modoStripe() === 'test',
@@ -1304,7 +1304,7 @@ app.get('/ordini', requireRole('cliente'), async (req, res) => {
     return res.redirect((scelta || voci[0]).href);
   }
   if (voci.length === 1) return res.redirect(voci[0].href);
-  res.render('ordini_cliente', { titolo: 'Stato ordini', minutiRisposta: await pricing.getFinestraMinuti() });
+  res.render('ordini_cliente', { titolo: 'Stato ordini', minutiTesto: await pricing.getFinestraMinutiTesto() });
 });
 
 // Storico unificato (tutto: in corso, scaduto, annullato, consegnato) — raggiungibile dal
@@ -1846,13 +1846,14 @@ app.get('/distributore/richieste/:id', requireRole('distributore'), async (req, 
   }
 
   // Letture indipendenti: partono insieme (col DB su un altro server ogni query in sequenza costa ~50 ms).
-  const [cliente, offerta, distributore, ordine, secondi, minutiRisposta, legameCliente] = await Promise.all([
+  const [cliente, offerta, distributore, ordine, secondi, minutiRisposta, minutiTesto, legameCliente] = await Promise.all([
     db.prepare('SELECT * FROM users WHERE id = ?').get(richiesta.cliente_id),
     richieste.calcolaOfferta(richiesta.id, distributorId),
     db.prepare('SELECT * FROM distributors WHERE id = ?').get(distributorId),
     richiesta.order_id ? db.prepare('SELECT * FROM orders WHERE id = ?').get(richiesta.order_id) : null,
     richieste.secondiRimasti(richiesta),
     pricing.getFinestraMinuti(),
+    pricing.getFinestraMinutiTesto(),
     // La scheda del cliente si apre solo se il cliente ha indicato questo banco (altrimenti la pagina risponde 404).
     anagrafiche.legame(distributorId, richiesta.cliente_id),
   ]);
@@ -1885,6 +1886,7 @@ app.get('/distributore/richieste/:id', requireRole('distributore'), async (req, 
     // Non si chiama `indietro`: l'intestazione del banco (partials/banco_testa), inclusa dalla vista, ne disegnerebbe un'altra freccia.
     paginaPrecedente: daDove || '/distributore',
     minutiRisposta,
+    minutiTesto, // il numero scritto nel testo di "richiesta chiusa" (10); minutiRisposta serve all'anello
     richiesta,
     risposta,
     cliente,
@@ -1970,8 +1972,6 @@ async function paginaAnagraficaBanco(req, res, extra = {}) {
     ok: SALVATI_ANAGRAFICA.includes(req.query.ok) ? req.query.ok : '',
     riassuntoOrari: orari.riassunto(dati.orari),
     moduloOrari: extra.moduloOrari || orari.valoriPerModulo(dati.orari),
-    // Senza orari salvati la casella "sempre aperto" parte spuntata (i giorni mostrano solo una proposta, spenta).
-    sempreAperto: extra.sempreAperto !== undefined ? extra.sempreAperto : !dati.orari,
     // La riga "Email per ogni nuova richiesta" c'è solo quando esiste l'invio vero (email.inviaNuovaRichiesta): oggi manca e la riga resta nascosta.
     emailRichieste: typeof emailModulo.inviaNuovaRichiesta === 'function',
   });
@@ -2012,11 +2012,11 @@ app.post('/distributore/anagrafica/orari', requireRole('distributore'), async (r
   if (letti.errore || Object.keys(letti.errori).length) {
     const dati = await anagraficaBanco.leggi(idBanco, req.session.user.id);
     return paginaAnagraficaBanco(req, res, {
-      dati, stato: 400, aperta: 'orari', moduloOrari: letti.valori, sempreAperto: false,
+      dati, stato: 400, aperta: 'orari', moduloOrari: letti.valori,
       errori: { orari: { ...letti.errori, _generale: letti.errore } },
     });
   }
-  await anagraficaBanco.salvaOrari(idBanco, letti.orari); // null = sempre aperto
+  await anagraficaBanco.salvaOrari(idBanco, letti.orari);
   res.redirect('/distributore/anagrafica?ok=orari#orari');
 });
 

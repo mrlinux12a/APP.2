@@ -20,7 +20,8 @@
   <%
     const durataScheda = v.durata || 600;
     const offsetScheda = (CIRC_SCHEDA * (1 - v.secondi / durataScheda)).toFixed(2);
-    const minutiFinestra = Math.max(1, Math.round(durataScheda / 60));
+    // Il numero scritto è quello della configurazione (10), non la durata dell'anello: col timer accorciato per le prove sarebbe "1 min".
+    const minutiFinestra = v.minutiTesto || Math.max(1, Math.round(durataScheda / 60));
   %>
   <a class="stato-home stato-richiesta" href="<%= v.href %>" data-secondi="<%= v.secondi %>" data-durata="<%= durataScheda %>">
     <div class="stato-riga">

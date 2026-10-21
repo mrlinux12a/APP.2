@@ -557,7 +557,6 @@ const Minuteria = (function () {
       const bottonePos = consegna.querySelector('[data-consegna-pos-usa]');
       if (form && destLat && destLng && posizione && posizioneTesto && bottonePos) {
         let daPosizione = ''; // l'indirizzo ricavato dalla posizione, per accorgersi che è stato cambiato
-        let senzaCivico = false; // quell'indirizzo è solo la via: il numero civico lo aggiunge chi paga (la posizione non basta a sceglierlo)
         const dice = function (testo) {
           posizione.hidden = !testo;
           posizioneTesto.textContent = testo || '';
@@ -666,10 +665,10 @@ const Minuteria = (function () {
                   }
                   campo.value = dati.indirizzo;
                   daPosizione = dati.indirizzo;
-                  senzaCivico = dati.civico === false;
                   destLat.value = String(lat);
                   destLng.value = String(lng);
-                  if (!senzaCivico) {
+                  // Un server che non manda `civico` (non ancora riavviato) vale come "c'è": la scheda si chiude come prima.
+                  if (dati.civico !== false) {
                     dice('');
                     conferma();
                   } else if (dati.precisa === false) {
@@ -698,12 +697,11 @@ const Minuteria = (function () {
 
         // Senza indirizzo non si invia: il campo si apre e dice cosa manca. Il gestore del form sta sul form (prima di quello sul documento) e ferma la propagazione.
         form.addEventListener('submit', function (e) {
-          // Un indirizzo preso dalla posizione senza il numero civico, lasciato com'è, non si paga: il corriere non saprebbe a che casa andare.
-          if (campo.value.trim() && !(senzaCivico && campo.value.trim() === daPosizione)) return;
+          if (campo.value.trim()) return;
           e.preventDefault();
           e.stopPropagation();
           apri();
-          dice(campo.value.trim() ? 'Aggiungi il numero civico all’indirizzo di consegna.' : 'Scrivi l’indirizzo di consegna, oppure tocca il mirino per usare la tua posizione.');
+          dice('Scrivi l’indirizzo di consegna, oppure tocca il mirino per usare la tua posizione.');
         });
       }
     }
@@ -2677,6 +2675,32 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
   });
 }
 
+/* Entrando nell'app le notifiche di sistema già mostrate spariscono dalla tendina del telefono (richiesta esplicita del 21/10/2026): quando la pagina si apre o torna
+   in primo piano (apertura dall'icona, tocco su una notifica, ritorno da un'altra app, tasto "indietro") si chiudono TUTTE quelle del sito, non solo la toccata. Chi
+   è dentro l'app vede già tutto sullo schermo. Vale per ogni ruolo e solo da collegati. Il service worker fa lo stesso al tocco su una notifica (public/sw.js).
+   `getNotifications` c'è su Android, su computer e su iPhone/iPad (web app installata); altrove non si fa niente. */
+(function () {
+  'use strict';
+  if (!('serviceWorker' in navigator) || !document.body || document.body.dataset.loggato !== '1') return;
+  let inCorso = false;
+  function pulisciTendina() {
+    if (inCorso || document.visibilityState !== 'visible') return;
+    inCorso = true;
+    // `ready` da solo non si risolve mai se nessun service worker si registra: dopo 3 secondi si lascia perdere.
+    Promise.race([navigator.serviceWorker.ready, new Promise(function (ok) { setTimeout(function () { ok(null); }, 3000); })])
+      .then(function (registrazione) {
+        if (!registrazione || typeof registrazione.getNotifications !== 'function') return;
+        return registrazione.getNotifications().then(function (aperte) { aperte.forEach(function (notifica) { notifica.close(); }); });
+      })
+      .catch(function () { /* la tendina resta com'è */ })
+      .then(function () { inCorso = false; });
+  }
+  pulisciTendina();
+  document.addEventListener('visibilitychange', pulisciTendina);
+  window.addEventListener('focus', pulisciTendina);
+  window.addEventListener('pageshow', pulisciTendina);
+})();
+
 /* Avvisi del banco (richiesta esplicita del 20/10/2026), su TUTTE le pagine con l'intestazione del banco (partials/banco_testa.ejs, [data-banco-testa]).
    Servono quando nessuno sta guardando la home: lì le tre colonne mostrano già tutto. Tre livelli, più la scheda del browser e il suono:
    1. pallino arancio col numero di richieste da confermare sulla scheda "Banco" (anche sulla home);
@@ -3495,7 +3519,7 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
    ([data-lettura]) e il suo modulo ([data-modulo], nascosto): "Modifica" li scambia, "Annulla" torna alla lettura. Se la pagina è arrivata con una scheda già
    aperta (errori di un salvataggio, o ?modifica=...: [data-aperta]) "Annulla" è il link vero che ricarica la pagina, così spariscono anche errori e valori
    scritti. Senza JavaScript "Modifica" e "Annulla" restano collegamenti normali. Orari: l'interruttore aperto/chiuso di ogni giorno accende o spegne i suoi
-   campi, "sempre aperto" li spegne tutti, "Copia su tutti i giorni feriali" copia il lunedì su martedì-venerdì. */
+   campi. */
 (function () {
   'use strict';
   const pagina = document.querySelector('.pagina-anagrafica-banco');
@@ -3536,17 +3560,14 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
   // ---------- Orari ----------
   const moduloOrari = pagina.querySelector('[data-modulo-orari]');
   if (moduloOrari) {
-    const sempre = moduloOrari.querySelector('[data-sempre-aperto]');
     const giorni = Array.prototype.slice.call(moduloOrari.querySelectorAll('[data-giorno]'));
 
     function campiDelGiorno(giorno) { return Array.prototype.slice.call(giorno.querySelectorAll('[data-fasce] input')); }
     function aggiornaGiorno(giorno) {
       const aperto = giorno.querySelector('[data-aperto]');
       const testo = giorno.querySelector('[data-aperto-testo]');
-      const spento = !!(sempre && sempre.checked);
-      if (aperto) aperto.disabled = spento;
       if (testo) testo.textContent = aperto && aperto.checked ? 'Aperto' : 'Chiuso';
-      const apertoOra = !spento && aperto && aperto.checked;
+      const apertoOra = !!(aperto && aperto.checked);
       campiDelGiorno(giorno).forEach(function (c) { c.disabled = !apertoOra; });
       giorno.classList.toggle('ab-giorno-chiuso', !apertoOra);
     }
@@ -3556,26 +3577,7 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
       const aperto = giorno.querySelector('[data-aperto]');
       if (aperto) aperto.addEventListener('change', function () { aggiornaGiorno(giorno); });
     });
-    if (sempre) sempre.addEventListener('change', aggiornaOrari);
     aggiornaOrari();
-
-    // Il lunedì su martedì-venerdì: stato aperto/chiuso e le quattro ore (i giorni in cui non conta restano com'erano).
-    const copia = moduloOrari.querySelector('[data-copia-feriali]');
-    if (copia) {
-      copia.addEventListener('click', function () {
-        const lunedi = moduloOrari.querySelector('[data-giorno="lun"]');
-        if (!lunedi) return;
-        const daCopiare = Array.prototype.slice.call(lunedi.querySelectorAll('input')).map(function (c) { return c.type === 'checkbox' ? c.checked : c.value; });
-        ['mar', 'mer', 'gio', 'ven'].forEach(function (g) {
-          const giorno = moduloOrari.querySelector('[data-giorno="' + g + '"]');
-          if (!giorno) return;
-          Array.prototype.slice.call(giorno.querySelectorAll('input')).forEach(function (c, i) {
-            if (c.type === 'checkbox') c.checked = daCopiare[i]; else c.value = daCopiare[i];
-          });
-        });
-        aggiornaOrari();
-      });
-    }
   }
 })();
 

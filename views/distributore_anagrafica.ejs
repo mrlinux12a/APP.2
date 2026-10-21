@@ -176,10 +176,6 @@
 
           <form class="ab-modulo" method="POST" action="/distributore/anagrafica/orari" data-modulo data-modulo-orari novalidate<%- aperta === 'orari' ? '' : ' hidden' %>>
             <% if (errori.orari && errori.orari._generale) { %><p class="ab-errore" role="alert"><%= errori.orari._generale %></p><% } %>
-            <label class="ab-sempre">
-              <input type="checkbox" name="sempre_aperto" value="1" data-sempre-aperto<%= sempreAperto ? ' checked' : '' %>>
-              <span>Nessun orario: sempre aperto</span>
-            </label>
             <div class="ab-giorni" data-giorni>
               <% GIORNI.forEach(function (g) {
                    const v = moduloOrari[g];
@@ -209,7 +205,6 @@
                 </div>
               <% }); %>
             </div>
-            <button type="button" class="ab-copia" data-copia-feriali>Copia su tutti i giorni feriali</button>
             <div class="ab-azioni">
               <a class="ab-annulla" href="/distributore/anagrafica#orari" data-annulla>Annulla</a>
               <button class="ab-salva" type="submit">Salva</button>

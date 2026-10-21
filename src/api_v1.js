@@ -299,7 +299,7 @@ router.post('/carrello/riepilogo', richiedeCliente, async (req, res) => {
     minimo: pricing.euro(r.minimo),
     manca_al_minimo: pricing.euro(r.mancaAlMinimo),
     raggiunto: r.raggiunto,
-    minuti_risposta: Math.round(r.minutiRisposta),
+    minuti_risposta: Math.round(r.minutiTesto), // è solo il numero che l'app scrive ("risponde entro 10 minuti")
     // Articoli tolti dal catalogo dopo essere finiti nel carrello: l'app li segnala.
     non_piu_disponibili: ((req.body && req.body.righe) || [])
       .map((v) => parseInt(v && v.id, 10))
@@ -463,7 +463,7 @@ router.get('/richieste/:id', richiedeCliente, async (req, res) => {
     order_id: richiesta.stato === 'ordinata' ? richiesta.order_id : null,
     creato_il: format.dataOraRoma(richiesta.creato_il, ', '),
     secondi: d.secondi,
-    minuti_risposta: Math.round(d.minutiRisposta),
+    minuti_risposta: Math.round(d.minutiTesto), // solo il numero che l'app scrive nel testo
     righe: righeJson(d.righe),
     // Le righe a prezzo del banco (come le mostra il sito) e gli importi divisi: consegna pagata in app / materiale pagato dopo al banco.
     righe_prezzi: d.righePrezzi.map((r) => ({ quantita: r.quantita, nome: r.nome_snapshot, codice: r.codice_snapshot, cad: e2(Number(r.prezzo_netto_unitario) + Number(r.raee_unitario || 0)), totale: e2(Number(r.subtotale) + Number(r.raee_riga || 0)) })),

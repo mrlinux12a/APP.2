@@ -223,6 +223,17 @@ function esitoDaRiga(riga) {
   return { esito: 'annullato' };
 }
 
+// Email e telefono dell'account, nella forma che Stripe accetta come dati di fatturazione; una stringa vuota se manca o non è valida (allora la
+// pagina lascia a Stripe il suo campo, invece di bloccare il pagamento con un dato che Stripe rifiuterebbe).
+function contattiPerStripe(utente) {
+  const email = String((utente && utente.email) || '').trim();
+  const telefono = String((utente && utente.telefono) || '').trim().replace(/[\s().-]/g, '');
+  return {
+    emailCliente: /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? email : '',
+    telefonoCliente: /^\+?\d{6,15}$/.test(telefono) ? telefono : '',
+  };
+}
+
 // Per la pagina /pagamento/<id>: o i dati per disegnare il form ({ esito: 'pagina', ... }) o un altro esito (carta già
 // autorizzata e richiesta già nata, pagamento scaduto...). La riga deve essere del cliente.
 async function preparaPagina(id, clienteId) {
@@ -241,10 +252,13 @@ async function preparaPagina(id, clienteId) {
   if (intento.status === 'canceled' || intento.status === 'succeeded') return { esito: 'annullato' };
 
   const voci = JSON.parse(riga.righe || '[]');
+  // Email e telefono dell'installatore: la pagina non li chiede più (Stripe li mostrerebbe per Link e altri metodi), li passa lei a Stripe da qui.
+  const contatti = await db.prepare('SELECT email, telefono FROM users WHERE id = ?').get(clienteId);
   return {
     esito: 'pagina',
     chiavePubblica: chiavePubblica(),
     clientSecret: intento.client_secret,
+    ...contattiPerStripe(contatti),
     importoCent: riga.importo_cent,
     tipo: riga.tipo,
     requestId: riga.request_id,
@@ -620,6 +634,7 @@ module.exports = {
   avviaPagamento,
   avviaPagamentoReinvio,
   preparaPagina,
+  contattiPerStripe,
   esitoRitorno,
   completaDaIntento,
   leggiEvento,

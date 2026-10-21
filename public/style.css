@@ -2579,6 +2579,9 @@ html.misura-aperta { overflow: hidden; }
 .att-verde .att-punto { background: var(--verde); }
 .att-sotto { margin: 0 0 18px; font-size: 14px; color: var(--grigio); }
 .att-sotto strong { color: var(--testo); }
+/* "Mancano 18 min" sotto il titolo di un ordine in consegna: scende da solo (public/app.js, "Consegna in arrivo"), sparisce a 3 minuti o meno. */
+.att-minuti { margin: 0 0 6px; font-size: 15px; font-weight: 700; line-height: 1.3; color: #1f5f2e; font-variant-numeric: tabular-nums; }
+.att-minuti.att-minuti-solo { margin-bottom: 18px; }
 
 /* "In consegna": la barretta si riempie col tempo trascorso (all'inverso dell'anello) */
 .att-verde .att-corrente .att-barretta { overflow: hidden; background: var(--verde-chiaro); }
@@ -5401,13 +5404,13 @@ html.misura-aperta { overflow: hidden; }
 .ab-spiega { margin: 2px 0 0; color: var(--ab-testo2); font-size: 13.5px; line-height: 1.4; }
 
 /* Pulsanti secondari ("✎ Modifica", "Cambia password", "Annulla"): pillola bianca col bordo #D6D1C6. */
-.ab-modifica, .ab-secondario, .ab-annulla, .ab-copia {
+.ab-modifica, .ab-secondario, .ab-annulla {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex: none; height: 36px; padding: 0 14px;
   border: 1px solid var(--ab-campo); border-radius: 18px; background: var(--surface); color: var(--testo);
   font: inherit; font-size: 14px; font-weight: 600; line-height: 1; text-decoration: none; cursor: pointer; white-space: nowrap;
 }
-.ab-modifica:hover, .ab-secondario:hover, .ab-annulla:hover, .ab-copia:hover { background: var(--sfondo); }
-.ab-modifica:focus-visible, .ab-secondario:focus-visible, .ab-annulla:focus-visible, .ab-copia:focus-visible, .ab-salva:focus-visible,
+.ab-modifica:hover, .ab-secondario:hover, .ab-annulla:hover { background: var(--sfondo); }
+.ab-modifica:focus-visible, .ab-secondario:focus-visible, .ab-annulla:focus-visible, .ab-salva:focus-visible,
 .ab-posizione-link:focus-visible, .ab-switch:focus-visible, .ab-esci:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
 .ab-secondario { margin-top: 14px; }
 .ab-annulla, .ab-salva { height: 40px; padding: 0 20px; border-radius: 20px; font-size: 15px; }
@@ -5468,8 +5471,6 @@ html.misura-aperta { overflow: hidden; }
 .ab-orari-chiuso { color: var(--grigio); }
 
 /* Orari, in modifica: una riga per giorno con l'interruttore aperto/chiuso e fino a due fasce. */
-.ab-sempre { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; font-size: 15px; font-weight: 600; cursor: pointer; }
-.ab-sempre input { width: 18px; height: 18px; margin: 0; accent-color: var(--blu); }
 .ab-giorno { padding: 10px 0; border-top: 1px solid var(--ab-linea); }
 .ab-giorno-riga { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; }
 .ab-giorno-nome { flex: none; width: 104px; font-weight: 600; }
@@ -5484,7 +5485,6 @@ html.misura-aperta { overflow: hidden; }
 }
 .ab-ora:focus { outline: none; border-color: var(--blu); box-shadow: 0 0 0 3px var(--blu-chiaro); }
 .ab-ora:disabled { background: var(--sfondo); }
-.ab-copia { margin-top: 14px; }
 .ab-giorno .ab-errore { margin-top: 4px; }
 
 /* Interruttori: 44x26, verde #297C3C acceso, grigio #D6D1C6 spento. Il bottone (Notifiche) e la casella (giorni degli orari) hanno lo stesso aspetto. */

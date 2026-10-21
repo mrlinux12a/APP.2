@@ -118,6 +118,7 @@ function esegui(sql, params, modo) {
   }
   if (/^SELECT pagamento_stato FROM requests WHERE id = \?/.test(s)) return richiesteDb.get(params[0]) || null;
   if (/^SELECT \* FROM users WHERE id = \?/.test(s)) return { id: params[0], ragione_sociale: 'Rossi Impianti', email: 'info@rossi.it' };
+  if (/^SELECT email, telefono FROM users WHERE id = \?/.test(s)) return { email: 'info@rossi.it', telefono: '+39 333 123 4567' };
   // Le filiali attive con i loro orari (flusso.controllaBancoAperto): una sola, senza orari = sempre aperta.
   if (/^SELECT \* FROM distributors WHERE attivo = 1 ORDER BY nome/.test(s)) return [{ id: 1, nome: 'Borea', filiale: 'Fegino', orari: null }];
 
@@ -320,10 +321,21 @@ test('pagina di pagamento: chiave pubblica, client secret, importo e pezzi; solo
     tipo: 'richiesta',
     requestId: null,
     pezzi: 5,
+    // Email e telefono dell'account: la pagina non li chiede, li passa lei a Stripe (public/pagamento.js)
+    emailCliente: 'info@rossi.it',
+    telefonoCliente: '+393331234567',
   });
   assert.equal((await stripePagamenti.preparaPagina(id, 999)).esito, 'annullato'); // un altro cliente
   assert.equal((await stripePagamenti.preparaPagina(12345, cliente.id)).esito, 'annullato');
   assert.equal(richiesteCreate.length, 0);
+});
+
+test('contatti per Stripe: email e telefono dell\'account, puliti; se mancano o non sono validi restano vuoti (la pagina lascia il campo a Stripe)', () => {
+  const { contattiPerStripe } = stripePagamenti;
+  assert.deepEqual(contattiPerStripe({ email: ' info@rossi.it ', telefono: '(+39) 333-123 4567' }), { emailCliente: 'info@rossi.it', telefonoCliente: '+393331234567' });
+  assert.deepEqual(contattiPerStripe({ email: 'non-una-mail', telefono: 'abc' }), { emailCliente: '', telefonoCliente: '' });
+  assert.deepEqual(contattiPerStripe({ email: '', telefono: '12' }), { emailCliente: '', telefonoCliente: '' });
+  assert.deepEqual(contattiPerStripe(null), { emailCliente: '', telefonoCliente: '' });
 });
 
 test('pagina di pagamento: senza chiave pubblica non si apre; pagamento annullato o in elaborazione', async () => {

@@ -132,14 +132,15 @@ test('orariDaModulo: legge il modulo, controlla le fasce e dice dov\'è l\'error
   assert.equal(r.valori.lun.da2, '25:00');
   assert.equal(r.valori.lun.aperto, true);
 
-  // tutto chiuso: non si salva (il banco non riceverebbe mai niente), salvo "sempre aperto"
+  // tutto chiuso: non si salva (il banco non riceverebbe mai niente); "sempre aperto" non c'è più nel modulo, un `sempre_aperto` scritto a mano non conta
   r = orari.orariDaModulo({});
   assert.equal(r.orari, null);
-  assert.match(r.errore, /almeno un giorno/);
+  assert.equal(r.errore, 'Segna almeno un giorno come aperto.');
   r = orari.orariDaModulo({ sempre_aperto: '1' });
-  assert.deepEqual([r.orari, r.errori, r.errore], [null, {}, null]);
+  assert.equal(r.orari, null);
+  assert.match(r.errore, /almeno un giorno/);
   r = orari.orariDaModulo({ sempre_aperto: '1', aperto_lun: '1', da1_lun: 'xx' });
-  assert.equal(r.errore, null, '"Sempre aperto" vince e non guarda i campi');
+  assert.match(r.errori.lun, /Orari non validi/, 'i campi si controllano sempre');
   // il corpo non è un oggetto: nessun errore del server
   assert.match(orari.orariDaModulo(null).errore, /almeno un giorno/);
   assert.match(orari.orariDaModulo({ da1_lun: ['a'], aperto_lun: '1' }).errori.lun, /prima fascia|non validi/);
