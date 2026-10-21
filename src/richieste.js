@@ -499,6 +499,30 @@ async function chiudiFinestraRisposte(richiesta) {
   return true;
 }
 
+// Rete di sicurezza del tempo mostrato all'installatore (corriere + tragitto): se alla conferma del banco il tragitto non è stato scritto (calcolo fallito,
+// conferma fatta da un server col codice vecchio, posizione che mancava) la riga ha consegna_minuti_stimati a 0 o vuoto e all'installatore resterebbe
+// solo il tempo del corriere. Qui, un istante prima di sommare i minuti del corriere, lo si ricalcola. Non lancia mai: se non riesce, resta com'era.
+async function assicuraTragitto(responseId) {
+  try {
+    const r = await db
+      .prepare(
+        `SELECT rr.consegna_minuti_stimati AS tragitto, rr.distributor_id, rq.cliente_id
+           FROM request_responses rr JOIN requests rq ON rq.id = rr.request_id
+          WHERE rr.id = ? AND rr.esito = 'confermato' AND rr.corriere_stato = 'in_attesa'`
+      )
+      .get(responseId);
+    if (!r || Number(r.tragitto) > 0) return;
+    const stima = await require('./consegna').minutiStimati(r.distributor_id, r.cliente_id, 0);
+    if (!(stima.minuti > 0)) return;
+    await db
+      .prepare(`UPDATE request_responses SET consegna_minuti_stimati = ? WHERE id = ? AND COALESCE(consegna_minuti_stimati, 0) <= 0`)
+      .run(stima.minuti, responseId);
+    console.log(`[tragitto] risposta ${responseId}: il tragitto mancava, ricalcolato al "preso" (${stima.viaggio} min).`);
+  } catch (err) {
+    console.error(`[tragitto] risposta ${responseId}: ricalcolo al "preso" non riuscito (${err.message}).`);
+  }
+}
+
 // Un corriere ha preso la consegna nel gruppo WhatsApp: la risposta del banco diventa valida e
 // l'ordine nasce subito. I `minuti` scritti dal corriere sono il tempo che ci mette ad arrivare DAL BANCO (src/corriere.js): sono quelli che vede il banco
 // (corriere_minuti). All'installatore si dice la somma di quei minuti e del tragitto dal banco a lui, già calcolato quando il banco ha confermato e rimasto
@@ -509,6 +533,7 @@ async function chiudiFinestraRisposte(richiesta) {
 //   { esito: 'gia_preso', nome }    un altro l'aveva già presa
 //   { esito: 'scaduta' }            finestra chiusa, richiesta annullata o messaggio ritirato
 async function corriereHaPreso(responseId, minuti, nome) {
+  await assicuraTragitto(responseId);
   const preso = await db
     .prepare(
       `UPDATE request_responses
@@ -758,7 +783,17 @@ async function rispondi(
   if (esito === 'confermato') {
     // Il tempo di consegna vero è partenza dichiarata + tragitto fino al cliente (calcolato sulla mappa dal banco che ha confermato). Con il corriere la
     // partenza non la dichiara il banco: la scrive il corriere su WhatsApp e corriereHaPreso la somma a questo tragitto, che qui resta da solo.
-    const stima = await consegna.minutiStimati(distributorId, richiesta.cliente_id, attesaCorriere ? 0 : partenza);
+    // Se il calcolo si rompe (DB, rete) la conferma resta valida e il tragitto si riprova quando il corriere risponde (assicuraTragitto).
+    let stima;
+    try {
+      stima = await consegna.minutiStimati(distributorId, richiesta.cliente_id, attesaCorriere ? 0 : partenza);
+    } catch (err) {
+      console.error(`[tragitto] richiesta ${requestId}: calcolo non riuscito (${err.message}), si riprova al "preso" del corriere.`);
+      stima = { minuti: attesaCorriere ? 0 : Math.max(0, Math.round((parseFloat(partenza) || 0) * 60)) };
+    }
+    if (stima.viaggio !== undefined && stima.viaggio !== null) {
+      console.log(`[tragitto] richiesta ${requestId}: ${stima.viaggio} min${stima.km !== null && stima.km !== undefined ? ', ' + stima.km + ' km' : ''} (${stima.servizio || stima.fonte})`);
+    }
     await db.prepare('UPDATE request_responses SET consegna_minuti_stimati = ? WHERE id = ?').run(
       stima.minuti,
       risposta.id

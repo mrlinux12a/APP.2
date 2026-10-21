@@ -39,29 +39,61 @@ async function getFinestraMinuti() {
   return getConfigNum('finestra_conferma_min', 10);
 }
 
-// SOLO PER PROVARE (richiesta esplicita del 21/10/2026): `PAGAMENTO_APP_PROVA=0.01` nel .env di UN computer fa valere quella cifra come importo che
-// l'installatore paga ORA in app (`app.totale`, cioè `da_pagare_app`: carrello, addebito, ordine, Storico). La formula di dividiTotale non cambia e le
-// sue voci (corriere, servizio, IVA) restano com'erano; cambia solo il totale addebitato. Il materiale da pagare dopo a BOREA non si tocca.
-// Sulla VPS non vale mai: con Stripe in modo reale o NODE_ENV=production la riga è ignorata (e il log lo dice). Per toglierla: via la riga e riavvio.
-// Con Stripe vero (non il pagamento simulato del PC) Stripe rifiuta importi sotto i 0,50 €.
-let avvisoProvaIgnorata = false;
+// IMPORTO DI PROVA — TEMPORANEO (richieste esplicite del 21/10/2026). `PAGAMENTO_APP_PROVA=0.50` nel .env di UN server fa valere quella cifra come importo
+// che l'installatore paga ORA in app (`app.totale`, cioè `da_pagare_app`: carrello, addebito Stripe, ordine, Storico). La formula di dividiTotale non cambia e
+// le sue voci (corriere, servizio, IVA) restano com'erano; cambia solo il totale addebitato, e mai in più della formula (`Math.min`). Il materiale da pagare
+// dopo a BOREA non si tocca. Da rimuovere quando le prove sono finite: vedi docs/PROMPT_RIPRISTINO_PAGAMENTO_PROVA.md.
+//
+// Con Stripe in modo di PROVA o col pagamento simulato basta quella riga. Con Stripe REALE (`STRIPE_MODO=live`, chiave sk_live_) o `NODE_ENV=production`
+// — cioè con soldi veri e clienti veri sullo stesso server — la riga da sola è IGNORATA: serve una seconda, `PAGAMENTO_APP_PROVA_LIVE=AAAA-MM-GG`, la data
+// (ora di Roma, compresa) fino a cui vale. Passata quella data, o se la data manca, è scritta male o è più lontana di 7 giorni, l'importo torna quello della
+// formula da solo anche se le righe restano nel .env: una dimenticanza non lascia il prezzo basso aperto. In quel caso la cifra non scende mai sotto i
+// 0,50 € (il minimo di Stripe, che sotto rifiuta l'addebito) e all'avvio il log scrive ATTENZIONE, con la data di scadenza.
+const MINIMO_STRIPE = 0.5;
+const GIORNI_MASSIMI_LIVE = 7;
+const avvisiProva = new Set(); // ogni avviso si scrive una volta sola
+function avvisaProva(chiave, testo, livello = 'warn') {
+  if (avvisiProva.has(chiave)) return;
+  avvisiProva.add(chiave);
+  console[livello](testo);
+}
+const giornoRoma = (data = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(data);
 function importoProvaApp() {
   const grezzo = String(process.env.PAGAMENTO_APP_PROVA || '').trim().replace(',', '.');
   if (!grezzo) return null;
-  const importo = Number(grezzo);
+  let importo = Number(grezzo);
   if (!Number.isFinite(importo) || importo <= 0) return null;
   if (stripeConfig.modo() === 'live' || process.env.NODE_ENV === 'production') {
-    if (!avvisoProvaIgnorata) {
-      avvisoProvaIgnorata = true;
-      console.warn('[config] PAGAMENTO_APP_PROVA ignorata: con Stripe in modo reale o NODE_ENV=production l’importo si calcola sempre con la formula.');
+    const fino = String(process.env.PAGAMENTO_APP_PROVA_LIVE || '').trim();
+    const oggi = giornoRoma();
+    const valida = /^\d{4}-\d{2}-\d{2}$/.test(fino) && !Number.isNaN(Date.parse(fino + 'T00:00:00Z'));
+    const lontana = valida && Date.parse(fino + 'T00:00:00Z') - Date.parse(oggi + 'T00:00:00Z') > GIORNI_MASSIMI_LIVE * 86400000;
+    if (!valida || lontana || fino < oggi) {
+      avvisaProva(
+        'ignorata:' + fino,
+        !fino
+          ? '[config] PAGAMENTO_APP_PROVA ignorata: con Stripe in modo reale o NODE_ENV=production serve anche PAGAMENTO_APP_PROVA_LIVE=AAAA-MM-GG (la data fino a cui vale, al massimo ' + GIORNI_MASSIMI_LIVE + ' giorni). L’importo si calcola con la formula.'
+          : !valida
+            ? '[config] PAGAMENTO_APP_PROVA ignorata: PAGAMENTO_APP_PROVA_LIVE="' + fino + '" non è una data AAAA-MM-GG. L’importo si calcola con la formula.'
+            : lontana
+              ? '[config] PAGAMENTO_APP_PROVA ignorata: PAGAMENTO_APP_PROVA_LIVE=' + fino + ' è più lontana di ' + GIORNI_MASSIMI_LIVE + ' giorni. L’importo si calcola con la formula.'
+              : '[config] PAGAMENTO_APP_PROVA scaduta il ' + fino + ': l’importo si calcola con la formula. Togli le righe PAGAMENTO_APP_PROVA e PAGAMENTO_APP_PROVA_LIVE dal .env.'
+      );
+      return null;
     }
-    return null;
+    importo = Math.max(importo, MINIMO_STRIPE);
+    avvisaProva(
+      'live:' + fino + ':' + importo,
+      `[config] ATTENZIONE: PAGAMENTO_APP_PROVA=${importo.toFixed(2)} con Stripe REALE / produzione, fino al ${fino} compreso: l'installatore paga ${importo.toFixed(2)} € invece della formula, con soldi veri. Togli PAGAMENTO_APP_PROVA e PAGAMENTO_APP_PROVA_LIVE dal .env appena finite le prove.`
+    );
   }
   return Math.round(importo * 100) / 100;
 }
 {
   const prova = importoProvaApp();
-  if (prova !== null) console.log(`[config] PAGAMENTO_APP_PROVA=${prova}: l'installatore paga ORA ${prova} € in app (la formula resta, il materiale al banco non cambia).`);
+  if (prova !== null && stripeConfig.modo() !== 'live' && process.env.NODE_ENV !== 'production') {
+    console.log(`[config] PAGAMENTO_APP_PROVA=${prova}: l'installatore paga ORA ${prova} € in app (la formula resta, il materiale al banco non cambia).`);
+  }
 }
 
 // Ordine minimo, calcolato sui prezzi già maggiorati del servizio e IVA esclusa.
@@ -166,7 +198,7 @@ async function calcolaOrdine(righeCarrello, { costoConsegna = 0 } = {}) {
 
   const { servizio, app, banco } = dividiTotale({ netto: totale_netto, raee: contributo_raee, consegna: costo_consegna, servizioPct, ivaPct });
   const prova = importoProvaApp();
-  if (prova !== null) app.totale = prova; // solo prove sul PC, vedi importoProvaApp
+  if (prova !== null) app.totale = Math.min(prova, app.totale); // solo prove, temporaneo, mai più della formula: vedi importoProvaApp
 
   return {
     righe,

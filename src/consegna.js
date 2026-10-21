@@ -5,9 +5,10 @@ const sede = require('./sede_installatori');
 
 // Quanto ci mette la merce ad arrivare dal banco all'installatore.
 //
-// Il tragitto vero (banco che ha accettato -> posizione dell'installatore) lo calcola un servizio di mappe (src/percorso.js). Se non risponde, o se
-// manca una delle due posizioni, si ripiega sulla stima di sempre: distanza in linea d'aria corretta di un fattore che tiene conto delle strade reali,
-// divisa per una velocità media urbana (config `velocita_media_kmh`).
+// Il tragitto vero (banco che ha accettato -> posizione dell'installatore) lo calcola un servizio di mappe (src/percorso.js: Google Maps col traffico se c'è la
+// chiave, altrimenti Valhalla). Se nessuno risponde si ripiega sulla stima: distanza in linea d'aria corretta di un fattore che tiene conto delle strade reali,
+// divisa per una velocità media urbana (config `velocita_media_kmh`); ogni ripiego si scrive nel log. Se manca una delle due posizioni non c'è niente da
+// calcolare e resta il solo tempo del corriere (anche questo si scrive nel log).
 //
 // Non è il tempo che vede il banco: quello è solo il tempo scritto dal corriere su WhatsApp (src/corriere.js). All'installatore si mostra la somma dei due.
 
@@ -58,11 +59,13 @@ async function minutiStimati(distributorId, clienteId, partenzaOre) {
 
   const km = geo.distanzaKm(posizione, partenza);
   if (km === null) {
-    // Senza posizioni note resta solo il tempo dichiarato dal banco.
+    // Senza posizioni note resta solo il tempo dichiarato dal banco. Non deve succedere (Borea ha la sua posizione nel DB e l'installatore ripiega sulla sede
+    // provvisoria): se succede si vede nel log invece di mostrare in silenzio un tempo troppo corto.
+    console.warn(`[tragitto] banco ${distributorId}, cliente ${clienteId}: manca una posizione (${partenza ? 'installatore' : 'banco'}): il tragitto non si può calcolare.`);
     return { minuti: partenzaMinuti, km: null, viaggio: null, stimato: false };
   }
 
-  // Il tragitto sulle strade vere. Non lancia mai: se il servizio non risponde si ripiega sulla stima qui sotto.
+  // Il tragitto sulle strade vere. Non lancia mai: se nessun servizio risponde si ripiega sulla stima qui sotto.
   const dallaMappa = await percorso.minutiInAuto(partenza, posizione);
   if (dallaMappa) {
     return {
@@ -71,10 +74,12 @@ async function minutiStimati(distributorId, clienteId, partenzaOre) {
       viaggio: dallaMappa.minuti,
       stimato: true,
       fonte: 'mappa',
+      servizio: dallaMappa.servizio || '',
       partenzaDa: partenza.nome || '',
     };
   }
 
+  if (percorso.attivo()) console.warn(`[tragitto] banco ${distributorId}, cliente ${clienteId}: nessun servizio di mappe ha risposto, uso la stima in linea d'aria.`);
   const kmStrada = km * FATTORE_STRADA;
   const v = await velocitaMedia();
   const viaggio = Math.max(5, Math.round((kmStrada / v) * 60));

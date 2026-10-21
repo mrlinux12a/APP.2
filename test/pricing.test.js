@@ -20,7 +20,7 @@ const percorsoDb = require.resolve(path.join(__dirname, '..', 'db', 'index.js'))
 require.cache[percorsoDb] = { id: percorsoDb, filename: percorsoDb, loaded: true, exports: dbFinto };
 
 // Le prove non dipendono dal .env del PC: l'importo di prova (PAGAMENTO_APP_PROVA) e il modo di Stripe partono da zero.
-for (const nome of ['PAGAMENTO_APP_PROVA', 'STRIPE_MODO', 'STRIPE_SECRET_KEY', 'NODE_ENV']) delete process.env[nome];
+for (const nome of ['PAGAMENTO_APP_PROVA', 'PAGAMENTO_APP_PROVA_LIVE', 'STRIPE_MODO', 'STRIPE_SECRET_KEY', 'NODE_ENV']) delete process.env[nome];
 const pricing = require('../src/pricing');
 const arrotonda = pricing.round2;
 // La cache della configurazione (60 s) tiene i valori: per provare un'altra percentuale si sostituiscono le due letture.
@@ -235,4 +235,61 @@ test('PAGAMENTO_APP_PROVA: l\'installatore paga ORA solo la cifra di prova, la f
     delete process.env.STRIPE_SECRET_KEY;
   }
   assert.equal((await pricing.calcolaOrdine(carrello(), { costoConsegna: 10 })).da_pagare_app, 20.07, 'spenta: di nuovo la formula');
+});
+
+test('PAGAMENTO_APP_PROVA con Stripe REALE o produzione: serve PAGAMENTO_APP_PROVA_LIVE (data), scade da sola, mai sotto 0,50 e mai sopra la formula', async () => {
+  const carrello = () => [riga(prodotto(1, 54.5), 1), riga(prodotto(2, 10), 1)]; // formula: 20,07 in app, 78,69 al banco
+  const da = async () => pricing.calcolaOrdine(carrello(), { costoConsegna: 10 });
+  const giornoRoma = (piu = 0) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(Date.now() + piu * 86400000));
+  const messaggi = [];
+  const originali = { warn: console.warn, log: console.log };
+  console.warn = (m) => messaggi.push(String(m));
+  console.log = (m) => messaggi.push(String(m));
+  const imposta = (prova, live) => {
+    process.env.STRIPE_SECRET_KEY = 'sk_live_x';
+    process.env.PAGAMENTO_APP_PROVA = prova;
+    if (live === undefined) delete process.env.PAGAMENTO_APP_PROVA_LIVE; else process.env.PAGAMENTO_APP_PROVA_LIVE = live;
+  };
+  try {
+    // 1. la sola riga NON basta: formula intera
+    imposta('0.50');
+    assert.equal((await da()).da_pagare_app, 20.07);
+    // 2. con la data valida (oggi compreso, fino a 7 giorni) vale 0,50, la formula e il materiale al banco restano, la spesa complessiva segue
+    for (const piu of [0, 1, 7]) {
+      imposta('0.50', giornoRoma(piu));
+      const t = await da();
+      assert.equal(t.da_pagare_app, 0.5, 'tra ' + piu + ' giorni');
+      assert.equal(t.app.totale, 0.5);
+      assert.deepEqual([t.app.corriere, t.app.servizio, t.app.imponibile, t.app.iva], [10, 6.45, 16.45, 3.62], 'la formula non cambia');
+      assert.equal(t.materiale_banco, 78.69);
+      assert.equal(t.totale_ivato, 79.19);
+    }
+    assert.match(messaggi.join('\n'), new RegExp('ATTENZIONE: PAGAMENTO_APP_PROVA=0\.50 con Stripe REALE / produzione, fino al ' + giornoRoma(0)));
+    // 3. scaduta, troppo lontana, scritta male, vuota: formula intera, anche se le righe restano nel .env
+    for (const live of [giornoRoma(-1), giornoRoma(8), giornoRoma(365), 'domani', '2026-13-45', '22/10/2026', '1', '']) {
+      imposta('0.50', live);
+      assert.equal((await da()).da_pagare_app, 20.07, JSON.stringify(live));
+    }
+    assert.match(messaggi.join('\n'), /PAGAMENTO_APP_PROVA scaduta il /);
+    assert.match(messaggi.join('\n'), /più lontana di 7 giorni/);
+    assert.match(messaggi.join('\n'), /non è una data AAAA-MM-GG/);
+    // 4. sotto i 0,50 con Stripe reale si porta al minimo di Stripe; sopra la formula non si sale mai
+    imposta('0.01', giornoRoma(1));
+    assert.equal((await da()).da_pagare_app, 0.5, 'Stripe rifiuta sotto 0,50: si arrotonda al minimo');
+    imposta('999', giornoRoma(1));
+    assert.equal((await da()).da_pagare_app, 20.07, 'mai più della formula');
+    // 5. NODE_ENV=production vale come Stripe reale (anche con la chiave di prova)
+    delete process.env.STRIPE_SECRET_KEY;
+    process.env.NODE_ENV = 'production';
+    process.env.PAGAMENTO_APP_PROVA = '0.50';
+    delete process.env.PAGAMENTO_APP_PROVA_LIVE;
+    assert.equal((await da()).da_pagare_app, 20.07, 'production senza data');
+    process.env.PAGAMENTO_APP_PROVA_LIVE = giornoRoma(2);
+    assert.equal((await da()).da_pagare_app, 0.5, 'production con la data');
+  } finally {
+    console.warn = originali.warn;
+    console.log = originali.log;
+    for (const n of ['PAGAMENTO_APP_PROVA', 'PAGAMENTO_APP_PROVA_LIVE', 'STRIPE_SECRET_KEY', 'NODE_ENV']) delete process.env[n];
+  }
+  assert.equal((await da()).da_pagare_app, 20.07, 'tolte le righe: la formula');
 });

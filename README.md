@@ -510,9 +510,11 @@ prelievo merci), per esempio `preso 30` (anche `preso 1 ora e 15`, `preso 1h30`,
 **Due orari, ognuno per chi deve vederlo:** il **banco** vede esattamente il tempo scritto dal corriere ("Il corriere ritira alle HH:MM" =
 momento della risposta + quei minuti: `orders.corriere_risposto_il` + `orders.corriere_minuti`, vedi `src/corriere.js`); l'**installatore** vede
 quando arriva la merce da lui = quei minuti **+ il tragitto dal banco che ha accettato alla sua posizione**, che il server calcola sulla mappa
-quando il banco conferma (`src/percorso.js`: OSRM su OpenStreetMap, senza chiave; `ROUTING_URL` per un server proprio, `ROUTING_ATTIVO=0` per
-spegnerlo; se non risponde si ripiega sulla stima in linea d'aria) e sta in `orders.corriere_arrivo_il`.
-Il server pubblico di OSRM è di prova: con molte richieste conviene un OSRM proprio o un servizio a pagamento con lo stesso formato.
+quando il banco conferma (`src/percorso.js`) e sta in `orders.corriere_arrivo_il`. Il tragitto viene, in quest'ordine, da **Google Maps** (col traffico del momento: è il
+numero che si vede su Maps) se nel `.env` c'è `GOOGLE_MAPS_API_KEY`; da un OSRM proprio se c'è `ROUTING_URL`; da **Valhalla** (OpenStreetMap, senza chiave; `VALHALLA_URL`
+per uno proprio); se nessuno risponde, dalla stima in linea d'aria. `ROUTING_ATTIVO=0` spegne tutto. Il server pubblico di OSRM non si usa più: in città dava tempi
+un terzo più brevi di Maps. **Per avere esattamente il tempo di Maps serve la chiave Google** (Google Cloud → abilitare "Routes API" → chiave API, limitata alla Routes API
+e all'IP della VPS → `GOOGLE_MAPS_API_KEY` nel `.env` della VPS e riavvio di pm2). Per confrontare i numeri: `node scripts/prova_tragitto.js "Via Dodecaneso, Genova" --corriere 10`.
 
 - **Finché nessuno risponde** l'installatore non sa niente: la richiesta resta "in attesa" con il
   timer che scorre, come se nessun banco avesse accettato (`request_responses.corriere_stato =
@@ -651,7 +653,7 @@ src/stripe_pagamenti.js  Stripe: PaymentIntent, pagina di pagamento, webhook, in
 src/whatsapp.js        gruppo WhatsApp dei corrieri (Baileys): messaggi, "preso", coda
 src/anagrafiche.js     registrazione cliente, approvazione banco, sconti per ambito
 src/consegna.js        tragitto dal banco all'installatore (mappa, con ripiego sulla stima in linea d'aria)
-src/percorso.js        tempo di guida fra due punti da un servizio di mappe (OSRM / OpenStreetMap)
+src/percorso.js        tempo di guida fra due punti da un servizio di mappe (Google Maps se c'è la chiave, poi OSRM proprio, poi Valhalla)
 src/corriere.js        orari del corriere: il ritiro che vede il banco (risposta su WhatsApp + minuti scritti)
 src/geo.js             lettura della posizione e distanze
 src/notifiche.js       notifiche in-app
