@@ -1122,9 +1122,9 @@ test('profilo: scheda "Sul telefono" con installazione (sempre disponibile, senz
   assert.match(t, /<section class="installa installa-profilo" data-installa data-installa-sempre hidden/);
   assert.doesNotMatch(t.slice(t.indexOf('Sul telefono')), /data-installa-chiudi/, 'nel profilo non scompare mai');
   assert.match(t, /data-notifiche-stato>Ricevi un avviso quando un banco risponde alla tua richiesta\.<\/div>/);
-  assert.match(t, /<button type="button" class="installa-btn" data-abilita-notifiche>Attiva<\/button>/);
-  // "Prova": la notifica di prova dal server, nascosta finché le notifiche ad app chiusa non sono attive
-  assert.match(t, /<button type="button" class="installa-btn" data-prova-notifica hidden>Prova<\/button>/);
+  // un interruttore on/off, niente "Prova" né notifica di prova
+  assert.match(t, /<button type="button" class="ab-switch" role="switch" aria-checked="false" aria-label="Avvisi sul telefono" data-abilita-notifiche>/);
+  assert.doesNotMatch(t, /data-prova-notifica/);
 });
 
 test('menu del profilo (cliente): niente voce "Notifiche"', async () => {

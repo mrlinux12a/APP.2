@@ -5575,6 +5575,7 @@ html.misura-aperta { overflow: hidden; }
 .an-telefono .an-riga { align-items: center; gap: 12px; }
 .an-telefono .an-testi { flex: 1; min-width: 0; }
 .an-notifiche .an-dettaglio { line-height: 1.4; }
+.an-notifiche { --ab-campo: #d6d1c6; } /* l'interruttore .ab-switch del banco, riusato qui */
 
 /* ---------- Password dimenticata, cambio password e eliminazione dell'account (installatore, 20/10/2026) ---------- */
 
