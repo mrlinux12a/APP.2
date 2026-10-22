@@ -670,11 +670,16 @@ const macroCategorie = conCache(60 * 1000, async function macroCategorie() {
 
 // Le due liste della home con una sola lettura: le categorie che in cantiere si cercano più spesso (in
 // cima) e le altre con almeno un prodotto. Il conteggio dei prodotti è la query più lenta della home.
+// "Riscaldamento e Caldaie" sta SEMPRE per ultima fra le categorie (richiesta esplicita del 22/10/2026), qualunque sia la sua priorità nel DB: sito e app mostrano
+// `inEvidenza` poi `altre`, quindi la si toglie da dov'è e la si mette in fondo ad `altre`. "Elementi con foto" non è una categoria e resta l'ultima tessera della home.
+const CATEGORIA_IN_FONDO = 'riscaldamento-e-caldaie';
+
 async function categorieHome() {
   const cats = await macroCategorie();
+  const inFondo = cats.filter((m) => m.slug === CATEGORIA_IN_FONDO && (m.in_evidenza === 1 || m.n_prodotti > 0));
   return {
-    inEvidenza: cats.filter((m) => m.in_evidenza === 1),
-    altre: cats.filter((m) => m.in_evidenza !== 1 && m.n_prodotti > 0),
+    inEvidenza: cats.filter((m) => m.in_evidenza === 1 && m.slug !== CATEGORIA_IN_FONDO),
+    altre: cats.filter((m) => m.in_evidenza !== 1 && m.n_prodotti > 0 && m.slug !== CATEGORIA_IN_FONDO).concat(inFondo),
   };
 }
 

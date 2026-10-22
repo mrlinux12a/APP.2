@@ -23,6 +23,11 @@ const percorsoDb = require.resolve(path.join(__dirname, '..', 'db', 'index.js'))
 require.cache[percorsoDb] = { id: percorsoDb, filename: percorsoDb, loaded: true, exports: dbFinto };
 
 const catalogo = require('../src/catalogo');
+// macroCategorie & co. sono in cache 60 s (src/memo.js): fra una prova e l'altra si sposta avanti l'orologio, così si rilegge il DB finto.
+const orologioVero = Date.now.bind(Date);
+let spostamentoMs = 0;
+Date.now = () => orologioVero() + spostamentoMs;
+const salta = () => { spostamentoMs += 61000; };
 const icone = require('../src/icone');
 
 const SLUG = [
@@ -61,8 +66,9 @@ test('macroCategorie / categorieHome / macroCategoria portano `immagine` (url o 
     { slug: 'riscaldamento-e-caldaie', nome: 'Riscaldamento e Caldaie', in_evidenza: 1, n_prodotti: 9 },
   ];
   const { inEvidenza } = await catalogo.categorieHome();
-  assert.equal(inEvidenza.find((m) => m.slug === 'bagno-e-sanitari').immagine, '/img/categorie/bagno-e-sanitari.svg');
-  assert.equal(inEvidenza.find((m) => m.slug === 'riscaldamento-e-caldaie').immagine, null);
+  const tutte = inEvidenza.concat((await catalogo.categorieHome()).altre);
+  assert.equal(tutte.find((m) => m.slug === 'bagno-e-sanitari').immagine, '/img/categorie/bagno-e-sanitari.svg');
+  assert.equal(tutte.find((m) => m.slug === 'riscaldamento-e-caldaie').immagine, null);
   assert.equal((await catalogo.macroCategoria('bagno-e-sanitari')).immagine, '/img/categorie/bagno-e-sanitari.svg');
   assert.equal((await catalogo.macroCategoria('riscaldamento-e-caldaie')).immagine, null);
   assert.equal(await catalogo.macroCategoria('non-esiste'), null);
@@ -133,4 +139,56 @@ test('stile: tessere uniformi su bianco (niente sfondo azzurro), immagine 72×60
   assert.match(css, /\.cat \{[^}]*min-height: 138px/);
   // il tema scuro non c'è (tolto il 02/10/2026): niente regole da aggiungere
   assert.doesNotMatch(css, /data-tema/);
+});
+
+test('"Riscaldamento e Caldaie" sta per ultima fra le categorie (inEvidenza poi altre), qualunque sia la priorità; le altre restano in ordine', async () => {
+  salta();
+  categorieDb = [
+    { slug: 'riscaldamento-e-caldaie', nome: 'Riscaldamento e Caldaie', in_evidenza: 1, n_prodotti: 9 },
+    { slug: 'bagno-e-sanitari', nome: 'Bagno e Sanitari', in_evidenza: 1, n_prodotti: 5 },
+    { slug: 'trattamento-acqua', nome: 'Trattamento Acqua', in_evidenza: 0, n_prodotti: 3 },
+    { slug: 'vuota', nome: 'Vuota', in_evidenza: 0, n_prodotti: 0 },
+  ];
+  const { inEvidenza, altre } = await catalogo.categorieHome();
+  const tutte = inEvidenza.concat(altre).map((m) => m.slug);
+  assert.deepEqual(tutte, ['bagno-e-sanitari', 'trattamento-acqua', 'riscaldamento-e-caldaie'], 'ultima; una categoria vuota non c\'è');
+  // anche se è fra le "altre"
+  salta();
+  categorieDb = [
+    { slug: 'riscaldamento-e-caldaie', nome: 'Riscaldamento e Caldaie', in_evidenza: 0, n_prodotti: 9 },
+    { slug: 'trattamento-acqua', nome: 'Trattamento Acqua', in_evidenza: 0, n_prodotti: 3 },
+  ];
+  const b = await catalogo.categorieHome();
+  assert.deepEqual(b.inEvidenza.concat(b.altre).map((m) => m.slug), ['trattamento-acqua', 'riscaldamento-e-caldaie']);
+  // senza prodotti e non in evidenza: non si mostra
+  salta();
+  categorieDb = [{ slug: 'riscaldamento-e-caldaie', nome: 'Riscaldamento e Caldaie', in_evidenza: 0, n_prodotti: 0 }];
+  const c = await catalogo.categorieHome();
+  assert.deepEqual(c.inEvidenza.concat(c.altre), []);
+});
+
+test('foto delle sottocategorie di "Raccorderia e Valvole": 7 webp 4:3 con i nomi giusti, e fotoSottocategoria li trova (anche "varie" = <macro>-varie)', async () => {
+  const cartella = path.join(__dirname, '..', 'public', 'img', 'sottocategorie');
+  const attese = ['valvole-a-sfera', 'valvole-industriali-motorizzate', 'rubinetti-e-valvole-varie', 'raccordi-ottone-bronzo', 'raccordi-a-saldare', 'raccordi-a-pressare', 'raccorderia-e-valvole-varie'];
+  for (const s of attese) {
+    const d = fs.readFileSync(path.join(cartella, s + '.webp'));
+    assert.equal(d.toString('ascii', 0, 4), 'RIFF', s);
+    assert.equal(d.toString('ascii', 8, 12), 'WEBP', s);
+    assert.ok(d.length < 60000, s + ': pochi KB');
+  }
+  // sottocategorieDi: la foto c'è se il file c'è
+  const dbConSotto = dbFinto.prepare;
+  dbFinto.prepare = (sql) => {
+    if (/FROM sottocategorie s/.test(sql)) {
+      const righe = async () => [{ slug: 'valvole-a-sfera', nome: 'Valvole', n: 3, macro_slug: 'raccorderia-e-valvole' }, { slug: 'varie', nome: 'Varie', n: 1, macro_slug: 'raccorderia-e-valvole' }, { slug: 'senza-file', nome: 'Altro', n: 2, macro_slug: 'raccorderia-e-valvole' }];
+      return { all: righe, get: async () => (await righe())[0] };
+    }
+    return dbConSotto(sql);
+  };
+  try {
+    const sotto = await catalogo.sottocategorieDi('raccorderia-e-valvole');
+    assert.deepEqual(sotto.map((s) => s.foto), ['/img/sottocategorie/valvole-a-sfera.webp', '/img/sottocategorie/raccorderia-e-valvole-varie.webp', null]);
+  } finally {
+    dbFinto.prepare = dbConSotto;
+  }
 });

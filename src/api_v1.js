@@ -260,7 +260,8 @@ router.get('/categorie/:slug', richiedeCliente, async (req, res) => {
   const sottocategorie = await catalogo.sottocategorieDi(macro.slug);
   res.json({
     macro: { slug: macro.slug, nome: macro.nome, descrizione: macro.descrizione, immagine: urlAssoluto(req, macro.immagine) },
-    sottocategorie: sottocategorie.map((s) => ({ slug: s.slug, nome: s.nome, n: Number(s.n) || 0 })),
+    // `foto`: indirizzo assoluto della foto della sottocategoria (public/img/sottocategorie/<slug>.webp, 4:3) o null: allora l'app ripiega sul fondo con l'icona della categoria, come il sito.
+    sottocategorie: sottocategorie.map((s) => ({ slug: s.slug, nome: s.nome, n: Number(s.n) || 0, foto: urlAssoluto(req, s.foto) })),
   });
 });
 
