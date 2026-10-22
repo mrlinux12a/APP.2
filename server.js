@@ -276,7 +276,7 @@ app.get('/api/eventi', (req, res) => {
   });
   res.flushHeaders();
   res.write('retry: 5000\n\n');
-  const togli = eventi.iscrivi(utente.id, res);
+  const togli = eventi.iscrivi(utente.id, res, utente.ruolo);
   const cuore = setInterval(() => {
     try { res.write(': \n\n'); } catch (e) { /* chiusa: la toglie 'close' */ }
   }, 25000);
@@ -1008,6 +1008,8 @@ app.get('/carrello', requireRole('cliente'), async (req, res) => {
     fraseBancoChiuso: orari.frasePerCarrello(statoBanco),
     testiChiuso: orari.testiChiuso(statoBanco, banco.nome),
     avvisoChiusura: orari.avvisoChiusura(statoBanco),
+    // Fra quanti secondi lo stato cambia da solo (chiude/riapre): la pagina si rilegge a quell'ora, e quando il banco cambia gli orari (evento 'orari') o la scheda torna visibile.
+    cambiaSec: orari.secondiAlCambio(statoBanco),
     ...riepilogo,
     cliente,
     // Solo a carrello vuoto: la scheda "Il tuo ultimo ordine" con "Rimetti nel carrello" (una lettura sola).

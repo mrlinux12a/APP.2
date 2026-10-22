@@ -156,6 +156,23 @@ test('inChiusura / avvisoChiusura: solo negli ultimi minuti (soglia IN_CHIUSURA_
   assert.equal(orari.avvisoChiusura(stato(10, 0)), null);
 });
 
+test('secondiAlCambio: fra quanti secondi lo stato cambia da solo (chiude se aperto, riapre se chiuso)', () => {
+  // aperto: alla chiusura (16:51:00 -> 17:00 = 540 s)
+  assert.equal(orari.secondiAlCambio(orari.statoOrari(S17, a(MAR, 16, 51)), a(MAR, 16, 51)), 540);
+  // chiuso: alla riapertura (martedì 17:00 -> mercoledì 07:30 = 870 minuti)
+  assert.equal(orari.secondiAlCambio(orari.statoOrari(S17, a(MAR, 17, 0)), a(MAR, 17, 0)), 870 * 60);
+  // con i secondi dentro il minuto: alle 17:00:20 mancano 20 secondi in meno
+  const venti = new Date(a(MAR, 17, 0).getTime() + 20000);
+  assert.equal(orari.secondiAlCambio(orari.statoOrari(S17, venti), venti), 870 * 60 - 20);
+  // pausa pranzo: riapre oggi alle 14:00
+  assert.equal(orari.secondiAlCambio(orari.statoOrari(S17, a(MAR, 13, 0)), a(MAR, 13, 0)), 60 * 60);
+  // sempre aperto o nessun giorno aperto: non cambia mai
+  assert.equal(orari.secondiAlCambio(orari.statoOrari(null, a(MAR, 13, 0)), a(MAR, 13, 0)), null);
+  assert.equal(orari.secondiAlCambio({ aperto: false, riapre: null }), null);
+  assert.equal(orari.secondiAlCambio(null), null);
+  assert.equal(orari.paginaOrari([{ id: 1, orari: S17 }], 'BOREA', a(MAR, 16, 51)).cambiaSec, 540);
+});
+
 test('testiChiuso: i testi di "ordini chiusi" (oggi, domani, un altro giorno, mai), col nome del banco preso dal DB', () => {
   const testi = (quando, nome = 'BOREA') => orari.testiChiuso(orari.statoOrari(S17, quando), nome);
   // pausa fra due fasce: riapre oggi

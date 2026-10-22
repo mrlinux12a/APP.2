@@ -201,6 +201,33 @@ test('la posizione del banco non ha più modi di essere spostata da qui (niente 
   assert.equal(banco.spostaPosizione, undefined);
 });
 
+test('salvaOrari avvisa subito gli installatori collegati (evento "orari" a tutto il ruolo "cliente"), non il banco', async () => {
+  const eventi = require('../src/eventi');
+  prepara();
+  const installatore1 = [];
+  const installatore2 = [];
+  const delBanco = [];
+  const togli = [
+    eventi.iscrivi(1, { write: (m) => installatore1.push(m), end() {} }, 'cliente'),
+    eventi.iscrivi(2, { write: (m) => installatore2.push(m), end() {} }, 'cliente'),
+    eventi.iscrivi(9, { write: (m) => delBanco.push(m), end() {} }, 'distributore'),
+  ];
+  try {
+    await banco.salvaOrari(2, null);
+    assert.deepEqual(installatore1, ['event: orari\ndata: {}\n\n']);
+    assert.deepEqual(installatore2, ['event: orari\ndata: {}\n\n']);
+    assert.deepEqual(delBanco, []);
+    // una connessione che non risponde più non fa fallire il salvataggio
+    togli.push(eventi.iscrivi(3, { write: () => { throw new Error('chiusa'); }, end() {} }, 'cliente'));
+    await banco.salvaOrari(2, null);
+    assert.equal(scritture.length >= 2, true);
+  } finally {
+    togli.forEach((f) => f());
+  }
+  // chiuse le pagine, non c'è nessuno da avvisare
+  assert.equal(eventi.emettiARuolo('cliente', 'orari', {}), 0);
+});
+
 test('salvaOrari e salvaEmailNuoveRichieste', async () => {
   prepara();
   await banco.salvaOrari(2, { lun: [['07:30', '12:30']], mar: [], mer: [], gio: [], ven: [], sab: [], dom: [] });

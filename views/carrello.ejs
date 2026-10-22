@@ -71,6 +71,9 @@
         <% if (avviso) { %><div class="avviso avviso-attenzione" role="status"><%= avviso %></div><% } %>
         <%# Fuori dagli orari del banco (impostati nella sua "Anagrafica", src/orari.js): il carrello si riempie e resta salvato, ma non si invia (richiesta esplicita del
             22/10/2026, mockup docs/mockup/carrello-chiuso.png). L'avviso c'è SOLO qui, mai nel catalogo. Testi: orari.testiChiuso. %>
+        <%# Il contenitore c'è sempre (anche vuoto): se il banco cambia gli orari mentre la pagina è aperta, public/app.js ("Orari del banco in tempo reale") rilegge la pagina
+            e sostituisce questo contenitore e la barra di pagamento ([data-orari-sync]) senza toccare il resto, cioè indirizzo e nota già scritti. %>
+        <div data-orari-sync="banner"<%- cambiaSec ? ' data-cambia-sec=' + JSON.stringify(String(cambiaSec)) : '' %>>
         <% if (bancoChiuso && testiChiuso) { %>
           <section class="cc-chiuso" role="status" aria-labelledby="cc-titolo">
             <div class="cc-testa">
@@ -84,6 +87,7 @@
             <a class="cc-orari" href="/orari"><%- iconaOrario %><span>Vedi orari</span><%- iconaAvanti %></a>
           </section>
         <% } %>
+        </div>
         <div class="carrello-layout">
           <div class="carrello-articoli">
             <div class="carrello-testata">
@@ -228,7 +232,7 @@
       <%# Barra di pagamento fissa, sopra la navbar. Il pulsante invia il form "form-invia" (come il vecchio
           "Paga … e invia la richiesta"); l'importo (come ogni voce del riepilogo) si riscrive da solo quando cambia una quantità
           (public/app.js, blocco "Carrello"). %>
-      <div class="barra-paga<%= avvisoChiusura ? ' barra-paga-chiusura' : '' %>">
+      <div class="barra-paga<%= avvisoChiusura ? ' barra-paga-chiusura' : '' %>" data-orari-sync="barra">
         <%# Poco prima della chiusura (orari.IN_CHIUSURA_MIN): striscia sopra la barra, "Ancora 9 min per inviare: alle 17:00 chiudiamo". I minuti li aggiorna
             public/app.js (data-chiusura-sec = secondi che mancano adesso); a zero la pagina si ricarica e mostra "Ordini chiusi". %>
         <% if (avvisoChiusura) { %>

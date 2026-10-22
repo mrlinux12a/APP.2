@@ -197,6 +197,16 @@ function testiChiuso(stato, nomeBanco = '') {
   };
 }
 
+// Fra quanti secondi lo stato cambia da solo (chiude se è aperto, riapre se è chiuso), per far rileggere la pagina a quell'ora; null se non cambia mai (sempre aperto, o
+// nessun giorno aperto). Il carrello e la pagina degli orari lo scrivono in `data-cambia-sec`.
+function secondiAlCambio(stato, quando = new Date()) {
+  if (!stato) return null;
+  if (stato.aperto) return stato.chiude ? stato.chiude.secondi : null;
+  if (!stato.riapre) return null;
+  const secondiDelMinuto = Math.floor(quando.getTime() / 1000) % 60; // l'ora di Roma ha scarti di minuti interi: i secondi sono quelli dell'istante
+  return Math.max(1, stato.riapre.attesaMin * 60 - secondiDelMinuto);
+}
+
 // "il banco è aperto fino alle 17:00" per l'avviso in chiusura: { ora: '17:00', mancanoMin, secondi } o null.
 function avvisoChiusura(stato, soglia = IN_CHIUSURA_MIN) {
   if (!inChiusura(stato, soglia)) return null;
@@ -239,7 +249,7 @@ function paginaOrari(distributori, nomeBanco = '', quando = new Date()) {
     : [];
   const testi = testiChiuso(stato, nomeBanco);
   return {
-    aperto: stato.aperto, sempreAperto: !unione, giorni, riapre: stato.riapre, chiude: stato.chiude, testi,
+    aperto: stato.aperto, sempreAperto: !unione, giorni, riapre: stato.riapre, chiude: stato.chiude, testi, cambiaSec: secondiAlCambio(stato, quando),
     titolo: stato.aperto ? 'Aperto ora' : 'Chiuso ora',
     sottoPrefisso: stato.aperto ? (stato.chiude ? 'Chiude oggi alle ' : 'Sempre aperto') : (testi ? testi.sottoPrefisso : ''),
     quando: stato.aperto ? (stato.chiude ? stato.chiude.ora : '') : (testi ? testi.quando : ''),
@@ -274,5 +284,5 @@ module.exports = {
   GIORNI, NOMI, MAX_FASCE, FUSO,
   oraValida, leggiOrari, orariDaModulo, valoriPerModulo,
   apertoAdesso, statoOrari, statoBanchi, frasePerCarrello, riassunto,
-  IN_CHIUSURA_MIN, inChiusura, avvisoChiusura, testiChiuso, unisciOrari, paginaOrari,
+  IN_CHIUSURA_MIN, inChiusura, avvisoChiusura, secondiAlCambio, testiChiuso, unisciOrari, paginaOrari,
 };

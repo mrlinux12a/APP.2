@@ -9,6 +9,7 @@
 // I controlli sono funzioni pure che ritornano gli errori PER CAMPO ({ campo: 'testo' }): la pagina li mostra sotto il campo, in rosso.
 const db = require('../db');
 const orari = require('./orari');
+const eventi = require('./eventi');
 // Il cambio password è condiviso con l'installatore e con il recupero della password: sta in src/password_account.js.
 const { controllaCambioPassword, cambiaPassword, chiudiAltreSessioni } = require('./password_account');
 
@@ -159,6 +160,9 @@ async function salvaFiliale(distributorId, valori) {
 
 async function salvaOrari(distributorId, valore) {
   await db.prepare('UPDATE distributors SET orari = ?::jsonb WHERE id = ?').run(valore ? JSON.stringify(valore) : null, distributorId);
+  // Richiesta esplicita del 22/10/2026: gli installatori collegati se ne accorgono subito. Evento 'orari' a ogni installatore con una pagina aperta: il carrello e la pagina
+  // "Orari di BOREA" si rileggono da sole (public/app.js). Non deve mai far fallire il salvataggio.
+  try { eventi.emettiARuolo('cliente', 'orari', {}); } catch (e) { /* pagine non avvisate: restano il controllo al ritorno in primo piano e il timer */ }
 }
 
 async function salvaEmailNuoveRichieste(distributorId, acceso) {

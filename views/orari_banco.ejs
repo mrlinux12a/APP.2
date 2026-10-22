@@ -10,6 +10,8 @@
     <%- include('partials/appbar', { titolo, intestazione, indietro: '/carrello', senzaProfilo: true }) %>
 
     <div class="contenuto">
+      <%# Se il banco cambia gli orari mentre la pagina è aperta (o allo scadere di quelli di adesso), public/app.js rilegge la pagina e sostituisce questo contenitore. %>
+      <div data-orari-sync="pagina"<%- pagina.cambiaSec ? ' data-cambia-sec=' + JSON.stringify(String(pagina.cambiaSec)) : '' %>>
       <section class="ob-stato <%= pagina.aperto ? 'ob-aperto' : 'ob-chiuso' %>" aria-live="polite">
         <span class="ob-luna" aria-hidden="true"><%- pagina.aperto ? iconaOrario : iconaLuna %></span>
         <div class="ob-stato-testi">
@@ -45,6 +47,7 @@
       <% } %>
 
       <p class="ob-nota">Fuori da questi orari puoi preparare il carrello, ma la richiesta si invia solo quando <%= nomeBanco %> è aperto.</p>
+      </div>
     </div>
   </div>
 

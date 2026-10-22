@@ -2013,6 +2013,57 @@ test('eventi in tempo reale: GET /api/eventi è una connessione che resta aperta
   assert.equal(eventi.connessioniAperte(1), 0, 'chiusa la pagina, la connessione si toglie');
 });
 
+test('orari in tempo reale: quando il banco salva gli orari ogni installatore collegato riceve l\'evento "orari" (il banco no); le viste hanno le parti da sostituire e il timer', async () => {
+  const eventi = require('../src/eventi');
+  const anagraficaBanco = require('../src/anagrafica_banco');
+  cookie = '';
+  assert.equal((await chiedi('/login', form({ username: 'prova', password: 'password-di-prova' }))).status, 302);
+  const ac = new AbortController();
+  const r = await chiedi('/api/eventi', { signal: ac.signal });
+  assert.equal(r.status, 200);
+  const lettore = r.body.getReader();
+  const decodifica = new TextDecoder();
+  let testo = '';
+  const leggiFinche = async (modello) => {
+    const scade = Date.now() + 3000;
+    while (!modello.test(testo) && Date.now() < scade) {
+      const { value, done } = await Promise.race([lettore.read(), new Promise((ok) => setTimeout(() => ok({ done: true }), 3000))]);
+      if (done) break;
+      testo += decodifica.decode(value);
+    }
+  };
+  try {
+    await leggiFinche(/retry: 5000/);
+    // il banco (altra sessione, qui una connessione finta registrata col suo ruolo) non riceve l'evento degli installatori
+    const delBanco = [];
+    const togliBanco = eventi.iscrivi(9, { write: (m) => delBanco.push(m), end() {} }, 'distributore');
+    const tutti = { lun: [['07:30', '12:30']], mar: [], mer: [], gio: [], ven: [], sab: [], dom: [] };
+    await anagraficaBanco.salvaOrari(2, tutti);
+    await leggiFinche(/event: orari\ndata: \{\}\n\n/);
+    assert.match(testo, /event: orari\ndata: \{\}\n\n/, 'l\'installatore collegato lo riceve subito');
+    assert.deepEqual(delBanco, [], 'il banco no');
+    togliBanco();
+
+    // lo script lo ascolta e rilegge la pagina sostituendo solo le parti marcate
+    const js = await (await fetch(base + '/app.js')).text();
+    assert.match(js, /sorgente\.addEventListener\('orari', function \(\) \{ window\.dispatchEvent\(new Event\('minuteria:orari'\)\); \}\);/);
+    assert.match(js, /window\.addEventListener\('minuteria:orari', rinfresca\);/);
+    assert.match(js, /document\.querySelector\('\[data-orari-sync="' \+ nuova\.getAttribute\('data-orari-sync'\) \+ '"\]'\)/);
+  } finally {
+    ac.abort();
+  }
+  assert.equal(eventi.emettiARuolo('cliente', 'orari', {}) >= 0, true);
+
+  // le viste: il carrello e la pagina degli orari hanno le parti da sostituire e, se lo stato cambia da solo, i secondi che mancano
+  await chiedi('/carrello/svuota', { method: 'POST' });
+  await chiedi('/api/carrello/imposta', json({ id: 1, qty: 50 }));
+  let t = await (await chiedi('/carrello')).text();
+  assert.match(t, /<div data-orari-sync="banner"( data-cambia-sec="\d+")?>/);
+  assert.match(t, /<div class="barra-paga[^"]*" data-orari-sync="barra">/);
+  const orariPagina = await (await chiedi('/orari')).text();
+  assert.match(orariPagina, /<div data-orari-sync="pagina"/);
+});
+
 test('eventi in tempo reale: anche il banco apre la connessione e riceve l\'evento "notifica" (suono subito, anche a scheda nascosta); un agente no', async () => {
   const eventi = require('../src/eventi');
   const salvato = cookie;
