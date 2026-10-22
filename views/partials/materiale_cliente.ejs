@@ -1,5 +1,5 @@
 <%
-  // Scheda "Materiale ordinato" della pagina di un cliente APPROVATO, vista dal banco (views/distributore_cliente.ejs, colonna destra).
+  // Scheda "Materiale ordinato" della pagina di un cliente APPROVATO, vista dal banco (views/distributore_cliente.ejs, a tutta larghezza sotto la barra del cliente).
   //
   // CONTESTO: l'installatore, quando ordina nell'app, paga SOLO il costo del servizio (e la consegna). Il materiale lo paga dopo al banco
   // (a BOREA). Per questo il banco deve avere, per ogni cliente, l'elenco di tutto il materiale ordinato con i prezzi IVA inclusa e i
@@ -8,6 +8,9 @@
   // `m` viene da materiale.materialeCliente (src/materiale.js): i numeri sono quelli dello Storico dell'installatore, qui si disegnano
   // soltanto. `clienteId` serve ai link; `esporta` è l'indirizzo del CSV. Filtri e vista stanno nell'URL (?mese=AAAA-MM|tutto&vista=ordine|articolo),
   // sono link GET e restano dopo un ricarica. Dentro un <details> non c'è JS: si apre e chiude da sé.
+  //
+  // Layout (22/10/2026): la scheda NON ha più un'altezza fissa con l'elenco che scorre dentro: scorre la pagina. La testata `.mc-fisso` (riga dei filtri + striscia
+  // del riepilogo) da 900px in su è `position: sticky` sotto l'intestazione del banco, così filtri e totale restano in vista; sotto i 900px non lo è (occuperebbe troppo schermo).
   const base = '/distributore/clienti/' + clienteId;
   const link = function (cambio) {
     const q = Object.assign({ mese: m.mese, vista: m.vista }, cambio);
@@ -16,61 +19,58 @@
   const altroScelto = m.mesiAltri.some(function (x) { return x.chiave === m.mese; });
   const n = m.riepilogo;
   const voceCorrente = function (vero) { return vero ? ' aria-current="true"' : ''; };
-  const testoArticoli = function (k) { return k + (k === 1 ? ' articolo' : ' articoli'); };
+  const conNumero = function (k, uno, molti) { return k + ' ' + (k === 1 ? uno : molti); };
+  const testoArticoli = function (k) { return conNumero(k, 'articolo', 'articoli'); };
+  // "5 pezzi" con il numero in grassetto: il numero e la parola stanno in due nodi.
+  const contaGrassetto = function (k, uno, molti) { return '<strong>' + k + '</strong> ' + (k === 1 ? uno : molti); };
 %>
 <section class="mc-card" id="materiale" aria-labelledby="mc-titolo">
-  <div class="mc-testa">
-    <div class="mc-testa-testi">
+  <div class="mc-fisso" data-mc-fisso>
+    <div class="mc-testa">
       <h2 class="mc-titolo" id="mc-titolo">Materiale ordinato</h2>
-      <p class="mc-sotto">Prezzi IVA inclusa. Il cliente ha pagato solo il servizio: il materiale lo paga a <%= m.ditta || 'il banco' %>.</p>
+      <div class="mc-filtri-mesi">
+        <nav class="mc-seg" aria-label="Periodo">
+          <% m.mesiRecenti.forEach(function (x) { %>
+            <a class="mc-seg-voce<%= m.mese === x.chiave ? ' attiva' : '' %>" href="<%= link({ mese: x.chiave }) %>"<%- voceCorrente(m.mese === x.chiave) %>><%= x.titolo %></a>
+          <% }); %>
+          <a class="mc-seg-voce<%= m.mese === 'tutto' ? ' attiva' : '' %>" href="<%= link({ mese: 'tutto' }) %>"<%- voceCorrente(m.mese === 'tutto') %>>Tutto</a>
+        </nav>
+        <% if (m.mesiAltri.length) { %>
+          <form class="mc-altri" method="get" action="<%= base %>#materiale">
+            <input type="hidden" name="vista" value="<%= m.vista %>">
+            <select class="mc-altri-select<%= altroScelto ? ' attiva' : '' %>" name="mese" aria-label="Altri mesi" onchange="this.form.submit()">
+              <% if (!altroScelto) { %><option value="" selected disabled>Altri mesi</option><% } %>
+              <% m.mesiAltri.forEach(function (x) { %>
+                <option value="<%= x.chiave %>"<%= m.mese === x.chiave ? ' selected' : '' %>><%= x.titolo %></option>
+              <% }); %>
+            </select>
+            <noscript><button class="mc-altri-vai" type="submit">Vai</button></noscript>
+          </form>
+        <% } %>
+      </div>
+      <div class="mc-testa-destra">
+        <nav class="mc-seg mc-seg-vista" aria-label="Vista">
+          <a class="mc-seg-voce<%= m.vista === 'ordine' ? ' attiva' : '' %>" href="<%= link({ vista: 'ordine' }) %>"<%- voceCorrente(m.vista === 'ordine') %>>Per ordine</a>
+          <a class="mc-seg-voce<%= m.vista === 'articolo' ? ' attiva' : '' %>" href="<%= link({ vista: 'articolo' }) %>"<%- voceCorrente(m.vista === 'articolo') %>>Per articolo</a>
+        </nav>
+        <a class="mc-esporta" href="<%= esporta %>?mese=<%= encodeURIComponent(m.mese) %>"><%- iconaDownload %>Esporta</a>
+      </div>
     </div>
-    <a class="mc-esporta" href="<%= esporta %>?mese=<%= encodeURIComponent(m.mese) %>"><%- iconaDownload %>Esporta</a>
-  </div>
 
-  <div class="mc-filtri">
-    <div class="mc-filtri-mesi">
-      <nav class="mc-seg" aria-label="Periodo">
-        <% m.mesiRecenti.forEach(function (x) { %>
-          <a class="mc-seg-voce<%= m.mese === x.chiave ? ' attiva' : '' %>" href="<%= link({ mese: x.chiave }) %>"<%- voceCorrente(m.mese === x.chiave) %>><%= x.titolo %></a>
-        <% }); %>
-        <a class="mc-seg-voce<%= m.mese === 'tutto' ? ' attiva' : '' %>" href="<%= link({ mese: 'tutto' }) %>"<%- voceCorrente(m.mese === 'tutto') %>>Tutto</a>
-      </nav>
-      <% if (m.mesiAltri.length) { %>
-        <form class="mc-altri" method="get" action="<%= base %>#materiale">
-          <input type="hidden" name="vista" value="<%= m.vista %>">
-          <select class="mc-altri-select<%= altroScelto ? ' attiva' : '' %>" name="mese" aria-label="Altri mesi" onchange="this.form.submit()">
-            <% if (!altroScelto) { %><option value="" selected disabled>Altri mesi</option><% } %>
-            <% m.mesiAltri.forEach(function (x) { %>
-              <option value="<%= x.chiave %>"<%= m.mese === x.chiave ? ' selected' : '' %>><%= x.titolo %></option>
-            <% }); %>
-          </select>
-          <noscript><button class="mc-altri-vai" type="submit">Vai</button></noscript>
-        </form>
-      <% } %>
-    </div>
-    <nav class="mc-seg mc-seg-vista" aria-label="Vista">
-      <a class="mc-seg-voce<%= m.vista === 'ordine' ? ' attiva' : '' %>" href="<%= link({ vista: 'ordine' }) %>"<%- voceCorrente(m.vista === 'ordine') %>>Per ordine</a>
-      <a class="mc-seg-voce<%= m.vista === 'articolo' ? ' attiva' : '' %>" href="<%= link({ vista: 'articolo' }) %>"<%- voceCorrente(m.vista === 'articolo') %>>Per articolo</a>
-    </nav>
-  </div>
-
-  <div class="mc-riepilogo">
-    <div class="mc-box">
-      <div class="mc-box-eti">Ordini</div>
-      <div class="mc-box-val"><%= n.nOrdini %></div>
-    </div>
-    <div class="mc-box">
-      <div class="mc-box-eti">Articoli · pezzi</div>
-      <div class="mc-box-val"><%= n.nArticoli %> · <%= n.pezzi %></div>
-    </div>
-    <div class="mc-box mc-box-totale">
-      <div class="mc-box-eti">Totale materiale IVA inclusa</div>
-      <div class="mc-box-val">€ <%= euro(n.totale) %></div>
-      <div class="mc-box-sotto">di cui IVA € <%= euro(n.iva) %></div>
+    <%# Striscia del riepilogo (al posto dei tre riquadri): conteggi, nota e, a destra, il totale. %>
+    <div class="mc-striscia">
+      <span class="mc-conta"><%- contaGrassetto(n.nOrdini, 'ordine', 'ordini') %></span>
+      <span class="mc-conta"><%- contaGrassetto(n.nArticoli, 'articolo', 'articoli') %> · <%- contaGrassetto(n.pezzi, 'pezzo', 'pezzi') %></span>
+      <span class="mc-nota">Prezzi IVA inclusa · il cliente li paga <%= m.ditta ? 'a ' + m.ditta : 'al banco' %></span>
+      <div class="mc-totale">
+        <span class="mc-totale-eti">Totale<%= m.meseNome ? ' ' + m.meseNome : '' %></span>
+        <strong class="mc-totale-val">€ <%= euro(n.totale) %></strong>
+        <span class="mc-totale-iva">di cui IVA € <%= euro(n.iva) %></span>
+      </div>
     </div>
   </div>
 
-  <div class="mc-elenco" role="region" aria-label="Elenco del materiale ordinato" tabindex="0">
+  <div class="mc-elenco">
     <% if (m.vuoto) { %>
       <p class="mc-vuoto">Nessun ordine in questo periodo.</p>
 
@@ -91,9 +91,11 @@
             <tr>
               <td class="mc-c-qta"><span class="mc-qta"><%= a.quantita %>×</span></td>
               <td>
-                <div class="mc-art"><%= a.nome %></div>
-                <div class="mc-cod">
-                  <% if (a.codice) { %>Cod. <%= a.codice %> · <% } %><%= a.prezziDiversi ? 'prezzi diversi' : '€ ' + euro(a.cad) + ' cad.' %><span class="mc-negli-sub"> · <%= negli %></span>
+                <div class="mc-art-riga">
+                  <div class="mc-art"><%= a.nome %></div>
+                  <div class="mc-cod">
+                    <% if (a.codice) { %>Cod. <%= a.codice %> · <% } %><%= a.prezziDiversi ? 'prezzi diversi' : '€ ' + euro(a.cad) + ' cad.' %><span class="mc-negli-sub"> · <%= negli %></span>
+                  </div>
                 </div>
               </td>
               <td class="mc-c-ordini"><%= negli %></td>
@@ -105,12 +107,13 @@
       </div>
 
     <% } else { %>
+      <%# Aperto all'arrivo solo il primo ordine (il più recente). %>
       <% m.ordini.forEach(function (o, i) { %>
-        <details class="mc-ordine"<%= i < 2 ? ' open' : '' %>>
+        <details class="mc-ordine"<%= i < 1 ? ' open' : '' %>>
           <summary class="mc-sum">
             <span class="mc-freccia" aria-hidden="true">▸</span>
             <span class="mc-num">Ordine #<%= o.id %></span>
-            <span class="mc-meta"><%= o.data %> · <%= testoArticoli(o.nArticoli) %></span>
+            <span class="mc-meta"><span class="mc-data"><%= o.data %></span><span class="mc-narticoli"><%= testoArticoli(o.nArticoli) %></span></span>
             <span class="sto-pillola sto-st-<%= o.stato.chiave %> mc-stato"><span class="sto-punto" aria-hidden="true"></span><%= o.stato.etichetta %></span>
             <span class="mc-tot">€ <%= euro(o.totale) %></span>
           </summary>
@@ -130,8 +133,10 @@
                   <tr>
                     <td class="mc-c-qta"><span class="mc-qta"><%= r.quantita %>×</span></td>
                     <td>
-                      <div class="mc-art"><%= r.nome %></div>
-                      <div class="mc-cod"><% if (r.codice) { %>Cod. <%= r.codice %><% } %><span class="mc-cad-sub"><%= r.codice ? ' · ' : '' %>€ <%= euro(r.cad) %> cad.</span></div>
+                      <div class="mc-art-riga">
+                        <div class="mc-art"><%= r.nome %></div>
+                        <div class="mc-cod"><% if (r.codice) { %>Cod. <%= r.codice %><% } %><span class="mc-cad-sub"><%= r.codice ? ' · ' : '' %>€ <%= euro(r.cad) %> cad.</span></div>
+                      </div>
                     </td>
                     <td class="mc-c-num mc-c-cad">€ <%= euro(r.cad) %></td>
                     <td class="mc-c-num mc-c-tot">€ <%= euro(r.totale) %></td>
@@ -143,10 +148,6 @@
           </div>
         </details>
       <% }); %>
-    <% } %>
-
-    <% if (!m.vuoto) { %>
-      <p class="mc-fondo">Totale<%= m.meseNome ? ' di ' + m.meseNome : '' %> <strong>€ <%= euro(n.totale) %></strong> IVA inclusa</p>
     <% } %>
   </div>
 </section>

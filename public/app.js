@@ -2659,6 +2659,36 @@ window.addEventListener('pageshow', function (e) {
   applica();
 })();
 
+/* Pagina di un cliente approvato (partials/materiale_cliente.ejs): da 900px la testata del materiale (filtri e totale, `[data-mc-fisso]`) resta in cima mentre si
+   scorrono gli ordini: lo fa il CSS (position: sticky). Quando è staccata dalla scheda, cioè sta davvero scorrendo sopra gli ordini, prende un'ombra leggera
+   (`.staccato`): il CSS da solo non sa dire se lo sticky è "attivo", quindi si confronta la sua posizione con quella della scheda a ogni scorrimento
+   (una misura per fotogramma). Sotto i 900px non è sticky e non resta mai staccata. */
+(function () {
+  'use strict';
+  const fisso = document.querySelector('[data-mc-fisso]');
+  const scheda = fisso && fisso.closest('.mc-card');
+  if (!scheda) return;
+  let inAttesa = false;
+
+  function misura() {
+    inAttesa = false;
+    const sticky = window.getComputedStyle(fisso).position === 'sticky';
+    // a riposo la testata è nell'angolo della scheda (sotto il suo bordo); se è più in basso, lo sticky la sta trattenendo
+    const spostamento = fisso.getBoundingClientRect().top - (scheda.getBoundingClientRect().top + scheda.clientTop);
+    fisso.classList.toggle('staccato', sticky && spostamento > 0.5);
+  }
+  function programma() {
+    if (inAttesa) return;
+    inAttesa = true;
+    window.requestAnimationFrame(misura);
+  }
+
+  window.addEventListener('scroll', programma, { passive: true });
+  window.addEventListener('resize', programma);
+  window.addEventListener('pageshow', programma);
+  misura();
+})();
+
 /* Striscia degli ordini in corso (partials/striscia_ordini.ejs). Con 4 o più schede la striscia scorre di lato: al caricamento si porta in
    vista quella della pagina aperta. Swipe tra gli ordini, SOLO con la striscia e SOLO su touch: uno spostamento orizzontale sul contenuto
    (non sulla striscia) passa all'ordine successivo (verso sinistra) o al precedente (verso destra). Conta come swipe se supera 60px ed è

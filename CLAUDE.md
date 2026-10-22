@@ -689,6 +689,7 @@ legge la posizione del dispositivo. Blocco "Carrello: indirizzo di consegna" di 
   `{ ok, indirizzo, civico, precisa }`. Un civico sbagliato che nessuno nota manda il corriere a un'altra casa. Con `civico: false` la scheda NON si chiude ("Posizione precisa solo a circa N m: controlla la via e aggiungi il numero civico.", o "Non trovo il numero civico di questo punto" se la posizione era buona ma OpenStreetMap non ha il numero),
   e il campo è solo un suggerimento: **il civico mancante NON blocca il pagamento** (richiesta esplicita del 21/10/2026: una prima versione fermava "Paga e invia" se il campo era rimasto la via senza numero, ma scattava solo se il testo era identico a quello preso dalla posizione, quindi scrivendo "via puggia" a mano si pagava lo stesso; tolta, non rimetterla). Appena si modifica il testo le coordinate si tolgono e il server ricava la posizione dall'indirizzo scritto. Senza `precisione` (script vecchio) ci si fida come prima; un server vecchio che non manda `civico` vale come "c'è" (`dati.civico !== false`).
   Il gestore anti doppio invio in fondo a `app.js` (capture su `document`) **non disabilita i pulsanti se l'invio è stato fermato** (`e.defaultPrevented`): prima li lasciava disabilitati anche dopo un controllo che aveva annullato l'invio (correzione generale, rimasta).
+  **CAP (22/10/2026, richiesta esplicita)**: l'indirizzo ricavato dalla posizione ha il CAP ("Via Puggia 22, 16141 Genova (GE)", `geo.indirizzoDaPosizioneDettaglio`), prima volutamente omesso perché quello di OpenStreetMap a volte è di una zona vicina (a Genova 16141 al posto di 16138). Si scrive solo se OSM ne dà **uno solo** di cinque cifre: una via che attraversa più CAP risponde `16141;16142` e allora resta senza (meglio niente che uno a caso); vale anche col civico mancante ("Via Puggia, 16141 Genova (GE)"). Al tragitto non serve (usa le coordinate); se il CAP è sbagliato lo corregge l'installatore nel campo. Prove: `test/anagrafica_banco.test.js` e "posizione di consegna" in `test/server.test.js`. Le frasi qui sotto con "Via Puggia, Genova (GE)" sono di prima.
   Provato nel browser incorporato con una pagina usa-e-getta (markup, `app.js`, `style.css` veri, GPS simulato, `/api/indirizzo` che chiama davvero Nominatim): telefono che stringe 100→40→10 m = "Via Puggia 22", chiusa; computer con un solo rilevamento da 100 m vicino al 17 = "Via Puggia, Genova (GE)", campo aperto, pagamento bloccato finché non si scrive il numero, poi invio ok; 8 m e 22 m = civico, chiusa; permesso negato. **Non provato su un telefono vero.**
   Prove: `test/anagrafica_banco.test.js` ("indirizzoDaPosizione: …") e `test/server.test.js` (`/api/indirizzo` con `precisione`, regex sullo script). Se il cliente continua a vedere civici sbagliati ALL'APERTO con GPS buono, il passo dopo sono i candidati (i 2-3 civici più vicini entro la precisione, da Overpass `around`) da scegliere con un tocco.
   Messaggi in `.consegna-pos` (fuori dal campo: restano visibili a scheda chiusa): in lavorazione, **permesso negato con la guida per il dispositivo** (iPhone/iPad: Impostazioni › Privacy e sicurezza ›
@@ -1040,36 +1041,50 @@ fondo a `style.css`); logica di approvazione e rifiuto **invariata** (`POST .../
   `fmt.dataSolaRoma`; le date di iscrizione con `fmt.dataOraRoma` (prima `dataOra` stampava l'ora UTC: 2 ore indietro).
 - Il cerchio con le iniziali è `partials/iniziali` con il parametro `tono` (`arancio` = da verificare, `grigio` =
   rifiutato, nessuno = blu/approvato).
-- Pagina del cliente: colonna sinistra = dati (fatturazione in 3 colonne, "Controlla su VIES ↗" in una nuova scheda,
-  sede legale e consegna abituale, contatti `tel:`/`mailto:`), destra = decisione. Per i **da verificare e i rifiutati**
-  la decisione va sopra i dati sotto i 900px (l'approvato ha un altro layout, vedi sotto). **Una voce senza dato non si
+- Pagina del cliente (**da verificare e rifiutato**): colonna sinistra = dati (fatturazione in 3 colonne, "Controlla su VIES ↗" in una nuova scheda,
+  sede legale e consegna abituale, contatti: il telefono non è un collegamento, l'email sì), destra = decisione. Sotto i 900px
+  la decisione va sopra i dati (l'**approvato** ha un altro layout: una barra con i dati e il materiale a tutta larghezza, vedi sotto). **Una voce senza dato non si
   disegna** (PEC, consegna, referente, telefono, email). La consegna abituale è una stringa sola
   ("Via X 1, 16131 Genova (GE)"): la via è ciò che sta prima della prima virgola. La città si mostra com'è salvata
   (un cliente ha "Génova" con l'accento nel DB: richiesta esplicita di non correggere i dati).
 - Il riquadro "È un tuo cliente?" è `sticky` con `top: 80px` (64px dell'intestazione, anch'essa sticky, + 16px): con
   `top: 16px` finirebbe sotto la barra. La conferma sul rifiuto è un `onclick="return confirm(...)"` sul solo pulsante
   "rifiuta" (il form è uno, con i due pulsanti `name="azione"`).
-- **Pagina del cliente approvato** (richiesta esplicita del 18/10/2026; al posto dei blocchi "Da incassare" e "Sconti concordati", non rimetterli): testata con freccia
-  tonda (`.cli-indietro-tondo`, niente riga "← Clienti") e pallino "● Approvato" (`.cli-intesta-app`); `.cli-layout-approvato` = colonna da 360px (fatturazione,
-  contatti, "Cliente approvato": le schede di prima, spostate) + `partials/materiale_cliente.ejs` (classi `mc-*`, col contesto scritto in testa: in app l'installatore
-  paga SOLO il servizio, il materiale lo paga dopo al banco, che qui ha tutto ciò che deve incassare, IVA inclusa; il servizio non compare mai). Contenitore
-  allargato da 900px (`.cli-pagina-larga`, 1600px). Sotto i 900px colonne impilate con il materiale **prima** dei dati; da 900px la scheda ha
-  `max-height: calc(100vh − 180px)` e scorre solo `.mc-elenco` (testata, filtri e riepilogo fissi), sotto scorre la pagina (niente scroll annidato su telefono).
-  Le regole di layout dell'approvato stanno in `@media (min-width: 900px)`: il blocco è in fondo al file e senza quella guardia vincerebbe sulla regola dei 900px (a 768px
-  le colonne restavano affiancate). **Un solo calcolo**: `materiale.materialeCliente(distributorId, clienteId, { mese, vista, ditta })` sta sopra `materialeOrdini` e non rifà
+- **Pagina del cliente approvato** (richiesta esplicita del 18/10/2026; al posto dei blocchi "Da incassare" e "Sconti concordati", non rimetterli) **e layout del 22/10/2026**
+  (richiesta esplicita "più spazio verticale agli ordini", mockup `docs/mockup/banco-cliente-spazio.png`; solo per lo stato 'approvato', "Da verificare" e "Rifiutato" sono rimasti
+  com'erano). **Niente più colonna di sinistra da 360px né scorrimento dentro la scheda**: una **barra bianca** (`.cli-barra`, ~60px, a tutta larghezza sotto l'intestazione del banco)
+  con freccia tonda da 40px, iniziali da 40, nome (Sora 19) con la pillola "● Approvato", sotto "tipo · cod. cliente X · P.IVA Y" (voci vuote omesse: **non c'è più "referente · iscritto il"**,
+  che ora si legge nel pannello) e, a destra, le pillole da 36px: telefono (testo, **non cliccabile**, niente `tel:`), email (`mailto:`) e "Dati cliente ▾". Quest'ultimo è il `<summary>`
+  di un `<details class="cli-dati-det">` che sta DOPO la riga: da 900px il CSS lo posiziona in assoluto in fondo a destra della riga (`right: var(--cli-gutter)`, che replica i bordi
+  del contenuto di `.cli-pagina-larga`) e il pannello si apre **sotto la barra spingendo giù la pagina**, senza JS, chiuso all'arrivo; sotto i 900px la barra va su due righe (nome sopra, pillole sotto
+  che scorrono di lato) e il pulsante è a tutta larghezza. Nel pannello (`.cli-pannello`, blocchi `auto-fit` da 260px = 3-4 colonne) c'è tutto ciò che stava a sinistra: Dati di fatturazione (+ VIES),
+  Indirizzi (sede legale, consegna abituale), Cliente approvato (codice, **referente, iscritto il**, approvato il, note interne). Poi `partials/materiale_cliente.ejs` (classi `mc-*`, col contesto
+  scritto in testa: in app l'installatore paga SOLO il servizio, il materiale lo paga dopo al banco, che qui ha tutto ciò che deve incassare, IVA inclusa; il servizio non compare mai) a tutta
+  larghezza (`.cli-pagina-larga`, max 1600px; `.cli-layout-approvato` è una colonna sola). **Scorre la PAGINA**: via `max-height` dalla scheda e `overflow-y` dall'elenco; la scheda ha
+  `overflow: clip` e **NON `hidden`** (hidden la renderebbe un contenitore di scorrimento e lo sticky smetterebbe di funzionare; un test lo controlla). La testata `.mc-fisso` (riga dei filtri:
+  "Materiale ordinato" · mesi · "Altri mesi" · a destra "Per ordine/Per articolo" ed "Esporta"; sotto la **striscia** `.mc-striscia` con "N ordini", "N articoli · M pezzi", nota
+  "Prezzi IVA inclusa · il cliente li paga a BOREA" e a destra il riquadro azzurro "Totale <mese> € X, di cui IVA") da 900px è `position: sticky; top: 64px` (l'altezza di `.banco-testa`: se cambia,
+  aggiornarla) e prende l'ombra `.staccato` da un blocco di `app.js` ("Pagina di un cliente approvato", misura la posizione a ogni scorrimento con una rAF: **nel pannello del browser
+  incorporato rAF e scroll non partono**, la logica si prova eseguendo il blocco a mano e dispatchando `scroll`); sotto i 900px non è sticky. **Sono spariti** `.mc-box*`, `.mc-riepilogo`, `.mc-fondo` (il
+  totale in fondo ripeteva quello della striscia), il testo "Il cliente ha pagato solo il servizio…" e `.cli-intesta-app`. Righe: ordine da 50px (freccia · "Ordine #id" · data e ora · "N articoli" ·
+  stato · totale; sotto i 900px su due righe), **aperto all'arrivo solo il primo ordine** (prima i primi due), articoli in righe da 44px con nome e "Cod. …" sulla stessa riga (`.mc-art-riga`).
+  Misure a 1366×768 e 1440×800 con il primo ordine aperto (3 articoli): sotto la testata si vedono **6 righe di ordine + 3 righe di articolo** senza scorrere, **11-12 ordini** scorrendo
+  (la testata resta); la richiesta diceva "almeno 8 righe di ordini": a pagina ferma sono 6 (+3 di articoli), il resto si vede scorrendo. Fra 900 e ~1075px i filtri vanno su due righe. **Un solo calcolo**: `materiale.materialeCliente(distributorId, clienteId, { mese, vista, ditta })` sta sopra `materialeOrdini` e non rifà
   conti. Differenze volute dallo Storico dell'installatore: stato = `storico_banco.statoStorico` (Da preparare / In consegna / Consegnato, pillole `sto-pillola
   sto-st-*`); totale ordine = `pricing.importiOrdine` (come l'installatore: con le righe arrotondate una per una può differire di 1-2 centesimi dalla somma delle righe) e IVA
   quella **salvata nell'ordine** (`ivaPctOrdine`), non `getIvaPct()` di oggi; "di cui IVA" = totale − somma dei netti di riga; "Articoli · pezzi" = articoli **distinti**
   (codice + nome) e somma delle quantità; ordine per `creato_il` decrescente, a parità l'id. La vista per articolo somma per (codice, nome) anche con prezzi diversi ("prezzi diversi",
   `cad` null; sotto i 640px "Negli ordini" passa sotto il nome); lo Storico dell'installatore invece divide per prezzo. Filtri: al massimo 2 mesi in segmenti + "Tutto", gli
-  altri in una `<select name="mese" onchange="this.form.submit()">` ("Altri mesi", con `<noscript>` "Vai"); sono tutti GET, con `#materiale`; i primi 2 ordini sono aperti.
+  altri in una `<select name="mese" onchange="this.form.submit()">` ("Altri mesi", con `<noscript>` "Vai"); sono tutti GET, con `#materiale`; solo il primo ordine è aperto.
   **Niente più "Vedi ordine #N ›"** (richiesta esplicita del 19/10/2026; `linkOrdineBanco` e `href` degli ordini sono spariti da `materialeCliente`): la pagina dell'ordine c'è per tutti gli stati ma qui non c'è più un link: ci si arriva dalla home
   ("Ispeziona") o dallo Storico. **CSV** `GET /distributore/clienti/:id/materiale.csv?mese=` (404 se il cliente non è approvato): `;`, BOM, dal più vecchio, Data;Ordine;Stato;
   Codice;Articolo;Quantità;Prezzo cad. IVA incl.;Totale IVA incl., ultima riga il totale, **senza servizio**; file `materiale_<ragione-sociale>_<AAAA-MM|tutto>.csv` (`nomeFileCsvCliente`,
   slug ASCII). `Response.text()` toglie il BOM: nei test si leggono i byte. **Sconti**: la rotta `POST .../sconti` e le regole salvate (`client_discount_rules`) restano, ma senza
   modulo; il partial `riga_sconti.ejs` e i suoi stili (`.cli-sotto-titolo`, `.cli-elenco-sconti`) restano finché non si decide se eliminarli del tutto. Prove: test
   "banco: \"Materiale ordinato\"..." in `server.test.js` e, in `materiale.test.js`, `materialeCliente`, il CSV del banco e il partial (stato vuoto, "Altri mesi"). Verifica
-  visiva senza toccare il DB vero: pagina usa-e-getta con partial veri, `style.css` vera e DB finto (come in `test/server.test.js`), su più larghezze (1440, 768, 375).
+  visiva senza toccare il DB vero: pagina usa-e-getta con la **vista vera** (`ejs.renderFile` di `views/distributore_cliente.ejs` con locals finti: `cliente`, `rapporto`, `materiale`, `tipi`, `fmt`, `euro`,
+  `bancoTesta`, `currentUser`, le icone), `style.css` e `app.js` veri serviti da un piccolo server in una cartella fuori dal progetto, su più larghezze (1440, 1366, 960, 768, 375). Il test
+  "banco: cliente approvato con tutti i dati…" in `server.test.js` controlla anche il CSS (niente `max-height`, `overflow: clip`, sticky solo da 900px).
 - Prova: `test/server.test.js` ("banco: elenco clienti..." e "banco: pagina del cliente..."). Nel browser, per provare
   approvazione e rifiuto non usare i clienti veri (un "da approvare" è una persona reale): creare due clienti di prova,
   provare, **cancellarli per id** (users, client_distributors, notifications, client_discount_rules).

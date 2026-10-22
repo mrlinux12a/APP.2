@@ -95,7 +95,7 @@ function posizioneValida(lat, lng) {
 }
 
 // Dalla posizione del dispositivo all'indirizzo (Nominatim, geocodifica inversa): serve al carrello, che con la posizione precompila "Consegna in cantiere".
-// Ritorna { indirizzo: "Via Puggia 22/3, Genova (GE)" (senza CAP: vedi sotto), civico: c'è il numero civico?, precisa: la posizione bastava per sceglierlo? } o null
+// Ritorna { indirizzo: "Via Puggia 22/3, 16131 Genova (GE)" (il CAP solo se univoco: vedi sotto), civico: c'è il numero civico?, precisa: la posizione bastava per sceglierlo? } o null
 // (fuori dall'Italia, senza una via, rete assente). NON lancia mai. `opzioni.fetch` serve alle prove.
 //
 // Il civico è il punto delicato: Nominatim dà il numero della casa PIÙ VICINA al punto, e i civici di una via stanno a 20-40 m uno dall'altro. Con una posizione
@@ -122,8 +122,10 @@ async function indirizzoDaPosizioneDettaglio(lat, lng, opzioni = {}) {
     const civico = precisa ? String(a.house_number || '').trim() : '';
     const citta = a.city || a.town || a.village || a.municipality || '';
     const provincia = String(a['ISO3166-2-lvl6'] || '').replace(/^IT-/, '');
-    // Senza CAP: quello di OpenStreetMap spesso è di un'altra zona (a Genova 16141 al posto di 16138) e non serve al tragitto, che usa le coordinate. Lo aggiunge chi conosce quello giusto.
-    const luogo = citta + (provincia && citta ? ' (' + provincia + ')' : '');
+    // Il CAP si scrive (richiesta esplicita del 22/10/2026) ma solo se OpenStreetMap ne dà UNO di cinque cifre: per le vie che attraversano più CAP risponde "16141;16142"
+    // e sceglierne uno a caso sarebbe peggio di niente. Può comunque essere di una zona vicina (a Genova 16141 al posto di 16138): al tragitto non serve, usa le coordinate.
+    const cap = String(a.postcode || '').match(/\b\d{5}\b/g) || [];
+    const luogo = [cap.length === 1 ? cap[0] : '', citta].filter(Boolean).join(' ') + (provincia && citta ? ' (' + provincia + ')' : '');
     return { indirizzo: [[via, civico].filter(Boolean).join(' '), luogo].filter(Boolean).join(', '), civico: !!civico, precisa };
   } catch (e) {
     return null;

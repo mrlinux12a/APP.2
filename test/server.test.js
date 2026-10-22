@@ -868,11 +868,11 @@ test('posizione di consegna: l\'indirizzo del carrello parte VUOTO, due modi per
   assert.match(t, /<button type="button" class="btn-cambia" data-consegna-cambia>Fatto<\/button>/, 'senza indirizzo il campo è aperto');
   await chiedi('/api/carrello/imposta', json({ id: 1, qty: 0 }));
 
-  // dalla posizione all'indirizzo: la geocodifica inversa, già nel formato del campo ("Via, civico, città (provincia)", SENZA il CAP di OpenStreetMap: spesso sbagliato)
+  // dalla posizione all'indirizzo: la geocodifica inversa, già nel formato del campo ("Via, civico, CAP città (provincia)", col CAP di OpenStreetMap)
   nominatim.chiamate.length = 0;
   let r = await chiedi('/api/indirizzo?lat=44.4019&lng=8.9742');
   assert.equal(r.status, 200);
-  assert.deepEqual(await r.json(), { ok: true, indirizzo: 'Via Puggia 22/3, Genova (GE)', civico: true, precisa: true });
+  assert.deepEqual(await r.json(), { ok: true, indirizzo: 'Via Puggia 22/3, 16131 Genova (GE)', civico: true, precisa: true });
   assert.match(nominatim.chiamate[0], /\/reverse\?.*lat=44\.4019.*lon=8\.9742/);
   assert.match(nominatim.chiamate[0], /zoom=18/, 'senza la precisione del dispositivo ci si fida: la casa più vicina');
   // con la precisione dichiarata dal dispositivo: fino a 30 m il civico vale; oltre sarebbe quello di un'altra casa (da Via Puggia 22 usciva il 17, 106 m più in là),
@@ -881,8 +881,8 @@ test('posizione di consegna: l\'indirizzo del carrello parte VUOTO, due modi per
     nominatim.chiamate.length = 0;
     r = await chiedi('/api/indirizzo?lat=44.4019&lng=8.9742&precisione=' + precisione);
     assert.deepEqual(await r.json(), giusto
-      ? { ok: true, indirizzo: 'Via Puggia 22/3, Genova (GE)', civico: true, precisa: true }
-      : { ok: true, indirizzo: 'Via Puggia, Genova (GE)', civico: false, precisa: false }, 'precisione ' + precisione);
+      ? { ok: true, indirizzo: 'Via Puggia 22/3, 16131 Genova (GE)', civico: true, precisa: true }
+      : { ok: true, indirizzo: 'Via Puggia, 16131 Genova (GE)', civico: false, precisa: false }, 'precisione ' + precisione);
     assert.match(nominatim.chiamate[0], giusto ? /zoom=18/ : /zoom=17/, 'precisione ' + precisione);
   }
   // una precisione che non è un numero non cambia nulla (come se mancasse)
@@ -1419,7 +1419,7 @@ test('banco e installatore vedono le STESSE cifre: totale, servizio e CSV identi
 
     // Il markup è diverso (il banco ha la sua scheda "Materiale ordinato", senza servizio), i NUMERI sono gli stessi: li fa un calcolo solo.
     assert.equal(totaleRiquadro(lato), '271,45');
-    const totaleBanco = (t) => (t.match(/<div class="mc-box mc-box-totale">[\s\S]*?<div class="mc-box-val">€ ([\d.,]+)<\/div>/) || [])[1];
+    const totaleBanco = (t) => (t.match(/<strong class="mc-totale-val">€ ([\d.,]+)<\/strong>/) || [])[1];
     assert.equal(totaleBanco(latoBanco), totaleRiquadro(lato), 'lo stesso totale del materiale');
     // gli stessi ordini con gli stessi totali (l'installatore: Ordine #N … sm-tot; il banco: mc-num … mc-tot)
     const totaliInstallatore = [...lato.matchAll(/<strong>Ordine #(\d+)<\/strong>[\s\S]*?<span class="sm-tot">€ ([\d.,]+)<\/span>/g)].map((m) => m[1] + '=' + m[2]);
@@ -1463,28 +1463,36 @@ test('banco: "Materiale ordinato" del cliente approvato: tutti gli ordini, IVA e
 
     // ----- ottobre, per ordine -----
     let t = await pagina('/distributore/clienti/32?mese=2026-10');
-    assert.match(t, /Prezzi IVA inclusa\. Il cliente ha pagato solo il servizio: il materiale lo paga a BOREA\./);
+    // la nota sta nella striscia del riepilogo (accorciata: il "servizio" non si nomina più qui) e la testata è una sola, `.mc-fisso`, con la riga dei filtri sopra la striscia
+    assert.match(t, /<span class="mc-nota">Prezzi IVA inclusa · il cliente li paga a BOREA<\/span>/);
+    assert.doesNotMatch(t, /ha pagato solo il servizio|mc-box|mc-riepilogo|mc-fondo|mc-sotto/);
+    assert.match(t, /<div class="mc-fisso" data-mc-fisso>\s*<div class="mc-testa">\s*<h2 class="mc-titolo" id="mc-titolo">Materiale ordinato<\/h2>[\s\S]*?<div class="mc-striscia">/);
     assert.match(t, /<a class="mc-esporta" href="\/distributore\/clienti\/32\/materiale\.csv\?mese=2026-10">/);
+    // la riga dei filtri, da sinistra: mesi, vista e "Esporta" (a destra)
+    assert.ok(t.indexOf('aria-label="Periodo"') < t.indexOf('aria-label="Vista"') && t.indexOf('aria-label="Vista"') < t.indexOf('class="mc-esporta"'), 'mesi, vista, Esporta');
     // riepilogo: 3 ordini, 4 articoli distinti, 5 pezzi (1 + 1 + 2 + 1); totale 61,00 + 124,44 (RAEE dentro) + 86,01 = 271,45;
     // di cui IVA = totale − netti di riga (50 + 102 + 70,50 = 222,50) = 48,95
-    assert.match(t, /<div class="mc-box-eti">Ordini<\/div>\s*<div class="mc-box-val">3<\/div>/);
-    assert.match(t, /<div class="mc-box-eti">Articoli · pezzi<\/div>\s*<div class="mc-box-val">4 · 5<\/div>/);
-    assert.match(t, /<div class="mc-box mc-box-totale">\s*<div class="mc-box-eti">Totale materiale IVA inclusa<\/div>\s*<div class="mc-box-val">€ 271,45<\/div>\s*<div class="mc-box-sotto">di cui IVA € 48,95<\/div>/);
-    // TUTTI gli ordini (anche quello ancora in preparazione), dal più recente; aperti i primi due
+    assert.match(t, /<span class="mc-conta"><strong>3<\/strong> ordini<\/span>\s*<span class="mc-conta"><strong>4<\/strong> articoli · <strong>5<\/strong> pezzi<\/span>/);
+    assert.match(t, /<div class="mc-totale">\s*<span class="mc-totale-eti">Totale ottobre<\/span>\s*<strong class="mc-totale-val">€ 271,45<\/strong>\s*<span class="mc-totale-iva">di cui IVA € 48,95<\/span>/);
+    // TUTTI gli ordini (anche quello ancora in preparazione), dal più recente; aperto SOLO il primo
     assert.deepEqual([...t.matchAll(/<span class="mc-num">Ordine #(\d+)<\/span>/g)].map((m) => m[1]), ['98', '97', '91']);
     assert.equal((t.match(/<details class="mc-ordine"/g) || []).length, 3);
-    assert.equal((t.match(/<details class="mc-ordine" open>/g) || []).length, 2);
-    assert.ok(t.indexOf('Ordine #91') > t.indexOf('<details class="mc-ordine">'), 'il terzo è chiuso');
-    // riga dell'ordine: numero, "data · articoli", pillola dello stato del banco, totale IVA inclusa
-    assert.match(t, /<span class="mc-num">Ordine #98<\/span>\s*<span class="mc-meta">16 ott, 09:12 · 1 articolo<\/span>\s*<span class="sto-pillola sto-st-in_consegna mc-stato"><span class="sto-punto" aria-hidden="true"><\/span>In consegna<\/span>\s*<span class="mc-tot">€ 61,00<\/span>/);
-    assert.match(t, /<span class="mc-num">Ordine #91<\/span>\s*<span class="mc-meta">14 ott, 22:29 · 2 articoli<\/span>\s*<span class="sto-pillola sto-st-consegnato mc-stato"><span class="sto-punto" aria-hidden="true"><\/span>Consegnato<\/span>\s*<span class="mc-tot">€ 86,01<\/span>/);
+    assert.equal((t.match(/<details class="mc-ordine" open>/g) || []).length, 1);
+    assert.ok(t.indexOf('<details class="mc-ordine" open>') < t.indexOf('Ordine #98') && t.indexOf('Ordine #98') < t.indexOf('<details class="mc-ordine">'), 'il primo è aperto, il secondo no');
+    assert.ok(t.indexOf('Ordine #97') > t.indexOf('<details class="mc-ordine">') && t.indexOf('Ordine #91') > t.indexOf('Ordine #97'), 'il secondo e il terzo sono chiusi');
+    // riga dell'ordine: numero, data e ora, "N articoli" (singolare con 1), pillola dello stato del banco, totale IVA inclusa
+    assert.match(t, /<span class="mc-num">Ordine #98<\/span>\s*<span class="mc-meta"><span class="mc-data">16 ott, 09:12<\/span><span class="mc-narticoli">1 articolo<\/span><\/span>\s*<span class="sto-pillola sto-st-in_consegna mc-stato"><span class="sto-punto" aria-hidden="true"><\/span>In consegna<\/span>\s*<span class="mc-tot">€ 61,00<\/span>/);
+    assert.match(t, /<span class="mc-num">Ordine #91<\/span>\s*<span class="mc-meta"><span class="mc-data">14 ott, 22:29<\/span><span class="mc-narticoli">2 articoli<\/span><\/span>\s*<span class="sto-pillola sto-st-consegnato mc-stato"><span class="sto-punto" aria-hidden="true"><\/span>Consegnato<\/span>\s*<span class="mc-tot">€ 86,01<\/span>/);
+    // nell'ordine il nome e "Cod. …" stanno nella stessa riga (`mc-art-riga`)
+    assert.match(t, /<div class="mc-art-riga">\s*<div class="mc-art">[^<]+<\/div>\s*<div class="mc-cod">Cod\. /);
     // righe: prezzo cad. = (netto + RAEE) × 1,22, totale riga = (netto riga + RAEE riga) × 1,22; mai il prezzo col servizio
     assert.match(t, /<span class="mc-qta">1×<\/span>[\s\S]*?87 Elemento A &#34;t&#34; 87gr Diam\. 100<\/div>\s*<div class="mc-cod">Cod\. C97[\s\S]*?<td class="mc-c-num mc-c-cad">€ 124,44<\/td>\s*<td class="mc-c-num mc-c-tot">€ 124,44<\/td>/);
     assert.match(t, /<span class="mc-qta">2×<\/span>[\s\S]*?Bocchettone A 90° Sanpress<\/div>[\s\S]*?<td class="mc-c-num mc-c-cad">€ 36,60<\/td>\s*<td class="mc-c-num mc-c-tot">€ 73,20<\/td>/);
     assert.doesNotMatch(t, /110,00|134,20|€ 55,00|€ 66,00/, 'né subtotale_cliente né il prezzo col servizio');
     // niente "Vedi ordine #N ›" (richiesta esplicita del 19/10/2026: la pagina dell'ordine si apre dalla home o dallo Storico) e nessuna traccia della bolla
     assert.doesNotMatch(t, /Vedi ordine|mc-vedi|\/distributore\/ordini\/|DDT|bolla|\/ddt\//i);
-    assert.match(t, /<p class="mc-fondo">Totale di ottobre <strong>€ 271,45<\/strong> IVA inclusa<\/p>/);
+    // il totale in fondo (`mc-fondo`) non c'è più: ripeteva quello della striscia
+    assert.equal((t.match(/271,45/g) || []).length, 1, 'il totale compare una volta sola, nella striscia');
     // il servizio pagato in app non si vede né come voce né come cifra; niente richieste senza ordine
     assert.doesNotMatch(t, /Servizio (già )?pagat|63,50|18,30|24,40|20,80|Richiesta #|st-riordina/);
     // filtri: i due mesi più recenti con ordini + "Tutto", poi "Per ordine | Per articolo"; senza "Altri mesi" (non ce ne sono)
@@ -1498,19 +1506,18 @@ test('banco: "Materiale ordinato" del cliente approvato: tutti gli ordini, IVA e
     // ----- settembre: un ordine, IVA 66,00 (366,00 − 300,00) -----
     t = await pagina('/distributore/clienti/32?mese=2026-09');
     assert.deepEqual([...t.matchAll(/<span class="mc-num">Ordine #(\d+)<\/span>/g)].map((m) => m[1]), ['30']);
-    assert.match(t, /<div class="mc-box-val">€ 366,00<\/div>\s*<div class="mc-box-sotto">di cui IVA € 66,00<\/div>/);
-    assert.match(t, /Totale di settembre <strong>€ 366,00<\/strong>/);
+    assert.match(t, /<span class="mc-totale-eti">Totale settembre<\/span>\s*<strong class="mc-totale-val">€ 366,00<\/strong>\s*<span class="mc-totale-iva">di cui IVA € 66,00<\/span>/);
+    assert.match(t, /<span class="mc-conta"><strong>1<\/strong> ordine<\/span>/, 'un solo ordine: singolare');
     assert.doesNotMatch(t, /Ordine #98|Ordine #97/);
 
     // ----- "Tutto" (ottobre + settembre): 4 ordini, 8 pezzi; il totale di tutti -----
     t = await pagina('/distributore/clienti/32?mese=tutto');
     assert.deepEqual([...t.matchAll(/<span class="mc-num">Ordine #(\d+)<\/span>/g)].map((m) => m[1]), ['98', '97', '91', '30']);
-    assert.match(t, /<div class="mc-box-val">4 · 8<\/div>/);
-    assert.match(t, /<div class="mc-box-val">€ 637,45<\/div>\s*<div class="mc-box-sotto">di cui IVA € 114,95<\/div>/);
-    assert.match(t, /<p class="mc-fondo">Totale <strong>€ 637,45<\/strong> IVA inclusa<\/p>/, '"Tutto": "Totale" senza il mese');
+    assert.match(t, /<strong>4<\/strong> articoli · <strong>8<\/strong> pezzi/);
+    assert.match(t, /<span class="mc-totale-eti">Totale<\/span>\s*<strong class="mc-totale-val">€ 637,45<\/strong>\s*<span class="mc-totale-iva">di cui IVA € 114,95<\/span>/, '"Tutto": "Totale" senza il mese');
     // un mese senza ordini torna al default (ottobre), un valore sbagliato pure
     for (const mese of ['2026-02', 'ciao']) {
-      assert.match(await pagina('/distributore/clienti/32?mese=' + mese), /<div class="mc-box-val">€ 271,45<\/div>/, 'mese=' + mese);
+      assert.match(await pagina('/distributore/clienti/32?mese=' + mese), /<strong class="mc-totale-val">€ 271,45<\/strong>/, 'mese=' + mese);
     }
 
     // ----- per articolo: righe sommate per codice e nome (anche con prezzi diversi), dal totale più alto -----
@@ -1532,7 +1539,7 @@ test('banco: "Materiale ordinato" del cliente approvato: tutti gli ordini, IVA e
     try {
       Object.assign(o98, { stato: 'evaso', request_id: 555 });
       t = await pagina('/distributore/clienti/32?mese=2026-10');
-      assert.match(t, /<span class="mc-meta">16 ott, 09:12 · 1 articolo<\/span>\s*<span class="sto-pillola sto-st-in_consegna mc-stato"><span class="sto-punto" aria-hidden="true"><\/span>In consegna<\/span>/);
+      assert.match(t, /<span class="mc-data">16 ott, 09:12<\/span><span class="mc-narticoli">1 articolo<\/span><\/span>\s*<span class="sto-pillola sto-st-in_consegna mc-stato"><span class="sto-punto" aria-hidden="true"><\/span>In consegna<\/span>/);
       assert.doesNotMatch(t, /DDT|bolla|\/ddt\/|mc-vedi|Vedi ordine|\/distributore\/ordini\/|\/distributore\/richieste\/555/i);
       Object.assign(o98, { stato: 'inviato' });
       t = await pagina('/distributore/clienti/32?mese=2026-10');
@@ -3092,27 +3099,38 @@ test('banco: pagina del cliente a due colonne (da verificare, approvato, rifiuta
     assert.doesNotMatch(t, /\/sconti|Sconti concordati/);
     // il layout nuovo è solo dell'approvato: gli altri stati restano com'erano (decisione a destra, nessuna scheda materiale)
     assert.match(t, /<div class="cli-layout cli-layout-decisione">/);
-    assert.doesNotMatch(t, /cli-layout-approvato|cli-indietro-tondo|mc-card|Materiale ordinato/);
+    assert.doesNotMatch(t, /cli-layout-approvato|cli-indietro-tondo|cli-barra|cli-dati-det|mc-card|Materiale ordinato/);
 
     // ----- approvato: poche informazioni, le voci vuote non si disegnano -----
     r = await chiedi('/distributore/clienti/32');
     assert.equal(r.status, 200);
     t = await r.text();
-    assert.match(t, /<span class="avatar avatar-56"[^>]*>RO</); // blu
+    // la barra del cliente (22/10/2026): iniziali da 40 (blu), nome con la pillola "● Approvato", sotto "tipo · cod. cliente · P.IVA" (le voci vuote non si scrivono)
+    assert.match(t, /<span class="avatar avatar-40"[^>]*>RO</);
     assert.match(t, /cli-etichetta cli-etichetta-verde">Approvato</);
-    assert.match(t, /Impresa · iscritto il 08\/09\/2026 alle 19:09</); // senza referente
-    assert.doesNotMatch(t, /referente|Codice fiscale|Codice SDI|Consegna abituale|Telefono|href="tel:/);
-    assert.match(t, /href="mailto:rossi@example\.com"/);
+    assert.match(t, /<p class="cli-barra-sotto">Impresa · cod\. cliente DEMO-ROSSI · P\.IVA 12345678901<\/p>/);
+    assert.doesNotMatch(t, /iscritto il|referente|Codice fiscale|Codice SDI|Consegna abituale|Telefono|href="tel:/);
+    // niente telefono: nessuna pillola del telefono; l'email c'è, come collegamento
+    assert.doesNotMatch(t, /cli-pill-fissa/);
+    assert.match(t, /<a class="cli-pill" href="mailto:rossi@example\.com"><span class="cli-pill-ico" aria-hidden="true"><svg[\s\S]*?<\/svg><\/span><span class="cli-pill-testo">rossi@example\.com<\/span><\/a>/);
     assert.match(t, /Sede legale<\/dt>\s*<dd class="cli-dato-val">Via Roma 1<\/dd>\s*<dd class="cli-dato-det">16121 GENOVA \(GE\)<\/dd>/);
-    // approvato: due colonne (dati e "Cliente approvato" a sinistra, materiale a destra), freccia tonda nella testata
-    assert.match(t, /<div class="cli-layout cli-layout-approvato">/);
-    assert.match(t, /<div class="cli-intesta cli-intesta-app">\s*<a class="cli-indietro-tondo" href="\/distributore\/clienti" aria-label="Torna ai clienti">/);
+    // la barra sta SOTTO l'intestazione del banco e PRIMA del contenuto, a tutta larghezza: freccia tonda, iniziali, testi; niente colonna dei dati a sinistra
+    assert.match(t, /<div class="cli-barra" role="region" aria-label="Cliente">\s*<div class="cli-barra-riga">\s*<a class="cli-indietro-tondo" href="\/distributore\/clienti" aria-label="Torna ai clienti">/);
+    assert.ok(t.indexOf('class="banco-testa') < t.indexOf('class="cli-barra"') && t.indexOf('class="cli-barra"') < t.indexOf('<main'), 'intestazione del banco, barra, poi la pagina');
+    assert.doesNotMatch(t, /<div class="cli-intesta"|cli-intesta-app|cli-intesta-testi|<div class="cli-colonna">|cli-scheda/, 'né la vecchia testata né la colonna di sinistra');
     assert.doesNotMatch(t, /<a class="cli-indietro"/, 'la riga "← Clienti" c\'è solo per gli altri stati');
+    // "Dati cliente ▾": un <details> CHIUSO all'arrivo (senza `open`), il pulsante è il suo <summary>; dentro tutto ciò che stava a sinistra
+    assert.match(t, /<details class="cli-dati-det">\s*<summary class="cli-dati-btn">Dati cliente <span class="cli-dati-chev" aria-hidden="true"><svg/);
+    assert.doesNotMatch(t, /<details class="cli-dati-det" open/);
     assert.match(t, /Codice cliente<\/dt>\s*<dd class="cli-dato-val cli-cifre">DEMO-ROSSI</);
     assert.match(t, /Note interne<\/dt>\s*<dd class="cli-dato-val cli-dato-note">Paga a 30 giorni</);
+    // la data d'iscrizione e quella d'approvazione si leggono nel pannello (sotto il nome non c'è più "iscritto il …")
+    assert.match(t, /Iscritto il<\/dt>\s*<dd class="cli-dato-val">08\/09\/2026 alle 19:09<\/dd>/);
+    assert.match(t, /Approvato il<\/dt>\s*<dd class="cli-dato-val">09\/09\/2026 alle 10:30<\/dd>/);
     const dove = (testo) => t.indexOf(testo);
     assert.ok(dove('id="cli-fatturazione"') < dove('id="cli-titolo-approvato"') && dove('id="cli-titolo-approvato"') < dove('id="materiale"'), 'dati, "Cliente approvato", poi il materiale');
     assert.match(t, /<div class="cli-colonna cli-colonna-destra cli-colonna-materiale">/);
+    assert.match(t, /<main class="cli-pagina cli-pagina-larga">/);
     // gli sconti non stanno più nella pagina (la rotta POST resta, senza modulo)
     assert.doesNotMatch(t, /\/sconti|Sconti concordati|Salva gli sconti|name="sconto\d_|cli-elenco-sconti|barra-azione/);
     assert.doesNotMatch(t, /È un tuo cliente\?|cli-approva|\/decidi/);
@@ -3146,6 +3164,66 @@ test('banco: pagina del cliente a due colonne (da verificare, approvato, rifiuta
       ['rifiutato', '', '', 131],
     ]);
   } finally {
+    banco.attivo = false;
+    await chiedi('/logout', { method: 'POST' });
+  }
+});
+
+test('banco: cliente approvato con tutti i dati: barra con telefono (non cliccabile) ed email, pannello "Dati cliente" senza perdere niente; gli ordini scorrono con la pagina', async () => {
+  cookie = '';
+  banco.attivo = true;
+  const prima = { ...utentiClienti[32] };
+  try {
+    await chiedi('/login', form({ username: 'banco', password: 'password-di-prova' }));
+    Object.assign(utentiClienti[32], { referente: 'Mario Rossi', telefono: '010 123 456', codice_fiscale: 'RSSMRA80A01D969Z', sdi_pec: 'ABC1234', indirizzo_consegna: 'Via Puggia 22/3, 16131 Genova (GE)' });
+    const t = await (await chiedi('/distributore/clienti/32')).text();
+
+    // barra: il nome (escapato), la pillola, "tipo · cod. cliente · P.IVA"
+    assert.match(t, /<h1 class="cli-nome-grande">Rossi &lt;b&gt;Impianti&lt;\/b&gt; S\.r\.l\.<\/h1>\s*<span class="cli-etichetta cli-etichetta-verde">Approvato<\/span>/);
+    assert.match(t, /<p class="cli-barra-sotto">Impresa · cod\. cliente DEMO-ROSSI · P\.IVA 12345678901<\/p>/);
+    // a destra le due pillole: il telefono NON è un collegamento (richiesta esplicita del 21/10/2026; l'app non lo trasforma da sola: format-detection), l'email sì; il telefono prima
+    assert.match(t, /<span class="cli-pill cli-pill-fissa"><span class="cli-pill-ico" aria-hidden="true"><svg[\s\S]*?<\/svg><\/span><span class="cli-pill-testo cli-cifre">010 123 456<\/span><\/span>\s*<a class="cli-pill" href="mailto:rossi@example\.com">/);
+    assert.doesNotMatch(t, /href="tel:/);
+    assert.match(t, /<meta name="format-detection" content="telephone=no">/);
+
+    // il pannello ha TUTTO quello che stava nella colonna di sinistra: fatturazione (con VIES), indirizzi, "Cliente approvato" (codice, referente, date, note)
+    const pannello = t.slice(t.indexOf('<div class="cli-pannello">'), t.indexOf('<main'));
+    assert.match(pannello, /id="cli-fatturazione">Dati di fatturazione<\/h2>/);
+    assert.match(pannello, /Partita IVA<\/dt>\s*<dd class="cli-dato-val cli-cifre">12345678901</);
+    assert.match(pannello, /Codice fiscale<\/dt>\s*<dd class="cli-dato-val cli-cifre">RSSMRA80A01D969Z</);
+    assert.match(pannello, /Codice SDI \/ PEC<\/dt>\s*<dd class="cli-dato-val cli-cifre">ABC1234</);
+    assert.match(pannello, /href="https:\/\/ec\.europa\.eu\/taxation_customs\/vies\/[^"]*"\s+target="_blank" rel="noopener">Controlla su VIES/);
+    assert.match(pannello, /Sede legale<\/dt>\s*<dd class="cli-dato-val">Via Roma 1<\/dd>\s*<dd class="cli-dato-det">16121 GENOVA \(GE\)<\/dd>/);
+    assert.match(pannello, /Consegna abituale<\/dt>\s*<dd class="cli-dato-val">Via Puggia 22\/3<\/dd>\s*<dd class="cli-dato-det">16131 Genova \(GE\)<\/dd>/);
+    assert.match(pannello, /id="cli-titolo-approvato">Cliente approvato<\/h2>/);
+    assert.match(pannello, /Codice cliente<\/dt>\s*<dd class="cli-dato-val cli-cifre">DEMO-ROSSI</);
+    assert.match(pannello, /Referente<\/dt>\s*<dd class="cli-dato-val">Mario Rossi</);
+    assert.match(pannello, /Iscritto il<\/dt>\s*<dd class="cli-dato-val">08\/09\/2026 alle 19:09</);
+    assert.match(pannello, /Approvato il<\/dt>\s*<dd class="cli-dato-val">09\/09\/2026 alle 10:30</);
+    assert.match(pannello, /Note interne<\/dt>\s*<dd class="cli-dato-val cli-dato-note">Paga a 30 giorni</);
+    assert.match(pannello, /<p class="cli-nota">Può inviarti richieste di disponibilità\.<\/p>/);
+    // il pannello è dentro il <details> chiuso: senza JS si apre e si chiude da sé
+    assert.ok(t.indexOf('<details class="cli-dati-det">') < t.indexOf('<div class="cli-pannello">'));
+
+    // ----- il CSS: scorre la pagina, non la scheda; la testata del materiale è sticky solo da 900px; la barra e il pannello hanno le loro regole -----
+    const css = fs.readFileSync(path.join(radice, 'public', 'style.css'), 'utf8');
+    const scheda = (css.match(/\n\.mc-card \{([^}]*)\}/) || [])[1];
+    assert.ok(scheda, 'la regola .mc-card c\'è');
+    assert.doesNotMatch(scheda, /max-height|overflow:\s*(hidden|auto|scroll)|overflow-y/, 'nessuna altezza massima né scorrimento nella scheda');
+    assert.match(scheda, /overflow: clip/, 'clip, non hidden: hidden ne farebbe un contenitore di scorrimento e lo sticky non funzionerebbe');
+    assert.doesNotMatch(css, /\.mc-card \{ max-height/);
+    assert.doesNotMatch(css, /\.mc-elenco\s*\{[^}]*overflow/, 'l\'elenco non scorre più dentro la scheda');
+    assert.match(css, /@media \(min-width: 900px\) \{\s*\.mc-fisso \{ position: sticky; top: 64px;/);
+    assert.doesNotMatch(css.slice(css.indexOf('@media (max-width: 899.98px) {\n  .mc-seg'), css.indexOf('Telefono stretto: i mesi')), /sticky/, 'sotto i 900px la testata non è sticky');
+    assert.doesNotMatch(css, /\.mc-box|\.mc-riepilogo|\.mc-fondo|\.cli-intesta-app/);
+    // l'ombra "staccata" la mette lo script, solo sulla testata
+    const js = fs.readFileSync(path.join(radice, 'public', 'app.js'), 'utf8');
+    assert.match(js, /document\.querySelector\('\[data-mc-fisso\]'\)/);
+    assert.match(js, /classList\.toggle\('staccato'/);
+    assert.match(css, /\.mc-fisso\.staccato \{ box-shadow:/);
+  } finally {
+    for (const k of Object.keys(utentiClienti[32])) delete utentiClienti[32][k];
+    Object.assign(utentiClienti[32], prima);
     banco.attivo = false;
     await chiedi('/logout', { method: 'POST' });
   }

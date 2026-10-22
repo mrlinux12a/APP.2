@@ -356,10 +356,14 @@ test('scheda "Materiale ordinato" (partial): stato vuoto, "Altri mesi" solo con 
   const vuoto = await disegna(await materiale.materialeCliente(2, 1, { adesso: quando(2026, 10, 20), ditta: 'BOREA SRL' }));
   assert.match(vuoto, /<p class="mc-vuoto">Nessun ordine in questo periodo\.<\/p>/);
   assert.doesNotMatch(vuoto, /mc-fondo|<details|<table/);
-  assert.match(vuoto, /<div class="mc-box-val">0 · 0<\/div>/);
-  assert.match(vuoto, /<div class="mc-box-val">€ 0,00<\/div>\s*<div class="mc-box-sotto">di cui IVA € 0,00<\/div>/);
+  // striscia del riepilogo: "0 ordini", "0 articoli · 0 pezzi" e il totale a zero
+  assert.match(vuoto, /<span class="mc-conta"><strong>0<\/strong> ordini<\/span>\s*<span class="mc-conta"><strong>0<\/strong> articoli · <strong>0<\/strong> pezzi<\/span>/);
+  assert.match(vuoto, /<strong class="mc-totale-val">€ 0,00<\/strong>\s*<span class="mc-totale-iva">di cui IVA € 0,00<\/span>/);
   assert.deepEqual([...vuoto.matchAll(/<a class="mc-seg-voce[^"]*" href="[^"]+"[^>]*>([^<]+)<\/a>/g)].map((x) => x[1]), ['Tutto', 'Per ordine', 'Per articolo']);
-  assert.match(vuoto, /il materiale lo paga a BOREA\./);
+  assert.match(vuoto, /<span class="mc-nota">Prezzi IVA inclusa · il cliente li paga a BOREA<\/span>/);
+  // senza il nome della ditta: "al banco", non "a il banco"
+  const senzaDitta = await disegna({ ...(await materiale.materialeCliente(2, 1, { adesso: quando(2026, 10, 20) })), ditta: '' });
+  assert.match(senzaDitta, /Prezzi IVA inclusa · il cliente li paga al banco/);
   // vista per articolo vuota: lo stesso messaggio, niente tabella
   assert.match(await disegna(await materiale.materialeCliente(2, 1, { vista: 'articolo', adesso: quando(2026, 10, 20) })), /Nessun ordine in questo periodo\./);
 
@@ -376,7 +380,7 @@ test('scheda "Materiale ordinato" (partial): stato vuoto, "Altri mesi" solo con 
   assert.match(t, /<select class="mc-altri-select attiva" name="mese"/);
   assert.match(t, /<option value="2026-06" selected>Giugno 2026<\/option>/);
   assert.doesNotMatch(t, /selected disabled/, 'con un mese degli "altri" scelto, niente segnaposto');
-  assert.match(t, /Totale di giugno <strong>€ 122,00<\/strong> IVA inclusa/);
+  assert.match(t, /<span class="mc-totale-eti">Totale giugno<\/span>\s*<strong class="mc-totale-val">€ 122,00<\/strong>/);
   // nessuna voce mensile attiva fra i segmenti (è la select ad esserlo) e "Tutto" non lo è
   assert.deepEqual([...t.matchAll(/<a class="mc-seg-voce( attiva)?" href="[^"]+"[^>]*>([^<]+)<\/a>/g)].map((x) => [x[2], !!x[1]]),
     [['Ottobre 2026', false], ['Settembre 2026', false], ['Tutto', false], ['Per ordine', true], ['Per articolo', false]]);

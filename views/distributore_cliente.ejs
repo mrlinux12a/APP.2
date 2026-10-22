@@ -2,8 +2,9 @@
   // Pagina di un cliente del banco. Tre stati (rapporto.stato):
   //  · da verificare: a destra il riquadro "È un tuo cliente?" (colonne 1,5 : 1);
   //  · rifiutato: a destra il pulsante per ripensarci (come sopra);
-  //  · approvato: a sinistra (360px) i dati dell'anagrafica e la scheda "Cliente approvato", a destra "Materiale ordinato" (tutti gli
-  //    ordini fatti a questo banco, col materiale a prezzi IVA inclusa). Sotto i 900px le colonne si impilano con il materiale SOPRA i dati.
+  //  · approvato (22/10/2026, per dare spazio agli ordini): i dati del cliente stanno in UNA barra bianca sotto l'intestazione del banco (freccia,
+  //    iniziali, nome, "cod. cliente · P.IVA", telefono ed email come pillole) e nel pannello "Dati cliente", chiuso all'arrivo; sotto, a tutta
+  //    larghezza, "Materiale ordinato" (tutti gli ordini fatti a questo banco, col materiale a prezzi IVA inclusa), che scorre con la PAGINA.
   // Una voce senza dato non si disegna. Gli sconti concordati non stanno più qui (la rotta POST .../sconti c'è ancora, senza modulo).
   const stato = rapporto.stato;
   const eApprovato = stato === 'approvato';
@@ -38,6 +39,12 @@
   ].filter(function (x) { return x[1]; });
   const telefono = String(cliente.telefono || '').trim();
   const email = String(cliente.email || '').trim();
+  // Riga sotto il nome nella barra dell'approvato: tipo · cod. cliente · P.IVA (le voci vuote non si scrivono).
+  const sottotitoloBarra = [
+    tipi[cliente.tipo_soggetto],
+    rapporto.codice_cliente ? 'cod. cliente ' + rapporto.codice_cliente : '',
+    cliente.partita_iva ? 'P.IVA ' + cliente.partita_iva : '',
+  ].filter(Boolean).join(' · ');
 %>
 <!DOCTYPE html>
 <html lang="it">
@@ -49,29 +56,140 @@
   <%# Intestazione unica del banco, con la scheda "Clienti" attiva (la sceglie il percorso /distributore/clienti/...). %>
   <%- include('partials/banco_testa') %>
 
+  <%# ---------- Approvato: la barra del cliente (una riga) e il pannello "Dati cliente" ----------
+       Sotto l'intestazione del banco, a tutta larghezza. Il <details> sta DOPO la riga ma il suo <summary> (il pulsante "Dati cliente ▾") è posizionato dal CSS
+       in fondo a destra della riga da 900px in su (sotto, va a tutta larghezza sotto le pillole): così il pannello si apre sotto la barra e spinge giù la pagina,
+       senza JS. Dentro c'è tutto ciò che prima stava nella colonna di sinistra. %>
+  <% if (eApprovato) { %>
+    <div class="cli-barra" role="region" aria-label="Cliente">
+      <div class="cli-barra-riga">
+        <a class="cli-indietro-tondo" href="/distributore/clienti" aria-label="Torna ai clienti"><%- iconaIndietro %></a>
+        <%- include('partials/iniziali', { nome: cliente.ragione_sociale, persona: cliente.referente, misura: 40, tono: tonoCerchio }) %>
+        <div class="cli-barra-testi">
+          <div class="cli-intesta-riga">
+            <h1 class="cli-nome-grande"><%= cliente.ragione_sociale %></h1>
+            <span class="cli-etichetta cli-etichetta-<%= coloreStato %>"><%= testoStato %></span>
+          </div>
+          <% if (sottotitoloBarra) { %><p class="cli-barra-sotto"><%= sottotitoloBarra %></p><% } %>
+        </div>
+        <% if (telefono || email) { %>
+          <div class="cli-barra-pillole">
+            <% if (telefono) { %>
+              <%# Il numero non è un collegamento (richiesta esplicita del 21/10/2026): una pillola come l'altra, ma senza tocco né effetto al passaggio. %>
+              <span class="cli-pill cli-pill-fissa"><span class="cli-pill-ico" aria-hidden="true"><%- iconaTelefono %></span><span class="cli-pill-testo cli-cifre"><%= telefono %></span></span>
+            <% } %>
+            <% if (email) { %>
+              <a class="cli-pill" href="mailto:<%= email %>"><span class="cli-pill-ico" aria-hidden="true"><%- iconaEmail %></span><span class="cli-pill-testo"><%= email %></span></a>
+            <% } %>
+          </div>
+        <% } %>
+      </div>
+
+      <details class="cli-dati-det">
+        <summary class="cli-dati-btn">Dati cliente <span class="cli-dati-chev" aria-hidden="true"><%- iconaGiu %></span></summary>
+        <div class="cli-pannello">
+          <% if (fiscali.length) { %>
+            <section class="cli-blocco" aria-labelledby="cli-fatturazione">
+              <h2 class="cli-blocco-titolo" id="cli-fatturazione">Dati di fatturazione</h2>
+              <dl class="cli-dati cli-dati-auto">
+                <% fiscali.forEach(function (x) { %>
+                  <div class="cli-dato">
+                    <dt class="cli-dato-eti"><%= x[0] %></dt>
+                    <dd class="cli-dato-val cli-cifre"><%= x[1] %></dd>
+                  </div>
+                <% }); %>
+              </dl>
+              <% if (cliente.partita_iva) { %>
+                <a class="cli-vies" href="https://ec.europa.eu/taxation_customs/vies/#/vat-validation"
+                   target="_blank" rel="noopener">Controlla su VIES <%- iconaEsterno %></a>
+              <% } %>
+            </section>
+          <% } %>
+
+          <% if (haSede || haConsegna) { %>
+            <section class="cli-blocco" aria-labelledby="cli-indirizzi">
+              <h2 class="cli-blocco-titolo" id="cli-indirizzi">Indirizzi</h2>
+              <dl class="cli-dati cli-dati-auto">
+                <% if (haSede) { %>
+                  <div class="cli-dato">
+                    <dt class="cli-dato-eti">Sede legale</dt>
+                    <% if (sede.via) { %><dd class="cli-dato-val"><%= sede.via %></dd><% } %>
+                    <% if (sede.zona) { %><dd class="cli-dato-det"><%= sede.zona %></dd><% } %>
+                  </div>
+                <% } %>
+                <% if (haConsegna) { %>
+                  <div class="cli-dato">
+                    <dt class="cli-dato-eti">Consegna abituale</dt>
+                    <% if (consegna.via) { %><dd class="cli-dato-val"><%= consegna.via %></dd><% } %>
+                    <% if (consegna.zona) { %><dd class="cli-dato-det"><%= consegna.zona %></dd><% } %>
+                  </div>
+                <% } %>
+              </dl>
+            </section>
+          <% } %>
+
+          <%# Cliente approvato: codice, referente, date e note interne. Referente e data d'iscrizione stavano sotto il nome (la riga "tipo · referente · iscritto il"):
+              ora che sotto il nome c'è "cod. cliente · P.IVA" si leggono qui, così nessun dato sparisce. %>
+          <section class="cli-blocco" aria-labelledby="cli-titolo-approvato">
+            <h2 class="cli-blocco-titolo" id="cli-titolo-approvato">Cliente approvato</h2>
+            <dl class="cli-dati cli-dati-auto">
+              <% if (rapporto.codice_cliente) { %>
+                <div class="cli-dato">
+                  <dt class="cli-dato-eti">Codice cliente</dt>
+                  <dd class="cli-dato-val cli-cifre"><%= rapporto.codice_cliente %></dd>
+                </div>
+              <% } %>
+              <% if (cliente.referente) { %>
+                <div class="cli-dato">
+                  <dt class="cli-dato-eti">Referente</dt>
+                  <dd class="cli-dato-val"><%= cliente.referente %></dd>
+                </div>
+              <% } %>
+              <div class="cli-dato">
+                <dt class="cli-dato-eti">Iscritto il</dt>
+                <dd class="cli-dato-val"><%= fmt.dataOraRoma(rapporto.richiesto_il) %></dd>
+              </div>
+              <% if (rapporto.deciso_il) { %>
+                <div class="cli-dato">
+                  <dt class="cli-dato-eti">Approvato il</dt>
+                  <dd class="cli-dato-val"><%= fmt.dataOraRoma(rapporto.deciso_il) %></dd>
+                </div>
+              <% } %>
+              <% if (rapporto.note) { %>
+                <div class="cli-dato cli-dato-largo">
+                  <dt class="cli-dato-eti">Note interne</dt>
+                  <dd class="cli-dato-val cli-dato-note"><%= rapporto.note %></dd>
+                </div>
+              <% } %>
+            </dl>
+            <p class="cli-nota">Può inviarti richieste di disponibilità.</p>
+          </section>
+        </div>
+      </details>
+    </div>
+  <% } %>
+
   <main class="cli-pagina<%= eApprovato ? ' cli-pagina-larga' : '' %>">
-    <%# Approvato: la freccia sta nella testata, accanto alle iniziali. Gli altri stati hanno la riga "← Clienti" sopra. %>
+    <%# Gli altri stati hanno la riga "← Clienti" sopra e la testata con le iniziali da 56. L'approvato ha la sua barra qui sopra. %>
     <% if (!eApprovato) { %>
       <a class="cli-indietro" href="/distributore/clienti"><%- iconaIndietro %>Clienti</a>
-    <% } %>
 
-    <div class="cli-intesta<%= eApprovato ? ' cli-intesta-app' : '' %>">
-      <% if (eApprovato) { %>
-        <a class="cli-indietro-tondo" href="/distributore/clienti" aria-label="Torna ai clienti"><%- iconaIndietro %></a>
-      <% } %>
-      <%- include('partials/iniziali', { nome: cliente.ragione_sociale, persona: cliente.referente, misura: 56, tono: tonoCerchio }) %>
-      <div class="cli-intesta-testi">
-        <div class="cli-intesta-riga">
-          <h1 class="cli-nome-grande"><%= cliente.ragione_sociale %></h1>
-          <span class="cli-etichetta cli-etichetta-<%= coloreStato %>"><%= testoStato %></span>
+      <div class="cli-intesta">
+        <%- include('partials/iniziali', { nome: cliente.ragione_sociale, persona: cliente.referente, misura: 56, tono: tonoCerchio }) %>
+        <div class="cli-intesta-testi">
+          <div class="cli-intesta-riga">
+            <h1 class="cli-nome-grande"><%= cliente.ragione_sociale %></h1>
+            <span class="cli-etichetta cli-etichetta-<%= coloreStato %>"><%= testoStato %></span>
+          </div>
+          <p class="cli-intesta-sotto"><%= sottotitolo %></p>
         </div>
-        <p class="cli-intesta-sotto"><%= sottotitolo %></p>
       </div>
-    </div>
+    <% } %>
 
     <div class="cli-layout<%= eApprovato ? ' cli-layout-approvato' : ' cli-layout-decisione' %>">
 
-      <%# ---------- Sinistra: i dati dell'anagrafica ---------- %>
+      <%# ---------- Sinistra: i dati dell'anagrafica (da verificare e rifiutato; l'approvato li ha nella barra) ---------- %>
+      <% if (!eApprovato) { %>
       <div class="cli-colonna">
         <% if (fiscali.length || haSede || haConsegna) { %>
           <section class="cli-scheda" aria-labelledby="cli-fatturazione">
@@ -142,36 +260,10 @@
           </section>
         <% } %>
 
-        <%# Cliente approvato: codice, note e data (le schede di prima, spostate a sinistra sotto i dati dell'anagrafica). %>
-        <% if (eApprovato) { %>
-          <section class="cli-scheda" aria-labelledby="cli-titolo-approvato">
-            <h2 class="cli-scheda-titolo" id="cli-titolo-approvato">Cliente approvato</h2>
-            <dl class="cli-dati cli-dati-1">
-              <% if (rapporto.codice_cliente) { %>
-                <div class="cli-dato">
-                  <dt class="cli-dato-eti">Codice cliente</dt>
-                  <dd class="cli-dato-val cli-cifre"><%= rapporto.codice_cliente %></dd>
-                </div>
-              <% } %>
-              <% if (rapporto.note) { %>
-                <div class="cli-dato">
-                  <dt class="cli-dato-eti">Note interne</dt>
-                  <dd class="cli-dato-val cli-dato-note"><%= rapporto.note %></dd>
-                </div>
-              <% } %>
-              <% if (rapporto.deciso_il) { %>
-                <div class="cli-dato">
-                  <dt class="cli-dato-eti">Approvato il</dt>
-                  <dd class="cli-dato-val"><%= fmt.dataOraRoma(rapporto.deciso_il) %></dd>
-                </div>
-              <% } %>
-            </dl>
-            <p class="cli-nota">Può inviarti richieste di disponibilità.</p>
-          </section>
-        <% } %>
       </div>
+      <% } %>
 
-      <%# ---------- Destra: la decisione; per chi è già approvato, il materiale ordinato ---------- %>
+      <%# ---------- Destra: la decisione; per chi è già approvato, il materiale ordinato (a tutta larghezza) ---------- %>
       <div class="cli-colonna cli-colonna-destra<%= eApprovato ? ' cli-colonna-materiale' : '' %>">
         <% if (eDaVerificare) { %>
           <section class="cli-decisione" aria-labelledby="cli-titolo-decisione">

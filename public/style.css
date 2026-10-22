@@ -4917,113 +4917,192 @@ html.misura-aperta { overflow: hidden; }
 .pg-nessuno .pg-link-riga { display: flex; flex-wrap: wrap; gap: 4px 16px; }
 .pg-nota { margin: 12px 2px 2px; font-size: 13px; line-height: 1.4; color: #6B6A5F; }
 
-/* ---------- Pagina di un cliente approvato, vista dal banco (views/distributore_cliente.ejs) ----------
-   Testata con freccia tonda e pallino "Approvato"; sotto, due colonne: a sinistra (360px) i dati dell'anagrafica e "Cliente approvato", a destra
-   la scheda "Materiale ordinato" (views/partials/materiale_cliente.ejs, classi `mc-*`): testata e filtri fissi, l'elenco scorre dentro la scheda.
-   Sotto i 900px le colonne si impilano con il materiale SOPRA i dati (regola `.cli-colonna-materiale` nel blocco "Clienti del banco"). */
-.cli-intesta-app { gap: 14px; }
+/* ---------- Pagina di un cliente approvato, vista dal banco (views/distributore_cliente.ejs, partials/materiale_cliente.ejs) ----------
+   22/10/2026, per dare spazio agli ordini (mockup docs/mockup/banco-cliente-spazio.png). Tre pezzi:
+   · la BARRA del cliente (`.cli-barra`): una riga bianca a tutta larghezza sotto l'intestazione del banco con freccia, iniziali, nome e "cod. cliente · P.IVA" a sinistra,
+     telefono ed email come pillole e il pulsante "Dati cliente ▾" a destra. Il pulsante è il <summary> di un <details> che sta DOPO la riga: da 900px in su è posizionato in
+     assoluto in fondo a destra della riga, e il pannello (tutto ciò che stava nella colonna di sinistra) si apre sotto e spinge giù la pagina, senza JS. Sotto i 900px la barra va
+     su due righe (nome sopra, pillole sotto che scorrono di lato) e il pulsante è a tutta larghezza.
+   · il MATERIALE a tutta larghezza (`.mc-*`): niente max-height né scorrimento interno, scorre la PAGINA. La testata `.mc-fisso` (riga dei filtri + striscia del riepilogo) da 900px
+     in su è sticky sotto l'intestazione del banco (64px, `.banco-testa`); l'ombra `.staccato` la mette public/app.js ("Pagina di un cliente approvato"). La scheda ha `overflow: clip`
+     e NON `hidden`: hidden ne farebbe un contenitore di scorrimento e lo sticky non funzionerebbe più.
+   · righe degli ordini da 50px, righe delle tabelle da 44px. */
+.cli-barra {
+  --cli-gutter: max(32px, calc((100% - 1536px) / 2)); /* i bordi del contenuto di `.cli-pagina-larga` (max 1600px con 32px di margine) */
+  position: relative;
+  padding: 10px var(--cli-gutter);
+  border-bottom: 1px solid #E2DED3;
+  background: var(--surface);
+}
+.cli-barra-riga { display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 40px; }
+.cli-barra .avatar { flex: none; }
 .cli-indietro-tondo {
-  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px;
-  border: 1px solid #E2DED3; border-radius: 50%; background: #fff; color: var(--testo); font-size: 22px; text-decoration: none;
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px;
+  border: 1px solid #E2DED3; border-radius: 50%; background: #fff; color: var(--testo); font-size: 20px; text-decoration: none;
 }
 .cli-indietro-tondo:hover { background: #FAF9F6; }
 .cli-indietro-tondo:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+.cli-barra-testi { flex: 1 1 0; min-width: 0; }
+.cli-barra .cli-intesta-riga { flex-wrap: nowrap; gap: 8px 10px; min-width: 0; }
+.cli-barra .cli-nome-grande { min-width: 0; overflow: hidden; font-size: 19px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.cli-barra-sotto { margin: 1px 0 0; overflow: hidden; color: var(--grigio); font-size: 13.5px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
 /* "● Approvato": pillola con pallino, non l'etichetta maiuscola degli altri stati */
-.cli-intesta-app .cli-etichetta {
-  display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px 4px 9px; border-radius: 999px;
+.cli-barra .cli-etichetta {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px; border-radius: 999px;
   font-size: 13px; letter-spacing: 0; text-transform: none;
 }
-.cli-intesta-app .cli-etichetta::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.cli-barra .cli-etichetta::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 
-/* Da 900px: contenitore largo (la tabella del materiale ha bisogno di spazio: quello delle altre pagine clienti, 1168px, la strozzerebbe),
-   colonna dei dati di 360px (le voci fiscali in due colonne, indirizzi e contatti uno sotto l'altro). Sotto i 900px le colonne si impilano
-   (regola nel blocco "Clienti del banco"): queste righe stanno qui dentro perché, essendo in fondo al file, altrimenti la vincerebbero. */
+/* Telefono (non cliccabile) ed email (mailto): pillole da 36px; l'email, se lunga, si accorcia con i puntini */
+.cli-barra-pillole { flex: 0 1 auto; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cli-pill {
+  display: inline-flex; align-items: center; gap: 8px; min-width: 0; height: 36px; padding: 0 14px;
+  border: 1px solid #E2DED3; border-radius: 18px; background: var(--surface); color: var(--testo); font-size: 14px; text-decoration: none;
+}
+.cli-pill-ico { flex: none; display: inline-flex; color: var(--grigio); font-size: 16px; }
+.cli-pill-testo { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cli-pill-fissa { flex: none; cursor: default; }
+a.cli-pill { color: var(--blu); }
+a.cli-pill .cli-pill-ico { color: var(--blu); }
+a.cli-pill:hover { background: #FAF9F6; }
+a.cli-pill:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+
+/* "Dati cliente ▾": il <summary>. Chiuso all'arrivo; aperto, il pannello sta sotto la riga. */
+.cli-dati-btn {
+  box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 14px;
+  border: 1.5px solid #245A8F; border-radius: 18px; background: var(--surface); color: #245A8F;
+  font-family: inherit; font-size: 14px; font-weight: 700; list-style: none; cursor: pointer; user-select: none;
+}
+.cli-dati-btn::-webkit-details-marker { display: none; }
+.cli-dati-btn:hover, .cli-dati-det[open] > .cli-dati-btn { background: var(--blu-chiaro); }
+.cli-dati-btn:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+.cli-dati-chev { display: inline-flex; font-size: 16px; transition: transform 0.15s; }
+.cli-dati-det[open] .cli-dati-chev { transform: rotate(180deg); }
+
+/* Pannello: i blocchi in 3-4 colonne (quante ne stanno, almeno 260px l'una), le voci di ogni blocco in due o tre. */
+.cli-pannello {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px 40px;
+  margin-top: 10px; padding: 16px 0 6px; border-top: 1px solid #ECE9E2;
+}
+.cli-blocco { min-width: 0; }
+.cli-blocco-titolo { margin: 0 0 10px; font-family: var(--cli-sora); font-size: 15px; font-weight: 700; line-height: 1.3; }
+.cli-dati-auto { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px 20px; }
+.cli-dato-largo { grid-column: 1 / -1; }
+.cli-blocco .cli-vies { min-height: 36px; margin-top: 4px; }
+.cli-blocco .cli-nota { margin-top: 10px; }
+
+/* Il materiale occupa tutta la larghezza: una colonna sola, sotto la barra. */
+.cli-layout-approvato { grid-template-columns: minmax(0, 1fr); }
+
 @media (min-width: 900px) {
   .cli-pagina.cli-pagina-larga {
     max-width: 1600px;
+    padding-top: 16px;
     padding-right: max(32px, env(safe-area-inset-right, 0px));
     padding-left: max(32px, env(safe-area-inset-left, 0px));
   }
-  .cli-layout-approvato { grid-template-columns: 360px minmax(0, 1fr); }
-  .cli-layout-approvato .cli-dati-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .cli-layout-approvato .cli-dati-2 { grid-template-columns: minmax(0, 1fr); }
-  .cli-layout-approvato .cli-contatti { grid-template-columns: minmax(0, 1fr); }
+  /* il pulsante sta in fondo a destra della riga (132px + 16px di aria: la riga lascia quel posto alle pillole) */
+  .cli-dati-btn { position: absolute; top: 12px; right: var(--cli-gutter); width: 132px; }
+  .cli-barra-riga { padding-right: 148px; }
+}
+/* Fra 900 e 1100px il posto è poco: l'email si accorcia prima */
+@media (min-width: 900px) and (max-width: 1099.98px) {
+  .cli-pill-testo { max-width: 200px; }
+}
+@media (max-width: 899.98px) {
+  .cli-barra { padding: 10px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px)); }
+  .cli-barra-riga { flex-wrap: wrap; }
+  .cli-barra .cli-intesta-riga { flex-wrap: wrap; }
+  .cli-barra .cli-nome-grande { overflow: visible; font-size: 18px; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+  .cli-barra-sotto { white-space: normal; overflow-wrap: anywhere; }
+  /* pillole sulla seconda riga, che scorre di lato se non ci stanno */
+  .cli-barra-pillole { flex: 1 1 100%; overflow-x: auto; scrollbar-width: none; }
+  .cli-barra-pillole::-webkit-scrollbar { display: none; }
+  .cli-pill { flex: none; height: 44px; }
+  .cli-pill-testo { overflow: visible; }
+  .cli-dati-det { margin-top: 10px; }
+  .cli-dati-btn { display: flex; width: 100%; height: 44px; }
+  .cli-pannello { gap: 18px; }
 }
 
 .mc-card {
   --mc-pad: 22px;
-  display: flex; flex-direction: column; min-width: 0; overflow: hidden; scroll-margin-top: 80px;
+  min-width: 0; overflow: clip; scroll-margin-top: 80px;
   border: 1px solid #E2DED3; border-radius: 18px; background: #fff;
 }
-.mc-testa { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px 16px; padding: 20px var(--mc-pad) 0; }
-.mc-testa-testi { flex: 1 1 260px; min-width: 0; }
-.mc-titolo { margin: 0; font-family: var(--cli-sora); font-size: 20px; font-weight: 700; line-height: 1.25; }
-.mc-sotto { margin: 4px 0 0; color: var(--grigio); font-size: 14px; line-height: 1.4; }
+
+/* Testata: riga dei filtri + striscia del riepilogo. Da 900px è sticky sotto l'intestazione del banco. */
+.mc-fisso { background: #fff; }
+.mc-testa { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 12px var(--mc-pad); border-bottom: 1px solid #ECE9E2; }
+.mc-titolo { margin: 0 4px 0 0; font-family: var(--cli-sora); font-size: 18px; font-weight: 700; line-height: 1.25; white-space: nowrap; }
+.mc-filtri-mesi { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.mc-testa-destra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-left: auto; }
 .mc-esporta {
-  flex: none; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px;
-  border: 1px solid #d6d1c6; border-radius: 22px; background: #fff; color: var(--testo); font-size: 14.5px; font-weight: 700; text-decoration: none;
+  flex: none; display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px;
+  border: 1px solid #d6d1c6; border-radius: 20px; background: #fff; color: var(--testo); font-size: 14px; font-weight: 700; text-decoration: none;
 }
 .mc-esporta svg { font-size: 18px; }
 .mc-esporta:hover { background: #FAF9F6; }
 .mc-esporta:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
 
-/* Filtri: mesi a sinistra, vista a destra. Segmento attivo bianco con ombra leggera su fondo #EFEDE6. */
-.mc-filtri { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 16px var(--mc-pad) 0; }
-.mc-filtri-mesi { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
-.mc-seg { display: inline-flex; gap: 4px; max-width: 100%; padding: 4px; overflow-x: auto; border-radius: 14px; background: #EFEDE6; scrollbar-width: none; }
+/* Segmenti (mesi, vista): attivo bianco con ombra leggera su fondo #EFEDE6. */
+.mc-seg { display: inline-flex; gap: 4px; max-width: 100%; padding: 3px; overflow-x: auto; border-radius: 14px; background: #EFEDE6; scrollbar-width: none; }
 .mc-seg::-webkit-scrollbar { display: none; }
 .mc-seg-voce {
-  flex: none; display: inline-flex; align-items: center; min-height: 36px; padding: 0 16px; border-radius: 11px;
+  flex: none; display: inline-flex; align-items: center; min-height: 34px; padding: 0 16px; border-radius: 11px;
   color: #4f4d44; font-family: var(--cli-sora); font-size: 14px; font-weight: 600; text-decoration: none; white-space: nowrap;
 }
 .mc-seg-voce:hover { color: var(--testo); }
 .mc-seg-voce.attiva { background: #fff; color: var(--testo); font-weight: 700; box-shadow: 0 1px 3px rgba(35, 32, 25, 0.14); }
 .mc-seg-voce:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; }
-.mc-altri { margin: 0; }
+.mc-altri { display: flex; margin: 0; } /* flex: un <select> inline lascia sotto di sé lo spazio della riga */
 .mc-altri-select {
-  height: 44px; padding: 0 12px; border: 1px solid #d6d1c6; border-radius: 14px; background: #fff; color: var(--testo);
-  font: inherit; font-size: 16px; font-weight: 600; /* 16px: sotto Safari iPhone ingrandisce la pagina al tocco */
+  height: 40px; margin: 0; padding: 0 12px; /* margin: la regola generale dei campi ci mette 12px sotto, che lo facevano finire 6px più in alto dei segmenti */ border: 1px solid #d6d1c6; border-radius: 14px; background: #fff; color: var(--testo);
+  font: inherit; font-size: 14.5px; font-weight: 600;
 }
 .mc-altri-select.attiva { border-color: #1A4468; background: #E3EDF7; color: #1A4468; }
 .mc-altri-select:focus-visible, .mc-altri-vai:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; }
-.mc-altri-vai { height: 44px; margin-left: 6px; padding: 0 14px; border: 1px solid #d6d1c6; border-radius: 14px; background: #fff; font: inherit; font-weight: 700; }
+.mc-altri-vai { height: 40px; margin-left: 6px; padding: 0 14px; border: 1px solid #d6d1c6; border-radius: 14px; background: #fff; font: inherit; font-weight: 700; }
 
-/* Riepilogo: Ordini, Articoli · pezzi, Totale (evidenziato) */
-.mc-riepilogo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.5fr); gap: 12px; padding: 16px var(--mc-pad) 0; }
-.mc-box { min-width: 0; padding: 12px 14px; border-radius: 14px; background: #F7F6F2; }
-.mc-box-eti { color: var(--grigio); font-size: 13px; line-height: 1.3; }
-.mc-box-val { margin-top: 4px; font-family: var(--cli-sora); font-size: 24px; font-weight: 800; line-height: 1.2; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.mc-box-sotto { margin-top: 4px; font-size: 12px; font-variant-numeric: tabular-nums; }
-.mc-box-totale { background: #E3EDF7; color: #1A4468; }
-.mc-box-totale .mc-box-eti { color: #1A4468; }
+/* Striscia del riepilogo (al posto dei tre riquadri): conteggi, nota e, a destra, il totale in un riquadro azzurro. */
+.mc-striscia { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 22px; min-height: 48px; padding: 7px var(--mc-pad); border-bottom: 1px solid #ECE9E2; background: #F7F6F2; }
+.mc-conta { color: #4f4d44; font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mc-conta strong { color: var(--testo); font-size: 16px; font-weight: 700; }
+.mc-nota { color: var(--grigio); font-size: 13px; }
+.mc-totale { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin-left: auto; padding: 4px 14px; border-radius: 10px; background: #E3EDF7; color: #1A4468; }
+.mc-totale-eti { font-size: 13px; font-weight: 700; }
+.mc-totale-val { font-family: var(--cli-sora); font-size: 20px; font-weight: 800; line-height: 1.3; font-variant-numeric: tabular-nums; }
+.mc-totale-iva { font-size: 12.5px; font-variant-numeric: tabular-nums; }
 
-/* Elenco: scorre dentro la scheda, testata e filtri restano */
-.mc-elenco { flex: 1 1 auto; min-height: 0; margin-top: 16px; overflow-y: auto; overscroll-behavior: contain; border-top: 1px solid #E2DED3; }
-.mc-elenco:focus-visible { outline: 2px solid var(--blu); outline-offset: -2px; }
+/* Elenco: scorre la pagina. Riga dell'ordine da 50px: freccia · numero · data e ora · N articoli · stato · totale. */
 .mc-ordine { border-bottom: 1px solid #ece9e2; }
+.mc-ordine:last-child { border-bottom: 0; }
+.mc-ordine[open] { background: #FAF9F6; }
 .mc-sum {
-  display: grid; grid-template-columns: 18px 120px minmax(0, 1fr) 150px 112px; align-items: center; column-gap: 14px;
-  padding: 14px var(--mc-pad); list-style: none; cursor: pointer;
+  display: grid; grid-template-columns: 18px 124px 230px minmax(0, 1fr) 132px 120px; align-items: center; column-gap: 14px;
+  height: 50px; padding: 0 var(--mc-pad); list-style: none; cursor: pointer;
 }
 .mc-sum::-webkit-details-marker { display: none; }
-.mc-sum:hover { background: #FAF9F6; }
+.mc-sum:hover { background: #F4F2EC; }
 .mc-sum:focus-visible { outline: 2px solid var(--blu); outline-offset: -2px; }
 .mc-freccia { color: var(--grigio); font-size: 12px; transition: transform 0.15s; }
 .mc-ordine[open] .mc-freccia { transform: rotate(90deg); }
 .mc-num { font-size: 16px; font-weight: 700; white-space: nowrap; }
-.mc-meta { min-width: 0; color: #4f4d44; font-size: 14px; font-variant-numeric: tabular-nums; }
+.mc-meta { display: contents; }
+.mc-data, .mc-narticoli { min-width: 0; color: #4f4d44; font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mc-stato { justify-self: start; }
 .mc-tot { justify-self: end; font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.mc-dettaglio { padding: 0 var(--mc-pad) 16px calc(var(--mc-pad) + 32px); }
+.mc-dettaglio { padding: 8px var(--mc-pad) 14px calc(var(--mc-pad) + 32px); }
 
-.mc-tab-box { overflow-x: auto; border: 1px solid #E2DED3; border-radius: 12px; background: #FAF9F6; }
-.mc-tab-box-solo { margin: 16px var(--mc-pad); }
+/* Tabelle (articoli di un ordine; vista per articolo): righe da 44px, nome e "Cod. …" sulla stessa riga. */
+.mc-tab-box { overflow-x: auto; border: 1px solid #E2DED3; border-radius: 12px; background: #fff; }
+.mc-tab-box-solo { margin: 12px var(--mc-pad) 16px; }
 .mc-tab { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .mc-tab th {
-  padding: 11px 14px; border-bottom: 1px solid #ece9e2; color: var(--grigio); font-size: 12px; font-weight: 600;
+  padding: 9px 14px; border-bottom: 1px solid #ece9e2; color: var(--grigio); font-size: 12px; font-weight: 600;
   letter-spacing: 0.08em; text-align: left; text-transform: uppercase; white-space: nowrap;
 }
-.mc-tab td { padding: 12px 14px; border-bottom: 1px solid #ece9e2; font-size: 14.5px; vertical-align: middle; }
+.mc-tab td { height: 44px; padding: 4px 14px; border-bottom: 1px solid #ece9e2; font-size: 14.5px; vertical-align: middle; }
 .mc-tab tbody tr:last-child td { border-bottom: 0; }
 .mc-tab .mc-c-qta { width: 64px; }
 .mc-tab .mc-c-num { width: 112px; text-align: right; white-space: nowrap; }
@@ -5033,53 +5112,69 @@ html.misura-aperta { overflow: hidden; }
   display: inline-flex; align-items: center; justify-content: center; min-width: 40px; height: 28px; padding: 0 6px;
   border-radius: 8px; background: #E3EDF7; color: #1A4468; font-size: 13px; font-weight: 800;
 }
+.mc-art-riga { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; }
 .mc-art { font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
-.mc-cod { margin-top: 2px; color: var(--grigio); font-size: 12.5px; }
-.mc-cad-sub, .mc-negli-sub { display: none; } /* il prezzo cad. e gli ordini passano sotto il nome quando la colonna non c'è (telefono) */
-.mc-fondo { margin: 0; padding: 14px var(--mc-pad) 18px; color: #4f4d44; font-size: 15px; text-align: right; }
-.mc-fondo strong { margin: 0 4px; color: var(--testo); font-family: var(--cli-sora); font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.mc-cod { color: var(--grigio); font-size: 12.5px; }
+.mc-cad-sub, .mc-negli-sub { display: none; } /* il prezzo cad. e gli ordini passano accanto al codice quando la colonna non c'è (telefono) */
 .mc-vuoto { margin: 0; padding: 48px var(--mc-pad); color: var(--grigio); font-size: 16px; text-align: center; }
 
-/* Da 900px la scheda sta nella schermata: l'elenco scorre dentro (sotto, è la pagina a scorrere). */
+/* Da 900px: testata sticky sotto l'intestazione del banco (64px). Le colonne della riga dell'ordine si stringono un po' fra 900 e 1180px. */
 @media (min-width: 900px) {
-  .mc-card { max-height: max(460px, calc(100vh - 180px)); max-height: max(460px, calc(100dvh - 180px)); }
+  .mc-fisso { position: sticky; top: 64px; z-index: 5; transition: box-shadow 0.15s; }
+  .mc-fisso.staccato { box-shadow: 0 6px 14px -8px rgba(35, 32, 25, 0.32); }
 }
-/* Colonna destra stretta: la riga dell'ordine va su due righe (numero e totale / dati e stato) */
-@media (max-width: 1179.98px) {
-  .mc-sum { grid-template-columns: 18px minmax(0, 1fr) auto; grid-template-areas: "freccia num tot" ". meta stato"; row-gap: 6px; }
-  .mc-freccia { grid-area: freccia; }
-  .mc-num { grid-area: num; }
-  .mc-tot { grid-area: tot; }
-  .mc-meta { grid-area: meta; }
-  .mc-stato { grid-area: stato; justify-self: end; }
-  .mc-dettaglio { padding-left: var(--mc-pad); }
+@media (min-width: 900px) and (max-width: 1179.98px) {
+  .mc-sum { grid-template-columns: 18px 112px 180px minmax(0, 1fr) 124px 108px; }
+  /* la testata è sticky anche qui: filtri più stretti, così stanno su una riga più a lungo (a due righe occuperebbe troppo schermo) */
+  .mc-testa { gap: 8px 10px; }
+  .mc-titolo { margin-right: 0; font-size: 16px; }
+  .mc-seg-voce { padding: 0 11px; font-size: 13.5px; }
+  .mc-testa-destra { gap: 8px; }
+  .mc-esporta { padding: 0 12px; }
 }
-/* Schermi a tocco: i segmenti arrivano a 44px (control da 48) */
+/* Tablet e telefono: la testata NON è sticky (occuperebbe troppo schermo), la riga dell'ordine va su due righe, il totale della striscia sotto i conteggi */
 @media (max-width: 899.98px) {
   .mc-seg { padding: 2px; }
   .mc-seg-voce { min-height: 44px; }
+  .mc-esporta { min-height: 44px; }
+  .mc-altri-select, .mc-altri-vai { height: 44px; font-size: 16px; } /* 16px: sotto Safari iPhone ingrandisce la pagina al tocco */
+  .mc-totale { flex: 1 1 100%; justify-content: space-between; margin-left: 0; }
+  .mc-sum {
+    grid-template-columns: 18px minmax(0, 1fr) auto; grid-template-areas: "freccia num tot" ". meta stato"; row-gap: 6px;
+    height: auto; min-height: 50px; padding-top: 10px; padding-bottom: 10px;
+  }
+  .mc-freccia { grid-area: freccia; }
+  .mc-num { grid-area: num; }
+  .mc-tot { grid-area: tot; }
+  .mc-meta { display: block; grid-area: meta; }
+  .mc-narticoli::before { content: " · "; }
+  .mc-stato { grid-area: stato; justify-self: end; }
+  .mc-dettaglio { padding-left: var(--mc-pad); }
 }
 /* Telefono stretto: i mesi vanno a capo invece di scorrere di lato (un "Tutto" tagliato non si vedrebbe) */
 @media (max-width: 479.98px) {
-  .mc-seg { flex-wrap: wrap; overflow-x: visible; }
-  .mc-seg-voce { padding: 0 14px; }
+  .mc-seg { flex-wrap: wrap; gap: 2px; overflow-x: visible; }
+  .mc-seg-voce { padding: 0 9px; font-size: 13.5px; }
 }
 @media (max-width: 639.98px) {
   .mc-card { --mc-pad: 14px; }
-  .mc-riepilogo { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  .mc-box-totale { grid-column: 1 / -1; order: -1; }
-  .mc-seg-vista { width: 100%; }
+  /* testata su tre righe: titolo e "Esporta" / mesi (e "Altri mesi") / "Per ordine | Per articolo" a tutta larghezza */
+  .mc-testa { gap: 10px 12px; }
+  .mc-testa-destra { display: contents; }
+  .mc-esporta { order: 1; margin-left: auto; }
+  .mc-filtri-mesi { order: 2; flex: 1 1 100%; }
+  .mc-seg-vista { order: 3; flex: 1 1 100%; }
   .mc-seg-vista .mc-seg-voce { flex: 1; justify-content: center; }
   .mc-sum { column-gap: 10px; grid-template-areas: "freccia num tot" ". meta meta" ". stato stato"; }
   .mc-stato { justify-self: start; }
-  .mc-tab th, .mc-tab td { padding: 10px; }
+  .mc-tab th, .mc-tab td { padding: 8px 10px; }
   .mc-tab .mc-c-qta { width: 52px; }
   .mc-tab .mc-c-num { width: 84px; }
   .mc-c-cad, .mc-c-ordini { display: none; }
   .mc-cad-sub, .mc-negli-sub { display: inline; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .mc-freccia { transition: none; }
+  .mc-freccia, .cli-dati-chev, .mc-fisso { transition: none; }
 }
 
 /* Pagine pubbliche: privacy e eliminazione dell'account (views/legale.ejs) */
