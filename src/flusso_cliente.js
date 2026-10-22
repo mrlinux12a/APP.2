@@ -134,13 +134,13 @@ async function validaRichiesta(clienteId, righe) {
 // arrivare da un'altra parte): vale per l'invio, per "Rinvia" e, con Stripe, anche a carta già autorizzata (allora la carta si rilascia).
 // Ritorna lo stato ({ aperto, riapre }) se è aperto, altrimenti lancia ErroreFlusso 'banco_chiuso'.
 async function controllaBancoAperto(quando = new Date()) {
-  const stato = await richieste.statoBanchiAttivi(quando);
+  const { stato, nome } = await richieste.bancoPerInstallatore(quando);
   if (!stato.aperto) {
     throw new ErroreFlusso(
       'banco_chiuso',
       'Il banco è chiuso',
       (stato.riapre ? 'Riapre ' + stato.riapre.testo + '.' : 'Al momento non riceve richieste.') + ' Non è stato addebitato nulla: riprova quando riapre.',
-      { riapre: stato.riapre, frase: orari.frasePerCarrello(stato) }
+      { riapre: stato.riapre, frase: orari.frasePerCarrello(stato), testi: orari.testiChiuso(stato, nome) }
     );
   }
   return stato;

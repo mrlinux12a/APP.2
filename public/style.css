@@ -2133,7 +2133,15 @@ html.misura-aperta { overflow: hidden; }
 :root { --altezza-barra-paga: 96px; }
 .app-carrello { padding-bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + var(--altezza-barra-paga) + 8px + 16px); }
 
-.carrello-testata { display: flex; justify-content: flex-end; margin-bottom: 4px; }
+.carrello-testata { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+/* "Svuota": pillola bianca col cestino, in alto a destra (richiesta esplicita del 22/10/2026). Area di tocco da 44px con la pillola da 34px dentro. */
+.btn-svuota {
+  position: relative; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px;
+  background: var(--surface); border: 1px solid var(--bordo); border-radius: 999px;
+  color: var(--testo, #1c1c1a); font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.btn-svuota svg { width: 16px; height: 16px; flex: none; }
+.btn-svuota::after { content: ""; position: absolute; inset: -5px -4px; }
 .link-aggiungi {
   display: inline-flex; align-items: center; min-height: 44px; padding: 0 2px;
   color: var(--blu); font-size: 15px; font-weight: 600; text-decoration: none;
@@ -2198,12 +2206,6 @@ html.misura-aperta { overflow: hidden; }
 /* "Paghi ora in app" e "Materiale, da pagare al banco": sotto il totale, separati da una riga */
 .riepilogo-riga.riepilogo-diviso { margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--bordo); }
 
-/* "Svuota carrello": in fondo, centrato, link sottolineato in rosso scuro */
-.svuota-fondo {
-  display: block; margin: 8px auto 0; min-height: 44px; padding: 0 16px; background: none; border: none;
-  color: #973030; font-family: inherit; font-size: 15px; text-decoration: underline; cursor: pointer;
-}
-
 /* Barra di pagamento fissa, subito sopra la navbar */
 .barra-paga {
   position: fixed; left: 0; right: 0; bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + 8px); z-index: 24;
@@ -2227,12 +2229,69 @@ html.misura-aperta { overflow: hidden; }
 .btn-paga:disabled { background: #c9d0d8; cursor: not-allowed; }
 /* Banco chiuso (orari dell'"Anagrafica del banco"): al posto di "Paga e invia richiesta" c'è "Il banco è chiuso · riapre domani alle 07:30", sempre
    disabilitato (public/app.js non lo riattiva), su due righe se serve: scuro su grigio, leggibile, non il bianco su grigio chiaro di un pulsante spento. */
-.btn-paga.btn-paga-chiuso { background: #ece9e2; color: #3f3e38; border: 1px solid var(--bordo); white-space: normal; line-height: 1.2; font-size: 14px; padding: 0 14px; }
+.btn-paga.btn-paga-chiuso { background: #a9bbd0; color: #ffffff; }
 .barra-paga-nota {
   display: flex; align-items: center; justify-content: center; gap: 6px;
   margin: 8px 0 0; color: var(--grigio); font-size: 12.5px; line-height: 1.3;
 }
 .barra-paga-nota .scudo { flex: none; display: flex; color: var(--verde); font-size: 16px; }
+
+/* Banco chiuso / in chiusura (richiesta esplicita del 22/10/2026, mockup carrello-chiuso.png e carrello-in-chiusura.png). Il pulsante spento e la nota con la luna
+   dicono quando riapre; la striscia arancio "Ancora N min per inviare" sta in cima alla barra, a tutta larghezza (annulla il padding della barra). */
+.barra-paga-nota.barra-paga-chiusa { color: var(--testo); }
+.barra-paga-nota.barra-paga-chiusa strong { font-weight: 700; }
+.nota-luna { flex: none; display: flex; color: var(--grigio); }
+.nota-luna svg { width: 16px; height: 16px; }
+.bp-chiusura {
+  display: flex; align-items: center; gap: 8px; margin: -10px -14px 10px; padding: 9px 14px;
+  background: var(--arancio-chiaro); color: #8f3f19; font-size: 14px; line-height: 1.25;
+}
+.bp-chiusura strong { font-weight: 700; }
+.bp-chiusura-ico { flex: none; display: flex; }
+.bp-chiusura-ico svg { width: 18px; height: 18px; }
+.app-carrello.app-carrello-chiusura { padding-bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + var(--altezza-barra-paga) + 8px + 16px + 38px); }
+
+/* Riquadro "Ordini chiusi per oggi" in cima al carrello, con "Vedi orari" (porta a /orari). */
+.cc-chiuso { background: var(--blu-scuro); color: #ffffff; border-radius: 16px; padding: 16px; margin: 0 0 14px; }
+.cc-testa { display: flex; align-items: center; gap: 12px; }
+.cc-luna { flex: none; display: flex; align-items: center; justify-content: center; width: 46px; height: 46px; border-radius: 50%; background: rgba(255, 255, 255, 0.15); }
+.cc-luna svg { width: 23px; height: 23px; }
+.cc-titolo { margin: 0; font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; font-size: 18px; font-weight: 700; line-height: 1.2; }
+.cc-sotto { margin: 3px 0 0; font-size: 14.5px; opacity: 0.92; }
+.cc-sotto strong { font-weight: 700; opacity: 1; }
+.cc-testo { margin: 12px 0 0; font-size: 14.5px; line-height: 1.4; opacity: 0.95; }
+.cc-orari {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; margin-top: 14px; padding: 0 16px;
+  border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 999px; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none;
+}
+.cc-orari svg { width: 16px; height: 16px; flex: none; }
+
+/* Pagina "Orari di BOREA" (views/orari_banco.ejs, mockup orari-borea.png). */
+.app-orari { padding-bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + 24px); }
+.ob-stato { display: flex; align-items: center; gap: 12px; padding: 14px; margin-bottom: 12px; background: var(--surface); border: 1px solid var(--bordo); border-radius: 16px; }
+.ob-luna { flex: none; display: flex; align-items: center; justify-content: center; width: 46px; height: 46px; border-radius: 50%; background: var(--blu-scuro); color: #ffffff; }
+.ob-aperto .ob-luna { background: var(--verde); }
+.ob-luna svg { width: 23px; height: 23px; }
+.ob-titolo { display: flex; align-items: center; gap: 8px; margin: 0; font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; font-size: 20px; font-weight: 700; line-height: 1.2; }
+.ob-punto { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--rosso); }
+.ob-aperto .ob-punto { background: var(--verde); }
+.ob-sotto { margin: 3px 0 0; font-size: 14.5px; color: var(--grigio); }
+.ob-sotto strong { color: var(--testo); font-weight: 700; }
+.ob-card { padding: 16px 14px 8px; background: var(--surface); border: 1px solid var(--bordo); border-radius: 16px; }
+.ob-occhiello { margin: 0 0 4px 4px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--grigio); }
+.ob-giorni { list-style: none; margin: 0; padding: 0; }
+.ob-giorno { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 14px 10px; border-top: 1px solid var(--bordo); }
+.ob-giorno:first-child { border-top: none; }
+.ob-oggi { background: var(--blu-chiaro); border-radius: 12px; border-top-color: transparent; }
+.ob-oggi + .ob-giorno { border-top-color: transparent; }
+.ob-nome { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 16px; font-weight: 700; }
+.ob-badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+.ob-badge-oggi { background: var(--blu); color: #ffffff; }
+.ob-badge-riapre { background: var(--verde-chiaro); color: var(--verde); }
+.ob-fasce { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; font-size: 15px; font-variant-numeric: tabular-nums; }
+.ob-oggi .ob-fasce { font-weight: 700; }
+.ob-chiuso-txt { color: var(--grigio); }
+.ob-nota { margin: 14px 4px 0; font-size: 14px; line-height: 1.4; color: var(--grigio); }
 @media (min-width: 720px) {
   .barra-paga-interno { max-width: 560px; }
 }

@@ -31,8 +31,9 @@
           <p class="colonna-vuota">Nessuna richiesta in attesa.</p>
         <% } %>
         <% daConfermare.forEach(function (r) { %>
+          <%# data-chiave: l'identità della scheda, per aggiornare la bacheca sul posto senza ricaricare la pagina (public/app.js, "Home del banco"). %>
           <article class="scheda scheda-richiesta<%= r.urgente ? ' urgente' : '' %><%= r.appena ? ' entra' : '' %>"
-                   data-richiesta data-secondi="<%= r.secondi %>" data-finestra="<%= finestraSecondi %>"
+                   data-chiave="richiesta-<%= r.id %>" data-richiesta data-secondi="<%= r.secondi %>" data-finestra="<%= finestraSecondi %>"
                    data-nuova-sec="<%= r.nuovaSec %>">
             <div class="scheda-testa">
               <div class="anello">
@@ -92,7 +93,7 @@
           <p class="colonna-vuota">Nessuna consegna in attesa di un corriere.</p>
         <% } %>
         <% attesaCorriere.forEach(function (c) { %>
-          <article class="scheda scheda-corriere" data-corriere data-trascorsi="<%= c.trascorsi %>">
+          <article class="scheda scheda-corriere" data-chiave="corriere-<%= c.id %>" data-corriere data-trascorsi="<%= c.trascorsi %>">
             <div class="scheda-testa scheda-testa-corriere">
               <span class="scheda-icona" aria-hidden="true"><%- iconaMessaggio %></span>
               <div class="scheda-testi">
@@ -127,7 +128,7 @@
              const minutiArrivo = o.arrivo ? Math.ceil(o.arrivo.secondi / 60) : 0;
              const inRitardo = o.arrivo && minutiArrivo <= 0;
         %>
-          <article class="scheda scheda-ordine">
+          <article class="scheda scheda-ordine" data-chiave="ordine-<%= o.id %>">
             <div class="scheda-testa scheda-testa-alto">
               <div class="scheda-testi">
                 <h3 class="scheda-nome"><%= o.cliente_nome %></h3>

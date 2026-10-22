@@ -985,11 +985,12 @@ app.get('/carrello', requireRole('cliente'), async (req, res) => {
   const righe = await righeCarrello(req);
   // Il banco è aperto? Fuori dagli orari impostati nella sua "Anagrafica" il pulsante di pagamento dice quando riapre e non si può premere (lo stesso
   // controllo lo rifà il server al momento di pagare). A carrello vuoto non serve: niente query in più.
-  const [riepilogo, statoBanco, cliente] = await Promise.all([
+  const [riepilogo, banco, cliente] = await Promise.all([
     flusso.riepilogoCarrello(righe),
-    righe.length ? richieste.statoBanchiAttivi() : { aperto: true, riapre: null },
+    righe.length ? richieste.bancoPerInstallatore() : { stato: { aperto: true, riapre: null, chiude: null }, nome: '' },
     db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id),
   ]);
+  const statoBanco = banco.stato;
 
   // Gli articoli che "Riordina" ha saltato (POST /storico/:id/riordina): l'avviso si mostra una volta sola.
   const saltati = Number(req.session.avvisoCarrello) || 0;
@@ -1001,13 +1002,25 @@ app.get('/carrello', requireRole('cliente'), async (req, res) => {
     chiaveInvio: require('crypto').randomBytes(12).toString('hex'),
     avviso: saltati === 1 ? '1 articolo non è più disponibile' : saltati > 1 ? saltati + ' articoli non sono più disponibili' : '',
     righe,
+    // Fuori orario il carrello si riempie ma non si invia (richiesta esplicita del 22/10/2026): in alto il riquadro "Ordini chiusi", sotto il pulsante spento e la nota
+    // con quando riapre. Poco prima della chiusura (orari.IN_CHIUSURA_MIN) una striscia sopra la barra di pagamento dice quanto manca. Tutti i testi: orari.testiChiuso.
     bancoChiuso: !statoBanco.aperto,
     fraseBancoChiuso: orari.frasePerCarrello(statoBanco),
+    testiChiuso: orari.testiChiuso(statoBanco, banco.nome),
+    avvisoChiusura: orari.avvisoChiusura(statoBanco),
     ...riepilogo,
     cliente,
     // Solo a carrello vuoto: la scheda "Il tuo ultimo ordine" con "Rimetti nel carrello" (una lettura sola).
     ultimoOrdine: righe.length ? null : await flusso.ultimoOrdineConsegnato(req.session.user.id),
   });
+});
+
+// "Orari di BOREA" (richiesta esplicita del 22/10/2026): a quali ore si può inviare una richiesta, dagli orari impostati nella "Anagrafica del banco" (mai scritti nel
+// codice). Ci si arriva da "Vedi orari" del carrello quando è chiuso. L'installatore vede la ditta, mai la filiale: gli orari delle filiali si mettono insieme.
+app.get('/orari', requireRole('cliente'), async (req, res) => {
+  const banco = await richieste.bancoPerInstallatore();
+  const nome = banco.nome || 'il banco';
+  res.render('orari_banco', { titolo: 'Orari di ' + nome, intestazione: banco.nome ? 'Orari di ' + banco.nome : 'Orari del banco', nomeBanco: nome, pagina: orari.paginaOrari(banco.distributori, banco.nome) });
 });
 
 app.post('/carrello/svuota', requireRole('cliente'), async (req, res) => {

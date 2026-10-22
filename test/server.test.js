@@ -2813,6 +2813,8 @@ test('home del banco: bacheca a tre colonne, senza interruttore né riquadri con
     assert.ok(t.includes('data-soglia-urgente="180"'));
     assert.doesNotMatch(t, /data-soglia-arrivo/, 'la scheda "Da preparare" non ha più una soglia rossa');
 
+    // ogni scheda ha la sua identità (data-chiave): la home si aggiorna sul posto e aggiunge, toglie e riordina solo quelle cambiate (public/app.js, "Home del banco")
+    assert.deepEqual([...t.matchAll(/<article class="scheda scheda-(richiesta|corriere|ordine)[^"]*"\s+data-chiave="([^"]+)"/g)].map((m) => m[2]), ['richiesta-11', 'richiesta-12', 'corriere-21', 'ordine-1280', 'ordine-1281']);
     // Da confermare: anello, timer, "Nuova" (447 s rimasti su 600: arrivata da 2 min 33 s), articoli, due pulsanti
     assert.equal(t.match(/data-richiesta /g).length, 2);
     assert.match(t, /data-secondi="447" data-finestra="600"/);
@@ -3910,6 +3912,14 @@ test('avvisi del banco: lo script e gli stili ci sono, il suono è un MP3 legger
   assert.match(js, /sorgente\.addEventListener\('notifica'/);
   // audio bloccato dal browser + notifiche del computer attive: suona la notifica di sistema al posto del sito
   assert.match(js, /esito === 'bloccato' && notificheSistemaConsentite\(\)/);
+  // la HOME non si ricarica: le colonne si aggiornano sul posto (scheda, suono e numero sul tab "Banco" insieme: "arriva prima il suono e il numeretto rispetto alla card")
+  assert.match(js, /Minuteria\.homeBanco = \{ rinfresca: rinfresca \};/);
+  assert.match(js, /new CustomEvent\('minuteria:bacheca'/);
+  assert.match(js, /window\.addEventListener\('minuteria:bacheca'/);
+  assert.match(js, /home && aggiornare \? Promise\.race\(\[home\.rinfresca\(\), pausa\(2500\)\]\)/);
+  assert.match(js, /function homeBanco\(\) \{\s*return typeof Minuteria !== 'undefined' && Minuteria\.homeBanco \? Minuteria\.homeBanco : null;/);
+  assert.match(js, /const versioneAttuale = function \(\) \{ return document\.body\.dataset\.versione \|\| null; \};/);
+  assert.doesNotMatch(js, /versionePagina/, 'i numeri della pagina si rileggono a ogni controllo: la home li riscrive aggiornandosi');
   // gli avvisi azzurri "Attiva il suono" / "Attiva le notifiche" (nascosti di default) e i loro stili
   assert.match(js, /Attiva il suono/);
   assert.match(js, /Attiva le notifiche/);
@@ -5101,9 +5111,30 @@ test('carrello: con TUTTI i banchi chiusi (orari) il pulsante dice quando riapre
   try {
     banchiAttiviProva.righe = soloQuelGiorno();
     let t = await (await chiedi('/carrello')).text();
-    assert.match(t, new RegExp('<button class="btn-paga btn-paga-chiuso" type="submit" form="form-invia" data-btn-paga data-banco-chiuso disabled>Il banco è chiuso · riapre ' + nomeGiorno + ' alle 07:30</button>'));
-    assert.doesNotMatch(t, /Paga e invia richiesta<\/button>/, 'al posto del pulsante di pagamento');
+    // richiesta del 22/10/2026: riquadro "Ordini chiusi" in cima, pulsante di sempre ma spento, nota con la luna sotto il pulsante; il nome del banco viene dal DB
+    assert.match(t, /<h2 class="cc-titolo" id="cc-titolo">Ordini chiusi per oggi<\/h2>/);
+    assert.match(t, new RegExp('<p class="cc-sotto">BOREA riapre <strong>' + nomeGiorno + ' alle 07:30</strong></p>'));
+    assert.match(t, /Puoi continuare ad aggiungere materiale: il carrello resta salvato e lo invii appena riapre\./);
+    assert.match(t, /<a class="cc-orari" href="\/orari">[\s\S]*?Vedi orari/);
+    assert.match(t, /<button class="btn-paga btn-paga-chiuso" type="submit" form="form-invia" data-btn-paga data-banco-chiuso disabled>Paga e invia richiesta<\/button>/);
+    assert.match(t, new RegExp('<span>Ordini chiusi · BOREA riapre <strong>' + nomeGiorno + ' alle 07:30</strong></span>'));
     assert.doesNotMatch(t, /Se nessun banco accetta, ti rimborsiamo/, 'niente promessa di rimborso: non si paga');
+    assert.doesNotMatch(t, /bp-chiusura/, 'la striscia "Ancora N min" è solo per quando è aperto e sta per chiudere');
+
+    // la pagina "Orari di BOREA": stato adesso e sette giorni, dagli orari del DB (qui solo "fra due giorni")
+    const pagOrari = await chiedi('/orari');
+    assert.equal(pagOrari.status, 200);
+    const to = await pagOrari.text();
+    assert.match(to, /<div class="titolo">Orari di BOREA<\/div>/);
+    assert.match(to, /<h1 class="ob-titolo"><span class="ob-punto" aria-hidden="true"><\/span>Chiuso ora<\/h1>/);
+    assert.match(to, new RegExp('BOREA riapre <strong>' + nomeGiorno + ' alle 07:30</strong>'));
+    assert.equal((to.match(/<li class="ob-giorno/g) || []).length, 7);
+    assert.equal((to.match(/<span class="ob-badge ob-badge-oggi">Oggi<\/span>/g) || []).length, 1);
+    assert.match(to, /<span class="ob-badge ob-badge-riapre">Riapre<\/span>/);
+    assert.match(to, /<span>07:30 – 12:30<\/span>/);
+    assert.match(to, /Fuori da questi orari puoi preparare il carrello, ma la richiesta si invia solo quando BOREA è aperto\./);
+    assert.doesNotMatch(to, /profilo-btn/, 'solo freccia e titolo');
+    assert.match(to, /href="\/carrello" aria-label="Indietro"/);
 
     // il server rifiuta lo stesso (la pagina può essere rimasta aperta): errore, nessun INSERT, il carrello resta
     const prima = registro.length;
@@ -5119,8 +5150,26 @@ test('carrello: con TUTTI i banchi chiusi (orari) il pulsante dice quando riapre
     banchiAttiviProva.righe = [...soloQuelGiorno(), { id: 3, nome: 'BOREA SRL', filiale: 'Banco Genova Staglieno', orari: null }];
     t = await (await chiedi('/carrello')).text();
     assert.match(t, /<button class="btn-paga" type="submit" form="form-invia" data-btn-paga >Paga e invia richiesta<\/button>/);
-    assert.doesNotMatch(t, /btn-paga-chiuso|data-banco-chiuso/);
+    assert.doesNotMatch(t, /btn-paga-chiuso|data-banco-chiuso|cc-chiuso/);
     assert.match(t, /Se nessun banco accetta, ti rimborsiamo/);
+
+    // aperto ma sta per chiudere: striscia sopra la barra di pagamento ("Ancora 9 min per inviare: alle HH:MM chiudiamo"), il pulsante resta quello di sempre.
+    // Gli orari si costruiscono sull'ora di Roma di adesso (chiude fra 9 minuti): vicino alla mezzanotte non si può, e quel pezzo si salta.
+    const romaOra = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date());
+    const adessoMin = Number(romaOra.find((p) => p.type === 'hour').value) * 60 + Number(romaOra.find((p) => p.type === 'minute').value);
+    if (adessoMin >= 5 && adessoMin <= 1440 - 20) {
+      const testoOra = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+      const chiudeAlle = testoOra(adessoMin + 9);
+      banchiAttiviProva.righe = [{ id: 2, nome: 'BOREA SRL', filiale: 'Banco Genova Fegino', orari: Object.fromEntries(orari.GIORNI.map((g) => [g, [[testoOra(adessoMin - 5), chiudeAlle]]])) }];
+      t = await (await chiedi('/carrello')).text();
+      assert.match(t, new RegExp('<div class="bp-chiusura" role="status" data-chiusura-sec="\\d+" data-chiusura-ora="' + chiudeAlle + '">'));
+      assert.match(t, new RegExp('Ancora <strong data-chiusura-min>(9|10) min</strong> per inviare: alle ' + chiudeAlle + ' chiudiamo'));
+      assert.match(t, /<button class="btn-paga" type="submit" form="form-invia" data-btn-paga >Paga e invia richiesta<\/button>/);
+      assert.doesNotMatch(t, /cc-chiuso|btn-paga-chiuso/);
+      // più lontano dalla chiusura (oltre la soglia): niente striscia
+      banchiAttiviProva.righe = [{ id: 2, nome: 'BOREA SRL', filiale: 'Banco Genova Fegino', orari: Object.fromEntries(orari.GIORNI.map((g) => [g, [['00:00', '23:59']]])) }];
+      if (adessoMin <= 1440 - 40) assert.doesNotMatch(await (await chiedi('/carrello')).text(), /bp-chiusura/);
+    }
   } finally {
     banchiAttiviProva.righe = originale;
   }

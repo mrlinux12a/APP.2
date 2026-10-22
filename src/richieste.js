@@ -152,6 +152,19 @@ async function statoBanchiAttivi(quando = new Date()) {
   return orari.statoBanchi(await distributoriAttivi(), quando);
 }
 
+// Il nome della ditta dei banchi attivi come lo vede l'installatore ("BOREA SRL" -> "BOREA", mai la filiale); con più ditte diverse o nessuna: '' (i testi dicono "il banco").
+function nomeDittaDeiBanchi(distributori) {
+  const nomi = [...new Set((distributori || []).map((d) => format.nomeCommerciale(d.nome)).filter(Boolean))];
+  return nomi.length === 1 ? nomi[0] : '';
+}
+
+// Tutto quello che il carrello, la pagina "Orari di BOREA" e l'API dell'app devono sapere dei banchi attivi con UNA lettura: le righe (con gli orari impostati nella loro
+// "Anagrafica del banco"), lo stato adesso ({ aperto, riapre, chiude }) e il nome della ditta.
+async function bancoPerInstallatore(quando = new Date()) {
+  const distributori = await distributoriAttivi();
+  return { distributori, stato: orari.statoBanchi(distributori, quando), nome: nomeDittaDeiBanchi(distributori) };
+}
+
 // ---------- Creazione ----------
 
 // Crea la richiesta di disponibilita' e manda la notifica ai distributori della zona.
@@ -970,6 +983,8 @@ module.exports = {
   assegnaOrdine,
   distributoriCandidati,
   statoBanchiAttivi,
+  bancoPerInstallatore,
+  nomeDittaDeiBanchi,
   creaRichiesta,
   reinviaRichiesta,
   aggiornaScadenza,

@@ -521,7 +521,8 @@ Senza chiavi, senza tabella o con `PUSH_ATTIVO=0` il sito funziona come prima: a
 
 **Banco** (richieste da confermare e "corriere trovato"): il suono arriva da ogni pagina del banco, anche con la scheda nascosta (il server avvisa la pagina in tempo reale, `GET /api/eventi`), e
 con la pagina chiusa o in secondo piano arriva la notifica di sistema, **ma solo se il banco le ha accese**: sotto l'intestazione compare l'avviso azzurro "Attiva le notifiche" (si rimanda di
-7 giorni con "Non ora"; l'interruttore sta anche in Anagrafica del banco › Notifiche). Se il browser tiene fermo l'audio compare "Attiva il suono": basta un tocco sulla pagina. Il suono
+7 giorni con "Non ora"; l'interruttore sta anche in Anagrafica del banco › Notifiche). Se il browser tiene fermo l'audio compare "Attiva il suono": basta un tocco sulla pagina. La **home non si ricarica**:
+le schede si aggiornano sul posto e il suono parte nello stesso istante della scheda (così l'audio resta sbloccato). Il suono
 (`public/suoni/avviso.mp3`, "din-don" morbido) si rigenera con `node scripts/genera_suono_avviso.js` (serve `ffmpeg` nel PATH); "Ascolta il suono" in Anagrafica lo fa sentire.
 
 ## Gruppo WhatsApp dei corrieri

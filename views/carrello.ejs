@@ -4,7 +4,7 @@
   <%- include('partials/app_head', { titolo }) %>
 </head>
 <body data-loggato="1">
-  <div class="app<%= righe.length ? ' app-carrello' : ' app-vuoto' %>">
+  <div class="app<%= righe.length ? ' app-carrello' + (avvisoChiusura ? ' app-carrello-chiusura' : '') : ' app-vuoto' %>">
     <%- include('partials/appbar', { titolo, intestazione: 'Carrello' }) %>
 
     <% if (!righe.length) { %>
@@ -69,10 +69,27 @@
       %>
       <div class="contenuto">
         <% if (avviso) { %><div class="avviso avviso-attenzione" role="status"><%= avviso %></div><% } %>
+        <%# Fuori dagli orari del banco (impostati nella sua "Anagrafica", src/orari.js): il carrello si riempie e resta salvato, ma non si invia (richiesta esplicita del
+            22/10/2026, mockup docs/mockup/carrello-chiuso.png). L'avviso c'è SOLO qui, mai nel catalogo. Testi: orari.testiChiuso. %>
+        <% if (bancoChiuso && testiChiuso) { %>
+          <section class="cc-chiuso" role="status" aria-labelledby="cc-titolo">
+            <div class="cc-testa">
+              <span class="cc-luna" aria-hidden="true"><%- iconaLuna %></span>
+              <div class="cc-testi">
+                <h2 class="cc-titolo" id="cc-titolo"><%= testiChiuso.titolo %></h2>
+                <p class="cc-sotto"><%= testiChiuso.sottoPrefisso %><% if (testiChiuso.quando) { %><strong><%= testiChiuso.quando %></strong><% } %></p>
+              </div>
+            </div>
+            <p class="cc-testo">Puoi continuare ad aggiungere materiale: il carrello resta salvato e lo invii appena riapre.</p>
+            <a class="cc-orari" href="/orari"><%- iconaOrario %><span>Vedi orari</span><%- iconaAvanti %></a>
+          </section>
+        <% } %>
         <div class="carrello-layout">
           <div class="carrello-articoli">
             <div class="carrello-testata">
               <a class="link-aggiungi" href="/home" data-torna-catalogo>+ Aggiungi pezzi</a>
+              <%# Richiesta esplicita del 22/10/2026: "Svuota" è in alto a destra, pillola con il cestino (prima era un link in fondo alla pagina). Chiede conferma, punta a #form-svuota. %>
+              <button class="btn-svuota" type="submit" form="form-svuota" aria-label="Svuota carrello"><%- iconaCestino %>Svuota</button>
             </div>
 
             <form method="POST" action="/carrello" id="form-carrello">
@@ -102,7 +119,7 @@
                 </div>
               <% }); %>
             </form>
-            <%# Svuotare chiede conferma: il pulsante è in fondo alla pagina e punta a questo form (form="form-svuota"). %>
+            <%# Svuotare chiede conferma: il pulsante "Svuota" è in cima alla pagina e punta a questo form (form="form-svuota"). %>
             <form method="POST" action="/carrello/svuota" id="form-svuota" onsubmit="return confirm('Svuotare il carrello?')"></form>
           </div>
 
@@ -204,8 +221,6 @@
                 <div class="cp-spesa"><span>Spesa complessiva</span><span>€ <span data-riep="spesa"><%= vista.spesa %></span></span></div>
               </div>
             </form>
-
-            <button class="svuota-fondo" type="submit" form="form-svuota">Svuota carrello</button>
           </div>
         </div>
       </div>
@@ -213,22 +228,35 @@
       <%# Barra di pagamento fissa, sopra la navbar. Il pulsante invia il form "form-invia" (come il vecchio
           "Paga … e invia la richiesta"); l'importo (come ogni voce del riepilogo) si riscrive da solo quando cambia una quantità
           (public/app.js, blocco "Carrello"). %>
-      <div class="barra-paga">
+      <div class="barra-paga<%= avvisoChiusura ? ' barra-paga-chiusura' : '' %>">
+        <%# Poco prima della chiusura (orari.IN_CHIUSURA_MIN): striscia sopra la barra, "Ancora 9 min per inviare: alle 17:00 chiudiamo". I minuti li aggiorna
+            public/app.js (data-chiusura-sec = secondi che mancano adesso); a zero la pagina si ricarica e mostra "Ordini chiusi". %>
+        <% if (avvisoChiusura) { %>
+          <div class="bp-chiusura" role="status" data-chiusura-sec="<%= avvisoChiusura.secondi %>" data-chiusura-ora="<%= avvisoChiusura.ora %>">
+            <span class="bp-chiusura-ico" aria-hidden="true"><%- iconaOrario %></span>
+            <span>Ancora <strong data-chiusura-min><%= avvisoChiusura.mancanoMin %> min</strong> per inviare: alle <%= avvisoChiusura.ora %> chiudiamo</span>
+          </div>
+        <% } %>
         <div class="barra-paga-interno">
           <div class="barra-paga-riga">
             <div class="bp-totale">
               <span class="bp-label">Paghi ora · consegna</span>
               <span class="bp-importo">€ <span data-riep="app_totale"><%= vista.app_totale %></span></span>
             </div>
-            <%# Banco chiuso (fuori dagli orari impostati nell'"Anagrafica del banco"): niente pagamento, il pulsante dice quando riapre e resta spento anche
-                se si cambia una quantità (public/app.js guarda data-banco-chiuso). Il server rifiuta comunque (flusso.validaRichiesta, 'banco_chiuso'). %>
+            <%# Banco chiuso (fuori dagli orari impostati nell'"Anagrafica del banco"): il pulsante resta spento anche se si cambia una quantità (public/app.js guarda
+                data-banco-chiuso) e sotto c'è la nota con quando riapre. Il server rifiuta comunque (flusso.validaRichiesta, 'banco_chiuso'). %>
             <% if (bancoChiuso) { %>
-              <button class="btn-paga btn-paga-chiuso" type="submit" form="form-invia" data-btn-paga data-banco-chiuso disabled><%= fraseBancoChiuso %></button>
+              <button class="btn-paga btn-paga-chiuso" type="submit" form="form-invia" data-btn-paga data-banco-chiuso disabled>Paga e invia richiesta</button>
             <% } else { %>
               <button class="btn-paga" type="submit" form="form-invia" data-btn-paga <%= raggiunto ? '' : 'disabled' %>>Paga e invia richiesta</button>
             <% } %>
           </div>
-          <% if (!bancoChiuso) { %>
+          <% if (bancoChiuso && testiChiuso) { %>
+            <p class="barra-paga-nota barra-paga-chiusa">
+              <span class="nota-luna" aria-hidden="true"><%- iconaLuna %></span>
+              <span><%= testiChiuso.notaPrefisso %><% if (testiChiuso.quando) { %><strong><%= testiChiuso.quando %></strong><% } %></span>
+            </p>
+          <% } else if (!bancoChiuso) { %>
             <p class="barra-paga-nota">
               <span class="scudo"><%- iconaScudo %></span>
               <span>Se nessun banco accetta, ti rimborsiamo</span>

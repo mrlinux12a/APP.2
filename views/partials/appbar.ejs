@@ -23,10 +23,13 @@
 
   <div class="azioni-appbar">
     <% if (eCliente) { %>
+      <%# `senzaProfilo` (pagina "Orari di BOREA"): solo freccia e titolo, come nel mockup. %>
+      <% if (typeof senzaProfilo === 'undefined' || !senzaProfilo) { %>
       <button class="profilo-btn" type="button" data-menu-apri aria-label="Menu profilo"
               aria-haspopup="menu" aria-expanded="false" aria-controls="menu-profilo">
         <%- include('iniziali', { nome: currentUser.ragione_sociale, persona: profilo && profilo.referente, misura: 36 }) %>
       </button>
+      <% } %>
     <% } else { %>
       <a class="icona-btn" href="/notifiche" aria-label="Notifiche">
         <%- iconaNotifiche %>

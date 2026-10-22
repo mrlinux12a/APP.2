@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('partials/app_head', { titolo }) %>
+</head>
+<body data-loggato="1">
+  <%# "Orari di BOREA" (richiesta esplicita del 22/10/2026, mockup docs/mockup/orari-borea.png): quando si può inviare una richiesta. Tutto viene dagli orari che il banco
+      imposta nella sua "Anagrafica del banco" (orari.paginaOrari): niente orari scritti qui. Classi ob-*. %>
+  <div class="app app-orari">
+    <%- include('partials/appbar', { titolo, intestazione, indietro: '/carrello', senzaProfilo: true }) %>
+
+    <div class="contenuto">
+      <section class="ob-stato <%= pagina.aperto ? 'ob-aperto' : 'ob-chiuso' %>" aria-live="polite">
+        <span class="ob-luna" aria-hidden="true"><%- pagina.aperto ? iconaOrario : iconaLuna %></span>
+        <div class="ob-stato-testi">
+          <h1 class="ob-titolo"><span class="ob-punto" aria-hidden="true"></span><%= pagina.titolo %></h1>
+          <p class="ob-sotto"><%= pagina.sottoPrefisso %><% if (pagina.quando) { %><strong><%= pagina.quando %></strong><% } %></p>
+        </div>
+      </section>
+
+      <% if (pagina.sempreAperto) { %>
+        <p class="ob-nota">Il banco non ha orari: puoi inviare le richieste a qualsiasi ora.</p>
+      <% } else { %>
+        <section class="ob-card" aria-labelledby="ob-occhiello">
+          <h2 class="ob-occhiello" id="ob-occhiello">Quando puoi inviare le richieste</h2>
+          <ul class="ob-giorni">
+            <% pagina.giorni.forEach(function (g) { %>
+              <li class="ob-giorno<%= g.oggi ? ' ob-oggi' : '' %>">
+                <div class="ob-nome">
+                  <span><%= g.nome %></span>
+                  <% if (g.oggi) { %><span class="ob-badge ob-badge-oggi">Oggi</span><% } %>
+                  <% if (g.riapre) { %><span class="ob-badge ob-badge-riapre">Riapre</span><% } %>
+                </div>
+                <% if (g.chiuso) { %>
+                  <div class="ob-fasce ob-chiuso-txt">Chiuso</div>
+                <% } else { %>
+                  <div class="ob-fasce">
+                    <% g.fasce.forEach(function (f) { %><span><%= f %></span><% }); %>
+                  </div>
+                <% } %>
+              </li>
+            <% }); %>
+          </ul>
+        </section>
+      <% } %>
+
+      <p class="ob-nota">Fuori da questi orari puoi preparare il carrello, ma la richiesta si invia solo quando <%= nomeBanco %> è aperto.</p>
+    </div>
+  </div>
+
+  <%- include('partials/nav', { attivo: 'carrello' }) %>
+  <script src="<%= asset('/app.js') %>" defer></script>
+</body>
+</html>

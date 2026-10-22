@@ -1837,7 +1837,6 @@ const Minuteria = (function () {
   if (!bacheca) return;
 
   const sogliaUrgente = parseInt(bacheca.getAttribute('data-soglia-urgente'), 10) || 180;
-  const avvio = Date.now();
 
   function numero(el, nome) {
     const n = parseInt(el.getAttribute(nome), 10);
@@ -1856,63 +1855,190 @@ const Minuteria = (function () {
     if (el && el.textContent !== testo) el.textContent = testo;
   }
 
-  const richieste = Array.prototype.map.call(bacheca.querySelectorAll('[data-richiesta]'), function (el) {
-    const anello = el.querySelector('[data-anello]');
-    const circ = anello ? parseFloat(anello.getAttribute('stroke-dasharray')) : 0;
-    return {
-      el: el,
-      anello: anello,
-      circ: circ,
-      tempo: el.querySelector('[data-tempo]'),
-      nuova: el.querySelector('[data-nuova]'),
-      fine: avvio + numero(el, 'data-secondi') * 1000,
-      finestra: Math.max(1, numero(el, 'data-finestra')),
-      nuovaFine: avvio + numero(el, 'data-nuova-sec') * 1000,
-      chiusa: false,
-    };
-  });
-
-  const corrieri = Array.prototype.map.call(bacheca.querySelectorAll('[data-corriere]'), function (el) {
-    return { el: el, da: el.querySelector('[data-da]'), inizio: avvio - numero(el, 'data-trascorsi') * 1000 };
-  });
-
-  const arrivi = Array.prototype.map.call(bacheca.querySelectorAll('[data-arrivo]'), function (el) {
-    return { el: el, min: el.querySelector('[data-arrivo-min]'), fine: avvio + numero(el, 'data-secondi') * 1000 };
-  });
-
-  if (!richieste.length && !corrieri.length && !arrivi.length) return;
+  // Gli istanti di ogni scheda si calcolano la PRIMA volta che la si vede, dai secondi scritti dal server, e da lì restano: la bacheca si aggiorna sul posto
+  // (`rinfresca`, più sotto) e le schede che c'erano già continuano il loro conto invece di ripartire.
+  const stati = new WeakMap();
+  function statoRichiesta(el, adesso) {
+    let r = stati.get(el);
+    if (!r) {
+      const anello = el.querySelector('[data-anello]');
+      r = {
+        anello: anello,
+        circ: anello ? parseFloat(anello.getAttribute('stroke-dasharray')) : 0,
+        tempo: el.querySelector('[data-tempo]'),
+        nuova: el.querySelector('[data-nuova]'),
+        fine: adesso + numero(el, 'data-secondi') * 1000,
+        finestra: Math.max(1, numero(el, 'data-finestra')),
+        nuovaFine: adesso + numero(el, 'data-nuova-sec') * 1000,
+        chiusa: false,
+      };
+      stati.set(el, r);
+    }
+    return r;
+  }
+  function statoCorriere(el, adesso) {
+    let c = stati.get(el);
+    if (!c) {
+      c = { da: el.querySelector('[data-da]'), inizio: adesso - numero(el, 'data-trascorsi') * 1000 };
+      stati.set(el, c);
+    }
+    return c;
+  }
+  function statoArrivo(el, adesso) {
+    let a = stati.get(el);
+    if (!a) {
+      a = { min: el.querySelector('[data-arrivo-min]'), fine: adesso + numero(el, 'data-secondi') * 1000 };
+      stati.set(el, a);
+    }
+    return a;
+  }
 
   function tick() {
     const adesso = Date.now();
 
-    richieste.forEach(function (r) {
+    bacheca.querySelectorAll('[data-richiesta]').forEach(function (el) {
+      const r = statoRichiesta(el, adesso);
       const sec = Math.max(0, Math.ceil((r.fine - adesso) / 1000));
       scrivi(r.tempo, mmss(sec));
       if (r.anello) r.anello.style.strokeDashoffset = String((r.circ * (1 - Math.min(1, sec / r.finestra))).toFixed(2));
-      r.el.classList.toggle('urgente', sec <= sogliaUrgente);
+      el.classList.toggle('urgente', sec <= sogliaUrgente);
       if (r.nuova && adesso >= r.nuovaFine) {
         r.nuova.remove();
         r.nuova = null;
       }
       if (sec === 0 && !r.chiusa) {
-        // La richiesta è scaduta: sparirà dalla colonna con la ricarica (la pagina si accorgerebbe da sola entro
-        // pochi secondi, ma così la scheda non resta lì a contare zero).
+        // La richiesta è scaduta: sparirà dalla colonna aggiornando la bacheca (lo farebbe da solo anche il controllo ogni 5 secondi, ma così la scheda non resta
+        // lì a contare zero). Se l'aggiornamento sul posto non riesce si ricarica la pagina.
         r.chiusa = true;
-        r.el.classList.remove('urgente');
-        r.el.classList.add('scaduta');
-        setTimeout(function () { window.location.reload(); }, 2500);
+        el.classList.remove('urgente');
+        el.classList.add('scaduta');
+        setTimeout(function () { rinfresca().then(function (ok) { if (!ok) window.location.reload(); }); }, 2500);
       }
     });
 
-    corrieri.forEach(function (c) {
+    bacheca.querySelectorAll('[data-corriere]').forEach(function (el) {
+      const c = statoCorriere(el, adesso);
       scrivi(c.da, Minuteria.daMinuti((adesso - c.inizio) / 1000));
     });
 
-    arrivi.forEach(function (a) {
+    bacheca.querySelectorAll('[data-arrivo]').forEach(function (el) {
+      const a = statoArrivo(el, adesso);
       const min = Math.ceil((a.fine - adesso) / 60000);
       scrivi(a.min, min <= 0 ? 'In ritardo' : durata(min));
     });
   }
+
+  // ----- Aggiornamento sul posto -----
+  // Quando arriva una richiesta (o cambia qualcosa) la bacheca NON si ricarica più: si chiede al server la stessa pagina, se ne prendono le tre colonne e si
+  // aggiungono, tolgono e riordinano le sole schede cambiate (ognuna ha la sua `data-chiave`). Così la scheda compare subito, insieme al suono e al numero sul
+  // tab "Banco" (prima il suono e il numero arrivavano e la scheda aspettava il giro di controllo e la ricarica: "arriva prima il suono e il numeretto rispetto alla
+  // card", richiesta esplicita del 21/10/2026), e la pagina non riparte da zero: l'audio resta sbloccato, lo scorrimento delle colonne e il conto delle altre
+  // schede non si perdono. Ritorna una promessa: true se la bacheca è aggiornata, false se non si è riusciti (chi chiama ricarica la pagina).
+  let puntatoreGiu = false;
+  document.addEventListener('pointerdown', function () { puntatoreGiu = true; }, true);
+  ['pointerup', 'pointercancel', 'dragend'].forEach(function (nome) {
+    document.addEventListener(nome, function () { puntatoreGiu = false; }, true);
+  });
+  // Se in quel momento si sta premendo su una scheda (il clic su "Conferma" è a metà) si aspetta il rilascio: cambiare le schede sotto il dito farebbe perdere il clic.
+  function attendiPuntatore() {
+    const limite = Date.now() + 2500;
+    return new Promise(function (ok) {
+      const prova = function () { if (!puntatoreGiu || Date.now() > limite) ok(); else setTimeout(prova, 100); };
+      if (puntatoreGiu) setTimeout(prova, 150); else ok();
+    });
+  }
+
+  function daiServer() {
+    const ac = typeof AbortController === 'function' ? new AbortController() : null;
+    const scade = setTimeout(function () { if (ac) ac.abort(); }, 8000);
+    return fetch(window.location.pathname + window.location.search, { cache: 'no-store', credentials: 'same-origin', headers: { Accept: 'text/html' }, signal: ac ? ac.signal : undefined })
+      .then(function (r) { clearTimeout(scade); return r.ok ? r.text() : null; })
+      .then(function (html) {
+        if (!html) return null;
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        // Una pagina senza bacheca (sessione scaduta: è la pagina di accesso) non si usa: chi chiama ricarica e il browser arriva dove deve.
+        return doc.querySelector('[data-bacheca]') ? doc : null;
+      })
+      .catch(function () { clearTimeout(scade); return null; });
+  }
+
+  // Una colonna: il numero, le schede (le stesse restano, le nuove entrano, quelle che non ci sono più escono, l'ordine è quello del server) e la frase "Nessuna…".
+  function riallineaColonna(vecchia, nuova) {
+    const listaV = vecchia.querySelector('.colonna-lista');
+    const listaN = nuova.querySelector('.colonna-lista');
+    if (!listaV || !listaN) return;
+    const contaV = vecchia.querySelector('.colonna-conta');
+    const contaN = nuova.querySelector('.colonna-conta');
+    if (contaV && contaN) {
+      contaV.textContent = contaN.textContent;
+      contaV.setAttribute('aria-label', contaN.getAttribute('aria-label') || '');
+    }
+    const esistenti = new Map();
+    listaV.querySelectorAll('[data-chiave]').forEach(function (el) { esistenti.set(el.getAttribute('data-chiave'), el); });
+    const volute = Array.prototype.slice.call(listaN.querySelectorAll('[data-chiave]'));
+    const chiaviVolute = new Set(volute.map(function (el) { return el.getAttribute('data-chiave'); }));
+    esistenti.forEach(function (el, chiave) { if (!chiaviVolute.has(chiave)) el.remove(); });
+
+    const vuotoV = listaV.querySelector('.colonna-vuota');
+    const vuotoN = listaN.querySelector('.colonna-vuota');
+    if (volute.length) {
+      if (vuotoV) vuotoV.remove();
+    } else if (!vuotoV && vuotoN) {
+      listaV.appendChild(document.importNode(vuotoN, true));
+    }
+
+    // Si scorre l'ordine voluto con un cursore sulla lista vecchia: la scheda giusta è già lì (si va avanti), altrimenti la si mette (nuova) o la si sposta (già nella lista).
+    let cursore = listaV.querySelector('[data-chiave]');
+    volute.forEach(function (voluta) {
+      const chiave = voluta.getAttribute('data-chiave');
+      let nodo = esistenti.get(chiave);
+      if (!nodo) {
+        nodo = document.importNode(voluta, true);
+        nodo.classList.add('entra'); // anche le schede che arrivano da una colonna all'altra entrano con la loro animazione (quella di sempre: .scheda.entra)
+      }
+      if (nodo === cursore) {
+        cursore = cursore.nextElementSibling;
+        while (cursore && !cursore.hasAttribute('data-chiave')) cursore = cursore.nextElementSibling;
+      } else {
+        listaV.insertBefore(nodo, cursore);
+      }
+    });
+  }
+
+  let rinfrescoInCorso = null;
+  let rinfrescoDaRifare = false;
+  function rinfresca() {
+    if (rinfrescoInCorso) { rinfrescoDaRifare = true; return rinfrescoInCorso; }
+    rinfrescoInCorso = daiServer().then(function (doc) {
+      if (!doc) return false;
+      return attendiPuntatore().then(function () {
+        const nuovo = doc.querySelector('[data-bacheca]');
+        ['conferma', 'corriere', 'preparare'].forEach(function (nome) {
+          const vecchia = bacheca.querySelector('.colonna-' + nome);
+          const nuova = nuovo.querySelector('.colonna-' + nome);
+          if (vecchia && nuova) riallineaColonna(vecchia, nuova);
+        });
+        // I numeri con cui la pagina è stata disegnata: la prossima verifica (blocco "Pagine del banco") non deve vedere una differenza e rifare tutto.
+        const versione = doc.body ? doc.body.getAttribute('data-versione') : null;
+        if (versione) document.body.setAttribute('data-versione', versione);
+        // Il menu in basso (telefono) ha i suoi numeri.
+        const navNuovo = doc.querySelector('nav.navbar');
+        const navVecchio = document.querySelector('nav.navbar');
+        if (navNuovo && navVecchio) navVecchio.innerHTML = navNuovo.innerHTML;
+        tick(); // le schede nuove prendono subito il loro conto
+        // Il numero sul tab "Banco" si allinea alle schede nello stesso istante (lo ascolta il blocco "Avvisi del banco").
+        const daConfermare = bacheca.querySelectorAll('.colonna-conferma [data-richiesta]').length;
+        window.dispatchEvent(new CustomEvent('minuteria:bacheca', { detail: { daConfermare: daConfermare } }));
+        return true;
+      });
+    }).catch(function () { return false; }).then(function (ok) {
+      rinfrescoInCorso = null;
+      if (rinfrescoDaRifare) { rinfrescoDaRifare = false; rinfresca(); }
+      return ok;
+    });
+    return rinfrescoInCorso;
+  }
+  Minuteria.homeBanco = { rinfresca: rinfresca };
 
   tick();
   setInterval(tick, 1000);
@@ -2043,7 +2169,7 @@ window.addEventListener('pageshow', function (e) {
 /* Pagine del banco (home, storico ordini, clienti, dettaglio richiesta): richieste e ordini
    appena arrivati compaiono senza premere F5. Ogni pochi secondi chiede al server due numeri
    leggeri (/api/distributore/novita) e li confronta con quelli con cui la pagina è stata disegnata
-   (data-versione): se sono cambiati si ricarica. Non dipende da una ricarica a tempo, che si salta
+   (data-versione): se sono cambiati si ricarica (la HOME invece si aggiorna sul posto, vedi sotto). Non dipende da una ricarica a tempo, che si salta
    quando la scheda è in secondo piano. Se la scheda è nascosta o l'utente sta scrivendo in un
    campo aspetta, e ricarica appena torna in primo piano o esce dal campo. */
 (function () {
@@ -2051,7 +2177,9 @@ window.addEventListener('pageshow', function (e) {
   const ms = parseInt(document.body.dataset.autoRefresh, 10);
   if (!ms) return;
 
-  const versionePagina = document.body.dataset.versione || null;
+  // I numeri con cui la pagina è stata disegnata. Si rileggono a ogni controllo: la home si aggiorna sul posto (Minuteria.homeBanco.rinfresca) e riscrive questo
+  // attributo con quelli della bacheca nuova.
+  const versioneAttuale = function () { return document.body.dataset.versione || null; };
   let inCorso = false;
   let daRicaricare = false;
   let erroriDiFila = 0;
@@ -2072,16 +2200,31 @@ window.addEventListener('pageshow', function (e) {
 
   // La ricarica vera. Sulle pagine del banco prima si fa sentire ciò che è appena arrivato e si aspetta la fine del suono ("Avvisi del banco", più sotto:
   // Minuteria.banco.primaDiRicaricare): ricaricare subito tagliava lo squillo a metà, e la notifica già consumata dalla pagina che spariva non suonava più.
+  // La HOME invece non si ricarica: le sue colonne si aggiornano sul posto (blocco "Home del banco": Minuteria.homeBanco.rinfresca), anche a scheda nascosta. La scheda
+  // della richiesta compare subito, insieme al suono e al numero sul tab "Banco", e l'audio resta sbloccato (dopo una ricarica il browser lo blocca di nuovo).
+  // Solo se l'aggiornamento non riesce (server che non risponde, sessione scaduta) si ricarica la pagina, come sulle altre.
   let ricaricando = false;
+  function homeBanco() {
+    return typeof Minuteria !== 'undefined' && Minuteria.homeBanco ? Minuteria.homeBanco : null;
+  }
   function ricaricaDavvero() {
     if (ricaricando) return;
     ricaricando = true;
-    // (`Minuteria` è una const del file, non una proprietà di window: cercarla lì darebbe sempre undefined e la ricarica non aspetterebbe mai il suono.)
-    const prima = typeof Minuteria !== 'undefined' && Minuteria.banco ? Minuteria.banco.primaDiRicaricare : null;
-    Promise.resolve(prima ? prima() : null).catch(function () { /* si ricarica lo stesso */ }).then(function () { window.location.reload(); });
+    const ricaricaPagina = function () {
+      // (`Minuteria` è una const del file, non una proprietà di window: cercarla lì darebbe sempre undefined e la ricarica non aspetterebbe mai il suono.)
+      const prima = typeof Minuteria !== 'undefined' && Minuteria.banco ? Minuteria.banco.primaDiRicaricare : null;
+      Promise.resolve(prima ? prima() : null).catch(function () { /* si ricarica lo stesso */ }).then(function () { window.location.reload(); });
+    };
+    const home = homeBanco();
+    if (!home) { ricaricaPagina(); return; }
+    home.rinfresca().then(function (ok) {
+      if (ok) { ricaricando = false; return; }
+      ricaricaPagina();
+    });
   }
 
   function ricarica() {
+    if (homeBanco()) { ricaricaDavvero(); return; }
     if (document.hidden || suCampo()) {
       daRicaricare = true;
       return;
@@ -2100,7 +2243,8 @@ window.addEventListener('pageshow', function (e) {
       .then(Minuteria.leggiJson)
       .then(function (d) {
         erroriDiFila = 0;
-        if (versionePagina !== null && JSON.stringify(d) !== versionePagina) ricarica();
+        const versione = versioneAttuale();
+        if (versione !== null && JSON.stringify(d) !== versione) ricarica();
       })
       .catch(function () {
         // Il controllo leggero non risponde (sessione scaduta, proxy, rete): si torna alla
@@ -2683,6 +2827,32 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
     navigator.serviceWorker.register('/sw.js').catch(function () { /* l'app funziona anche senza */ });
   });
 }
+
+/* Carrello: "Ancora 9 min per inviare: alle 17:00 chiudiamo" (richiesta esplicita del 22/10/2026). La striscia sopra la barra di pagamento la disegna il server solo negli ultimi
+   minuti prima della chiusura del banco (orari.IN_CHIUSURA_MIN); `data-chiusura-sec` = i secondi che mancano al momento del disegno. Qui si aggiorna il numero (i minuti, per
+   eccesso) e a zero la pagina si ricarica, così compaiono "Ordini chiusi" e il pulsante spento. Il ricarico aspetta 1,5 s dopo lo zero: se per un arrotondamento il server
+   rispondesse ancora "aperto", la pagina non si ricarica a raffica. */
+(function () {
+  'use strict';
+  const striscia = document.querySelector('[data-chiusura-sec]');
+  if (!striscia) return;
+  const fine = Date.now() + Number(striscia.getAttribute('data-chiusura-sec')) * 1000;
+  const numero = striscia.querySelector('[data-chiusura-min]');
+  let programmato = false;
+  function aggiorna() {
+    const mancano = fine - Date.now();
+    if (mancano <= 0) {
+      if (!programmato) { programmato = true; setTimeout(function () { window.location.reload(); }, 1500); }
+      return;
+    }
+    if (numero) numero.textContent = Math.ceil(mancano / 60000) + ' min';
+  }
+  aggiorna();
+  setInterval(aggiorna, 10000);
+  // timer fermi a scheda nascosta: al ritorno si rimette a posto subito
+  document.addEventListener('visibilitychange', aggiorna);
+  window.addEventListener('pageshow', aggiorna);
+})();
 
 /* Entrando nell'app le notifiche di sistema già mostrate spariscono dalla tendina del telefono (richiesta esplicita del 21/10/2026): quando la pagina si apre o torna
    in primo piano (apertura dall'icona, tocco su una notifica, ritorno da un'altra app, tasto "indietro") si chiudono TUTTE quelle del sito, non solo la toccata. Chi
@@ -3658,14 +3828,20 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
               break;
           }
         });
-        if (aggiornare) aggiornaStato();
-        if (!suonare) return null;
-        return suono().then(function (esito) {
-          // Audio bloccato dal browser (nessun gesto su questa pagina) ma notifiche del computer attive: ci pensa il sistema, col suo suono. Con la scheda nascosta la
-          // notifica è già stata mostrata qui sopra (stesso tag: non se ne fa una seconda).
-          if (esito === 'bloccato' && notificheSistemaConsentite()) {
-            perSuono.forEach(function (n) { mostraNotifica(n.titolo, n.testo, n.link, 'minuteria-' + n.id); });
-          }
+        // Sulla HOME la scheda compare PRIMA del suono e del numero sul tab "Banco" (richiesta esplicita del 21/10/2026: "arriva prima il suono e il numeretto rispetto
+        // alla card"): si aggiornano le colonne sul posto (senza ricaricare la pagina) e solo dopo si suona. Se il server tarda più di 2,5 s si suona lo stesso.
+        const home = eHome && Minuteria.homeBanco ? Minuteria.homeBanco : null;
+        const colonne = home && aggiornare ? Promise.race([home.rinfresca(), pausa(2500)]) : Promise.resolve(true);
+        return colonne.then(function () {
+          if (aggiornare) aggiornaStato();
+          if (!suonare) return null;
+          return suono().then(function (esito) {
+            // Audio bloccato dal browser (nessun gesto su questa pagina) ma notifiche del computer attive: ci pensa il sistema, col suo suono. Con la scheda nascosta la
+            // notifica è già stata mostrata qui sopra (stesso tag: non se ne fa una seconda).
+            if (esito === 'bloccato' && notificheSistemaConsentite()) {
+              perSuono.forEach(function (n) { mostraNotifica(n.titolo, n.testo, n.link, 'minuteria-' + n.id); });
+            }
+          });
         });
       })
       .catch(function () { /* nessuna notifica questo giro */ })
@@ -3710,6 +3886,10 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
 
   creaConfig();
   mostraNumeri(daConfermare, null);
+  // La home aggiornata sul posto (blocco "Home del banco") dice quante richieste ci sono da confermare: il numero sul tab "Banco" cambia nello stesso istante delle schede.
+  window.addEventListener('minuteria:bacheca', function (e) {
+    if (e.detail && typeof e.detail.daConfermare === 'number') mostraNumeri(e.detail.daConfermare, null);
+  });
   aggiornaStato();
   setTimeout(daiPush, 800);
   setInterval(aggiornaStato, STATO_MS);
@@ -3731,8 +3911,11 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
         apertaGiaUnaVolta = true;
       });
       sorgente.addEventListener('notifica', function () {
-        daiPush();
-        setTimeout(daiPush, 1500);
+        daiPush(); // sulla home aggiorna prima le colonne e poi suona (vedi daiPush)
+        setTimeout(function () {
+          if (eHome && Minuteria.homeBanco) Minuteria.homeBanco.rinfresca(); // la scheda può non essere ancora visibile al database: si ricontrolla
+          daiPush();
+        }, 1500);
       });
     };
     apriEventi();

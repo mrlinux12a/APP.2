@@ -121,12 +121,22 @@ function apertoAdesso(orari, quando = new Date()) {
 // { aperto, riapre }: `riapre` è null se è aperto (o se non riapre mai: tutti i giorni chiusi), altrimenti
 // { giorno: 'lun', giorniDa: 0..7, ora: '07:30', attesaMin, testo: 'domani alle 07:30' }. `attesaMin` = minuti da adesso alla riapertura, per
 // scegliere fra più banchi quello che riapre prima.
+//
+// Quando è aperto c'è anche `chiude`: la fine della fascia in corso, { ora: '17:00', istante: Date, mancanoMin, secondi } (`mancanoMin` = minuti interi da adesso, per
+// eccesso: alle 16:59:30 mancano 1 minuto), oppure null senza orari ("sempre aperto"). Se la fascia dopo comincia proprio dove finisce questa, il banco non chiude in mezzo.
 function statoOrari(valore, quando = new Date()) {
   const orari = leggiOrari(valore);
-  if (!orari) return { aperto: true, riapre: null };
+  if (!orari) return { aperto: true, riapre: null, chiude: null };
   const { giorno, minuti } = ricavaRoma(quando);
   const oggi = orari[GIORNI[giorno]];
-  if (oggi.some((f) => minutiDi(f[0]) <= minuti && minuti < minutiDi(f[1]))) return { aperto: true, riapre: null };
+  const inCorso = oggi.find((f) => minutiDi(f[0]) <= minuti && minuti < minutiDi(f[1]));
+  if (inCorso) {
+    let fine = minutiDi(inCorso[1]);
+    let ora = inCorso[1];
+    for (const f of oggi) if (minutiDi(f[0]) === fine) { fine = minutiDi(f[1]); ora = f[1]; }
+    const istante = new Date(Math.floor(quando.getTime() / 60000) * 60000 + (fine - minuti) * 60000);
+    return { aperto: true, riapre: null, chiude: { ora, istante, mancanoMin: fine - minuti, secondi: Math.max(1, Math.ceil((istante.getTime() - quando.getTime()) / 1000)) } };
+  }
 
   // Il prossimo inizio di fascia: oggi dopo adesso, poi i giorni dopo; allo stesso giorno della settimana prossima valgono tutte le fasce.
   for (let d = 0; d <= 7; d++) {
@@ -141,11 +151,99 @@ function statoOrari(valore, quando = new Date()) {
 }
 
 // Più banchi (le filiali attive): c'è qualcuno aperto? Se no, quando riapre il primo. `distributori`: righe di `distributors` (con `orari`).
+// Se è aperto, `chiude` è la chiusura che arriva più tardi fra le filiali aperte (null se una è sempre aperta o non ci sono banchi).
 function statoBanchi(distributori, quando = new Date()) {
   const stati = (distributori || []).map((d) => statoOrari(d.orari, quando));
-  if (!stati.length || stati.some((s) => s.aperto)) return { aperto: true, riapre: null };
+  const aperti = stati.filter((s) => s.aperto);
+  if (!stati.length || aperti.length) {
+    const chiusure = aperti.map((s) => s.chiude);
+    const chiude = !chiusure.length || chiusure.some((c) => !c) ? null : chiusure.reduce((piu, c) => (c.mancanoMin > piu.mancanoMin ? c : piu));
+    return { aperto: true, riapre: null, chiude };
+  }
   const riaperture = stati.map((s) => s.riapre).filter(Boolean).sort((a, b) => a.attesaMin - b.attesaMin);
   return { aperto: false, riapre: riaperture[0] || null };
+}
+
+// Sotto questi minuti dalla chiusura il carrello avvisa "Ancora N min per inviare: alle 17:00 chiudiamo" (richiesta esplicita del 22/10/2026).
+const IN_CHIUSURA_MIN = 30;
+function inChiusura(stato, soglia = IN_CHIUSURA_MIN) {
+  return !!(stato && stato.aperto && stato.chiude && stato.chiude.mancanoMin <= soglia);
+}
+
+// I testi di "ordini chiusi", UNICI per carrello, pagina degli orari e API dell'app (richiesta esplicita del 22/10/2026). `nomeBanco` è il nome della ditta preso dal
+// DB ("BOREA"), mai scritto nel codice; senza nome si dice "il banco". Ritorna null se è aperto. I testi sono spezzati in prefisso + `quando` perché il quando va in grassetto:
+//   { titolo: 'Ordini chiusi per oggi', sottoPrefisso: 'BOREA riapre ', quando: 'domani alle 07:30', sotto: 'BOREA riapre domani alle 07:30',
+//     notaPrefisso: 'Ordini chiusi · BOREA riapre ', nota: 'Ordini chiusi · BOREA riapre domani alle 07:30' }
+function testiChiuso(stato, nomeBanco = '') {
+  if (!stato || stato.aperto) return null;
+  const nome = String(nomeBanco || '').trim() || 'il banco';
+  const maiuscola = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+  const riapre = stato.riapre;
+  let titolo, sottoPrefisso, quando, notaFrase;
+  if (!riapre) {
+    titolo = 'Ordini chiusi';
+    quando = '';
+    sottoPrefisso = 'Al momento ' + nome + ' non riceve richieste';
+    notaFrase = 'al momento ' + nome + ' non riceve richieste';
+  } else {
+    titolo = riapre.giorniDa === 0 ? 'Ordini chiusi ora' : 'Ordini chiusi per oggi';
+    quando = riapre.testo;
+    sottoPrefisso = maiuscola(nome) + ' riapre ';
+    notaFrase = nome + ' riapre ';
+  }
+  return {
+    titolo, sottoPrefisso, quando, sotto: sottoPrefisso + quando,
+    notaPrefisso: 'Ordini chiusi · ' + notaFrase, nota: 'Ordini chiusi · ' + notaFrase + quando,
+  };
+}
+
+// "il banco è aperto fino alle 17:00" per l'avviso in chiusura: { ora: '17:00', mancanoMin, secondi } o null.
+function avvisoChiusura(stato, soglia = IN_CHIUSURA_MIN) {
+  if (!inChiusura(stato, soglia)) return null;
+  return { ora: stato.chiude.ora, mancanoMin: stato.chiude.mancanoMin, secondi: stato.chiude.secondi };
+}
+
+// Gli orari di più filiali messi insieme (cosa vede l'installatore: "BOREA", mai la filiale): per ogni giorno l'unione delle fasce, con quelle che si toccano
+// o si sovrappongono fuse in una. Null se manca una filiale con orari o se non ce ne sono: "sempre aperto".
+function unisciOrari(distributori) {
+  const lista = (distributori || []).map((d) => leggiOrari(d.orari));
+  if (!lista.length || lista.some((o) => !o)) return null;
+  const testoDa = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+  const unione = {};
+  for (const g of GIORNI) {
+    const fasce = lista.flatMap((o) => o[g]).map((f) => [minutiDi(f[0]), minutiDi(f[1])]).sort((a, b) => a[0] - b[0]);
+    const fuse = [];
+    for (const f of fasce) {
+      const ultima = fuse[fuse.length - 1];
+      if (ultima && f[0] <= ultima[1]) ultima[1] = Math.max(ultima[1], f[1]);
+      else fuse.push([f[0], f[1]]);
+    }
+    unione[g] = fuse.map((f) => [testoDa(f[0]), testoDa(f[1])]);
+  }
+  return unione;
+}
+
+// Tutto quello che serve alla pagina "Orari di BOREA" (e all'API dell'app): lo stato adesso, i testi e i sette giorni, lunedì per primo.
+//   { aperto, sempreAperto, titolo: 'Chiuso ora' | 'Aperto ora', sottoPrefisso, quando, chiude, riapre, testi (null se aperto),
+//     giorni: [{ chiave, nome, fasce: ['07:30 – 12:30', ...], chiuso, oggi, riapre }] }
+// `oggi` = il giorno di Roma di adesso, `riapre` = il giorno in cui riapre (solo se è dopo oggi: oggi basta il badge "Oggi").
+function paginaOrari(distributori, nomeBanco = '', quando = new Date()) {
+  const stato = statoBanchi(distributori, quando);
+  const unione = unisciOrari(distributori);
+  const { giorno } = ricavaRoma(quando);
+  const giorni = unione
+    ? GIORNI.map((g, i) => ({
+        chiave: g, nome: NOMI[g], fasce: unione[g].map((f) => f[0] + ' – ' + f[1]), chiuso: unione[g].length === 0,
+        oggi: i === giorno, riapre: !stato.aperto && !!stato.riapre && stato.riapre.giorniDa > 0 && stato.riapre.giorno === g,
+      }))
+    : [];
+  const testi = testiChiuso(stato, nomeBanco);
+  return {
+    aperto: stato.aperto, sempreAperto: !unione, giorni, riapre: stato.riapre, chiude: stato.chiude, testi,
+    titolo: stato.aperto ? 'Aperto ora' : 'Chiuso ora',
+    sottoPrefisso: stato.aperto ? (stato.chiude ? 'Chiude oggi alle ' : 'Sempre aperto') : (testi ? testi.sottoPrefisso : ''),
+    quando: stato.aperto ? (stato.chiude ? stato.chiude.ora : '') : (testi ? testi.quando : ''),
+  };
 }
 
 // "Il banco è chiuso · riapre domani alle 07:30" (senza riapertura: solo "Il banco è chiuso").
@@ -176,4 +274,5 @@ module.exports = {
   GIORNI, NOMI, MAX_FASCE, FUSO,
   oraValida, leggiOrari, orariDaModulo, valoriPerModulo,
   apertoAdesso, statoOrari, statoBanchi, frasePerCarrello, riassunto,
+  IN_CHIUSURA_MIN, inChiusura, avvisoChiusura, testiChiuso, unisciOrari, paginaOrari,
 };

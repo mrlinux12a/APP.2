@@ -240,7 +240,12 @@ test('PAGAMENTO_APP_PROVA: l\'installatore paga ORA solo la cifra di prova, la f
 test('PAGAMENTO_APP_PROVA con Stripe REALE o produzione: serve PAGAMENTO_APP_PROVA_LIVE (data), scade da sola, mai sotto 0,50 e mai sopra la formula', async () => {
   const carrello = () => [riga(prodotto(1, 54.5), 1), riga(prodotto(2, 10), 1)]; // formula: 20,07 in app, 78,69 al banco
   const da = async () => pricing.calcolaOrdine(carrello(), { costoConsegna: 10 });
-  const giornoRoma = (piu = 0) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(Date.now() + piu * 86400000));
+  // Giorni di calendario, non multipli di 24 ore: col cambio d'ora legale di mezzo (ultima domenica di ottobre) "adesso + 8 × 24 h" cade 7 giorni dopo se si è
+  // appena passata la mezzanotte, e il test prendeva per "troppo lontana" una data che lo è esattamente di 7 giorni.
+  const giornoRoma = (piu = 0) => {
+    const [anno, mese, giorno] = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()).split('-').map(Number);
+    return new Date(Date.UTC(anno, mese - 1, giorno + piu)).toISOString().slice(0, 10);
+  };
   const messaggi = [];
   const originali = { warn: console.warn, log: console.log };
   console.warn = (m) => messaggi.push(String(m));

@@ -13,6 +13,7 @@ const pricing = require('./pricing');
 const richieste = require('./richieste');
 const flusso = require('./flusso_cliente');
 const format = require('./format');
+const orari = require('./orari');
 const notifiche = require('./notifiche');
 const tokenApp = require('./token_app');
 const anagrafiche = require('./anagrafiche');
@@ -336,8 +337,28 @@ async function esitoPagamentoJson(id, clienteId) {
 }
 
 function rispostaErroreFlusso(res, e) {
-  return res.status(400).json({ errore: e.message, titolo: e.titolo, codice: e.codice, request_id: e.requestId || null });
+  return res.status(400).json({
+    errore: e.message, titolo: e.titolo, codice: e.codice, request_id: e.requestId || null,
+    // "banco_chiuso": quando riapre e i testi pronti (gli stessi del carrello del sito, src/orari.js `testiChiuso`)
+    ...(e.testi ? { testi: e.testi, riapre: e.riapre ? { giorno: e.riapre.giorno, ora: e.riapre.ora, testo: e.riapre.testo } : null } : {}),
+  });
 }
+
+// Orari dei banchi per l'app (la stessa fonte del carrello e della pagina "Orari di BOREA" del sito): aperto o chiuso adesso, quando chiude (`chiude`, con i
+// minuti che mancano) o riapre, i testi di "ordini chiusi" e i sette giorni con le fasce. Tutto viene dagli orari impostati dal banco, mai scritto qui.
+router.get('/orari', richiedeCliente, async (req, res) => {
+  const banco = await richieste.bancoPerInstallatore();
+  const pagina = orari.paginaOrari(banco.distributori, banco.nome);
+  res.json({
+    nome: banco.nome || null,
+    aperto: pagina.aperto,
+    sempre_aperto: pagina.sempreAperto,
+    chiude: pagina.chiude ? { ora: pagina.chiude.ora, minuti_mancanti: pagina.chiude.mancanoMin, in_chiusura: orari.inChiusura(banco.stato) } : null,
+    riapre: pagina.riapre ? { giorno: pagina.riapre.giorno, ora: pagina.riapre.ora, testo: pagina.riapre.testo } : null,
+    testi: pagina.testi,
+    giorni: pagina.giorni.map((g) => ({ giorno: g.chiave, nome: g.nome, fasce: g.fasce, chiuso: g.chiuso, oggi: g.oggi, riapre: g.riapre })),
+  });
+});
 
 // Paga e invia la richiesta, con destinazione e note scritte nel carrello. `chiave` (facoltativa) identifica l'invio dal carrello: lo
 // stesso invio ripetuto (doppio tocco, ritentativo) risponde con la richiesta già partita, senza crearne un'altra.

@@ -187,6 +187,8 @@ const iconaInfo = svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5"/><pat
 const iconaEsci = svg('<path d="M10 4H6.5A1.5 1.5 0 0 0 5 5.5v13A1.5 1.5 0 0 0 6.5 20H10"/><path d="M15 8l4 4-4 4"/><path d="M19 12H9.5"/>');
 
 const iconaOrario = svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3.2 2"/>');
+// Luna: "ordini chiusi" (carrello fuori orario, pagina degli orari).
+const iconaLuna = svg('<path d="M20 14.2A8 8 0 0 1 9.8 4a8 8 0 1 0 10.2 10.2Z"/>');
 
 // Cronometro (colonna "Da confermare" della home del banco) e fumetto (colonna "Attesa corriere").
 const iconaTimer = svg(
@@ -326,6 +328,7 @@ module.exports = {
   iconaInfo,
   iconaEsci,
   iconaOrario,
+  iconaLuna,
   iconaTimer,
   iconaMessaggio,
   iconaPersona,
