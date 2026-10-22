@@ -162,11 +162,15 @@
             <a class="ab-modifica" href="/distributore/anagrafica?modifica=orari#orari" data-modifica<%- aperta === 'orari' ? ' hidden' : '' %>><%- matita %>Modifica</a>
           </header>
           <%- salvato('orari', 'Orari salvati.') %>
+          <%# Senza orari impostati questa filiale NON riceve richieste e, per gli installatori, non conta come aperta (src/orari.js): niente "sempre aperto". %>
+          <% if (orariNonImpostati) { %>
+            <p class="ab-avviso" role="alert"><strong>Orari non impostati.</strong> Finché non li salvi questa filiale non riceve richieste. Scegli i giorni e le fasce qui sotto e premi Salva.</p>
+          <% } %>
 
           <div class="ab-lettura" data-lettura<%- aperta === 'orari' ? ' hidden' : '' %>>
             <ul class="ab-orari">
               <% if (!riassuntoOrari.length) { %>
-                <li class="ab-orari-riga"><span class="ab-orari-giorni">Tutti i giorni</span><span class="ab-orari-fasce">Sempre aperto</span></li>
+                <li class="ab-orari-riga"><span class="ab-orari-giorni">Tutti i giorni</span><span class="ab-orari-fasce ab-orari-chiuso">Orari non impostati</span></li>
               <% } %>
               <% riassuntoOrari.forEach(function (r) { %>
                 <li class="ab-orari-riga"><span class="ab-orari-giorni"><%= r.etichetta %></span><span class="ab-orari-fasce<%= r.chiuso ? ' ab-orari-chiuso' : '' %>"><%= r.chiuso ? 'Chiuso' : r.fasce.join(' · ') %></span></li>

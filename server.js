@@ -1982,7 +1982,9 @@ async function paginaAnagraficaBanco(req, res, extra = {}) {
     anagraficaBanco,
     orari,
     // Quale scheda è aperta in modifica: quella con gli errori, o quella chiesta con ?modifica= (anche senza JavaScript).
-    aperta: extra.aperta !== undefined ? extra.aperta : (SCHEDE_ANAGRAFICA.includes(req.query.modifica) ? req.query.modifica : null),
+    // Una filiale senza orari impostati NON riceve richieste (dal 22/10/2026): la scheda "Orari" si apre da sola in modifica, con l'avviso.
+    aperta: extra.aperta !== undefined ? extra.aperta : (SCHEDE_ANAGRAFICA.includes(req.query.modifica) ? req.query.modifica : (dati.orari ? null : 'orari')),
+    orariNonImpostati: !dati.orari,
     valori: extra.valori || {},
     errori: extra.errori || {},
     ok: SALVATI_ANAGRAFICA.includes(req.query.ok) ? req.query.ok : '',

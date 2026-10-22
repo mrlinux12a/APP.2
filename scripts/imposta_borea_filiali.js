@@ -77,9 +77,9 @@ async function main() {
     // dichiarato dal banco (vedi src/consegna.js), senza stima del tragitto.
     await c.query(
       `INSERT INTO distributors (nome, filiale, zona, consegna_ore_default, costo_consegna, attivo, ricezione_attiva,
-                                 ragione_sociale, partita_iva, indirizzo, cap, citta, provincia, telefono, email, ditta_id)
+                                 ragione_sociale, partita_iva, indirizzo, cap, citta, provincia, telefono, email, ditta_id, orari)
        SELECT nome, $2, zona, consegna_ore_default, costo_consegna, 1, 1,
-              ragione_sociale, partita_iva, $3, $4, $5, $6, telefono, email, ditta_id
+              ragione_sociale, partita_iva, $3, $4, $5, $6, telefono, email, ditta_id, orari
          FROM distributors WHERE id = $1
        ON CONFLICT (nome, filiale) DO NOTHING`,
       [fe.id, STAGLIENO.filiale, STAGLIENO.indirizzo, STAGLIENO.cap, STAGLIENO.citta, STAGLIENO.provincia]

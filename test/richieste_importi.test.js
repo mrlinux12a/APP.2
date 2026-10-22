@@ -5,11 +5,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 
+// Dal 22/10/2026 una filiale senza orari impostati NON riceve richieste: le prove che hanno bisogno di un banco aperto gli danno un orario vero (24 ore, a Roma).
+const SEMPRE_APERTO = Object.fromEntries(['lun', 'mar', 'mer', 'gio', 'ven', 'sab', 'dom'].map((g) => [g, [['00:00', '23:59']]]));
 const config = { servizio_pct: '10', iva_pct: '22', spedizione_fissa: '10', ordine_minimo: '33', finestra_conferma_min: '10' };
 const chiamate = []; // { s, p, modo }
 let richiestaDb = null; // la riga di requests che "esiste"
 let righeDb = []; // request_items + prodotto
-let banchiAttivi = [{ id: 2, nome: 'BOREA SRL', filiale: 'Fegino' }]; // le filiali attive (con i loro `orari`, se ci sono)
+let banchiAttivi = [{ id: 2, nome: 'BOREA SRL', filiale: 'Fegino', orari: SEMPRE_APERTO }]; // le filiali attive (con i loro `orari`, se ci sono)
 const dbFinto = {
   prepare: (sql) => {
     const s = sql.replace(/\s+/g, ' ').trim();
@@ -45,7 +47,7 @@ const righeCarrello = [{ prodotto: prodotto(1, 54.5), quantita: 1 }, { prodotto:
 const riga = (id, listino) => ({ request_id: 55, product_id: id, quantita: 1, codice: 'C' + id, nome: 'P' + id, categoria: 'X', prezzo_listino: listino, sconto_base_pct: 0, raee: 0 });
 const inserimento = () => chiamate.find((c) => /^INSERT INTO requests/.test(c.s));
 const aggiornamento = (re) => chiamate.find((c) => re.test(c.s));
-const prepara = () => { chiamate.length = 0; richiestaDb = null; righeDb = []; banchiAttivi = [{ id: 2, nome: 'BOREA SRL', filiale: 'Fegino' }]; };
+const prepara = () => { chiamate.length = 0; richiestaDb = null; righeDb = []; banchiAttivi = [{ id: 2, nome: 'BOREA SRL', filiale: 'Fegino', orari: SEMPRE_APERTO }]; };
 
 test('creaRichiesta: salva gli importi divisi (consegna e materiale) dai totali del carrello, accanto al pagamento', async () => {
   prepara();
@@ -177,18 +179,19 @@ const SETTIMANA = { lun: FASCE_ORARI, mar: FASCE_ORARI, mer: FASCE_ORARI, gio: F
 // Roma, lunedì 19 ottobre 2026 (ora legale, UTC+2): `a(giorno, ore, minuti)` con giorno 0 = lunedì.
 const a = (giorno, ore, minuti = 0) => new Date(Date.UTC(2026, 9, 19 + giorno, ore - 2, minuti));
 
-test('distributoriCandidati: solo le filiali aperte adesso (senza orari = sempre aperta)', async () => {
+test('distributoriCandidati: solo le filiali aperte adesso (senza orari impostati: mai)', async () => {
   prepara();
   banchiAttivi = [
     { id: 2, nome: 'BOREA SRL', filiale: 'Fegino', orari: SETTIMANA },
     { id: 3, nome: 'BOREA SRL', filiale: 'Staglieno', orari: { ...SETTIMANA, mar: [['15:00', '19:00']] } },
-    { id: 4, nome: 'ALTRA', filiale: 'Sempre', orari: null },
+    { id: 4, nome: 'ALTRA', filiale: 'Sempre', orari: SEMPRE_APERTO },
+    { id: 5, nome: 'SENZA ORARI', filiale: 'Nuova', orari: null },
   ];
   const ids = async (quando) => (await richieste.distributoriCandidati([1], 'Genova', 1, quando)).map((d) => d.id);
-  assert.deepEqual(await ids(a(1, 10)), [2, 4], 'martedì 10:00: Fegino aperta, Staglieno no (apre alle 15), la terza sempre');
+  assert.deepEqual(await ids(a(1, 10)), [2, 4], 'martedì 10:00: Fegino aperta, Staglieno no (apre alle 15), la terza aperta 24 ore, la quarta senza orari mai');
   assert.deepEqual(await ids(a(1, 13)), [4], 'martedì 13:00: Fegino è nella pausa pranzo, Staglieno apre alle 15');
   assert.deepEqual(await ids(a(1, 16)), [2, 3, 4], 'martedì 16:00: tutte aperte');
-  assert.deepEqual(await ids(a(6, 10)), [4], 'domenica: aperta solo quella senza orari');
+  assert.deepEqual(await ids(a(6, 10)), [4], 'domenica: aperta solo quella a 24 ore');
   assert.deepEqual(await richieste.distributoriCandidati([], 'Genova', 1, a(1, 10)), [], 'senza articoli niente candidati');
 });
 

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 100"><defs><filter id="ccom" x="-30%" y="-200%" width="160%" height="500%"><feGaussianBlur stdDeviation="2.6"/></filter><linearGradient id="ccco" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="0.65" stop-color="#F0F2F5"/><stop offset="1" stop-color="#C5CCD4"/></linearGradient><linearGradient id="ccal" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7FC4F5" stop-opacity=0.85/><stop offset="1" stop-color="#7FC4F5" stop-opacity=0/></linearGradient></defs><ellipse cx="60" cy="92" rx="40" ry="4.5" fill="#000" opacity="0.1" filter="url(#ccom)"/>
+<rect x="8" y="26" width="104" height="34" rx="11" fill="url(#ccco)" stroke="#D2D8DF" stroke-width="0.6"/>
+<rect x="14" y="29.5" width="92" height="2.4" rx="1.2" fill="#FFFFFF"/>
+<rect x="16" y="50" width="88" height="7" rx="3.5" fill="#46505C"/>
+<rect x="18" y="51.2" width="84" height="3.6" rx="1.8" fill="#E9EDF1"/>
+<circle cx="98" cy="40" r="1.6" fill="#33A6F0"/>
+<text x="92" y="41.8" font-family="Arial, sans-serif" font-size="5" font-weight="700" fill="#6B7480" text-anchor="end">22°</text>
+<path d="M34 66 q-3 6 0 12 t0 12" fill="none" stroke="url(#ccal)" stroke-width="2.4" stroke-linecap="round"/><path d="M50 66 q-3 6 0 12 t0 12" fill="none" stroke="url(#ccal)" stroke-width="2.4" stroke-linecap="round"/><path d="M66 66 q-3 6 0 12 t0 12" fill="none" stroke="url(#ccal)" stroke-width="2.4" stroke-linecap="round"/><path d="M82 66 q-3 6 0 12 t0 12" fill="none" stroke="url(#ccal)" stroke-width="2.4" stroke-linecap="round"/></svg>

@@ -290,8 +290,8 @@ const anagraficaProva = {
   utente: { id: 9, username: 'banco', email: 'banco.fegino@borea.example' },
 };
 const scrittureAnagrafica = [];
-// Le filiali attive come le legge il carrello per gli orari (richieste.statoBanchiAttivi): senza orari = sempre aperta.
-const banchiAttiviProva = { righe: [{ id: 2, nome: 'BOREA SRL', filiale: 'Banco Genova Fegino', orari: null }] };
+// Le filiali attive come le legge il carrello per gli orari (richieste.statoBanchiAttivi): aperte tutto il giorno (24 ore: una filiale senza orari impostati non riceve richieste).
+const banchiAttiviProva = { righe: [{ id: 2, nome: 'BOREA SRL', filiale: 'Banco Genova Fegino', orari: Object.fromEntries(['lun', 'mar', 'mer', 'gio', 'ven', 'sab', 'dom'].map((g) => [g, [['00:00', '23:59']]])) }] };
 const richiesteBanco = [
   { id: 11, cliente_nome: 'Rossi <b>Impianti</b> S.r.l.', esito: 'in_attesa', secondi: 447, secondi_da_risposta: null },
   { id: 12, cliente_nome: 'Bianchi Termoidraulica', esito: 'in_attesa', secondi: 95, secondi_da_risposta: null },
@@ -4895,8 +4895,11 @@ test('banco: "Anagrafica del banco": schede a sinistra e a destra, dati in lettu
     assert.match(t, /<dt>Zona servita<\/dt><dd>Genova e provincia<\/dd>/);
     assert.match(t, /<div class="ab-posizione ab-posizione-ok">[\s\S]*?<strong>Posizione sulla mappa impostata\.<\/strong> Serve ai corrieri e per calcolare le distanze\.<\/span>\s*<\/div>/);
     assert.doesNotMatch(t, /data-sposta|data-mappa-sposta|data-mappa-dialog|mappa\.js|Sposta/);
-    // Orari: senza orari impostati vale "sempre aperto"
-    assert.match(t, /<span class="ab-orari-giorni">Tutti i giorni<\/span><span class="ab-orari-fasce">Sempre aperto<\/span>/);
+    // Orari: senza orari impostati NON esiste "sempre aperto" (22/10/2026): avviso e scheda già aperta in modifica, con la proposta da salvare
+    assert.doesNotMatch(t, /Sempre aperto/);
+    assert.match(t, /<p class="ab-avviso" role="alert"><strong>Orari non impostati\.<\/strong> Finché non li salvi questa filiale non riceve richieste\./);
+    assert.match(t, /<section class="ab-card" id="orari" data-scheda="orari" data-aperta>/);
+    assert.match(t, /name="da1_lun" value="07:30"/, 'il modulo parte dalla proposta');
     // Accesso: email dell'utente e password nascosta, e il pulsante "Cambia password"
     assert.match(t, /<dt>Email di accesso<\/dt><dd>banco\.fegino@borea\.example<\/dd>/);
     assert.match(t, /<dd class="ab-punti" aria-label="Password nascosta">••••••••••<\/dd>/);
@@ -4908,16 +4911,19 @@ test('banco: "Anagrafica del banco": schede a sinistra e a destra, dati in lettu
     // "Esci": lo stesso modulo della tendina
     assert.match(t, /<form class="ab-esci-form" method="POST" action="\/logout">\s*<button type="submit" class="ab-esci"><span class="ab-esci-ico" aria-hidden="true"><svg[\s\S]*?<\/svg><\/span>Esci dal banco<\/button>/);
     // moduli: ogni scheda ha il suo POST, tutti nascosti finché non si preme "Modifica"
-    for (const azione of ['ditta', 'filiale', 'orari', 'password']) {
+    for (const azione of ['ditta', 'filiale', 'password']) {
       assert.match(t, new RegExp('<form class="ab-modulo[^"]*" method="POST" action="/distributore/anagrafica/' + azione + '"[^>]* hidden>'), azione);
     }
-    assert.doesNotMatch(t, /data-aperta/);
+    // (quello degli orari è già aperto: questa filiale non ha orari impostati)
+    assert.doesNotMatch(t, /<form class="ab-modulo[^"]*" method="POST" action="\/distributore\/anagrafica\/orari"[^>]* hidden>/);
+    // senza orari impostati si apre da sola solo la scheda Orari: le altre restano chiuse
+    assert.doesNotMatch(t, /data-scheda="(ditta|filiale|accesso|notifiche)" data-aperta/);
     // ?modifica=filiale apre quella scheda già col modulo (anche senza JavaScript)
     const aperta = await (await chiedi('/distributore/anagrafica?modifica=filiale')).text();
     assert.match(aperta, /<section class="ab-card" id="filiale" data-scheda="filiale" data-aperta>/);
     assert.match(aperta, /<form class="ab-modulo" method="POST" action="\/distributore\/anagrafica\/filiale" data-modulo novalidate>/);
-    // un valore sconosciuto non apre niente
-    assert.doesNotMatch(await (await chiedi('/distributore/anagrafica?modifica=boh')).text(), /data-aperta/);
+    // un valore sconosciuto non apre niente (a parte la scheda Orari, che senza orari impostati è aperta da sola)
+    assert.doesNotMatch(await (await chiedi('/distributore/anagrafica?modifica=boh')).text(), /data-scheda="(ditta|filiale|accesso|notifiche)" data-aperta/);
   } finally {
     banco.attivo = false;
   }
@@ -5198,7 +5204,7 @@ test('carrello: con TUTTI i banchi chiusi (orari) il pulsante dice quando riapre
     assert.match(await (await chiedi('/carrello')).text(), /Valvola a sfera/);
 
     // basta UNA filiale aperta: il pulsante torna quello di sempre
-    banchiAttiviProva.righe = [...soloQuelGiorno(), { id: 3, nome: 'BOREA SRL', filiale: 'Banco Genova Staglieno', orari: null }];
+    banchiAttiviProva.righe = [...soloQuelGiorno(), { id: 3, nome: 'BOREA SRL', filiale: 'Banco Genova Staglieno', orari: Object.fromEntries(['lun', 'mar', 'mer', 'gio', 'ven', 'sab', 'dom'].map((g) => [g, [['00:00', '23:59']]])) }];
     t = await (await chiedi('/carrello')).text();
     assert.match(t, /<button class="btn-paga" type="submit" form="form-invia" data-btn-paga >Paga e invia richiesta<\/button>/);
     assert.doesNotMatch(t, /btn-paga-chiuso|data-banco-chiuso|cc-chiuso/);

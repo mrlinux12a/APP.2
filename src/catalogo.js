@@ -640,14 +640,32 @@ async function eseguiRicerca(
 // macroCategorie, sottocategorieDi, macroCategoria e contaProdottiConFoto sono in cache per
 // 60 secondi (vedi memo.js): il server non le modifica mai, e i conteggi sono la parte più
 // lenta di home e categorie. Una modifica fatta da script compare entro un minuto.
+// Immagine di una categoria (richiesta esplicita del 22/10/2026, sostituisce l'icona su sfondo azzurro nella griglia della home): public/img/categorie/<slug>.svg, si propone
+// SOLO se il file c'è (stessa logica di `fotoSottocategoria`: un file mancante sotto /img non è un 404 innocuo, passa da sessione e query). Il controllo sta dentro
+// macroCategorie/macroCategoria, che sono in cache 60 s: niente `fs.access` a ogni richiesta, e un file tolto o aggiunto compare entro un minuto. "Riscaldamento e Caldaie" ed
+// "Elementi con foto" non hanno il file e restano con la loro icona.
+const CARTELLA_IMMAGINI_CATEGORIE = path.join(__dirname, '..', 'public', 'img', 'categorie');
+
+async function immagineCategoria(slug) {
+  if (typeof slug !== 'string' || !/^[a-z0-9-]+$/.test(slug)) return null; // lo slug viene dal DB, ma non si costruisce mai un percorso da un valore strano
+  try {
+    await fs.promises.access(path.join(CARTELLA_IMMAGINI_CATEGORIE, slug + '.svg'));
+    return '/img/categorie/' + slug + '.svg';
+  } catch (e) {
+    return null;
+  }
+}
+
 const macroCategorie = conCache(60 * 1000, async function macroCategorie() {
-  return db
+  const righe = await db
     .prepare(
       `SELECT m.*, (SELECT COUNT(*) FROM products p WHERE p.macro_slug = m.slug AND p.attivo = 1) AS n_prodotti
          FROM macro_categorie m
         ORDER BY m.priorita, m.ordine, m.nome`
     )
     .all();
+  const immagini = await Promise.all(righe.map((m) => immagineCategoria(m.slug)));
+  return righe.map((m, i) => ({ ...m, immagine: immagini[i] }));
 });
 
 // Le due liste della home con una sola lettura: le categorie che in cantiere si cercano più spesso (in
@@ -753,7 +771,8 @@ async function marchiNellaCategoria({ macroSlug = null, sotto = null } = {}) {
 }
 
 const macroCategoria = conCache(60 * 1000, async function macroCategoria(slug) {
-  return db.prepare('SELECT * FROM macro_categorie WHERE slug = ?').get(slug);
+  const macro = await db.prepare('SELECT * FROM macro_categorie WHERE slug = ?').get(slug);
+  return macro ? { ...macro, immagine: await immagineCategoria(macro.slug) } : macro;
 });
 
 // ---------- Elenchi paginati ----------
@@ -921,6 +940,7 @@ module.exports = {
   raggruppaVarianti,
   cercaProdotti,
   macroCategorie,
+  immagineCategoria,
   categorieHome,
   macroCategoria,
   sottocategorieDi,

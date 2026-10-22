@@ -93,8 +93,16 @@ async function elencoJson(elenco) {
   };
 }
 
-function macroJson(m) {
-  return { slug: m.slug, nome: m.nome, descrizione: m.descrizione, n_prodotti: Number(m.n_prodotti) || 0 };
+// `immagine`: indirizzo ASSOLUTO dell'immagine della categoria (public/img/categorie/<slug>.svg) o null se il file non c'è (l'app resta con l'icona). APP_URL se c'è, altrimenti
+// l'indirizzo con cui è stata fatta la richiesta; l'app la mostra con SvgUri (react-native-svg).
+function urlAssoluto(req, percorso) {
+  if (!percorso) return null;
+  const base = String(process.env.APP_URL || '').trim().replace(/\/+$/, '') || req.protocol + '://' + req.get('host');
+  return base + percorso;
+}
+
+function macroJson(m, req) {
+  return { slug: m.slug, nome: m.nome, descrizione: m.descrizione, n_prodotti: Number(m.n_prodotti) || 0, immagine: urlAssoluto(req, m.immagine) };
 }
 
 const e2 = (n) => pricing.euro(n);
@@ -230,7 +238,7 @@ router.get('/catalogo', richiedeCliente, async (req, res) => {
     catalogo.categorieHome(),
     catalogo.contaProdottiConFoto(),
   ]);
-  res.json({ in_evidenza: inEvidenza.map(macroJson), altre: altre.map(macroJson), con_foto: conFoto });
+  res.json({ in_evidenza: inEvidenza.map((m) => macroJson(m, req)), altre: altre.map((m) => macroJson(m, req)), con_foto: conFoto });
 });
 
 // Ricerca mentre si digita, con lo stesso ambito delle pagine del sito (categoria,
@@ -251,7 +259,7 @@ router.get('/categorie/:slug', richiedeCliente, async (req, res) => {
   if (!macro) return res.status(404).json({ errore: 'Categoria non trovata.' });
   const sottocategorie = await catalogo.sottocategorieDi(macro.slug);
   res.json({
-    macro: { slug: macro.slug, nome: macro.nome, descrizione: macro.descrizione },
+    macro: { slug: macro.slug, nome: macro.nome, descrizione: macro.descrizione, immagine: urlAssoluto(req, macro.immagine) },
     sottocategorie: sottocategorie.map((s) => ({ slug: s.slug, nome: s.nome, n: Number(s.n) || 0 })),
   });
 });

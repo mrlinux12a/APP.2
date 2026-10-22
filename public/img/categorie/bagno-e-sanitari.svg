@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 100"><defs><filter id="bsom" x="-30%" y="-200%" width="160%" height="500%"><feGaussianBlur stdDeviation="2.6"/></filter><linearGradient id="bsce" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="0.6" stop-color="#F1F3F5"/><stop offset="1" stop-color="#C7CED6"/></linearGradient><linearGradient id="bsin" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C9D1DA"/><stop offset="1" stop-color="#F4F6F8"/></linearGradient><linearGradient id="bscr" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8E97A1"/><stop offset="0.4" stop-color="#F7F9FA"/><stop offset="0.7" stop-color="#C3C9D0"/><stop offset="1" stop-color="#7D8690"/></linearGradient><linearGradient id="bscv" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="0.25" stop-color="#E4E8EC"/><stop offset="0.55" stop-color="#A4ADB7"/><stop offset="0.8" stop-color="#E9ECEF"/><stop offset="1" stop-color="#7D8690"/></linearGradient><linearGradient id="bsac" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#BFE3FA" stop-opacity="0.9"/><stop offset="1" stop-color="#6FB7EA" stop-opacity="0.5"/></linearGradient></defs><ellipse cx="60" cy="93" rx="40" ry="4.5" fill="#000" opacity="0.18" filter="url(#bsom)"/>
+<path d="M14 54 Q16 86 60 88 Q104 86 106 54 Z" fill="url(#bsce)"/>
+<ellipse cx="60" cy="54" rx="46" ry="10" fill="#FFFFFF" stroke="#D3D9E0" stroke-width="0.8"/>
+<ellipse cx="60" cy="55.5" rx="38" ry="7" fill="url(#bsin)"/>
+<ellipse cx="62" cy="57.6" rx="2.6" ry="1" fill="#8C96A1"/>
+<path d="M20 60 Q24 80 46 85" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" opacity="0.9"/>
+<rect x="55" y="30" width="10" height="17" rx="2" fill="url(#bscr)"/>
+<ellipse cx="60" cy="47" rx="8" ry="2.2" fill="url(#bscv)"/>
+<path d="M60 33 Q60 24 69 24 H79" fill="none" stroke="url(#bscv)" stroke-width="5.5"/>
+<rect x="76.5" y="21.3" width="4" height="7.6" rx="1" fill="url(#bscr)"/>
+<path d="M58 30 L46 26.5" stroke="url(#bscv)" stroke-width="3.4" stroke-linecap="round"/>
+<path d="M78.5 29.5 V50" stroke="url(#bsac)" stroke-width="2.2" stroke-linecap="round"/></svg>

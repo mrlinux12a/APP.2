@@ -3,8 +3,8 @@
 //   node scripts/stato_orari.js                  adesso
 //   node scripts/stato_orari.js "2026-10-22 18:50"   a quell'ora di Roma (per provare "e alle 18:50?")
 //
-// Perché serve: per l'installatore "BOREA" è APERTA se lo è ALMENO UNA filiale attiva, e una filiale senza orari è sempre aperta. Quindi se il banco cambia gli orari
-// di una filiale sola, l'installatore non vede niente finché l'altra resta aperta (o senza orari). Qui si vede chi tiene aperto.
+// Perché serve: per l'installatore "BOREA" è APERTA se lo è ALMENO UNA filiale attiva; una filiale senza orari impostati NON riceve richieste (dal 22/10/2026 non esiste
+// più "sempre aperto"). Qui si vede, filiale per filiale, chi tiene aperto e cosa risulta all'installatore.
 require('dotenv').config({ quiet: true });
 const richieste = require('../src/richieste');
 const orari = require('../src/orari');
@@ -34,16 +34,16 @@ function quando() {
     const s = orari.statoOrari(d.orari, adesso);
     const letti = orari.leggiOrari(d.orari);
     console.log('· #' + d.id + ' ' + d.nome + (d.filiale ? ' — ' + d.filiale : ''));
-    if (!letti) console.log('    orari: NESSUNO (valore vuoto o illeggibile) → SEMPRE APERTA');
+    if (!letti) console.log('    orari: NON IMPOSTATI (valore vuoto o illeggibile) → NON riceve richieste');
     else {
       for (const g of orari.GIORNI) console.log('    ' + orari.NOMI[g].padEnd(10) + (letti[g].length ? letti[g].map((f) => f[0] + '–' + f[1]).join('  ') : 'chiuso'));
     }
-    console.log('    adesso: ' + (s.aperto ? 'APERTA' + (s.chiude ? ' (chiude alle ' + s.chiude.ora + ')' : ' (senza orari)') : 'chiusa' + (s.riapre ? ', riapre ' + s.riapre.testo : '')));
+    console.log('    adesso: ' + (s.aperto ? 'APERTA' + (s.chiude ? ' (chiude alle ' + s.chiude.ora + ')' : '') : 'chiusa' + (s.riapre ? ', riapre ' + s.riapre.testo : '')));
     console.log('');
   }
   const t = orari.testiChiuso(banco.stato, banco.nome);
   console.log('RISULTATO per l\'installatore: ' + (banco.stato.aperto
-    ? 'APERTO' + (banco.stato.chiude ? ' fino alle ' + banco.stato.chiude.ora + (orari.inChiusura(banco.stato) ? ' (striscia "Ancora ' + banco.stato.chiude.mancanoMin + ' min")' : '') : ' — nessuna chiusura (una filiale aperta è senza orari)')
+    ? 'APERTO' + (banco.stato.chiude ? ' fino alle ' + banco.stato.chiude.ora + (orari.inChiusura(banco.stato) ? ' (striscia "Ancora ' + banco.stato.chiude.mancanoMin + ' min")' : '') : ' — nessuna chiusura (nessun banco attivo)')
     : 'CHIUSO — ' + t.titolo + ' · ' + t.sotto));
   process.exit(0);
 })().catch((e) => { console.error('Errore:', e.message); process.exit(1); });

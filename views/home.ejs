@@ -40,7 +40,12 @@
           <% const parolaLunga = (nome) => nome.split(/\s+/).some((p) => p.length > 14); %>
           <% inEvidenza.concat(altre).forEach(function (m) { %>
             <a class="cat<%= parolaLunga(m.nome) ? ' cat-lunga' : '' %>" href="/categoria/<%= m.slug %>">
-              <span class="cat-ico"><%- iconaCategoria(m.slug) %></span>
+              <%# Con l'immagine (public/img/categorie/<slug>.svg, solo se il file c'è) al posto dell'icona; "alt" vuoto perché il nome è scritto sotto; width/height fissi: niente salti di layout. %>
+              <% if (m.immagine) { %>
+                <span class="cat-img"><img src="<%= m.immagine %>" alt="" width="72" height="60" loading="lazy" decoding="async"></span>
+              <% } else { %>
+                <span class="cat-ico"><%- iconaCategoria(m.slug) %></span>
+              <% } %>
               <span class="nome"><%= m.nome %></span>
             </a>
           <% }); %>

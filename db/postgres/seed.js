@@ -56,14 +56,19 @@ async function upsertUser(u) {
   ).run(dati.ruolo, dati.username, dati.password_hash, dati.ragione_sociale, dati.email, dati.telefono, dati.distributor_id, dati.zona, dati.partita_iva, dati.codice_fiscale, dati.indirizzo, dati.cap, dati.citta, dati.provincia, dati.sdi_pec, dati.indirizzo_consegna, dati.referente);
 }
 
+// Orari di partenza dei banchi demo (come la proposta dell'Anagrafica del banco). Una filiale senza orari NON riceve richieste (dal 22/10/2026: non esiste "sempre aperto");
+// il seed li scrive solo alla creazione, un banco che li ha già cambiati non li ritrova riscritti (ON CONFLICT non li tocca).
+const FASCE_PREDEFINITE = [['07:30', '12:30'], ['14:00', '18:00']];
+const ORARI_PREDEFINITI = { lun: FASCE_PREDEFINITE, mar: FASCE_PREDEFINITE, mer: FASCE_PREDEFINITE, gio: FASCE_PREDEFINITE, ven: FASCE_PREDEFINITE, sab: [['07:30', '12:00']], dom: [] };
+
 async function upsertDistributor(d) {
   await db.prepare(
     `INSERT INTO distributors (nome, filiale, zona, consegna_ore_default, costo_consegna, attivo,
                                ragione_sociale, partita_iva, indirizzo, cap, citta, provincia,
-                               telefono, email)
+                               telefono, email, orari)
      VALUES (?, ?, ?, ?, ?, 1,
              ?, ?, ?, ?, ?, ?,
-             ?, ?)
+             ?, ?, ?::jsonb)
      ON CONFLICT(nome, filiale) DO UPDATE SET
        zona = excluded.zona,
        consegna_ore_default = excluded.consegna_ore_default,
@@ -77,7 +82,7 @@ async function upsertDistributor(d) {
        provincia = excluded.provincia,
        telefono = excluded.telefono,
        email = excluded.email`
-  ).run(d.nome, d.filiale, d.zona, d.consegna_ore_default, d.costo_consegna, d.ragione_sociale, d.partita_iva, d.indirizzo, d.cap, d.citta, d.provincia, d.telefono, d.email);
+  ).run(d.nome, d.filiale, d.zona, d.consegna_ore_default, d.costo_consegna, d.ragione_sociale, d.partita_iva, d.indirizzo, d.cap, d.citta, d.provincia, d.telefono, d.email, JSON.stringify(ORARI_PREDEFINITI));
   return db.prepare('SELECT * FROM distributors WHERE nome = ? AND filiale = ?').get(d.nome, d.filiale);
 }
 

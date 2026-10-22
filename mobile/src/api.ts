@@ -89,7 +89,8 @@ export async function chiamaApi<T>(percorso: string, opzioni: { metodo?: string;
 
 export type Utente = { id: number; username: string; ragione_sociale: string; ruolo: string };
 
-export type Categoria = { slug: string; nome: string; descrizione: string; n_prodotti: number };
+// `immagine`: indirizzo assoluto dell'immagine della categoria (SVG), oppure null/assente se non c'è: allora resta l'icona.
+export type Categoria = { slug: string; nome: string; descrizione: string; n_prodotti: number; immagine?: string | null };
 
 export type Sottocategoria = { slug: string; nome: string; n: number };
 

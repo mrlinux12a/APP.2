@@ -48,7 +48,12 @@
           <% sottocategorie.forEach(function (s) { %>
             <a class="sotto-scheda" href="<%= conFiltri({ sotto: s.slug, misura: null, marchio: null }) %>">
               <span class="sotto-foto">
-                <span class="sotto-segnaposto"><%- iconaCategoria(macro.slug) %></span>
+                <%# Senza foto della sottocategoria: l'immagine della categoria (se c'è) su bianco, altrimenti l'icona su grigio; la foto, se c'è, copre tutto. %>
+                <% if (macro.immagine) { %>
+                  <span class="sotto-segnaposto sotto-segnaposto-img"><img src="<%= macro.immagine %>" alt="" width="120" height="100" loading="lazy" decoding="async"></span>
+                <% } else { %>
+                  <span class="sotto-segnaposto"><%- iconaCategoria(macro.slug) %></span>
+                <% } %>
                 <% if (s.foto) { %>
                   <img src="<%= s.foto %>" alt="<%= s.nome %>" width="600" height="450" loading="lazy"
                        onerror="this.remove()">

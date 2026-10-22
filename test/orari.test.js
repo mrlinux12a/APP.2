@@ -14,7 +14,7 @@ const SETTIMANA = {
 const a = (giorno, ore, minuti = 0) => new Date(Date.UTC(2026, 9, 19 + giorno, ore - 2, minuti));
 const LUN = 0, MAR = 1, MER = 2, VEN = 4, SAB = 5, DOM = 6;
 
-test('leggiOrari: senza orari (o con un dato rovinato) vale "sempre aperto", mai "chiuso"', () => {
+test('leggiOrari: senza orari impostati (o con un dato rovinato) ritorna null, e la filiale risulta CHIUSA: "sempre aperto" non esiste più (22/10/2026)', () => {
   assert.equal(orari.leggiOrari(null), null);
   assert.equal(orari.leggiOrari(undefined), null);
   assert.equal(orari.leggiOrari('non è json'), null);
@@ -23,8 +23,13 @@ test('leggiOrari: senza orari (o con un dato rovinato) vale "sempre aperto", mai
   assert.equal(orari.leggiOrari({ lun: [['18:00', '07:00']] }), null, 'fascia alla rovescia');
   assert.equal(orari.leggiOrari({ lun: [['07:00', '12:00'], ['11:00', '13:00']] }), null, 'fasce sovrapposte');
   assert.equal(orari.leggiOrari({ lun: [['07:00', '08:00'], ['09:00', '10:00'], ['11:00', '12:00']] }), null, 'più di due fasce');
-  assert.equal(orari.apertoAdesso(null, a(MAR, 3)), true);
-  assert.equal(orari.apertoAdesso('rovinato', a(MAR, 3)), true);
+  assert.equal(orari.apertoAdesso(null, a(MAR, 3)), false, 'orari non impostati: non riceve richieste');
+  assert.equal(orari.apertoAdesso(undefined, a(MAR, 11)), false);
+  assert.equal(orari.apertoAdesso('rovinato', a(MAR, 11)), false);
+  assert.deepEqual(orari.statoOrari(null, a(MAR, 11)), { aperto: false, riapre: null }, 'e non riapre da solo: serve che il banco li imposti');
+  assert.equal(orari.orariImpostati(null), false);
+  assert.equal(orari.orariImpostati('rovinato'), false);
+  assert.equal(orari.orariImpostati(SETTIMANA), true);
   // completa i giorni mancanti come chiusi e legge anche il testo JSON
   const letti = orari.leggiOrari(JSON.stringify({ lun: [['07:30', '12:00']] }));
   assert.deepEqual(letti.lun, [['07:30', '12:00']]);
@@ -79,12 +84,17 @@ test('statoOrari: quando riapre (oggi, domani, un giorno della settimana)', () =
 test('statoBanchi: basta una filiale aperta; se sono tutte chiuse riapre la prima', () => {
   const presto = { id: 1, orari: SETTIMANA };
   const tardi = { id: 2, orari: { ...SETTIMANA, mer: [['15:00', '19:00']] } };
-  const sempre = { id: 3, orari: null };
+  const senza = { id: 3, orari: null };
   // martedì 19:00: chiuse entrambe; mercoledì la prima apre alle 07:30, la seconda alle 15:00
   const chiuso = orari.statoBanchi([tardi, presto], a(MAR, 19, 0));
   assert.equal(chiuso.aperto, false);
   assert.equal(chiuso.riapre.testo, 'domani alle 07:30');
-  assert.equal(orari.statoBanchi([presto, sempre], a(MAR, 19, 0)).aperto, true, 'una filiale senza orari è sempre aperta');
+  // una filiale senza orari impostati NON tiene aperta la ditta (era il caso di Staglieno, che restava "sempre aperta" per gli installatori)
+  assert.equal(orari.statoBanchi([presto, senza], a(MAR, 19, 0)).aperto, false, 'una filiale senza orari non conta come aperta');
+  assert.equal(orari.statoBanchi([presto, senza], a(MAR, 19, 0)).riapre.testo, 'domani alle 07:30');
+  assert.equal(orari.statoBanchi([presto, senza], a(MAR, 10, 0)).aperto, true, 'aperta quella che ha gli orari');
+  assert.equal(orari.statoBanchi([senza], a(MAR, 10, 0)).aperto, false, 'tutte senza orari: chiuso, e non riapre');
+  assert.equal(orari.statoBanchi([senza], a(MAR, 10, 0)).riapre, null);
   assert.equal(orari.statoBanchi([presto, tardi], a(MAR, 10, 0)).aperto, true);
   assert.equal(orari.statoBanchi([], a(MAR, 19, 0)).aperto, true, 'nessun banco: non è una questione di orari');
   assert.equal(orari.frasePerCarrello(chiuso), 'Il banco è chiuso · riapre domani alle 07:30');
@@ -114,8 +124,6 @@ test('chiude: la fine della fascia in corso, con i minuti che mancano (ora di Ro
   const aMezzo = new Date(a(MAR, 16, 51).getTime() + 30000);
   assert.equal(orari.statoOrari(S17, aMezzo).chiude.mancanoMin, 9);
   assert.equal(orari.statoOrari(S17, aMezzo).chiude.secondi, 510);
-  // senza orari: sempre aperto, non chiude mai
-  assert.deepEqual(orari.statoOrari(null, a(MAR, 16, 59)), { aperto: true, riapre: null, chiude: null });
   // due fasce che si toccano non sono una chiusura: chiude alla fine della seconda
   const attaccate = { ...S17, mar: [['07:30', '14:00'], ['14:00', '17:00']] };
   assert.equal(orari.statoOrari(attaccate, a(MAR, 13, 0)).chiude.ora, '17:00');
@@ -130,15 +138,15 @@ test('chiude: vale l\'ora di Roma, con l\'ora legale e con quella solare, qualun
   assert.equal(orari.statoOrari(S17, new Date(Date.UTC(2026, 11, 2, 16, 0))).aperto, false);
 });
 
-test('statoBanchi: con più filiali aperte "chiude" è la chiusura che arriva più tardi; una sempre aperta = non chiude', () => {
+test('statoBanchi: con più filiali aperte "chiude" è la chiusura che arriva più tardi; una senza orari non conta', () => {
   const presto = { id: 1, orari: S17 };
   const tardi = { id: 2, orari: { ...S17, mar: [['07:30', '12:30'], ['14:00', '19:00']] } };
   const s = orari.statoBanchi([presto, tardi], a(MAR, 16, 0));
   assert.equal(s.aperto, true);
   assert.equal(s.chiude.ora, '19:00');
   assert.equal(s.chiude.mancanoMin, 180);
-  assert.equal(orari.statoBanchi([presto, { id: 3, orari: null }], a(MAR, 16, 0)).chiude, null, 'una filiale senza orari non chiude');
-  assert.equal(orari.statoBanchi([], a(MAR, 16, 0)).chiude, null);
+  assert.equal(orari.statoBanchi([presto, { id: 3, orari: null }], a(MAR, 16, 0)).chiude.ora, '17:00', 'una filiale senza orari non cambia la chiusura');
+  assert.equal(orari.statoBanchi([], a(MAR, 16, 0)).chiude, null, 'nessun banco: non è una questione di orari');
   // una chiusa e una aperta: conta quella aperta
   assert.equal(orari.statoBanchi([presto, { id: 4, orari: { ...S17, mar: [['15:00', '16:30']] } }], a(MAR, 12, 0)).chiude.ora, '12:30');
 });
@@ -150,7 +158,8 @@ test('inChiusura / avvisoChiusura: solo negli ultimi minuti (soglia IN_CHIUSURA_
   assert.equal(orari.inChiusura(stato(16, 29)), false, 'a 31 minuti no');
   assert.equal(orari.inChiusura(stato(16, 59)), true);
   assert.equal(orari.inChiusura(stato(17, 0)), false, 'chiuso: non è "in chiusura"');
-  assert.equal(orari.inChiusura(orari.statoOrari(null, a(MAR, 16, 59))), false, 'sempre aperto');
+  assert.equal(orari.inChiusura(orari.statoOrari(null, a(MAR, 16, 59))), false, 'senza orari: chiuso, non "in chiusura"');
+  assert.equal(orari.inChiusura(orari.statoBanchi([], a(MAR, 16, 59))), false, 'nessun banco');
   assert.equal(orari.inChiusura(stato(16, 51), 5), false, 'soglia diversa');
   assert.deepEqual(orari.avvisoChiusura(stato(16, 51)), { ora: '17:00', mancanoMin: 9, secondi: 540 });
   assert.equal(orari.avvisoChiusura(stato(10, 0)), null);
@@ -166,8 +175,9 @@ test('secondiAlCambio: fra quanti secondi lo stato cambia da solo (chiude se ape
   assert.equal(orari.secondiAlCambio(orari.statoOrari(S17, venti), venti), 870 * 60 - 20);
   // pausa pranzo: riapre oggi alle 14:00
   assert.equal(orari.secondiAlCambio(orari.statoOrari(S17, a(MAR, 13, 0)), a(MAR, 13, 0)), 60 * 60);
-  // sempre aperto o nessun giorno aperto: non cambia mai
+  // nessun banco o nessun giorno aperto (anche orari non impostati): non cambia mai
   assert.equal(orari.secondiAlCambio(orari.statoOrari(null, a(MAR, 13, 0)), a(MAR, 13, 0)), null);
+  assert.equal(orari.secondiAlCambio(orari.statoBanchi([], a(MAR, 13, 0)), a(MAR, 13, 0)), null);
   assert.equal(orari.secondiAlCambio({ aperto: false, riapre: null }), null);
   assert.equal(orari.secondiAlCambio(null), null);
   assert.equal(orari.paginaOrari([{ id: 1, orari: S17 }], 'BOREA', a(MAR, 16, 51)).cambiaSec, 540);
@@ -207,7 +217,7 @@ test('testiChiuso: i testi di "ordini chiusi" (oggi, domani, un altro giorno, ma
   assert.equal(orari.testiChiuso(null, 'BOREA'), null);
 });
 
-test('unisciOrari: le fasce di tutte le filiali insieme, fuse quando si toccano; senza orari = sempre aperto', () => {
+test('unisciOrari: le fasce di tutte le filiali insieme, fuse quando si toccano; una filiale senza orari non aggiunge niente', () => {
   const f1 = { id: 1, orari: S17 };
   const f2 = { id: 2, orari: { ...S17, mar: [['12:30', '13:00'], ['17:00', '19:00']] } };
   const u = orari.unisciOrari([f1, f2]);
@@ -216,8 +226,9 @@ test('unisciOrari: le fasce di tutte le filiali insieme, fuse quando si toccano;
   // sovrapposte: una fascia sola
   assert.deepEqual(orari.unisciOrari([f1, { id: 5, orari: { ...S17, mar: [['10:00', '15:00'], ['16:00', '19:00']] } }]).mar, [['07:30', '19:00']]);
   assert.deepEqual(u.dom, []);
-  assert.equal(orari.unisciOrari([f1, { id: 3, orari: null }]), null, 'una filiale sempre aperta: sempre aperto');
-  assert.equal(orari.unisciOrari([]), null);
+  assert.deepEqual(orari.unisciOrari([f1, { id: 3, orari: null }]), orari.unisciOrari([f1]), 'una filiale senza orari non aggiunge niente');
+  assert.deepEqual(orari.unisciOrari([{ id: 3, orari: null }]).lun, [], 'tutte senza orari: tutto chiuso');
+  assert.equal(orari.unisciOrari([]), null, 'nessuna filiale attiva');
 });
 
 test('paginaOrari: lo stato adesso, i testi e i sette giorni (oggi, giorno di riapertura, chiusi)', () => {
@@ -246,11 +257,17 @@ test('paginaOrari: lo stato adesso, i testi e i sette giorni (oggi, giorno di ri
   assert.equal(p.sottoPrefisso, 'Chiude oggi alle ');
   assert.equal(p.quando, '17:00');
   assert.equal(p.testi, null);
-  // sempre aperto: niente giorni da elencare
-  p = orari.paginaOrari([{ id: 1, orari: null }], 'BOREA', a(MAR, 15, 0));
+  // nessuna filiale attiva: non è una questione di orari (niente giorni da elencare)
+  p = orari.paginaOrari([], 'BOREA', a(MAR, 15, 0));
   assert.equal(p.sempreAperto, true);
   assert.deepEqual(p.giorni, []);
-  assert.equal(p.sottoPrefisso, 'Sempre aperto');
+  assert.equal(p.aperto, true);
+  // filiali senza orari impostati: chiuso, "Al momento BOREA non riceve richieste", tutti i giorni chiusi
+  p = orari.paginaOrari([{ id: 1, orari: null }], 'BOREA', a(MAR, 15, 0));
+  assert.equal(p.aperto, false);
+  assert.equal(p.sempreAperto, false);
+  assert.equal(p.sottoPrefisso, 'Al momento BOREA non riceve richieste');
+  assert.equal(p.giorni.every((g) => g.chiuso), true);
 });
 
 test('riassunto: i giorni consecutivi con gli stessi orari stanno su una riga', () => {

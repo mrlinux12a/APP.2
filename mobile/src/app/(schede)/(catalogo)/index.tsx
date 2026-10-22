@@ -1,6 +1,7 @@
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { SvgUri } from 'react-native-svg';
 
 import type { Categoria } from '@/api';
 import { BarraRicerca } from '@/componenti/BarraRicerca';
@@ -10,14 +11,25 @@ import { Caricamento, Errore } from '@/componenti/Stato';
 import { useCatalogo, usePrecaricaCatalogo, useRicerca } from '@/dati';
 import { FONT, RAGGIO, useTema, type Colori } from '@/tema';
 
-function Tessera({ c, titolo, conta, icona, href }: { c: Colori; titolo: string; conta: number; icona: React.ReactNode; href: Href }) {
+// L'immagine della categoria (SVG da /img/categorie/<slug>.svg, la manda l'API) su riquadro bianco, senza sfondo azzurro. Se manca o non si carica resta l'icona di prima.
+function ImmagineCategoria({ uri, icona }: { uri: string; icona: React.ReactNode }) {
+  const [errore, setErrore] = useState(false);
+  if (errore) return <View style={stili.tesseraIco}>{icona}</View>;
+  return (
+    <View style={stili.tesseraImg}>
+      <SvgUri uri={uri} width="100%" height="100%" onError={() => setErrore(true)} />
+    </View>
+  );
+}
+
+function Tessera({ c, titolo, conta, icona, immagine, href }: { c: Colori; titolo: string; conta: number; icona: React.ReactNode; immagine?: string | null; href: Href }) {
   return (
     <Pressable
       onPress={() => router.push(href)}
       accessibilityRole="link"
       style={[stili.tessera, { backgroundColor: c.superficie, borderColor: c.bordo }]}
     >
-      <View style={[stili.tesseraIco, { backgroundColor: c.accentoChiaro }]}>{icona}</View>
+      {immagine ? <ImmagineCategoria uri={immagine} icona={icona} /> : <View style={stili.tesseraIco}>{icona}</View>}
       <Text style={[stili.tesseraNome, { color: c.testo }]}>{titolo}</Text>
       <Text style={[stili.tesseraConta, { color: c.grigio }]}>{conta.toLocaleString('it-IT')} articoli</Text>
     </Pressable>
@@ -61,6 +73,7 @@ export default function Home() {
                 titolo={m.nome}
                 conta={m.n_prodotti}
                 icona={<IconaCategoria slug={m.slug} colore={c.accento} dimensione={20} />}
+                immagine={m.immagine}
                 href={{ pathname: '/categoria/[slug]', params: { slug: m.slug, titolo: m.nome } }}
               />
             ))}
@@ -107,7 +120,9 @@ const stili = StyleSheet.create({
     gap: 6,
     minHeight: 118,
   },
-  tesseraIco: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  // Riquadro bianco (niente più sfondo azzurro): l'icona di ripiego e l'immagine stanno sullo stesso fondo.
+  tesseraIco: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' },
+  tesseraImg: { width: 96, height: 80, borderRadius: 12, overflow: 'hidden', backgroundColor: '#FFFFFF' },
   tesseraNome: { fontFamily: FONT.titolo, fontSize: 15, lineHeight: 19 },
   tesseraConta: { fontFamily: FONT.testo, fontSize: 13, marginTop: 'auto' },
 });

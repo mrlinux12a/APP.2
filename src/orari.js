@@ -2,8 +2,9 @@
 // senza DB: le legge `richieste.distributoriCandidati`, il carrello (`flusso_cliente.validaRichiesta`) e la pagina dell'anagrafica.
 //
 // Formato salvato in `distributors.orari` (JSONB): { "lun": [["07:30","12:30"],["14:00","18:00"]], ..., "dom": [] }, sempre i sette giorni, al
-// massimo due fasce per giorno, ora di Roma (Europe/Rome, anche se il server gira in UTC). Un giorno senza fasce è chiuso. NULL = nessun orario
-// impostato = sempre aperto, com'era prima. Una fascia è [inizio, fine) con inizio < fine nello stesso giorno (niente notti a cavallo di due giorni).
+// massimo due fasce per giorno, ora di Roma (Europe/Rome, anche se il server gira in UTC). Un giorno senza fasce è chiuso. NULL = orari NON ancora
+// impostati = la filiale non riceve richieste finché non li imposta (dal 22/10/2026 "sempre aperto" non esiste più: una filiale rimasta senza orari teneva aperta tutta la
+// ditta per gli installatori senza che nessuno se ne accorgesse). Una fascia è [inizio, fine) con inizio < fine nello stesso giorno (niente notti a cavallo di due giorni).
 
 const GIORNI = ['lun', 'mar', 'mer', 'gio', 'ven', 'sab', 'dom'];
 const NOMI = { lun: 'Lunedì', mar: 'Martedì', mer: 'Mercoledì', gio: 'Giovedì', ven: 'Venerdì', sab: 'Sabato', dom: 'Domenica' };
@@ -38,8 +39,8 @@ function fasceDelGiorno(valore) {
 }
 
 // Legge quello che arriva dal DB (oggetto, oppure testo JSON se il driver non lo ha già letto) e ritorna gli orari nella forma completa
-// (sette giorni) o null: nessun orario, oppure un valore che non si capisce. Un valore rovinato NON chiude il banco: vale "sempre aperto"
-// (meglio ricevere una richiesta fuori orario che perderne una per un dato sbagliato).
+// (sette giorni) o null: orari non impostati, oppure un valore che non si capisce. In entrambi i casi la filiale risulta CHIUSA (statoOrari) e l'Anagrafica del banco
+// dice "Orari non impostati".
 function leggiOrari(valore) {
   let o = valore;
   if (typeof o === 'string') {
@@ -92,7 +93,7 @@ function orariDaModulo(corpo) {
   return { orari, errori: {}, errore: null, valori };
 }
 
-// Quello che il modulo di modifica mostra: i valori salvati; senza orari (sempre aperto) una proposta da cui partire (come nel mockup).
+// Quello che il modulo di modifica mostra: i valori salvati; senza orari (non ancora impostati) una proposta da cui partire (come nel mockup).
 function valoriPerModulo(orari) {
   const base = orari || {
     lun: [['07:30', '12:30'], ['14:00', '18:00']], mar: [['07:30', '12:30'], ['14:00', '18:00']], mer: [['07:30', '12:30'], ['14:00', '18:00']],
@@ -113,7 +114,7 @@ function ricavaRoma(quando) {
   return { giorno: GIORNO_DA_INGLESE[dato('weekday')], minuti: Number(dato('hour')) * 60 + Number(dato('minute')) };
 }
 
-// Il banco riceve richieste adesso? (senza orari: sì)
+// Il banco riceve richieste adesso? (senza orari impostati: no)
 function apertoAdesso(orari, quando = new Date()) {
   return statoOrari(orari, quando).aperto;
 }
@@ -123,10 +124,10 @@ function apertoAdesso(orari, quando = new Date()) {
 // scegliere fra più banchi quello che riapre prima.
 //
 // Quando è aperto c'è anche `chiude`: la fine della fascia in corso, { ora: '17:00', istante: Date, mancanoMin, secondi } (`mancanoMin` = minuti interi da adesso, per
-// eccesso: alle 16:59:30 mancano 1 minuto), oppure null senza orari ("sempre aperto"). Se la fascia dopo comincia proprio dove finisce questa, il banco non chiude in mezzo.
+// eccesso: alle 16:59:30 mancano 1 minuto). Senza orari impostati la filiale è chiusa e non riapre (`riapre` null: finché non li imposta). Se la fascia dopo comincia proprio dove finisce questa, il banco non chiude in mezzo.
 function statoOrari(valore, quando = new Date()) {
   const orari = leggiOrari(valore);
-  if (!orari) return { aperto: true, riapre: null, chiude: null };
+  if (!orari) return { aperto: false, riapre: null };
   const { giorno, minuti } = ricavaRoma(quando);
   const oggi = orari[GIORNI[giorno]];
   const inCorso = oggi.find((f) => minutiDi(f[0]) <= minuti && minuti < minutiDi(f[1]));
@@ -197,7 +198,7 @@ function testiChiuso(stato, nomeBanco = '') {
   };
 }
 
-// Fra quanti secondi lo stato cambia da solo (chiude se è aperto, riapre se è chiuso), per far rileggere la pagina a quell'ora; null se non cambia mai (sempre aperto, o
+// Fra quanti secondi lo stato cambia da solo (chiude se è aperto, riapre se è chiuso), per far rileggere la pagina a quell'ora; null se non cambia mai (nessun banco, o
 // nessun giorno aperto). Il carrello e la pagina degli orari lo scrivono in `data-cambia-sec`.
 function secondiAlCambio(stato, quando = new Date()) {
   if (!stato) return null;
@@ -214,10 +215,10 @@ function avvisoChiusura(stato, soglia = IN_CHIUSURA_MIN) {
 }
 
 // Gli orari di più filiali messi insieme (cosa vede l'installatore: "BOREA", mai la filiale): per ogni giorno l'unione delle fasce, con quelle che si toccano
-// o si sovrappongono fuse in una. Null se manca una filiale con orari o se non ce ne sono: "sempre aperto".
+// o si sovrappongono fuse in una. Una filiale senza orari impostati non aggiunge niente (è chiusa); null solo se non ci sono filiali attive.
 function unisciOrari(distributori) {
-  const lista = (distributori || []).map((d) => leggiOrari(d.orari));
-  if (!lista.length || lista.some((o) => !o)) return null;
+  if (!distributori || !distributori.length) return null;
+  const lista = distributori.map((d) => leggiOrari(d.orari)).filter(Boolean);
   const testoDa = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
   const unione = {};
   for (const g of GIORNI) {
@@ -234,7 +235,7 @@ function unisciOrari(distributori) {
 }
 
 // Tutto quello che serve alla pagina "Orari di BOREA" (e all'API dell'app): lo stato adesso, i testi e i sette giorni, lunedì per primo.
-//   { aperto, sempreAperto, titolo: 'Chiuso ora' | 'Aperto ora', sottoPrefisso, quando, chiude, riapre, testi (null se aperto),
+//   { aperto, sempreAperto (solo se non ci sono filiali attive: non è una questione di orari), titolo: 'Chiuso ora' | 'Aperto ora', sottoPrefisso, quando, chiude, riapre, testi (null se aperto),
 //     giorni: [{ chiave, nome, fasce: ['07:30 – 12:30', ...], chiuso, oggi, riapre }] }
 // `oggi` = il giorno di Roma di adesso, `riapre` = il giorno in cui riapre (solo se è dopo oggi: oggi basta il badge "Oggi").
 function paginaOrari(distributori, nomeBanco = '', quando = new Date()) {
@@ -251,7 +252,7 @@ function paginaOrari(distributori, nomeBanco = '', quando = new Date()) {
   return {
     aperto: stato.aperto, sempreAperto: !unione, giorni, riapre: stato.riapre, chiude: stato.chiude, testi, cambiaSec: secondiAlCambio(stato, quando),
     titolo: stato.aperto ? 'Aperto ora' : 'Chiuso ora',
-    sottoPrefisso: stato.aperto ? (stato.chiude ? 'Chiude oggi alle ' : 'Sempre aperto') : (testi ? testi.sottoPrefisso : ''),
+    sottoPrefisso: stato.aperto ? (stato.chiude ? 'Chiude oggi alle ' : 'Nessun orario') : (testi ? testi.sottoPrefisso : ''),
     quando: stato.aperto ? (stato.chiude ? stato.chiude.ora : '') : (testi ? testi.quando : ''),
   };
 }
@@ -280,9 +281,14 @@ function riassunto(valore) {
   }));
 }
 
+// Gli orari di questa filiale sono impostati (e leggibili)? Se no, la filiale non riceve richieste e l'Anagrafica lo dice.
+function orariImpostati(valore) {
+  return !!leggiOrari(valore);
+}
+
 module.exports = {
   GIORNI, NOMI, MAX_FASCE, FUSO,
-  oraValida, leggiOrari, orariDaModulo, valoriPerModulo,
+  oraValida, leggiOrari, orariImpostati, orariDaModulo, valoriPerModulo,
   apertoAdesso, statoOrari, statoBanchi, frasePerCarrello, riassunto,
   IN_CHIUSURA_MIN, inChiusura, avvisoChiusura, secondiAlCambio, testiChiuso, unisciOrari, paginaOrari,
 };

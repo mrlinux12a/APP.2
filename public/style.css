@@ -2014,7 +2014,7 @@ html.misura-aperta { overflow: hidden; }
   align-items: flex-start;
   gap: 10px;
   padding: 14px 12px;
-  min-height: 128px; /* icona + due righe di nome: anche le tessere con un nome solo non restano più basse */
+  min-height: 138px; /* immagine da 60px + 10 + due righe di nome (+ 28 di margini): anche le tessere con un nome solo non restano più basse */
   min-width: 0;
   background: var(--surface);
   border: 1px solid var(--bordo);
@@ -2027,7 +2027,7 @@ html.misura-aperta { overflow: hidden; }
   width: 52px;
   height: 52px;
   border-radius: 14px;
-  background: var(--blu-chiaro);
+  background: #ffffff; /* niente più sfondo azzurro (22/10/2026): griglia uniforme con le tessere che hanno l'immagine */
   color: #1a4468;
   font-size: 30px;
   display: flex;
@@ -2035,6 +2035,17 @@ html.misura-aperta { overflow: hidden; }
   justify-content: center;
 }
 .cat-ico svg { stroke-width: 1.8; }
+/* Immagine della categoria (src/catalogo.js `immagineCategoria`): 72×60 (6:5, come i file), su bianco, senza bordo, raggio 12. `contain`: mai ritagliata. */
+.cat-img {
+  flex: none;
+  display: block;
+  width: 72px;
+  height: 60px;
+  border-radius: 12px;
+  background: #ffffff;
+  overflow: hidden;
+}
+.cat-img img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .cat .nome {
   min-width: 0;
   width: 100%;
@@ -2060,6 +2071,8 @@ html.misura-aperta { overflow: hidden; }
 }
 @media (min-width: 720px) {
   .griglia-categorie { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  .cat-img { width: 96px; height: 80px; }
+  .cat { min-height: 158px; }
   .cat .nome { font-size: 16px; }
   .cat-lunga .nome { font-size: 16px; }
 }
@@ -2819,6 +2832,10 @@ html.misura-aperta { overflow: hidden; }
   color: #8a887e;
   font-size: 32px; /* le icone di src/icone.js sono 1em */
 }
+/* Sottocategoria senza foto ma con l'immagine della categoria: su bianco, centrata, alta circa il 55% del riquadro; la foto vera (se c'è) la copre. */
+.sotto-foto:has(.sotto-segnaposto-img) { background: #ffffff; }
+.sotto-segnaposto-img { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
+.sotto-foto .sotto-segnaposto-img img { position: static; inset: auto; display: block; height: 55%; width: auto; max-width: 70%; object-fit: contain; } /* più specifico di `.sotto-foto img` (foto a tutto riquadro) */
 .sotto-foto img {
   position: absolute;
   inset: 0;
