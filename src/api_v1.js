@@ -106,6 +106,11 @@ function macroJson(m, req) {
 }
 
 const e2 = (n) => pricing.euro(n);
+// Un istante letto da una colonna TIMESTAMP senza fuso (ora UTC che pg legge come ora locale) come stringa ISO vera, o null se manca.
+const isoFase = (naive) => {
+  const d = format.istanteUtc(naive);
+  return d ? d.toISOString() : null;
+};
 
 // ---------- Accesso ----------
 
@@ -635,6 +640,21 @@ router.get('/ordini/:id', richiedeCliente, async (req, res) => {
     corriere: String(ordine.corriere_nome || '').trim() || null,
     creato_il: format.dataOraRoma(ordine.creato_il, ', '),
     consegnato_il: ordine.consegnato_il ? format.dataOraRoma(ordine.consegnato_il, ', ') : null,
+    // Le tre fasi (Inviata · Confermata · Consegnata) come istanti ISO (null se non si sa), e quanto ci ha messo dall'invio alla consegna (minuti, null senza invio).
+    // `fasi_testo` sono gli stessi orari già scritti in ora italiana per il passo ("19:23", o "14 ott · 19:23" se è in un altro giorno rispetto alla consegna):
+    // l'app li mostra così com'è, senza fare conti coi fusi orari; `durata_testo` è il testo della pillola.
+    fasi: {
+      inviata: isoFase(d.fasi.inviata),
+      confermata: isoFase(d.fasi.confermata),
+      consegnata: isoFase(d.fasi.consegnata),
+    },
+    fasi_testo: {
+      inviata: format.oraFaseRoma(d.fasi.inviata, ordine.consegnato_il) || null,
+      confermata: format.oraFaseRoma(d.fasi.confermata, ordine.consegnato_il) || null,
+      consegnata: format.oraFaseRoma(d.fasi.consegnata, ordine.consegnato_il) || null,
+    },
+    durataMin: d.fasi.durataMin,
+    durata_testo: d.fasi.durataMin === null ? null : `Arrivato in ${format.durataArrivo(d.fasi.durataMin)} dall'invio`,
     // Solo la ditta: la filiale da cui parte l'ordine non si mostra all'installatore.
     distributore: d.distributore ? { nome: d.distributore.nome, filiale: '' } : null,
     ditta,

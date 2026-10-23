@@ -136,6 +136,10 @@ Object.assign(ordiniProva.ordini, {
   73: { ...ordiniProva.base, ...importiNuovi, id: 73, request_id: 81, stato: 'evaso', creato_il: fa(3 * 86400000), consegnato_il: consegnatoIl },
   74: { ...ordiniProva.base, ...importiNuovi, id: 74, request_id: 81, stato: 'inviato', creato_il: fa(3600000), consegnato_il: null },
   75: { ...ordiniProva.base, ...importiNuovi, id: 75, request_id: 82, stato: 'inviato', creato_il: fa(3600000), consegnato_il: null },
+  // gli orari sotto i passi di "Consegnato": 76 inviato, confermato e consegnato lo stesso giorno; 77 inviato la sera e consegnato il giorno dopo; 78 vecchio, senza richiesta
+  76: { ...ordiniProva.base, ...importiNuovi, id: 76, request_id: 83, stato: 'evaso', creato_il: naive(new Date(Date.UTC(2026, 9, 14, 17, 40))), consegnato_il: consegnatoIl },
+  77: { ...ordiniProva.base, ...importiNuovi, id: 77, request_id: 84, stato: 'evaso', creato_il: naive(new Date(Date.UTC(2026, 9, 21, 21, 55))), consegnato_il: naive(new Date(Date.UTC(2026, 9, 22, 6, 30))) },
+  78: { ...ordiniProva.base, ...importiNuovi, id: 78, request_id: null, stato: 'evaso', creato_il: naive(new Date(Date.UTC(2026, 9, 14, 17, 40))), consegnato_il: consegnatoIl },
   // gli stessi ordini 97 e 91 della fixture del materiale (Storico di ottobre), per la ricevuta in PDF del singolo ordine e di "Ricevute del mese"
   97: { ...ordiniProva.base, ...importiNuovi, id: 97, request_id: 197, stato: 'evaso', creato_il: new Date(Date.UTC(2026, 9, 15, 17, 15)), consegnato_il: consegnatoIl },
   91: { ...ordiniProva.base, ...importiNuovi, id: 91, request_id: 191, stato: 'evaso', creato_il: new Date(Date.UTC(2026, 9, 14, 20, 29)), consegnato_il: consegnatoIl },
@@ -145,17 +149,22 @@ const righeOrdineNuovo = [
   { id: 12, quantita: 1, codice_snapshot: '12697319', nome_snapshot: 'Adattatore Ø80/60mm Sistema Sdoppiato Condensazione', prezzo_netto_unitario: 10, subtotale: 10, raee_unitario: 0, raee_riga: 0, subtotale_cliente: 11 },
 ];
 const pagatoIlProva = naive(new Date(Date.UTC(2026, 9, 15, 10, 0))); // 15 ottobre 2026
+// Gli istanti delle richieste di prova (`creato_il` e, per una richiesta rinviata, `pagato_il` riscritto dal rinvio): servono alla pagina "Consegnato" (orario di "Inviata"
+// e pillola "Arrivato in … dall'invio"). Le richieste che non sono qui non hanno `creato_il`: la pagina allora non scrive l'orario né la pillola.
+const richiesteTempiProva = {};
+const utc = (g, m, o, min) => naive(new Date(Date.UTC(2026, g, m, o, min))); // (mese 0-11, giorno, ora UTC, minuti)
 
 function eseguiOrdineProva(s, p, modo) {
   if (/^SELECT \* FROM orders WHERE id = \?/.test(s)) return ordiniProva.ordini[p[0]] || null;
   if (/^SELECT \* FROM order_items WHERE order_id = \?/.test(s)) {
     if (!(Number(p[0]) in ordiniProva.ordini)) return [];
-    return [73, 74, 75].includes(Number(p[0])) ? righeOrdineNuovo : righeOrdineProva;
+    return [73, 74, 75, 76, 77].includes(Number(p[0])) ? righeOrdineNuovo : righeOrdineProva;
   }
   if (/^SELECT \* FROM distributors WHERE id = \?/.test(s)) return { id: 2, nome: 'BOREA SRL', filiale: 'Banco Genova Fegino' };
   if (/FROM requests WHERE id = \?/.test(s) && /pagamento_stato, pagamento_metodo/.test(s)) {
     // 81: consegna pagata con Stripe (20,07); 82: la stessa, poi rimborsata; le altre: l'ordine di prima, pagato tutto in app (149,49)
-    if ([81, 191, 197].includes(Number(p[0]))) return { pagamento_stato: 'pagato', pagamento_metodo: 'stripe', pagamento_importo: 20.07, pagato_il: pagatoIlProva };
+    const tempi = richiesteTempiProva[Number(p[0])] || {};
+    if ([81, 191, 197].includes(Number(p[0])) || tempi.stripe) return { pagamento_stato: 'pagato', pagamento_metodo: 'stripe', pagamento_importo: 20.07, pagato_il: pagatoIlProva, ...tempi.colonne };
     if (Number(p[0]) === 82) return { pagamento_stato: 'rimborsato', pagamento_metodo: 'stripe', pagamento_importo: 20.07, pagato_il: pagatoIlProva };
     return { pagamento_stato: 'pagato', pagamento_metodo: 'simulato', pagamento_importo: 149.49, pagato_il: fa(3 * 86400000) };
   }
@@ -2424,6 +2433,53 @@ test('ordine consegnato: stessa struttura in verde (materiale consegnato, Pagame
     // tolti: Totale, la sezione dettagli (consegna, destinazione, pagamento, note), la nota sul prezzo, Annulla e il pulsante vecchio
     assert.doesNotMatch(t, /att-totale|<dt>Totale<\/dt>|Dettagli consegna|att-dettagli|att-dett-|Prezzo definitivo|Annulla ordine|att-annulla|\/elimina|consegnato-prova|>Ordine consegnato</);
     assert.doesNotMatch(t, /sezione-titolo/); // niente titolo "Prodotti"
+  } finally {
+    ordiniProva.attivo = false;
+  }
+});
+
+// Gli orari sotto i passi della pagina "Consegnato" e la pillola "Arrivato in … dall'invio".
+const orariPassi = (t) => [...t.matchAll(/<li class="att-passo att-fatto">[\s\S]*?<\/svg><\/span>(\w+)<\/span>(?:\s*<span class="att-ora">([^<]*)<\/span>)?/g)].map((m) => m[1] + ':' + (m[2] || ''));
+
+test('ordine consegnato lo stesso giorno: tre orari "HH:MM" sotto i passi e la pillola con i minuti giusti', async () => {
+  ordiniProva.attivo = true;
+  const inviata = naive(new Date(Date.UTC(2026, 9, 14, 17, 23))); // 19:23 a Roma
+  richiesteTempiProva[83] = { stripe: true, colonne: { creato_il: inviata, pagato_il: inviata } }; // inviata 19:23, confermata 19:40, consegnata 20:10
+  try {
+    const t = await (await chiedi('/ordini/76')).text();
+    assert.deepEqual(orariPassi(t), ['Inviata:19:23', 'Confermata:19:40', 'Consegnata:20:10']);
+    assert.match(t, /<p class="att-sotto att-sotto-pillola">Mercoledì 14 ottobre(?: 2026)? alle 20:10<\/p>\s*<p class="att-arrivato-riga"><span class="att-arrivato" data-arrivato>Arrivato in 47 min dall'invio<\/span><\/p>/);
+    assert.doesNotMatch(t, /att-ora">(—|-|\s*)</, 'mai trattini');
+  } finally {
+    delete richiesteTempiProva[83];
+    ordiniProva.attivo = false;
+  }
+});
+
+test('ordine inviato la sera e consegnato il giorno dopo: "21 ott · 23:50" sotto Inviata, e la pillola dice "8 h 40 min"', async () => {
+  ordiniProva.attivo = true;
+  const inviata = naive(new Date(Date.UTC(2026, 9, 21, 21, 50))); // 23:50 a Roma
+  // rinviata: creato_il è del giorno prima e non conta, vale pagato_il riscritto dal rinvio (l'ultimo invio, quello che ha fatto nascere l'ordine)
+  richiesteTempiProva[84] = { stripe: true, colonne: { creato_il: naive(new Date(Date.UTC(2026, 9, 19, 9, 0))), pagato_il: inviata } };
+  try {
+    const t = await (await chiedi('/ordini/77')).text();
+    assert.deepEqual(orariPassi(t), ['Inviata:21 ott · 23:50', 'Confermata:21 ott · 23:55', 'Consegnata:08:30']);
+    assert.match(t, /Arrivato in 8 h 40 min dall'invio/);
+  } finally {
+    delete richiesteTempiProva[84];
+    ordiniProva.attivo = false;
+  }
+});
+
+test('ordine consegnato vecchio, senza richiesta: niente orario sotto Inviata e niente pillola; il resto della pagina invariato', async () => {
+  ordiniProva.attivo = true;
+  try {
+    const t = await (await chiedi('/ordini/78')).text();
+    assert.deepEqual(orariPassi(t), ['Inviata:', 'Confermata:19:40', 'Consegnata:20:10']);
+    assert.doesNotMatch(t, /att-arrivato|Arrivato in/);
+    assert.match(t, /<p class="att-sotto">Mercoledì 14 ottobre(?: 2026)? alle 20:10<\/p>/, 'senza pillola il sottotitolo ha il suo margine di sempre');
+    assert.match(t, /<form class="att-riordina"/);
+    assert.match(t, /data-importo-banco>€ 78,69<\/div>/);
   } finally {
     ordiniProva.attivo = false;
   }

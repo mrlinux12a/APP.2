@@ -551,6 +551,34 @@ richieste.impostaAssegnatore(creaOrdineDaRisposta);
 
 // ---------- Ordine: lettura, consegna, annullamento ----------
 
+// Gli istanti delle tre fasi di un ordine consegnato, per la pagina "Consegnato" (sito e app): quando è stata inviata la richiesta, quando BOREA ha confermato
+// (e un corriere ha preso la consegna: l'ordine nasce lì) e quando è stato consegnato. Sono colonne TIMESTAMP senza fuso: vanno mostrate con le funzioni
+// ...Roma di format.js. Un istante che manca (ordine vecchio senza richiesta) resta null e la vista non scrive niente per quel passo.
+//  · Inviata: `requests.creato_il`, ma "Rinvia richiesta" riapre la STESSA riga senza toccarlo e riscrive `pagato_il`: l'ultimo invio, quello che ha fatto nascere
+//    l'ordine, è quindi il più recente fra i due (alla nascita sono lo stesso NOW(), quindi uguali).
+//  · `durataMin`: minuti dall'invio alla consegna, almeno 1; null senza invio o se i dati non tornano (consegna prima dell'invio).
+function ultimoInvio(richiesta) {
+  if (!richiesta) return null;
+  const creato = format.istanteUtc(richiesta.creato_il);
+  const pagato = format.istanteUtc(richiesta.pagato_il);
+  if (creato && pagato && pagato > creato) return richiesta.pagato_il;
+  return creato ? richiesta.creato_il : null;
+}
+
+function fasiOrdine(ordine, richiesta) {
+  const inviata = ultimoInvio(richiesta);
+  const consegnata = ordine.consegnato_il || null;
+  const da = format.istanteUtc(inviata);
+  const a = format.istanteUtc(consegnata);
+  const minuti = da && a ? Math.round((a.getTime() - da.getTime()) / 60000) : null;
+  return {
+    inviata,
+    confermata: ordine.creato_il || null,
+    consegnata,
+    durataMin: minuti !== null && minuti >= 0 ? Math.max(1, minuti) : null,
+  };
+}
+
 async function dettaglioOrdine(ordine) {
   // Le letture non dipendono una dall'altra (tutto parte da `ordine`, già letto): partono insieme, un solo giro di rete
   // invece di cinque in fila. Questa pagina si apre a ogni passaggio fra gli ordini di "Stato ordini".
@@ -560,7 +588,7 @@ async function dettaglioOrdine(ordine) {
     ordine.distributor_id ? db.prepare('SELECT * FROM distributors WHERE id = ?').get(ordine.distributor_id) : null,
     ordine.request_id
       ? db
-          .prepare('SELECT pagamento_stato, pagamento_metodo, pagamento_importo, pagato_il, rimborsato_il FROM requests WHERE id = ?')
+          .prepare('SELECT creato_il, pagamento_stato, pagamento_metodo, pagamento_importo, pagato_il, rimborsato_il FROM requests WHERE id = ?')
           .get(ordine.request_id)
       : null,
     pricing.getIvaPct(),
@@ -587,6 +615,7 @@ async function dettaglioOrdine(ordine) {
     // Consegna pagata in app e materiale da pagare a BOREA, divisi come nel carrello (la stessa funzione dello Storico e del banco).
     importi: pricing.importiOrdine(ordine, pagamento, ivaPct, servizioPct),
     annullabile: ordineAnnullabileDalCliente(ordine), // sempre false: il cliente non annulla un ordine
+    fasi: fasiOrdine(ordine, richiestaOrdine), // gli orari sotto i passi della pagina "Consegnato" e quanto ci ha messo
     statoPag: pagamenti.calcolaStatoPagamento({ riga: rigaPagamento, richiesta: richiestaOrdine, ordine }),
     ivaPct,
   };
@@ -1075,6 +1104,7 @@ module.exports = {
   eliminaRichiesta,
   creaOrdineDaRisposta,
   dettaglioOrdine,
+  fasiOrdine,
   segnaConsegnatoDalCorriere,
   eliminaOrdine,
   ordineAnnullabileDalCliente,

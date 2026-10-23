@@ -4182,6 +4182,19 @@ html.misura-aperta { overflow: hidden; }
 }
 .att-esito svg { display: block; }
 
+/* L'orario sotto ogni passo ("19:23", o "14 ott · 19:23" se è in un altro giorno) e la pillola "Arrivato in 47 min dall'invio" sotto la data. Le tre colonne
+   restano uguali (griglia 1fr) anche con l'orario lungo: va a capo invece di allargarsi. */
+.att-ora {
+  display: block; margin-top: 2px; text-align: center; font-size: 13px; line-height: 1.25; font-weight: 700; color: #1c1917;
+  font-variant-numeric: tabular-nums; text-wrap: balance;
+}
+.att-sotto.att-sotto-pillola { margin-bottom: 10px; }
+.att-arrivato-riga { margin: 0 0 18px; text-align: center; }
+.att-arrivato {
+  display: inline-block; padding: 3px 10px; border-radius: 10px; background: #e3f3e6; color: #1f5f2e;
+  font-size: 13px; line-height: 1.3; font-weight: 700;
+}
+
 /* "Riordina gli stessi pezzi": il pulsante blu di "Rinvia richiesta" (.att-rinvia), con l'icona a sinistra */
 .att-riordina { margin: 0 0 12px; }
 .att-riordina .att-rinvia { margin-top: 0; }

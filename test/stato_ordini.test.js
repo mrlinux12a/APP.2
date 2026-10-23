@@ -536,3 +536,34 @@ test('senza il corriere l\'arrivo è la stima del banco (consegna_ore): "Arriva 
   [v] = await flusso.vociStriscia(1);
   assert.equal(v.minuti, null);
 });
+
+// ---------------- Le tre fasi di un ordine consegnato (pagina "Consegnato": orario sotto Inviata · Confermata · Consegnata) ----------------
+
+test('fasiOrdine: inviata = richiesta, confermata = nascita dell\'ordine, consegnata = consegnato_il; durata dall\'invio alla consegna (almeno 1 min)', () => {
+  const ordine = { creato_il: '2026-10-14 17:40:00', consegnato_il: '2026-10-14 18:10:00' };
+  const f = flusso.fasiOrdine(ordine, { creato_il: '2026-10-14 17:23:00', pagato_il: '2026-10-14 17:23:00' });
+  assert.deepEqual([f.inviata, f.confermata, f.consegnata, f.durataMin], ['2026-10-14 17:23:00', '2026-10-14 17:40:00', '2026-10-14 18:10:00', 47]);
+  // consegnata subito (meno di 30 secondi): "almeno 1 min", mai "0 min"
+  assert.equal(flusso.fasiOrdine({ ...ordine, consegnato_il: '2026-10-14 17:23:10' }, { creato_il: '2026-10-14 17:23:00' }).durataMin, 1);
+});
+
+test('fasiOrdine: una richiesta RINVIATA conta dall\'ultimo invio (il rinvio riscrive pagato_il e non tocca creato_il), quello che ha fatto nascere l\'ordine', () => {
+  const ordine = { creato_il: '2026-10-14 17:40:00', consegnato_il: '2026-10-14 18:10:00' };
+  const f = flusso.fasiOrdine(ordine, { creato_il: '2026-10-13 09:00:00', pagato_il: '2026-10-14 17:23:00' });
+  assert.equal(f.inviata, '2026-10-14 17:23:00');
+  assert.equal(f.durataMin, 47);
+});
+
+test('fasiOrdine: ordine vecchio senza richiesta (o senza orario d\'invio): niente invio e niente durata, il resto resta', () => {
+  const ordine = { creato_il: '2026-10-14 17:40:00', consegnato_il: '2026-10-14 18:10:00' };
+  for (const richiesta of [null, undefined, {}, { creato_il: null, pagato_il: null }]) {
+    const f = flusso.fasiOrdine(ordine, richiesta);
+    assert.deepEqual([f.inviata, f.durataMin], [null, null]);
+    assert.equal(f.confermata, '2026-10-14 17:40:00');
+    assert.equal(f.consegnata, '2026-10-14 18:10:00');
+  }
+  // dati che non tornano (consegna prima dell'invio): nessuna durata negativa
+  assert.equal(flusso.fasiOrdine(ordine, { creato_il: '2026-10-14 19:00:00' }).durataMin, null);
+  // non ancora consegnato: nessuna durata
+  assert.equal(flusso.fasiOrdine({ creato_il: '2026-10-14 17:40:00', consegnato_il: null }, { creato_il: '2026-10-14 17:23:00' }).durataMin, null);
+});

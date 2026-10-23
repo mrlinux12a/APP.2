@@ -158,6 +158,25 @@ function oraSolaRoma(naive) {
   return `${d.ora}:${d.minuti}`;
 }
 
+// L'orario di una fase dell'ordine ("Inviata", "Confermata", "Consegnata") sotto il suo passo: "19:23", oppure "14 ott · 19:23" se la fase cade in un giorno
+// (italiano) diverso da `riferimento` (di solito la consegna: un ordine inviato la sera e consegnato il giorno dopo). Da colonne TIMESTAMP senza fuso.
+// "" se l'orario manca: la vista allora non scrive niente (né trattini né "—").
+function oraFaseRoma(naive, riferimento) {
+  const istante = istanteUtc(naive);
+  if (!istante) return '';
+  const ora = oraSolaRoma(naive);
+  const rif = istanteUtc(riferimento);
+  if (!rif) return ora;
+  const a = partiRoma(istante);
+  const b = partiRoma(rif);
+  return a.anno === b.anno && a.mese === b.mese && a.giorno === b.giorno ? ora : `${dataCortaRoma(naive)} · ${ora}`;
+}
+
+// "47 min", "1 h 12 min": quanto ci ha messo un ordine ad arrivare, nella pillola "Arrivato in … dall'invio" (durataMinuti non scrive "min" oltre l'ora).
+function durataArrivo(min) {
+  return min < 60 ? durataMinuti(min) : `${durataMinuti(min)} min`;
+}
+
 // Il giorno di una colonna TIMESTAMP senza fuso, in ora italiana, per raggruppare gli elenchi:
 // { chiave: '2026-10-14', etichetta: 'Oggi' | 'Ieri' | '12 ottobre' } (con l'anno se non è quello corrente:
 // '12 ottobre 2025'). La chiave è uguale per tutti gli istanti dello stesso giorno italiano. `adesso` solo nelle prove.
@@ -234,4 +253,4 @@ function indirizzoCompleto(a) {
   return [a.indirizzo, riga2].filter(Boolean).join(' — ');
 }
 
-module.exports = { indirizzoCompleto, giornoMeseRoma, nomeCommerciale, SOGLIA_IN_ARRIVO_SEC, inArrivo, toDate, istanteUtc, dataOra, dataSola, oraSola, oraRoma, dataOraRoma, dataSolaRoma, dataBreveRoma, dataCortaRoma, dataEstesaRoma, oraSolaRoma, giornoRoma, durataMinuti, durataBreve, daMinuti, tempoTrascorso, meseRoma, tempoConsegna, mmss, durataFinestraSec };
+module.exports = { indirizzoCompleto, giornoMeseRoma, nomeCommerciale, SOGLIA_IN_ARRIVO_SEC, inArrivo, toDate, istanteUtc, dataOra, dataSola, oraSola, oraRoma, dataOraRoma, dataSolaRoma, dataBreveRoma, dataCortaRoma, dataEstesaRoma, oraSolaRoma, oraFaseRoma, durataArrivo, giornoRoma, durataMinuti, durataBreve, daMinuti, tempoTrascorso, meseRoma, tempoConsegna, mmss, durataFinestraSec };

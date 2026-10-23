@@ -1,7 +1,7 @@
 // Date brevi dello Storico (src/format.js): "Oggi · 21:20", "Ieri · 18:05", "12 set · 09:40" e il mese in ora italiana.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { dataBreveRoma, dataCortaRoma, dataEstesaRoma, dataSolaRoma, meseRoma, durataMinuti, daMinuti, tempoTrascorso } = require('../src/format');
+const { dataBreveRoma, dataCortaRoma, dataEstesaRoma, dataSolaRoma, meseRoma, durataMinuti, daMinuti, tempoTrascorso, oraFaseRoma, durataArrivo } = require('../src/format');
 
 // Le colonne TIMESTAMP sono UTC senza fuso: a Roma d'estate (ottobre) sono +2 ore, d'inverno +1.
 const adesso = new Date('2026-10-05T20:00:00Z');
@@ -107,4 +107,25 @@ test('durataFinestraSec: la finestra di conferma, anche per una richiesta rinvia
   assert.equal(durataFinestraSec(null, null, 10), 600);
   assert.equal(durataFinestraSec(t('2026-10-15T10:10:00'), t('2026-10-15T10:00:00'), 10), 600);
   assert.equal(durataFinestraSec(null, null, undefined), 600);
+});
+
+test('oraFaseRoma: "19:23" se la fase è nello stesso giorno italiano della consegna, "21 ott · 23:50" se è in un altro; vuoto se manca', () => {
+  const consegna = '2026-10-22 06:30:00'; // 08:30 a Roma
+  assert.equal(oraFaseRoma('2026-10-22 05:10:00', consegna), '07:10');
+  assert.equal(oraFaseRoma('2026-10-21 21:50:00', consegna), '21 ott · 23:50', 'inviato la sera, consegnato il giorno dopo');
+  // il giorno si conta in ora italiana, non in UTC: 22:30 UTC del 21 è già il 22 a Roma (00:30)
+  assert.equal(oraFaseRoma('2026-10-21 22:30:00', consegna), '00:30');
+  assert.equal(oraFaseRoma('2026-10-21 21:59:00', consegna), '21 ott · 23:59');
+  // senza riferimento solo l'ora; senza orario niente (né trattini né "—")
+  assert.equal(oraFaseRoma('2026-10-21 21:50:00', null), '23:50');
+  assert.equal(oraFaseRoma(null, consegna), '');
+  assert.equal(oraFaseRoma(undefined, consegna), '');
+});
+
+test('durataArrivo: "47 min", e oltre l\'ora "1 h 12 min"', () => {
+  assert.equal(durataArrivo(1), '1 min');
+  assert.equal(durataArrivo(47), '47 min');
+  assert.equal(durataArrivo(59), '59 min');
+  assert.equal(durataArrivo(60), '1 h 00 min');
+  assert.equal(durataArrivo(72), '1 h 12 min');
 });

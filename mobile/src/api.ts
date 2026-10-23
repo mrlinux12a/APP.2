@@ -247,6 +247,12 @@ export type Ordine = {
   corriere: string | null;
   creato_il: string;
   consegnato_il: string | null;
+  // Le fasi Inviata · Confermata · Consegnata: istanti ISO (null se non si sa) e gli stessi orari già scritti in ora italiana per il passo ("19:23", o
+  // "14 ott · 19:23" se è in un altro giorno rispetto alla consegna). `durataMin` = minuti dall'invio alla consegna, `durata_testo` il testo della pillola.
+  fasi: { inviata: string | null; confermata: string | null; consegnata: string | null };
+  fasi_testo: { inviata: string | null; confermata: string | null; consegnata: string | null };
+  durataMin: number | null;
+  durata_testo: string | null;
   distributore: { nome: string; filiale: string } | null;
   ditta: string;
   modalita: string;

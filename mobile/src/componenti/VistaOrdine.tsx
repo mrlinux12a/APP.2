@@ -15,6 +15,13 @@ import { Avviso, Bottone, Card, Forte, Nota, RigaArticolo, RigaInfo, SezioneTito
 // Entro questa soglia l'ordine "è in arrivo" e non si scrivono più i minuti (la stessa del sito: format.SOGLIA_IN_ARRIVO_SEC).
 const IN_ARRIVO_SEC = 180;
 
+// I tre passi della pagina "Consegnato", ognuno con il suo orario (fasi_testo, già in ora italiana dal server).
+const PASSI_CONSEGNATO: { chiave: 'inviata' | 'confermata' | 'consegnata'; etichetta: string }[] = [
+  { chiave: 'inviata', etichetta: 'Inviata' },
+  { chiave: 'confermata', etichetta: 'Confermata' },
+  { chiave: 'consegnata', etichetta: 'Consegnata' },
+];
+
 // La parte alta di un ordine in consegna: titolo con l'arrivo (che si aggiorna da solo), barra che si riempie fino all'arrivo, chi lo porta.
 function Consegna({ o, lettoIl }: { o: Ordine; lettoIl: number }) {
   const { c } = useTema();
@@ -105,6 +112,21 @@ export function VistaOrdine({ id, nuovo = false }: { id: number; nuovo?: boolean
           <Text style={[stili.heroBadge, { backgroundColor: c.superficie, color: c.verde }]}>Consegnato</Text>
           <Text style={[stili.heroTempo, { color: c.verde }]}>{o.tempo_testo}</Text>
           {o.ditta ? <Text style={[stili.heroSotto, { color: c.verde }]}>{o.ditta}</Text> : null}
+          {o.durata_testo ? (
+            <Text style={[stili.heroPillola, { backgroundColor: c.superficie, color: c.verde }]}>{o.durata_testo}</Text>
+          ) : null}
+          <View style={stili.passi}>
+            {PASSI_CONSEGNATO.map((p) => (
+              <View key={p.chiave} style={stili.passo}>
+                <View style={[stili.passoBarretta, { backgroundColor: c.verde }]} />
+                <Text style={[stili.passoEtichetta, { color: c.verde }]}>✓ {p.etichetta}</Text>
+                {/* Un orario che manca (ordine vecchio) non si scrive: resta solo l'etichetta. */}
+                {o.fasi_testo[p.chiave] ? (
+                  <Text style={[stili.passoOra, { color: c.testo }]}>{o.fasi_testo[p.chiave]}</Text>
+                ) : null}
+              </View>
+            ))}
+          </View>
         </View>
       ) : (
         <Consegna o={o} lettoIl={q.dataUpdatedAt} />
@@ -161,6 +183,21 @@ const stili = StyleSheet.create({
   },
   heroTempo: { fontFamily: FONT.titolo, fontSize: 20 },
   heroSotto: { fontFamily: FONT.testo, fontSize: 14, marginTop: 3 },
+  heroPillola: {
+    alignSelf: 'flex-start',
+    fontFamily: FONT.testoForte,
+    fontSize: 13,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginTop: 10,
+  },
+  passi: { flexDirection: 'row', gap: 8, marginTop: 14 },
+  passo: { flex: 1, gap: 6 },
+  passoBarretta: { height: 5, borderRadius: 3 },
+  passoEtichetta: { fontFamily: FONT.testoForte, fontSize: 12.5, textAlign: 'center' },
+  passoOra: { fontFamily: FONT.testoForte, fontSize: 13, textAlign: 'center', fontVariant: ['tabular-nums'] },
   barra: { height: 8, borderRadius: 4, overflow: 'hidden', marginTop: 14 },
   barraPiena: { height: 8, borderRadius: 4 },
   barraTesti: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },

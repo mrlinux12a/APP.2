@@ -141,19 +141,34 @@
             <span><svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 12.5l4.2 4.2L18.5 8"/></svg></span>
           </div>
           <h2 class="att-titolo">Consegnato</h2>
-          <p class="att-sotto"><%= fmt.dataEstesaRoma(ordine.consegnato_il) %></p>
+          <%
+            // Gli orari sotto i passi (richiesta esplicita): "19:23", o "14 ott · 19:23" se il passo è in un giorno diverso dalla consegna. Un orario che manca (ordine
+            // vecchio, senza richiesta) non si scrive. La pillola "Arrivato in … dall'invio" c'è solo se si sa quando è stata inviata la richiesta.
+            const orari = (typeof fasi !== 'undefined' && fasi) || {};
+            const oraInviata = fmt.oraFaseRoma(orari.inviata, ordine.consegnato_il);
+            const oraConfermata = fmt.oraFaseRoma(orari.confermata, ordine.consegnato_il);
+            const oraConsegnata = fmt.oraFaseRoma(orari.consegnata, ordine.consegnato_il);
+            const conPillola = orari.durataMin !== null && orari.durataMin !== undefined;
+          %>
+          <p class="att-sotto<%= conPillola ? ' att-sotto-pillola' : '' %>"><%= fmt.dataEstesaRoma(ordine.consegnato_il) %></p>
+          <% if (conPillola) { %>
+            <p class="att-arrivato-riga"><span class="att-arrivato" data-arrivato>Arrivato in <%= fmt.durataArrivo(orari.durataMin) %> dall'invio</span></p>
+          <% } %>
           <ol class="att-passi">
             <li class="att-passo att-fatto">
               <span class="att-barretta"></span>
               <span class="att-etichetta"><%- spunta %>Inviata</span>
+              <% if (oraInviata) { %><span class="att-ora"><%= oraInviata %></span><% } %>
             </li>
             <li class="att-passo att-fatto">
               <span class="att-barretta"></span>
               <span class="att-etichetta"><%- spunta %>Confermata</span>
+              <% if (oraConfermata) { %><span class="att-ora"><%= oraConfermata %></span><% } %>
             </li>
             <li class="att-passo att-fatto">
               <span class="att-barretta"></span>
               <span class="att-etichetta"><%- spunta %>Consegnata</span>
+              <% if (oraConsegnata) { %><span class="att-ora"><%= oraConsegnata %></span><% } %>
             </li>
           </ol>
         </div>
