@@ -4817,6 +4817,7 @@ html.misura-aperta { overflow: hidden; }
   display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 8px; padding-top: 10px;
   border-top: 1px solid var(--cp-linea); font-size: 15px; font-weight: 700;
 }
+.cp-nota-iva { display: block; margin-top: 1px; }
 .cp-totale strong {
   font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; font-size: 22px; font-weight: 800;
   font-variant-numeric: tabular-nums; white-space: nowrap;

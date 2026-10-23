@@ -108,9 +108,9 @@ async function getOrdineMinimo() {
   return getConfigNum('ordine_minimo', 33);
 }
 
-// Spedizione fissa: si somma dopo, non concorre a raggiungere il minimo.
+// Spedizione fissa (il corriere che l'installatore paga in app, 5 € dal 23/10/2026): si somma dopo, non concorre a raggiungere il minimo.
 async function getSpedizioneFissa() {
-  return getConfigNum('spedizione_fissa', 10);
+  return getConfigNum('spedizione_fissa', 5);
 }
 
 // Prezzo netto grossista: listino meno lo sconto Base del prodotto (o del distributore).
@@ -137,29 +137,58 @@ function euro(n) {
   return (n || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-// COME SI DIVIDE QUELLO CHE PAGA L'INSTALLATORE (regola dal 16/10/2026: la tiene UNA sola funzione, dividiTotale, e la usano il carrello,
-// l'addebito, l'ordine e lo Storico):
-//  · PAGA ORA IN APP  = corriere fisso (config spedizione_fissa, 10 €)
-//                       + servizio = servizio_pct (10%) della merce a PREZZO DEL BANCO, IVA esclusa
-//                       + IVA iva_pct (22%) su (corriere + servizio).
+// COME SI DIVIDE QUELLO CHE PAGA L'INSTALLATORE (la tiene UNA sola funzione, dividiTotale, e la usano il carrello, l'addebito, l'ordine e lo Storico):
+//  · PAGA ORA IN APP  = corriere fisso (config spedizione_fissa, 5 €: è già il prezzo finale, niente IVA sopra)
+//                       + servizio IVA INCLUSA = servizio_pct (10%) della merce a PREZZO DEL BANCO, IVA esclusa, più la sua IVA iva_pct (22%).
 //  · PAGA DOPO A BOREA = merce a prezzo del banco (+ RAEE, se c'è) + IVA iva_pct su quella somma.
-// Il 10% sta SOLO nella voce "Servizio": i prezzi delle righe (catalogo, carrello) sono quelli del banco. Ogni voce è già arrotondata
-// (round2) e i totali sono somma di voci arrotondate: la vista non fa conti, e da_pagare_app (l'addebito Stripe) coincide con app.totale
-// centesimo per centesimo. Esempio: merce 64,50 → servizio 6,45; app = 10,00 + 6,45 + IVA 3,62 = 20,07; banco = 64,50 + IVA 14,19 = 78,69;
-// spesa complessiva 98,76.
+// Richiesta esplicita del 23/10/2026 ("5 euro costo fisso corriere, e costo di servizio con IVA incluso"): prima l'IVA era una riga sopra a corriere e
+// servizio (10 € + servizio, poi + 22% su tutto). Ora nel riepilogo non c'è più la riga IVA: il servizio si mostra e si paga con l'IVA dentro.
+// L'IVA che sta DENTRO il totale (`app.iva`, `app.imponibile`) si ricava per scorporo dal totale pagato, ed è quella che va salvata sull'ordine e sulla
+// ricevuta ("di cui"). `app.servizio` resta il 10% IVA ESCLUSA (è quello che si salva in `servizio` e da cui si ricava la percentuale), `app.servizioIva`
+// è quello che si mostra e si paga; `app.ivaInclusa` vale sempre true qui: serve a chi legge importi salvati col modello di prima (vedi appIvaInclusa).
+// Il 10% sta SOLO nella voce "Servizio": i prezzi delle righe (catalogo, carrello) sono quelli del banco. Ogni voce è già arrotondata (round2) e i totali sono
+// somma di voci arrotondate: la vista non fa conti, e da_pagare_app (l'addebito Stripe) coincide con app.totale centesimo per centesimo.
+// Esempio: merce 64,50 → servizio 6,45 → con IVA 7,87; app = 5,00 + 7,87 = 12,87 (di cui IVA 2,32); banco = 64,50 + IVA 14,19 = 78,69; spesa complessiva 91,56.
+function scorporaIva(totale, ivaPct) {
+  const iva = round2(totale - totale / (1 + ivaPct / 100));
+  return { iva, imponibile: round2(totale - iva) };
+}
+
 function dividiTotale({ netto, raee = 0, consegna = 0, servizioPct, ivaPct }) {
   const servizio = round2((netto * servizioPct) / 100); // esattamente "il 10% della merce", non la somma di righe arrotondate una per una
-  const appImponibile = round2(consegna + servizio);
-  const appIva = round2((appImponibile * ivaPct) / 100);
+  const servizioIva = round2(servizio * (1 + ivaPct / 100));
+  const appTotale = round2(consegna + servizioIva);
+  const { iva: appIva, imponibile: appImponibile } = scorporaIva(appTotale, ivaPct);
   const bancoImponibile = round2(netto + raee);
   const bancoIva = round2((bancoImponibile * ivaPct) / 100);
   return {
     servizio,
-    app: { corriere: round2(consegna), servizio, imponibile: appImponibile, iva: appIva, totale: round2(appImponibile + appIva) },
+    app: { corriere: round2(consegna), servizio, servizioIva, imponibile: appImponibile, iva: appIva, totale: appTotale, ivaInclusa: true },
     banco: { merce: round2(netto), raee: round2(raee), imponibile: bancoImponibile, iva: bancoIva, totale: round2(bancoImponibile + bancoIva) },
     servizioPct,
     ivaPct,
   };
+}
+
+// Gli importi "paga ora" già salvati (ordini e richieste nati prima del 23/10/2026) hanno l'IVA SOPRA corriere e servizio: (10 + 6,45) × 1,22 = 20,07, con
+// la riga IVA da 3,62. Quelli nuovi hanno l'IVA dentro: 5 + 7,87 = 12,87, di cui IVA 2,32. Per scegliere come mostrarli si guarda l'IVA salvata: è
+// "inclusa" se è più vicina allo scorporo dal totale nuovo che all'IVA sommata sopra del modello vecchio. Con il corriere a zero i due modelli danno gli
+// stessi numeri e vale quello vecchio (le righe tornano comunque). Non si guarda il totale addebitato: con l'importo di prova (PAGAMENTO_APP_PROVA) non
+// somma, ma l'IVA salvata sì.
+function appIvaInclusa({ corriere, servizio, iva, ivaPct }) {
+  const vecchia = round2(((corriere + servizio) * ivaPct) / 100);
+  const nuova = scorporaIva(round2(corriere + round2(servizio * (1 + ivaPct / 100))), ivaPct).iva;
+  return Math.abs(iva - nuova) < Math.abs(iva - vecchia);
+}
+
+// In `app` ogni importo ha sempre `servizioIva` (il servizio come si MOSTRA: con l'IVA dentro nel modello nuovo, uguale a `servizio` nel vecchio, dove l'IVA
+// ha la sua riga) e `ivaInclusa`: le viste scrivono `servizioIva` e disegnano la riga IVA solo se `!ivaInclusa`, senza fare conti.
+function conServizioMostrato(app, ivaPct) {
+  const ivaInclusa = appIvaInclusa({ corriere: app.corriere, servizio: app.servizio, iva: app.iva, ivaPct });
+  if (!ivaInclusa) return { ...app, ivaInclusa, servizioIva: app.servizio };
+  const servizioIva = round2(app.servizio * (1 + ivaPct / 100));
+  // L'imponibile "di cui" è quello che resta togliendo l'IVA dal totale nuovo (le richieste non lo salvano: lo si ricava così).
+  return { ...app, ivaInclusa, servizioIva, imponibile: round2(app.corriere + servizioIva - app.iva) };
 }
 
 // A partire dalle righe carrello [{prodotto, quantita}], calcola righe ordine e totali.
@@ -217,7 +246,7 @@ async function calcolaOrdine(righeCarrello, { costoConsegna = 0 } = {}) {
     iva: round2(app.iva + banco.iva),
     totale_ivato: round2(app.totale + banco.totale), // la spesa complessiva
     servizio, // il 10% della merce a prezzo del banco, IVA esclusa
-    da_pagare_app: app.totale, // corriere + servizio + IVA: l'importo addebitato quando si preme "Paga e invia"
+    da_pagare_app: app.totale, // corriere + servizio con IVA inclusa: l'importo addebitato quando si preme "Paga e invia"
     materiale_banco: banco.totale, // merce (+ RAEE) + IVA: quello che si paga dopo a BOREA
     app,
     banco,
@@ -297,6 +326,7 @@ function importiOrdine(ordine, pagamento, ivaPct, servizioPct) {
     app = { corriere, servizio, imponibile: appImponibile, iva: appIva, totale: round2(appImponibile + appIva) };
     banco = { merce, raee, imponibile: bancoImponibile, iva: bancoIva, totale: round2(bancoImponibile + bancoIva) };
   }
+  app = conServizioMostrato(app, ivaPct);
 
   let pagatoIl = null;
   let rimborsato = false;
@@ -357,16 +387,20 @@ function importiRichiesta(richiesta, calcolato) {
     const raee = round2(n(richiesta.raee_banco));
     app = { corriere, servizio, imponibile: round2(corriere + servizio), iva: round2(n(richiesta.iva_app)), totale: round2(n(richiesta.da_pagare_app)) };
     banco = { merce, raee, imponibile: round2(merce + raee), iva: round2(n(richiesta.iva_banco)), totale: round2(n(richiesta.materiale_banco)) };
+    // L'IVA % si ricava dal materiale, dove non ci sono dubbi (iva / imponibile); solo senza materiale si prova con le due parti insieme (modello di prima).
+    const pctBanco = banco.imponibile > 0 ? uno((banco.iva / banco.imponibile) * 100) : 0;
     const imponibile = app.imponibile + banco.imponibile;
-    const pct = imponibile > 0 ? uno(((app.iva + banco.iva) / imponibile) * 100) : 0;
+    const pctInsieme = imponibile > 0 ? uno(((app.iva + banco.iva) / imponibile) * 100) : 0;
+    const pct = pctBanco > 0 && pctBanco < 100 ? pctBanco : pctInsieme;
     ivaPct = pct > 0 && pct < 100 ? pct : (calcolato ? calcolato.ivaPct : 0);
     servizioPct = merce > 0 ? uno((servizio / merce) * 100) : (calcolato ? calcolato.servizioPct : 0);
   } else {
-    app = { corriere: calcolato.app.corriere, servizio: calcolato.app.servizio, imponibile: calcolato.app.imponibile, iva: calcolato.app.iva, totale: calcolato.app.totale };
+    app = { ...calcolato.app };
     banco = { ...calcolato.banco };
     ivaPct = calcolato.ivaPct;
     servizioPct = calcolato.servizioPct;
   }
+  app = conServizioMostrato(app, ivaPct);
 
   const addebitato = n(richiesta.pagamento_importo);
   if (addebitato > 0) app.totale = round2(addebitato);
@@ -408,6 +442,7 @@ module.exports = {
   prezzoCliente,
   prezzoClienteConPct,
   dividiTotale,
+  appIvaInclusa,
   ivaPctOrdine,
   importiOrdine,
   importiRichiesta,

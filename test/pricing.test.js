@@ -2,13 +2,14 @@
 // nessun accesso al database vero. Si lancia con `npm test`.
 //
 // La regola (la stessa scritta sopra calcolaOrdine):
-//   paga ORA in app   = corriere fisso + servizio (servizio_pct della merce a prezzo del banco, IVA esclusa) + IVA su (corriere + servizio)
+//   paga ORA in app   = corriere fisso (5 €, prezzo finale) + servizio con l'IVA dentro (servizio_pct della merce a prezzo del banco, IVA esclusa, più la sua IVA);
+//                       l'IVA contenuta nel totale ("di cui") si ricava per scorporo
 //   paga DOPO a BOREA = merce a prezzo del banco (+ RAEE) + IVA su quella somma
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 
-const config = { servizio_pct: '10', iva_pct: '22', spedizione_fissa: '10', ordine_minimo: '33' };
+const config = { servizio_pct: '10', iva_pct: '22', spedizione_fissa: '5', ordine_minimo: '33' };
 const dbFinto = {
   prepare: (sql) => {
     const esegui = async (...p) => (/FROM config WHERE chiave/.test(sql) ? (config[p[0]] !== undefined ? [{ valore: config[p[0]] }] : []) : []);
@@ -27,24 +28,26 @@ const arrotonda = pricing.round2;
 const prodotto = (id, listino, { sconto = 0, raee = 0 } = {}) => ({ id, codice: 'C' + id, nome: 'P' + id, prezzo_listino: listino, sconto_base_pct: sconto, raee });
 const riga = (p, quantita) => ({ prodotto: p, quantita });
 
-test('dividiTotale: l\'esempio della specifica — merce 64,50: servizio 6,45, in app 20,07, materiale 78,69, spesa 98,76', () => {
-  const d = pricing.dividiTotale({ netto: 64.5, raee: 0, consegna: 10, servizioPct: 10, ivaPct: 22 });
-  assert.deepEqual(d.app, { corriere: 10, servizio: 6.45, imponibile: 16.45, iva: 3.62, totale: 20.07 });
+test('dividiTotale: l\'esempio della specifica — merce 64,50: servizio 6,45 (7,87 con IVA), in app 5,00 + 7,87 = 12,87, materiale 78,69, spesa 91,56', () => {
+  const d = pricing.dividiTotale({ netto: 64.5, raee: 0, consegna: 5, servizioPct: 10, ivaPct: 22 });
+  assert.deepEqual(d.app, { corriere: 5, servizio: 6.45, servizioIva: 7.87, imponibile: 10.55, iva: 2.32, totale: 12.87, ivaInclusa: true });
   assert.deepEqual(d.banco, { merce: 64.5, raee: 0, imponibile: 64.5, iva: 14.19, totale: 78.69 });
-  assert.equal(d.servizio, 6.45);
-  assert.equal(arrotonda(d.app.totale + d.banco.totale), 98.76);
+  assert.equal(d.servizio, 6.45, 'il servizio salvato resta il 10% IVA esclusa');
+  assert.equal(arrotonda(d.app.corriere + d.app.servizioIva), d.app.totale, 'corriere e servizio (IVA dentro) sommano al totale: niente riga IVA sopra');
+  assert.equal(arrotonda(d.app.imponibile + d.app.iva), d.app.totale, 'imponibile e IVA sono "di cui", dentro il totale');
+  assert.equal(arrotonda(d.app.totale + d.banco.totale), 91.56);
   assert.deepEqual([d.servizioPct, d.ivaPct], [10, 22]);
 });
 
-test('calcolaOrdine: 54,50 + 10,00 di merce -> consegna 10,00 + servizio 6,45 + IVA 3,62 = 20,07; materiale 64,50 + IVA 14,19 = 78,69; spesa 98,76', async () => {
-  const t = await pricing.calcolaOrdine([riga(prodotto(1, 54.5), 1), riga(prodotto(2, 10), 1)], { costoConsegna: 10 });
+test('calcolaOrdine: 54,50 + 10,00 di merce -> corriere 5,00 + servizio 7,87 (IVA inclusa) = 12,87; materiale 64,50 + IVA 14,19 = 78,69; spesa 91,56', async () => {
+  const t = await pricing.calcolaOrdine([riga(prodotto(1, 54.5), 1), riga(prodotto(2, 10), 1)], { costoConsegna: 5 });
   assert.equal(t.totale_netto, 64.5, 'la merce è a prezzo del banco');
-  assert.deepEqual(t.app, { corriere: 10, servizio: 6.45, imponibile: 16.45, iva: 3.62, totale: 20.07 });
+  assert.deepEqual(t.app, { corriere: 5, servizio: 6.45, servizioIva: 7.87, imponibile: 10.55, iva: 2.32, totale: 12.87, ivaInclusa: true });
   assert.deepEqual(t.banco, { merce: 64.5, raee: 0, imponibile: 64.5, iva: 14.19, totale: 78.69 });
   // i valori "piatti" coincidono con le voci, centesimo per centesimo
   assert.equal(t.da_pagare_app, t.app.totale);
   assert.equal(t.materiale_banco, t.banco.totale);
-  assert.equal(t.totale_ivato, 98.76, 'spesa complessiva = app.totale + banco.totale');
+  assert.equal(t.totale_ivato, 91.56, 'spesa complessiva = app.totale + banco.totale');
   assert.equal(t.totale_ivato, arrotonda(t.app.totale + t.banco.totale));
   assert.equal(t.imponibile, arrotonda(t.app.imponibile + t.banco.imponibile));
   assert.equal(t.iva, arrotonda(t.app.iva + t.banco.iva));
@@ -56,11 +59,13 @@ test('calcolaOrdine: 54,50 + 10,00 di merce -> consegna 10,00 + servizio 6,45 + 
 
 test('il servizio è ESATTAMENTE il 10% della merce, non la somma di righe arrotondate una per una', async () => {
   // 50 pezzi a 33,33: merce 1.666,50. Il prezzo col 10% arrotondato per pezzo (36,66) darebbe 166,50 di servizio invece di 166,65.
-  const t = await pricing.calcolaOrdine([riga(prodotto(1, 33.33), 50)], { costoConsegna: 10 });
+  const t = await pricing.calcolaOrdine([riga(prodotto(1, 33.33), 50)], { costoConsegna: 5 });
   assert.equal(t.totale_netto, 1666.5);
   assert.equal(t.servizio, 166.65);
   assert.equal(t.app.servizio, 166.65);
-  assert.equal(t.app.imponibile, 176.65);
+  assert.equal(t.app.servizioIva, 203.31);
+  assert.equal(t.app.totale, 208.31);
+  assert.equal(t.app.imponibile, 170.75);
   // quello che si salva in order_items resta come prima: prezzo e subtotale col 10% (arrotondati per riga)
   assert.equal(t.righe[0].prezzo_unitario_cliente, 36.66);
   assert.equal(t.righe[0].subtotale_cliente, 1833);
@@ -69,36 +74,36 @@ test('il servizio è ESATTAMENTE il 10% della merce, non la somma di righe arrot
 });
 
 test('RAEE: sta solo nel Materiale (con la sua IVA), mai nella consegna', async () => {
-  const t = await pricing.calcolaOrdine([riga(prodotto(1, 100, { raee: 2.5 }), 2)], { costoConsegna: 10 });
+  const t = await pricing.calcolaOrdine([riga(prodotto(1, 100, { raee: 2.5 }), 2)], { costoConsegna: 5 });
   assert.equal(t.contributo_raee, 5);
   assert.deepEqual(t.banco, { merce: 200, raee: 5, imponibile: 205, iva: 45.1, totale: 250.1 });
-  assert.deepEqual(t.app, { corriere: 10, servizio: 20, imponibile: 30, iva: 6.6, totale: 36.6 });
-  assert.equal(t.da_pagare_app, 36.6);
+  assert.deepEqual(t.app, { corriere: 5, servizio: 20, servizioIva: 24.4, imponibile: 24.1, iva: 5.3, totale: 29.4, ivaInclusa: true });
+  assert.equal(t.da_pagare_app, 29.4);
   assert.equal(t.materiale_banco, 250.1);
-  assert.equal(t.totale_ivato, 286.7);
+  assert.equal(t.totale_ivato, 279.5);
 });
 
 test('lo sconto del banco entra nel prezzo del banco: listino − sconto, e il servizio è il 10% di quello', async () => {
-  const t = await pricing.calcolaOrdine([riga(prodotto(1, 10, { sconto: 30 }), 50)], { costoConsegna: 10 });
+  const t = await pricing.calcolaOrdine([riga(prodotto(1, 10, { sconto: 30 }), 50)], { costoConsegna: 5 });
   assert.equal(t.righe[0].prezzo_netto_unitario, 7);
   assert.equal(t.totale_netto, 350);
   assert.equal(t.servizio, 35);
-  assert.equal(t.da_pagare_app, 54.9); // (10 + 35) × 1,22
+  assert.equal(t.da_pagare_app, 47.7); // 5 + 35 × 1,22
   assert.equal(t.materiale_banco, 427); // 350 × 1,22
-  assert.equal(t.totale_ivato, 481.9);
+  assert.equal(t.totale_ivato, 474.7);
 });
 
 test('carrello vuoto: tutto a zero tranne la consegna (che l\'ordine minimo impedisce di pagare)', async () => {
-  const t = await pricing.calcolaOrdine([], { costoConsegna: 10 });
+  const t = await pricing.calcolaOrdine([], { costoConsegna: 5 });
   assert.equal(t.totale_netto, 0);
   assert.equal(t.servizio, 0);
   assert.equal(t.banco.totale, 0);
-  assert.equal(t.app.totale, 12.2);
+  assert.equal(t.app.totale, 5, 'il corriere è già il prezzo finale: niente IVA sopra');
 });
 
 test('prezzoNetto: il prezzo che si mostra a chi sfoglia il catalogo è quello del banco, uguale a prezzo_netto_unitario del carrello', async () => {
   const p = prodotto(1, 54.5, { sconto: 12.5 });
-  const t = await pricing.calcolaOrdine([riga(p, 1)], { costoConsegna: 10 });
+  const t = await pricing.calcolaOrdine([riga(p, 1)], { costoConsegna: 5 });
   assert.equal(pricing.prezzoNetto(p), 47.69);
   assert.equal(t.righe[0].prezzo_netto_unitario, pricing.prezzoNetto(p), 'catalogo e carrello dicono lo stesso prezzo');
 });
@@ -117,17 +122,20 @@ const ordineVecchio = (extra = {}) => ({
   servizio: 0, imponibile_app: 0, iva_app: 0, da_pagare_app: 0, imponibile_banco: 0, iva_banco: 0, materiale_banco: 0, ...extra,
 });
 
-test('importiOrdine, ordine NUOVO: usa le colonne salvate, e sono quelle di calcolaOrdine (54,50 + 10,00 -> 20,07 in app, 78,69 al banco)', async () => {
-  const t = await pricing.calcolaOrdine([riga(prodotto(1, 54.5), 1), riga(prodotto(2, 10), 1)], { costoConsegna: 10 });
+test('importiOrdine, ordine NUOVO: usa le colonne salvate, e sono quelle di calcolaOrdine (54,50 + 10,00 -> 12,87 in app, 78,69 al banco)', async () => {
+  const t = await pricing.calcolaOrdine([riga(prodotto(1, 54.5), 1), riga(prodotto(2, 10), 1)], { costoConsegna: 5 });
   const i = pricing.importiOrdine(colonneSalvate(t), null, 22);
   const { conPagamento, pagatoIl, rimborsato, rimborsatoIl, metodo, ...parteApp } = i.app;
   assert.deepEqual(parteApp, t.app);
   assert.equal(conPagamento, false, 'senza pagamento la consegna non dice "pagata"');
   assert.deepEqual(i.banco, t.banco);
-  assert.equal(i.app.corriere, 10);
-  assert.equal(i.app.servizio, 6.45);
-  assert.equal(i.app.iva, 3.62);
-  assert.equal(i.app.totale, 20.07);
+  assert.equal(i.app.corriere, 5);
+  assert.equal(i.app.servizio, 6.45, 'salvato IVA esclusa');
+  assert.equal(i.app.servizioIva, 7.87, 'mostrato con l\'IVA dentro');
+  assert.equal(i.app.ivaInclusa, true, 'IVA dentro il totale: niente riga IVA da disegnare');
+  assert.equal(i.app.iva, 2.32);
+  assert.equal(i.app.imponibile, 10.55);
+  assert.equal(i.app.totale, 12.87);
   assert.equal(i.banco.merce, 64.5);
   assert.equal(i.banco.iva, 14.19);
   assert.equal(i.banco.totale, 78.69);
@@ -135,8 +143,31 @@ test('importiOrdine, ordine NUOVO: usa le colonne salvate, e sono quelle di calc
   assert.equal(i.ivaPct, 22);
 });
 
+test('importiOrdine, ordine NATO COL MODELLO DI PRIMA (IVA sopra: 10 + 6,45 + 3,62 = 20,07): resta com\'era, con la sua riga IVA', () => {
+  const salvato = {
+    totale_netto: 64.5, totale_finale: 70.95, costo_consegna: 10, contributo_raee: 0, iva: 17.81,
+    servizio: 6.45, imponibile_app: 16.45, iva_app: 3.62, da_pagare_app: 20.07, imponibile_banco: 64.5, iva_banco: 14.19, materiale_banco: 78.69,
+  };
+  const i = pricing.importiOrdine(salvato, null, 22);
+  assert.equal(i.app.ivaInclusa, false);
+  assert.deepEqual([i.app.corriere, i.app.servizio, i.app.servizioIva, i.app.imponibile, i.app.iva, i.app.totale], [10, 6.45, 6.45, 16.45, 3.62, 20.07]);
+  assert.equal(i.ivaPct, 22);
+  // anche con l'importo di prova (0,01): l'IVA salvata dice com'era fatto l'ordine, non il totale addebitato
+  const prova = pricing.importiOrdine({ ...salvato, da_pagare_app: 0.01 }, null, 22);
+  assert.equal(prova.app.ivaInclusa, false);
+  const provaNuovo = pricing.importiOrdine(colonneSalvate({ totale_netto: 64.5, totale_finale: 70.95, banco: { raee: 0, imponibile: 64.5, iva: 14.19 }, iva: 16.51, servizio: 6.45, app: { corriere: 5, imponibile: 10.55, iva: 2.32 }, da_pagare_app: 0.01, materiale_banco: 78.69 }), null, 22);
+  assert.equal(provaNuovo.app.ivaInclusa, true);
+});
+
+test('appIvaInclusa: distingue l\'IVA dentro il totale (5 + 7,87, di cui 2,32) da quella sopra (10 + 6,45 + 3,62)', () => {
+  assert.equal(pricing.appIvaInclusa({ corriere: 5, servizio: 6.45, iva: 2.32, ivaPct: 22 }), true);
+  assert.equal(pricing.appIvaInclusa({ corriere: 10, servizio: 6.45, iva: 3.62, ivaPct: 22 }), false);
+  assert.equal(pricing.appIvaInclusa({ corriere: 0, servizio: 6.45, iva: 1.42, ivaPct: 22 }), false, 'senza corriere i due modelli coincidono: vale il vecchio, le righe tornano uguale');
+});
+
 test('importiOrdine, ordine VECCHIO (colonne a zero): si ricalcola e dà gli stessi importi di uno nuovo', () => {
   const i = pricing.importiOrdine(ordineVecchio(), null, 22, 10);
+  assert.equal(i.app.ivaInclusa, false, 'gli ordini di prima hanno l\'IVA sopra');
   assert.equal(i.app.corriere, 10);
   assert.equal(i.app.servizio, 6.45, 'totale_finale − totale_netto');
   assert.equal(i.app.imponibile, 16.45);
@@ -185,6 +216,7 @@ test('importiOrdine, pagamento: l\'importo davvero addebitato, la data e il rimb
 test('ivaPctOrdine: dai valori SALVATI dell\'ordine, non da quelli di oggi', () => {
   // colonne nuove: (iva_app + iva_banco) / (imponibile_app + imponibile_banco)
   assert.equal(pricing.ivaPctOrdine({ imponibile_app: 16.45, iva_app: 3.62, imponibile_banco: 64.5, iva_banco: 14.19 }, 99), 22);
+  assert.equal(pricing.ivaPctOrdine({ imponibile_app: 10.55, iva_app: 2.32, imponibile_banco: 64.5, iva_banco: 14.19 }, 99), 22, 'IVA dentro il totale');
   // un'IVA diversa da quella di configurazione (ordine fatto con l'aliquota di allora)
   assert.equal(pricing.ivaPctOrdine({ imponibile_app: 10, iva_app: 1, imponibile_banco: 90, iva_banco: 9 }, 22), 10);
   // ordine vecchio: iva / (totale_finale + RAEE + consegna)
@@ -196,14 +228,14 @@ test('ivaPctOrdine: dai valori SALVATI dell\'ordine, non da quelli di oggi', () 
 
 test('PAGAMENTO_APP_PROVA: l\'installatore paga ORA solo la cifra di prova, la formula e il materiale al banco restano', async () => {
   const carrello = () => [riga(prodotto(1, 54.5), 1), riga(prodotto(2, 10), 1)];
-  const normale = await pricing.calcolaOrdine(carrello(), { costoConsegna: 10 });
+  const normale = await pricing.calcolaOrdine(carrello(), { costoConsegna: 5 });
   try {
     process.env.PAGAMENTO_APP_PROVA = '0,01'; // anche con la virgola
-    const t = await pricing.calcolaOrdine(carrello(), { costoConsegna: 10 });
+    const t = await pricing.calcolaOrdine(carrello(), { costoConsegna: 5 });
     assert.equal(t.da_pagare_app, 0.01);
     assert.equal(t.app.totale, 0.01, 'una sola cifra: addebito e riepilogo dicono lo stesso');
     // la formula non cambia: le voci sono quelle di sempre, e il materiale che si paga dopo a BOREA pure
-    assert.deepEqual([t.app.corriere, t.app.servizio, t.app.imponibile, t.app.iva], [10, 6.45, 16.45, 3.62]);
+    assert.deepEqual([t.app.corriere, t.app.servizio, t.app.imponibile, t.app.iva], [5, 6.45, 10.55, 2.32]);
     assert.deepEqual(t.banco, normale.banco);
     assert.equal(t.materiale_banco, 78.69);
     assert.equal(t.totale_ivato, 78.7, 'spesa complessiva = 0,01 in app + 78,69 al banco');
@@ -211,7 +243,7 @@ test('PAGAMENTO_APP_PROVA: l\'installatore paga ORA solo la cifra di prova, la f
     // valori che non valgono (zero, testo, negativo) = spenta
     for (const v of ['0', 'abc', '-5', '  ']) {
       process.env.PAGAMENTO_APP_PROVA = v;
-      assert.equal((await pricing.calcolaOrdine(carrello(), { costoConsegna: 10 })).da_pagare_app, 20.07, v);
+      assert.equal((await pricing.calcolaOrdine(carrello(), { costoConsegna: 5 })).da_pagare_app, 12.87, v);
     }
 
     // sulla VPS non vale mai: Stripe in modo reale o NODE_ENV=production la ignorano
@@ -221,25 +253,25 @@ test('PAGAMENTO_APP_PROVA: l\'installatore paga ORA solo la cifra di prova, la f
     const warnOriginale = console.warn;
     console.warn = (m) => avvisi.push(String(m));
     try {
-      assert.equal((await pricing.calcolaOrdine(carrello(), { costoConsegna: 10 })).da_pagare_app, 20.07, 'chiave reale');
+      assert.equal((await pricing.calcolaOrdine(carrello(), { costoConsegna: 5 })).da_pagare_app, 12.87, 'chiave reale');
     } finally {
       console.warn = warnOriginale;
       delete process.env.STRIPE_SECRET_KEY;
     }
     assert.match(avvisi.join(' '), /PAGAMENTO_APP_PROVA ignorata/);
     process.env.NODE_ENV = 'production';
-    assert.equal((await pricing.calcolaOrdine(carrello(), { costoConsegna: 10 })).da_pagare_app, 20.07, 'NODE_ENV=production');
+    assert.equal((await pricing.calcolaOrdine(carrello(), { costoConsegna: 5 })).da_pagare_app, 12.87, 'NODE_ENV=production');
   } finally {
     delete process.env.PAGAMENTO_APP_PROVA;
     delete process.env.NODE_ENV;
     delete process.env.STRIPE_SECRET_KEY;
   }
-  assert.equal((await pricing.calcolaOrdine(carrello(), { costoConsegna: 10 })).da_pagare_app, 20.07, 'spenta: di nuovo la formula');
+  assert.equal((await pricing.calcolaOrdine(carrello(), { costoConsegna: 5 })).da_pagare_app, 12.87, 'spenta: di nuovo la formula');
 });
 
 test('PAGAMENTO_APP_PROVA con Stripe REALE o produzione: serve PAGAMENTO_APP_PROVA_LIVE (data), scade da sola, mai sotto 0,50 e mai sopra la formula', async () => {
-  const carrello = () => [riga(prodotto(1, 54.5), 1), riga(prodotto(2, 10), 1)]; // formula: 20,07 in app, 78,69 al banco
-  const da = async () => pricing.calcolaOrdine(carrello(), { costoConsegna: 10 });
+  const carrello = () => [riga(prodotto(1, 54.5), 1), riga(prodotto(2, 10), 1)]; // formula: 12,87 in app, 78,69 al banco
+  const da = async () => pricing.calcolaOrdine(carrello(), { costoConsegna: 5 });
   // Giorni di calendario, non multipli di 24 ore: col cambio d'ora legale di mezzo (ultima domenica di ottobre) "adesso + 8 × 24 h" cade 7 giorni dopo se si è
   // appena passata la mezzanotte, e il test prendeva per "troppo lontana" una data che lo è esattamente di 7 giorni.
   const giornoRoma = (piu = 0) => {
@@ -258,14 +290,14 @@ test('PAGAMENTO_APP_PROVA con Stripe REALE o produzione: serve PAGAMENTO_APP_PRO
   try {
     // 1. la sola riga NON basta: formula intera
     imposta('0.50');
-    assert.equal((await da()).da_pagare_app, 20.07);
+    assert.equal((await da()).da_pagare_app, 12.87);
     // 2. con la data valida (oggi compreso, fino a 7 giorni) vale 0,50, la formula e il materiale al banco restano, la spesa complessiva segue
     for (const piu of [0, 1, 7]) {
       imposta('0.50', giornoRoma(piu));
       const t = await da();
       assert.equal(t.da_pagare_app, 0.5, 'tra ' + piu + ' giorni');
       assert.equal(t.app.totale, 0.5);
-      assert.deepEqual([t.app.corriere, t.app.servizio, t.app.imponibile, t.app.iva], [10, 6.45, 16.45, 3.62], 'la formula non cambia');
+      assert.deepEqual([t.app.corriere, t.app.servizio, t.app.imponibile, t.app.iva], [5, 6.45, 10.55, 2.32], 'la formula non cambia');
       assert.equal(t.materiale_banco, 78.69);
       assert.equal(t.totale_ivato, 79.19);
     }
@@ -273,7 +305,7 @@ test('PAGAMENTO_APP_PROVA con Stripe REALE o produzione: serve PAGAMENTO_APP_PRO
     // 3. scaduta, troppo lontana, scritta male, vuota: formula intera, anche se le righe restano nel .env
     for (const live of [giornoRoma(-1), giornoRoma(8), giornoRoma(365), 'domani', '2026-13-45', '22/10/2026', '1', '']) {
       imposta('0.50', live);
-      assert.equal((await da()).da_pagare_app, 20.07, JSON.stringify(live));
+      assert.equal((await da()).da_pagare_app, 12.87, JSON.stringify(live));
     }
     assert.match(messaggi.join('\n'), /PAGAMENTO_APP_PROVA scaduta il /);
     assert.match(messaggi.join('\n'), /più lontana di 7 giorni/);
@@ -282,13 +314,13 @@ test('PAGAMENTO_APP_PROVA con Stripe REALE o produzione: serve PAGAMENTO_APP_PRO
     imposta('0.01', giornoRoma(1));
     assert.equal((await da()).da_pagare_app, 0.5, 'Stripe rifiuta sotto 0,50: si arrotonda al minimo');
     imposta('999', giornoRoma(1));
-    assert.equal((await da()).da_pagare_app, 20.07, 'mai più della formula');
+    assert.equal((await da()).da_pagare_app, 12.87, 'mai più della formula');
     // 5. NODE_ENV=production vale come Stripe reale (anche con la chiave di prova)
     delete process.env.STRIPE_SECRET_KEY;
     process.env.NODE_ENV = 'production';
     process.env.PAGAMENTO_APP_PROVA = '0.50';
     delete process.env.PAGAMENTO_APP_PROVA_LIVE;
-    assert.equal((await da()).da_pagare_app, 20.07, 'production senza data');
+    assert.equal((await da()).da_pagare_app, 12.87, 'production senza data');
     process.env.PAGAMENTO_APP_PROVA_LIVE = giornoRoma(2);
     assert.equal((await da()).da_pagare_app, 0.5, 'production con la data');
   } finally {
@@ -296,5 +328,5 @@ test('PAGAMENTO_APP_PROVA con Stripe REALE o produzione: serve PAGAMENTO_APP_PRO
     console.log = originali.log;
     for (const n of ['PAGAMENTO_APP_PROVA', 'PAGAMENTO_APP_PROVA_LIVE', 'STRIPE_SECRET_KEY', 'NODE_ENV']) delete process.env[n];
   }
-  assert.equal((await da()).da_pagare_app, 20.07, 'tolte le righe: la formula');
+  assert.equal((await da()).da_pagare_app, 12.87, 'tolte le righe: la formula');
 });

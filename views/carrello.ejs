@@ -180,7 +180,7 @@
                           placeholder="Es. orario preferito, riferimento cantiere..."></textarea>
               </details>
 
-              <%# COSA PAGHI E A CHI: due riquadri. "Consegna in cantiere" si paga ORA in app (corriere fisso + servizio + IVA); "Materiale" si paga
+              <%# COSA PAGHI E A CHI: due riquadri. "Consegna in cantiere" si paga ORA in app (corriere fisso + servizio con l'IVA dentro); "Materiale" si paga
                   DOPO a BOREA (merce a prezzo del banco + RAEE + IVA). Ogni importo è già calcolato (pricing.dividiTotale) e scritto come testo
                   in `vista`: i `[data-riep]` li riscrive public/app.js quando cambia una quantità, con le stesse chiavi. %>
               <%
@@ -201,10 +201,10 @@
                   <p class="cp-sotto">Il nostro servizio: lo addebitiamo quando premi "Paga e invia richiesta".</p>
                   <dl class="cp-righe">
                     <div class="cp-riga"><dt><span class="cp-et">Corriere</span> <span class="cp-sp">· costo fisso</span></dt><dd>€ <span data-riep="app_corriere"><%= vista.app_corriere %></span></dd></div>
-                    <div class="cp-riga"><dt><span class="cp-et">Servizio</span> <span class="cp-sp">· <span data-riep="servizio_pct"><%= vista.servizio_pct %></span>% della merce (€ <span data-riep="banco_merce"><%= vista.banco_merce %></span>)</span></dt><dd>€ <span data-riep="app_servizio"><%= vista.app_servizio %></span></dd></div>
-                    <div class="cp-riga"><dt><span class="cp-et">IVA <span data-riep="iva_pct"><%= vista.iva_pct %></span>%</span> <span class="cp-sp">· su € <span data-riep="app_imponibile"><%= vista.app_imponibile %></span></span></dt><dd>€ <span data-riep="app_iva"><%= vista.app_iva %></span></dd></div>
+                    <%# Il servizio si paga con l'IVA già dentro (23/10/2026, richiesta esplicita): niente riga IVA sotto. %>
+                    <div class="cp-riga"><dt><span class="cp-et">Servizio</span> <span class="cp-sp">· <span data-riep="servizio_pct"><%= vista.servizio_pct %></span>% della merce (€ <span data-riep="banco_merce"><%= vista.banco_merce %></span>) + IVA</span></dt><dd>€ <span data-riep="app_servizio"><%= vista.app_servizio %></span></dd></div>
                   </dl>
-                  <div class="cp-totale"><span>Totale da pagare ora</span><strong>€ <span data-riep="app_totale"><%= vista.app_totale %></span></strong></div>
+                  <div class="cp-totale"><span>Totale da pagare ora<span class="cp-sp cp-nota-iva">IVA inclusa</span></span><strong>€ <span data-riep="app_totale"><%= vista.app_totale %></span></strong></div>
                 </section>
 
                 <section class="cp-riquadro cp-dopo" aria-labelledby="cp-dopo-titolo">

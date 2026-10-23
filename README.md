@@ -107,8 +107,9 @@ i sinonimi pollici↔mm (dettagli in `CLAUDE.md`).
 ## Ordine minimo e spedizione
 
 Ordine minimo **€ 33** di merce, calcolata sui prezzi già maggiorati del servizio e IVA
-esclusa. La **spedizione di € 10** si somma dopo e non concorre a raggiungere la soglia.
-Entrambi i valori stanno in `config` (`ordine_minimo`, `spedizione_fissa`).
+esclusa. La **spedizione di € 5** (il corriere, già prezzo finale) si somma dopo e non concorre a raggiungere la soglia.
+Entrambi i valori stanno in `config` (`ordine_minimo`, `spedizione_fissa`). Il **servizio** (10% della merce) si
+paga in app **con l'IVA dentro**: con merce 64,50 € sono 5,00 + 7,87 = **12,87 €** (di cui IVA 2,32), senza una riga IVA a parte.
 
 ## Registrazione e approvazione
 

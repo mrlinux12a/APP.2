@@ -270,17 +270,17 @@ test('avviaPagamento: PaymentIntent con carta solo autorizzata, importo del carr
   assert.equal(richiesteCreate.length, 0, 'la richiesta non nasce prima del pagamento');
 });
 
-test('avviaPagamento: Stripe addebita SOLO "Paghi ora" (corriere + servizio + IVA = 20,07), non il materiale né la spesa complessiva', async () => {
+test('avviaPagamento: Stripe addebita SOLO "Paghi ora" (corriere 5,00 + servizio con IVA 7,87 = 12,87), non il materiale né la spesa complessiva', async () => {
   preparati();
-  // i totali come li dà pricing.calcolaOrdine per 54,50 + 10,00 di merce: app.totale 20,07, materiale 78,69, spesa 98,76
-  flusso.validaRichiesta = async () => ({ cliente, totali: { totale_ivato: 98.76, da_pagare_app: 20.07, materiale_banco: 78.69 } });
+  // i totali come li dà pricing.calcolaOrdine per 54,50 + 10,00 di merce: app.totale 12,87, materiale 78,69, spesa 91,56
+  flusso.validaRichiesta = async () => ({ cliente, totali: { totale_ivato: 91.56, da_pagare_app: 12.87, materiale_banco: 78.69 } });
   const id = await stripePagamenti.avviaPagamento(cliente.id, carrello, { destinazione: 'Via Puggia 22/3' });
   const [, p] = stripe.chiamate.find((c) => c[0] === 'create');
-  assert.equal(p.amount, 2007);
-  assert.equal(righe[id - 1].importo_cent, 2007);
+  assert.equal(p.amount, 1287);
+  assert.equal(righe[id - 1].importo_cent, 1287);
   // e con i numeri veri del calcolo: lo stesso valore che il carrello mostra come "Totale da pagare ora"
   const pricing = require('../src/pricing');
-  const d = pricing.dividiTotale({ netto: 64.5, raee: 0, consegna: 10, servizioPct: 10, ivaPct: 22 });
+  const d = pricing.dividiTotale({ netto: 64.5, raee: 0, consegna: 5, servizioPct: 10, ivaPct: 22 });
   assert.equal(Math.round(d.app.totale * 100), p.amount);
 });
 
@@ -652,7 +652,7 @@ test('pagamento arrivato troppo tardi: niente richiesta, carta rilasciata', asyn
 
 test('Rinvia richiesta: si paga di nuovo la consegna di OGGI e la STESSA richiesta si riapre con pagamento Stripe', async () => {
   preparati();
-  consegnaDiOggi = 20.07; // la richiesta era stata pagata 66,90 (vecchio modello): rinviando si paga la consegna ricalcolata
+  consegnaDiOggi = 12.87; // la richiesta era stata pagata 66,90 (vecchio modello): rinviando si paga la consegna ricalcolata
   const chiusa = { id: 55, cliente_id: cliente.id, stato: 'nessuna_offerta', pagamento_importo: 66.9 };
   richiesteDb.set(55, { pagamento_stato: 'rimborsato', pagamento_importo: 66.9 });
   richieste.getRichiesta = async () => chiusa;
@@ -665,8 +665,8 @@ test('Rinvia richiesta: si paga di nuovo la consegna di OGGI e la STESSA richies
 
   const id = await stripePagamenti.avviaPagamentoReinvio(cliente.id, chiusa);
   const [, p] = stripe.chiamate.find((c) => c[0] === 'create');
-  assert.equal(p.amount, 2007);
-  assert.equal(righe[0].importo_cent, 2007);
+  assert.equal(p.amount, 1287);
+  assert.equal(righe[0].importo_cent, 1287);
   assert.equal(righe[0].tipo, 'reinvio');
   assert.equal(righe[0].request_id, 55);
 
@@ -680,7 +680,7 @@ test('Rinvia richiesta: si paga di nuovo la consegna di OGGI e la STESSA richies
   const esito = await stripePagamenti.esitoRitorno('pi_test_1', cliente.id);
   assert.deepEqual(esito, { esito: 'ok', requestId: 55, tipo: 'reinvio' });
   // la richiesta torna a segnare come pagato quanto è stato autorizzato
-  assert.deepEqual(riaperture, [[55, { metodoPagamento: 'stripe', importo: 20.07 }]]);
+  assert.deepEqual(riaperture, [[55, { metodoPagamento: 'stripe', importo: 12.87 }]]);
   assert.equal(richiesteCreate.length, 0, 'nessuna richiesta nuova');
   assert.equal(righe[0].stato, 'autorizzato');
 });

@@ -15,7 +15,7 @@ const dbFinto = {
     const s = sql.replace(/\s+/g, ' ');
     const esegui = async (...p) => {
       chiamate.push({ s, p });
-      if (/FROM config WHERE chiave/.test(s)) return [{ valore: p[0] === 'iva_pct' ? '22' : p[0] === 'servizio_pct' ? '10' : p[0] === 'spedizione_fissa' ? '10' : '33' }];
+      if (/FROM config WHERE chiave/.test(s)) return [{ valore: p[0] === 'iva_pct' ? '22' : p[0] === 'servizio_pct' ? '10' : p[0] === 'spedizione_fissa' ? '5' : '33' }];
       if (/FROM orders o LEFT JOIN distributors/.test(s)) {
         const filiale = /AND o\.distributor_id = \?/.test(s) ? p[1] : null;
         return ordini.filter((o) => o.cliente_id === p[0] && (filiale === null || o.distributor_id === filiale)).sort((a, b) => b.id - a.id); // ORDER BY o.id DESC
@@ -62,14 +62,14 @@ const prova = (f) => async () => { ordini = []; righe = []; richieste = []; righ
 test('importo che si paga in app: servizio (10%) + consegna, IVA inclusa; il materiale (prezzo del banco + RAEE) si paga dopo; le due parti fanno il totale', async () => {
   const prodotto = (id, listino, sconto, raee) => ({ prodotto: { id, codice: 'C' + id, nome: 'P' + id, prezzo_listino: listino, sconto_base_pct: sconto, raee }, quantita: 2 });
   // netto: 100 × (1 − 0,3) = 70 → ×2 = 140; con servizio 77 → ×2 = 154; RAEE 1,50 × 2 = 3
-  const t = await pricing.calcolaOrdine([prodotto(1, 100, 30, 1.5)], { costoConsegna: 10 });
+  const t = await pricing.calcolaOrdine([prodotto(1, 100, 30, 1.5)], { costoConsegna: 5 });
   assert.equal(t.totale_netto, 140);
   assert.equal(t.totale_finale, 154);
   assert.equal(t.servizio, 14, 'il 10% sul prezzo del banco, IVA esclusa');
-  assert.equal(t.da_pagare_app, 29.28, '(14 + 10) × 1,22');
+  assert.equal(t.da_pagare_app, 22.08, '5 + 14 × 1,22: il corriere è già finale, il servizio ha dentro la sua IVA');
   assert.equal(t.materiale_banco, 174.46, '(140 + 3) × 1,22');
   assert.ok(Math.abs(t.da_pagare_app + t.materiale_banco - t.totale_ivato) <= 0.01, 'insieme fanno il totale: ' + t.totale_ivato);
-  assert.equal(t.totale_ivato, 203.74, '(154 + 3 + 10) × 1,22: invariato');
+  assert.equal(t.totale_ivato, 196.54, '22,08 in app + 174,46 al banco');
   // senza consegna né servizio (sconto 0 e prezzo netto = listino... il servizio c'è sempre): nessun ordine vuoto
   const vuoto = await pricing.calcolaOrdine([], { costoConsegna: 0 });
   assert.equal(vuoto.da_pagare_app, 0);

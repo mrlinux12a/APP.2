@@ -162,7 +162,7 @@ export type RiepilogoCarrello = {
   iva_pct: number;
   // La spesa complessiva (consegna + materiale).
   totale_ivato: string;
-  // Quello che l'installatore paga ORA in app (consegna in cantiere: corriere + servizio + IVA) e quello che paga DOPO al banco (materiale + IVA).
+  // Quello che l'installatore paga ORA in app (consegna in cantiere: corriere + servizio con l'IVA dentro) e quello che paga DOPO al banco (materiale + IVA).
   da_pagare_ora: string;
   da_pagare_al_banco: string;
   riepilogo: VistaRiepilogo;
@@ -208,7 +208,8 @@ export type StatoPagamento = {
 
 // Le due parti di quello che si paga: la consegna in app, il materiale dopo al banco.
 export type Importi = {
-  consegna: { totale: string; corriere: string; servizio: string; servizio_pct: number; imponibile: string; iva: string; iva_pct: number };
+  // `servizio` è il servizio come si mostra; con `iva_inclusa` ha già l'IVA dentro (e `iva` è "di cui"), senza è la riga IVA in più degli importi di prima.
+  consegna: { totale: string; corriere: string; servizio: string; servizio_pct: number; imponibile: string; iva: string; iva_pct: number; iva_inclusa: boolean };
   materiale: { totale: string; merce: string; raee: string | null; imponibile: string; iva: string };
   spesa: string;
 };

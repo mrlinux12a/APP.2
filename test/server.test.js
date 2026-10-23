@@ -24,7 +24,7 @@ const utente = {
   id: 1, ruolo: 'cliente', username: 'prova', ragione_sociale: 'Prova S.r.l.', zona: 'Genova', distributor_id: null, attivo: 1,
   password_hash: bcrypt.hashSync('password-di-prova', 4), indirizzo_consegna: 'Via Puggia 22/3, Genova',
 };
-const config = { servizio_pct: '10', iva_pct: '22', finestra_conferma_min: '10', ordine_minimo: '33', spedizione_fissa: '10' };
+const config = { servizio_pct: '10', iva_pct: '22', finestra_conferma_min: '10', ordine_minimo: '33', spedizione_fissa: '5' };
 const registro = []; // le query viste, per controllare cosa NON è stato eseguito
 
 // Storico del cliente 1: richieste, righe e ordini. Si accende solo nelle prove che lo usano (storico.attivo), così
@@ -1041,17 +1041,19 @@ test('carrello: "Cosa paghi e a chi" — Consegna in cantiere (ORA, in app) e Ma
   assert.match(t, /data-totale-riga="4">€ 10,00</);
   assert.doesNotMatch(t, /59,95|11,00/, 'il prezzo col 10% non si vede più');
 
-  // A) la paghi ora: corriere 10,00 + servizio 6,45 (10% di 64,50) + IVA 3,62 (22% di 16,45) = 20,07
+  // A) la paghi ora: corriere 5,00 + servizio con l'IVA dentro 7,87 (10% di 64,50 = 6,45, più IVA) = 12,87; nessuna riga IVA a parte
   assert.match(t, /<section class="cp-riquadro cp-ora"/);
   assert.match(t, /<span class="cp-badge cp-badge-ora">Paghi ora<\/span>/);
   assert.match(t, /Il nostro servizio: lo addebitiamo quando premi "Paga e invia richiesta"./);
-  assert.deepEqual(riep('app_corriere'), ['10,00']);
-  assert.deepEqual(riep('app_servizio'), ['6,45']);
-  assert.deepEqual(riep('app_imponibile'), ['16,45']);
-  assert.deepEqual(riep('app_iva'), ['3,62']);
-  assert.deepEqual(riep('app_totale'), ['20,07', '20,07'], 'nel riquadro e nella barra');
-  assert.match(t, /Servizio<\/span> <span class="cp-sp">· <span data-riep="servizio_pct">10<\/span>% della merce \(€ <span data-riep="banco_merce">64,50<\/span>\)/);
-  assert.match(t, /IVA <span data-riep="iva_pct">22<\/span>%<\/span> <span class="cp-sp">· su € <span data-riep="app_imponibile">16,45<\/span>/);
+  assert.deepEqual(riep('app_corriere'), ['5,00']);
+  assert.deepEqual(riep('app_servizio'), ['7,87']);
+  assert.deepEqual(riep('app_totale'), ['12,87', '12,87'], 'nel riquadro e nella barra');
+  assert.match(t, /Servizio<\/span> <span class="cp-sp">· <span data-riep="servizio_pct">10<\/span>% della merce \(€ <span data-riep="banco_merce">64,50<\/span>\) \+ IVA<\/span>/);
+  assert.match(t, /Totale da pagare ora<span class="cp-sp cp-nota-iva">IVA inclusa<\/span>/);
+  // richiesta esplicita del 23/10/2026: il servizio ha l'IVA dentro, nel riquadro "paghi ora" non c'è più la riga IVA (resta quella del materiale)
+  assert.deepEqual(riep('app_imponibile'), [], 'niente riga IVA nel riquadro "paghi ora"');
+  assert.deepEqual(riep('app_iva'), []);
+  assert.deepEqual(riep('iva_pct'), ['22'], 'una sola riga IVA in pagina: quella del materiale');
 
   // B) la paghi dopo a BOREA: merce 64,50 (= somma delle righe) + IVA 14,19 = 78,69; nessun RAEE
   assert.match(t, /<span class="cp-badge cp-badge-dopo">Paghi dopo (a [^<]+|al banco)<\/span>/);
@@ -1063,10 +1065,10 @@ test('carrello: "Cosa paghi e a chi" — Consegna in cantiere (ORA, in app) e Ma
   assert.deepEqual(riep('banco_totale'), ['78,69']);
   assert.match(t, /<div class="cp-riga" data-riga-raee hidden>/, 'senza RAEE la riga c\'è ma è nascosta');
   // C) spesa complessiva = i due totali
-  assert.deepEqual(riep('spesa'), ['98,76']);
-  assert.equal(Math.round((20.07 + 78.69) * 100) / 100, 98.76);
+  assert.deepEqual(riep('spesa'), ['91,56']);
+  assert.equal(Math.round((12.87 + 78.69) * 100) / 100, 91.56);
   // la barra: "Paghi ora · consegna" e l'importo addebitato
-  assert.match(t, /<span class="bp-label">Paghi ora · consegna<\/span>\s*<span class="bp-importo">€ <span data-riep="app_totale">20,07<\/span>/);
+  assert.match(t, /<span class="bp-label">Paghi ora · consegna<\/span>\s*<span class="bp-importo">€ <span data-riep="app_totale">12,87<\/span>/);
   assert.match(t, /<span>Se nessun banco accetta, ti rimborsiamo<\/span>/);
   // ordine minimo: 64,50 di merce ≥ 33
   assert.match(t, /data-minimo-avviso hidden>/);
@@ -1087,11 +1089,10 @@ test('carrello: l\'articolo con RAEE — il contributo sta solo nel Materiale (c
   assert.deepEqual(riep('banco_imponibile'), ['205,00']);
   assert.deepEqual(riep('banco_iva'), ['45,10']);
   assert.deepEqual(riep('banco_totale'), ['250,10']);
-  // in app: corriere 10 + servizio 20 (10% di 200, senza RAEE) = 30 → IVA 6,60 → 36,60
-  assert.deepEqual(riep('app_servizio'), ['20,00']);
-  assert.deepEqual(riep('app_imponibile'), ['30,00']);
-  assert.deepEqual(riep('app_totale'), ['36,60', '36,60']);
-  assert.deepEqual(riep('spesa'), ['286,70']); // 36,60 + 250,10
+  // in app: corriere 5 + servizio 20 (10% di 200, senza RAEE) con la sua IVA = 24,40 → 29,40
+  assert.deepEqual(riep('app_servizio'), ['24,40']);
+  assert.deepEqual(riep('app_totale'), ['29,40', '29,40']);
+  assert.deepEqual(riep('spesa'), ['279,50']); // 29,40 + 250,10
   await chiedi('/carrello/svuota', { method: 'POST' });
 });
 
@@ -1116,20 +1117,20 @@ test('carrello dal vivo: /api/carrello/imposta restituisce tutte le voci già pr
   await chiedi('/api/carrello/imposta', json({ id: 4, qty: 1 }));
   const r = await (await chiedi('/api/carrello/imposta', json({ id: 3, qty: 2 }))).json();
   assert.equal(r.ok, true);
-  // merce 119,00 (109 + 10): servizio 11,90; app 10 + 11,90 = 21,90 + IVA 4,82 = 26,72; materiale 119 + IVA 26,18 = 145,18; spesa 171,90
+  // merce 119,00 (109 + 10): servizio 11,90 → con IVA 14,52; app 5 + 14,52 = 19,52 (di cui imponibile 16,00 e IVA 3,52); materiale 119 + IVA 26,18 = 145,18; spesa 164,70
   assert.deepEqual(
     [r.riepilogo.banco_merce, r.riepilogo.app_servizio, r.riepilogo.app_imponibile, r.riepilogo.app_iva, r.riepilogo.app_totale, r.riepilogo.banco_iva, r.riepilogo.banco_totale, r.riepilogo.spesa],
-    ['119,00', '11,90', '21,90', '4,82', '26,72', '26,18', '145,18', '171,90']
+    ['119,00', '14,52', '16,00', '3,52', '19,52', '26,18', '145,18', '164,70']
   );
   assert.deepEqual([r.riepilogo.articoli, r.riepilogo.con_raee, r.riepilogo.raggiunto, r.riepilogo.manca], ['2 articoli', false, true, '0,00']);
   assert.deepEqual(r.totali_righe, { 3: '109,00', 4: '10,00' });
-  assert.equal(r.totali.da_pagare_app, 26.72, 'l\'addebito è proprio app.totale');
+  assert.equal(r.totali.da_pagare_app, 19.52, 'l\'addebito è proprio app.totale');
   assert.equal(r.totali.materiale_banco, 145.18);
-  assert.equal(r.totali.totale_ivato, 171.9);
+  assert.equal(r.totali.totale_ivato, 164.7);
   assert.equal(r.pezzi, 3);
   // la pagina ricaricata dice le stesse cose: le voci sono le stesse, scritte dalla stessa funzione
   const t = await (await chiedi('/carrello')).text();
-  for (const chiave of ['app_totale', 'banco_totale', 'spesa', 'app_iva', 'banco_iva', 'banco_merce']) {
+  for (const chiave of ['app_totale', 'app_servizio', 'banco_totale', 'spesa', 'banco_iva', 'banco_merce']) {
     assert.equal((t.match(new RegExp('data-riep="' + chiave + '">([^<]*)<')) || [])[1], r.riepilogo[chiave], chiave);
   }
   assert.match(t, /data-totale-riga="3">€ 109,00</);
@@ -1798,12 +1799,14 @@ test('richiesta scaduta: "Nessun corriere ha confermato" se il banco aveva accet
 });
 
 // Le richieste di prova (fixture `storico`) con articoli e importi della specifica: 54,50 + 10,00 di merce a prezzo del banco ->
-// consegna 20,07 (10,00 + servizio 6,45 + IVA 3,62) pagata in app, materiale 78,69 (64,50 + IVA 14,19) da pagare a BOREA solo se confermano.
+// consegna 12,87 (5,00 + servizio 6,45 con la sua IVA = 7,87, di cui IVA 2,32) pagata in app, materiale 78,69 (64,50 + IVA 14,19) da pagare a BOREA solo se confermano.
 const DUE_ARTICOLI = () => [
   { nome: 'Adattatore Ø80/100mm Per Caldaia 45-65kw', quantita: 1, product_id: 101, codice: '12514597', prezzo_listino: 54.5, sconto_base_pct: 0, raee: 0 },
   { nome: 'Adattatore Ø80/60mm Sistema Sdoppiato Condensazione', quantita: 1, product_id: 102, codice: '12697319', prezzo_listino: 10, sconto_base_pct: 0, raee: 0 },
 ];
-const IMPORTI_SALVATI = { corriere: 10, servizio: 6.45, iva_app: 3.62, da_pagare_app: 20.07, merce_banco: 64.5, raee_banco: 0, iva_banco: 14.19, materiale_banco: 78.69 };
+const IMPORTI_SALVATI = { corriere: 5, servizio: 6.45, iva_app: 2.32, da_pagare_app: 12.87, merce_banco: 64.5, raee_banco: 0, iva_banco: 14.19, materiale_banco: 78.69 };
+// Una richiesta nata COL MODELLO DI PRIMA (IVA sopra corriere e servizio: 10 + 6,45 + 3,62 = 20,07): resta com'era, con la sua riga IVA.
+const IMPORTI_SALVATI_PRIMA = { corriere: 10, servizio: 6.45, iva_app: 3.62, da_pagare_app: 20.07, merce_banco: 64.5, raee_banco: 0, iva_banco: 14.19, materiale_banco: 78.69 };
 const IMPORTI_A_ZERO = { corriere: 0, servizio: 0, iva_app: 0, da_pagare_app: 0, merce_banco: 0, raee_banco: 0, iva_banco: 0, materiale_banco: 0 };
 const rispostaProva = (idRichiesta, extra) => ({ id: 1, request_id: idRichiesta, distributor_id: 2, distributore_nome: 'BOREA SRL', filiale: 'Fegino', ditta_id: 6, esito: 'in_attesa', corriere_stato: null, ...extra });
 // Applica i campi alla richiesta di prova (e gli articoli), esegue la prova e rimette tutto com'era.
@@ -1826,7 +1829,7 @@ async function conRichiesta(id, campi, articoli, prova) {
 }
 
 test('richiesta in attesa: righe e "Merce" a prezzo del banco, scheda "Pagamenti" (carta BLOCCATA, materiale in sospeso) e "Annulla la richiesta" solo finché nessun banco conferma', async () => {
-  await conRichiesta(6, { ...IMPORTI_SALVATI, pagamento_importo: 20.07, pagamento_metodo: 'stripe', pagato_il: fa(60000) }, DUE_ARTICOLI(), async () => {
+  await conRichiesta(6, { ...IMPORTI_SALVATI, pagamento_importo: 12.87, pagamento_metodo: 'stripe', pagato_il: fa(60000) }, DUE_ARTICOLI(), async () => {
     storico.risposte[6] = [rispostaProva(6)];
     let t = await (await chiedi('/richieste/6')).text();
     // 1. "Materiale richiesto": quantità, nome, "Cod. … · € cad.", totale di riga; sotto la merce IVA esclusa a prezzi del banco
@@ -1838,17 +1841,18 @@ test('richiesta in attesa: righe e "Merce" a prezzo del banco, scheda "Pagamenti
     assert.doesNotMatch(t, /att-pagato|<span>Pagato<\/span>|Richiesta del|prezzi IVA esclusa/);
     // 2. "Pagamenti", stato 'bloccato': la carta è solo AUTORIZZATA. Consegna azzurra con il lucchetto, materiale tratteggiato "solo se conferma"
     assert.match(t, /<div class="card att-card pg-card" data-pagamenti data-stato="attesa" data-pagamento="bloccato">\s*<h2 class="pg-titolo">Pagamenti<\/h2>/);
-    assert.match(t, /<div class="pg-riga pg-bloccata">[\s\S]*?Consegna in cantiere[\s\S]*?<span class="pg-lucchetto"[\s\S]*?<\/span>Bloccati sulla carta · addebitati solo se BOREA conferma[\s\S]*?<div class="pg-importo" data-importo-app>€ 20,07<\/div>/);
+    assert.match(t, /<div class="pg-riga pg-bloccata">[\s\S]*?Consegna in cantiere[\s\S]*?<span class="pg-lucchetto"[\s\S]*?<\/span>Bloccati sulla carta · addebitati solo se BOREA conferma[\s\S]*?<div class="pg-importo" data-importo-app>€ 12,87<\/div>/);
     assert.match(t, /<div class="pg-riga pg-materiale pg-sospeso">[\s\S]*?<div class="pg-nome">Materiale<\/div>\s*<div class="pg-sub">Lo paghi a BOREA solo se conferma<\/div>[\s\S]*?<div class="pg-importo" data-importo-banco>€ 78,69<\/div>/);
     assert.doesNotMatch(t, /Pagata|rimborsata se nessuno accetta|pg-consegna|Rimborso/, 'non è pagata: è bloccata');
     assert.doesNotMatch(t, /Ricevuta|ricevuta\.pdf/, 'la ricevuta nasce con l\'ordine, non prima');
-    // 3. il dettaglio (chiuso): consegna bloccata 10,00 / 6,45 / 3,62 e materiale 64,50 / 14,19, senza RAEE
+    // 3. il dettaglio (chiuso): consegna bloccata 5,00 / 7,87 (servizio con la sua IVA, nessuna riga IVA) e materiale 64,50 / 14,19, senza RAEE
     assert.match(t, /<details class="pg-dettaglio">/);
     assert.doesNotMatch(t, /<details class="pg-dettaglio" open/);
     assert.match(t, /<h3>Consegna · bloccata sulla carta<\/h3>/);
-    assert.match(t, /Corriere<\/span> <span class="pg-sp">· costo fisso<\/span><\/dt><dd>€ 10,00<\/dd>/);
-    assert.match(t, /Servizio<\/span> <span class="pg-sp">· 10% della merce<\/span><\/dt><dd>€ 6,45<\/dd>/);
-    assert.match(t, /IVA 22%<\/span> <span class="pg-sp">· su € 16,45<\/span><\/dt><dd>€ 3,62<\/dd>/);
+    assert.match(t, /Corriere<\/span> <span class="pg-sp">· costo fisso<\/span><\/dt><dd>€ 5,00<\/dd>/);
+    assert.match(t, /Servizio<\/span> <span class="pg-sp">· 10% della merce \+ IVA<\/span><\/dt><dd>€ 7,87<\/dd>/);
+    assert.equal((t.match(/<span class="pg-et">IVA 22%<\/span>/g) || []).length, 1, 'una sola riga IVA: quella del materiale');
+    assert.doesNotMatch(t, /IVA 22%<\/span> <span class="pg-sp">· su € (10,55|11,45)/);
     assert.match(t, /<h3>Materiale · se BOREA conferma<\/h3>/);
     assert.match(t, /Merce<\/span> <span class="pg-sp">· prezzo del banco<\/span><\/dt><dd>€ 64,50<\/dd>/);
     assert.match(t, /IVA 22%<\/span> <span class="pg-sp">· su € 64,50<\/span><\/dt><dd>€ 14,19<\/dd>/);
@@ -1884,8 +1888,19 @@ test('richiesta in attesa VECCHIA (importi non salvati): si ricalcolano sulle ri
     assert.match(t, /<div class="pg-importo" data-importo-app>€ 66,90<\/div>/, 'la consegna è il pagamento_importo');
     assert.match(t, /<div class="pg-importo" data-importo-banco>€ 78,69<\/div>/, 'il materiale è ricalcolato');
     // le voci del dettaglio sono quelle del calcolo di oggi, come nel carrello
-    assert.match(t, /Servizio<\/span> <span class="pg-sp">· 10% della merce<\/span><\/dt><dd>€ 6,45<\/dd>/);
+    assert.match(t, /Servizio<\/span> <span class="pg-sp">· 10% della merce \+ IVA<\/span><\/dt><dd>€ 7,87<\/dd>/);
     assert.match(t, /IVA 22%<\/span> <span class="pg-sp">· su € 64,50<\/span><\/dt><dd>€ 14,19<\/dd>/);
+  });
+});
+
+test('richiesta in attesa nata COL MODELLO DI PRIMA (IVA sopra: 10,00 + 6,45 + IVA 3,62 = 20,07): resta com\'era, con la sua riga IVA', async () => {
+  await conRichiesta(6, { ...IMPORTI_SALVATI_PRIMA, pagamento_importo: 20.07, pagamento_metodo: 'stripe', pagato_il: fa(60000) }, DUE_ARTICOLI(), async () => {
+    storico.risposte[6] = [rispostaProva(6)];
+    const t = await (await chiedi('/richieste/6')).text();
+    assert.match(t, /<div class="pg-importo" data-importo-app>€ 20,07<\/div>/);
+    assert.match(t, /Corriere<\/span> <span class="pg-sp">· costo fisso<\/span><\/dt><dd>€ 10,00<\/dd>/);
+    assert.match(t, /Servizio<\/span> <span class="pg-sp">· 10% della merce<\/span><\/dt><dd>€ 6,45<\/dd>/);
+    assert.match(t, /IVA 22%<\/span> <span class="pg-sp">· su € 16,45<\/span><\/dt><dd>€ 3,62<\/dd>/);
   });
 });
 
@@ -1899,7 +1914,7 @@ test('richiesta in attesa del vecchio flusso (mai pagata): righe e materiale, ma
 });
 
 test('richiesta scaduta: UNA sola riga grigia "Nessun addebito € 0,00" (niente furgone, niente verde), pillola "Nessun addebito sulla carta", la nota col blocco di OGGI; Rinvia ed Elimina', async () => {
-  const campi = { ...IMPORTI_SALVATI, pagamento_stato: 'rimborsato', pagamento_importo: 20.07, pagamento_metodo: 'stripe', rimborsato_il: new Date(2025, 2, 20, 9, 10) };
+  const campi = { ...IMPORTI_SALVATI, pagamento_stato: 'rimborsato', pagamento_importo: 12.87, pagamento_metodo: 'stripe', rimborsato_il: new Date(2025, 2, 20, 9, 10) };
   await conRichiesta(4, campi, DUE_ARTICOLI(), async () => {
     storico.risposte[4] = [rispostaProva(4, { esito: 'scaduto' })];
     let t = await (await chiedi('/richieste/4')).text();
@@ -1913,21 +1928,21 @@ test('richiesta scaduta: UNA sola riga grigia "Nessun addebito € 0,00" (niente
     assert.doesNotMatch(t, /Richiesta del|prezzi IVA esclusa/);
     // Pagamenti, stato 'annullato': UNA riga grigia con la carta di credito; niente consegna, materiale, dettaglio né ricevuta
     assert.match(t, /<div class="card att-card pg-card" data-pagamenti data-stato="chiusa" data-pagamento="annullato">/);
-    assert.match(t, /<div class="pg-riga pg-nessuno">[\s\S]*?<div class="pg-nome">Nessun addebito<\/div>\s*<div class="pg-sub">Il blocco di € 20,07 sulla carta è stato annullato\. Nessuna consegna, niente da pagare a BOREA\.<\/div>[\s\S]*?<div class="pg-importo" data-importo-app>€ 0,00<\/div>/);
+    assert.match(t, /<div class="pg-riga pg-nessuno">[\s\S]*?<div class="pg-nome">Nessun addebito<\/div>\s*<div class="pg-sub">Il blocco di € 12,87 sulla carta è stato annullato\. Nessuna consegna, niente da pagare a BOREA\.<\/div>[\s\S]*?<div class="pg-importo" data-importo-app>€ 0,00<\/div>/);
     assert.equal((t.match(/class="pg-riga/g) || []).length, 1, 'una sola riga');
     assert.doesNotMatch(t, /pg-consegna|pg-materiale|pg-bloccata|<details class="pg-dettaglio">|Ricevuta|data-importo-banco/);
-    // la nota: gli stessi prezzi di oggi di quando si preme "Rinvia" (qui non sono cambiati: 20,07 e 78,69)
-    assert.match(t, /<p class="pg-nota" data-nota-rinvio>Se rinvii la richiesta blocchiamo di nuovo € 20,07 sulla carta, addebitati solo se BOREA conferma\. Il materiale \(€ 78,69\) lo paghi a BOREA\.<\/p>/);
+    // la nota: gli stessi prezzi di oggi di quando si preme "Rinvia" (qui non sono cambiati: 12,87 e 78,69)
+    assert.match(t, /<p class="pg-nota" data-nota-rinvio>Se rinvii la richiesta blocchiamo di nuovo € 12,87 sulla carta, addebitati solo se BOREA conferma\. Il materiale \(€ 78,69\) lo paghi a BOREA\.<\/p>/);
     // Rinvia (blu) ed Elimina, come prima
     assert.match(t, /action="\/richieste\/4\/reinvia"[\s\S]*?Rinvia richiesta/);
     assert.match(t, /action="\/richieste\/4\/elimina"[\s\S]*?Elimina richiesta/);
 
-    // i prezzi sono cambiati dopo la chiusura: la nota usa quelli di oggi (articolo da 104,50: merce 114,50 -> 26,17 e 139,69)
+    // i prezzi sono cambiati dopo la chiusura: la nota usa quelli di oggi (articolo da 104,50: merce 114,50 -> 18,97 e 139,69)
     storico.righe[4][0].prezzo_listino = 104.5;
     t = await (await chiedi('/richieste/4')).text();
-    assert.match(t, /blocchiamo di nuovo € 26,17 sulla carta, addebitati solo se BOREA conferma\. Il materiale \(€ 139,69\) lo paghi a BOREA\./);
+    assert.match(t, /blocchiamo di nuovo € 18,97 sulla carta, addebitati solo se BOREA conferma\. Il materiale \(€ 139,69\) lo paghi a BOREA\./);
     assert.match(t, /<div class="pg-importo" data-importo-app>€ 0,00<\/div>/);
-    assert.match(t, /Il blocco di € 20,07 sulla carta è stato annullato/, 'il blocco annullato è quello che era stato fatto');
+    assert.match(t, /Il blocco di € 12,87 sulla carta è stato annullato/, 'il blocco annullato è quello che era stato fatto');
 
     // più ditte: "al banco"
     storico.risposte[4] = [rispostaProva(4, { esito: 'scaduto' }), rispostaProva(4, { id: 2, distributore_nome: 'AFIS SPA', ditta_id: 7, esito: 'scaduto' })];
@@ -1938,14 +1953,14 @@ test('richiesta scaduta: UNA sola riga grigia "Nessun addebito € 0,00" (niente
 });
 
 test('richiesta scaduta con carta già rilasciata su Stripe, e banco che aveva accettato ma senza corriere: sempre "Nessun addebito" (mai "rimborso in corso")', async () => {
-  const campi = { ...IMPORTI_SALVATI, pagamento_stato: 'pagato', pagamento_importo: 20.07, pagamento_metodo: 'stripe' };
+  const campi = { ...IMPORTI_SALVATI, pagamento_stato: 'pagato', pagamento_importo: 12.87, pagamento_metodo: 'stripe' };
   await conRichiesta(4, campi, DUE_ARTICOLI(), async (r) => {
     storico.risposte[4] = [rispostaProva(4, { esito: 'confermato', corriere_stato: 'scaduto' })];
     // il giro di Stripe non ha ancora rilasciato il blocco (la richiesta si è appena chiusa): per chi guarda è già annullato
     let t = await (await chiedi('/richieste/4')).text();
     assert.match(t, /<span class="att-rimborso">[\s\S]*?Nessun addebito sulla carta<\/span>/);
     assert.doesNotMatch(t, /Rimborso in corso|att-rimborso-attesa|pg-rimborso-corso/);
-    assert.match(t, /<div class="pg-riga pg-nessuno">[\s\S]*?Il blocco di € 20,07 sulla carta è stato annullato\. Nessuna consegna, niente da pagare a BOREA\./);
+    assert.match(t, /<div class="pg-riga pg-nessuno">[\s\S]*?Il blocco di € 12,87 sulla carta è stato annullato\. Nessuna consegna, niente da pagare a BOREA\./);
     // la riga di Stripe dice la stessa cosa (blocco rilasciato)
     stripeRighe.push({ id: 901, cliente_id: 1, tipo: 'richiesta', modo: 'test', stato: 'rilasciato', payment_intent_id: 'pi_prova_4', importo_cent: 2007, incasso_cent: null, request_id: 4, aggiornato_il: fa(60000) });
     try {
@@ -1964,7 +1979,7 @@ test('richiesta scaduta con carta già rilasciata su Stripe, e banco che aveva a
 });
 
 test('richiesta annullata da te in fase 1: UNA riga grigia "Hai annullato la richiesta: il blocco … è stato tolto dalla carta", nessun addebito', async () => {
-  const campi = { ...IMPORTI_SALVATI, pagamento_stato: 'rimborsato', pagamento_importo: 20.07, pagamento_metodo: 'stripe', rimborsato_il: null };
+  const campi = { ...IMPORTI_SALVATI, pagamento_stato: 'rimborsato', pagamento_importo: 12.87, pagamento_metodo: 'stripe', rimborsato_il: null };
   await conRichiesta(2, campi, DUE_ARTICOLI(), async () => {
     storico.risposte[2] = [rispostaProva(2, { esito: 'scaduto' })];
     stripeRighe.push({ id: 902, cliente_id: 1, tipo: 'richiesta', modo: 'test', stato: 'rilasciato', payment_intent_id: 'pi_prova_2', importo_cent: 2007, incasso_cent: null, request_id: 2, aggiornato_il: fa(60000) });
@@ -1974,7 +1989,7 @@ test('richiesta annullata da te in fase 1: UNA riga grigia "Hai annullato la ric
       assert.match(t, /<dt>Merce · IVA esclusa · prezzi del banco<\/dt><dd>€ 64,50<\/dd>/);
       assert.doesNotMatch(t, /già comprensivi del servizio|Richiesta del|rimborsato/);
       assert.match(t, /<div class="card att-card pg-card" data-pagamenti data-stato="chiusa" data-pagamento="annullato">/);
-      assert.match(t, /<div class="pg-riga pg-nessuno">[\s\S]*?<div class="pg-nome">Nessun addebito<\/div>\s*<div class="pg-sub">Hai annullato la richiesta: il blocco di € 20,07 è stato tolto dalla carta\.<\/div>[\s\S]*?<div class="pg-importo" data-importo-app>€ 0,00<\/div>/);
+      assert.match(t, /<div class="pg-riga pg-nessuno">[\s\S]*?<div class="pg-nome">Nessun addebito<\/div>\s*<div class="pg-sub">Hai annullato la richiesta: il blocco di € 12,87 è stato tolto dalla carta\.<\/div>[\s\S]*?<div class="pg-importo" data-importo-app>€ 0,00<\/div>/);
       assert.equal((t.match(/class="pg-riga/g) || []).length, 1, 'una sola riga: niente materiale');
       assert.doesNotMatch(t, /data-nota-rinvio|pg-materiale|Ricevuta/, 'una richiesta annullata non si rinvia e non ha ricevuta');
     } finally {

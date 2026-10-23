@@ -7,7 +7,7 @@ const path = require('path');
 
 // Dal 22/10/2026 una filiale senza orari impostati NON riceve richieste: le prove che hanno bisogno di un banco aperto gli danno un orario vero (24 ore, a Roma).
 const SEMPRE_APERTO = Object.fromEntries(['lun', 'mar', 'mer', 'gio', 'ven', 'sab', 'dom'].map((g) => [g, [['00:00', '23:59']]]));
-const config = { servizio_pct: '10', iva_pct: '22', spedizione_fissa: '10', ordine_minimo: '33', finestra_conferma_min: '10' };
+const config = { servizio_pct: '10', iva_pct: '22', spedizione_fissa: '5', ordine_minimo: '33', finestra_conferma_min: '10' };
 const chiamate = []; // { s, p, modo }
 let richiestaDb = null; // la riga di requests che "esiste"
 let righeDb = []; // request_items + prodotto
@@ -51,7 +51,7 @@ const prepara = () => { chiamate.length = 0; richiestaDb = null; righeDb = []; b
 
 test('creaRichiesta: salva gli importi divisi (consegna e materiale) dai totali del carrello, accanto al pagamento', async () => {
   prepara();
-  const totali = await pricing.calcolaOrdine(righeCarrello, { costoConsegna: 10 });
+  const totali = await pricing.calcolaOrdine(righeCarrello, { costoConsegna: 5 });
   const { requestId } = await richieste.creaRichiesta({ id: 1, zona: 'Genova', ragione_sociale: 'Rossi' }, righeCarrello, {
     destinazione: 'Via Puggia 22/3', importo: totali.da_pagare_app, totali,
   });
@@ -60,8 +60,8 @@ test('creaRichiesta: salva gli importi divisi (consegna e materiale) dai totali 
   assert.ok(ins, 'INSERT INTO requests');
   // le colonne nuove, nell'ordine: corriere, servizio, iva_app, da_pagare_app, merce_banco, raee_banco, iva_banco, materiale_banco
   assert.match(ins.s, /corriere, servizio, iva_app, da_pagare_app, merce_banco, raee_banco, iva_banco, materiale_banco\)/);
-  assert.deepEqual(ins.p.slice(-8), [10, 6.45, 3.62, 20.07, 64.5, 0, 14.19, 78.69]);
-  assert.equal(ins.p[8], 20.07, 'pagamento_importo: quello addebitato');
+  assert.deepEqual(ins.p.slice(-8), [5, 6.45, 2.32, 12.87, 64.5, 0, 14.19, 78.69]);
+  assert.equal(ins.p[8], 12.87, 'pagamento_importo: quello addebitato');
   // placeholders e valori tornano: 10 parametri di prima + 8 nuovi
   assert.equal((ins.s.match(/\?/g) || []).length, ins.p.length);
   // richiesta in attesa: non è rimborsata, quindi niente data di rimborso
@@ -70,7 +70,7 @@ test('creaRichiesta: salva gli importi divisi (consegna e materiale) dai totali 
 
 test('creaRichiesta senza `totali` (script, prove): le colonne restano a 0 e le pagine ricalcolano', async () => {
   prepara();
-  await richieste.creaRichiesta({ id: 1, zona: 'Genova', ragione_sociale: 'Rossi' }, righeCarrello, { importo: 20.07 });
+  await richieste.creaRichiesta({ id: 1, zona: 'Genova', ragione_sociale: 'Rossi' }, righeCarrello, { importo: 12.87 });
   assert.deepEqual(inserimento().p.slice(-8), [0, 0, 0, 0, 0, 0, 0, 0]);
 });
 
@@ -82,20 +82,20 @@ test('"Rinvia richiesta": la consegna si ricalcola con i prezzi di OGGI e si ris
   const su = aggiornamento(/^UPDATE requests SET stato = 'in_attesa'/);
   assert.ok(su, 'la richiesta si riapre');
   assert.match(su.s, /corriere = \?, servizio = \?, iva_app = \?, da_pagare_app = \?, merce_banco = \?, raee_banco = \?, iva_banco = \?, materiale_banco = \?/);
-  // 10 + 11,45 di servizio = 21,45 + IVA 4,72 = 26,17; materiale 114,50 + IVA 25,19 = 139,69
-  assert.deepEqual(su.p.slice(1, 9), [10, 11.45, 4.72, 26.17, 114.5, 0, 25.19, 139.69]);
+  // 5 + 11,45 di servizio × 1,22 = 13,97 -> 18,97 (di cui IVA 3,42); materiale 114,50 + IVA 25,19 = 139,69
+  assert.deepEqual(su.p.slice(1, 9), [5, 11.45, 3.42, 18.97, 114.5, 0, 25.19, 139.69]);
   const incasso = aggiornamento(/^UPDATE requests SET pagamento_stato = 'pagato'/);
   assert.ok(incasso, 'si addebita di nuovo');
   assert.match(incasso.s, /rimborsato_il = NULL/);
-  assert.deepEqual(incasso.p, ['simulato', 26.17, 55], 'metodo, importo ricalcolato, richiesta');
+  assert.deepEqual(incasso.p, ['simulato', 18.97, 55], 'metodo, importo ricalcolato, richiesta');
 });
 
 test('"Rinvia richiesta" con Stripe: la richiesta torna a segnare come pagato quanto è stato autorizzato', async () => {
   prepara();
   richiestaDb = { id: 55, cliente_id: 1, stato: 'nessuna_offerta', pagamento_stato: 'rimborsato', pagamento_importo: 66.9 };
   righeDb = [riga(1, 54.5), riga(2, 10)];
-  await richieste.reinviaRichiesta(55, { metodoPagamento: 'stripe', importo: 20.07 });
-  assert.deepEqual(aggiornamento(/^UPDATE requests SET pagamento_stato = 'pagato'/).p, ['stripe', 20.07, 55]);
+  await richieste.reinviaRichiesta(55, { metodoPagamento: 'stripe', importo: 12.87 });
+  assert.deepEqual(aggiornamento(/^UPDATE requests SET pagamento_stato = 'pagato'/).p, ['stripe', 12.87, 55]);
   // una richiesta non chiusa non si riapre
   prepara();
   richiestaDb = { id: 55, cliente_id: 1, stato: 'in_attesa' };
@@ -114,18 +114,18 @@ test('rimborso: scrive anche QUANDO è stato rimborsato (rimborsato_il), per "Ri
 // ---- pricing: importiRichiesta / importi / calcolaDaRigheDb
 
 const richiestaSalvata = (extra = {}) => ({
-  corriere: 10, servizio: 6.45, iva_app: 3.62, da_pagare_app: 20.07, merce_banco: 64.5, raee_banco: 0, iva_banco: 14.19, materiale_banco: 78.69,
-  stato: 'in_attesa', pagamento_stato: 'pagato', pagamento_metodo: 'stripe', pagamento_importo: 20.07, pagato_il: '2026-10-17T09:00:00Z', rimborsato_il: null,
+  corriere: 5, servizio: 6.45, iva_app: 2.32, da_pagare_app: 12.87, merce_banco: 64.5, raee_banco: 0, iva_banco: 14.19, materiale_banco: 78.69,
+  stato: 'in_attesa', pagamento_stato: 'pagato', pagamento_metodo: 'stripe', pagamento_importo: 12.87, pagato_il: '2026-10-17T09:00:00Z', rimborsato_il: null,
   scade_il: '2026-10-17T09:10:00Z', ...extra,
 });
 const richiestaVecchia = (extra = {}) => richiestaSalvata({
   corriere: 0, servizio: 0, iva_app: 0, da_pagare_app: 0, merce_banco: 0, raee_banco: 0, iva_banco: 0, materiale_banco: 0, ...extra,
 });
 
-test('importiRichiesta, richiesta NUOVA: le colonne salvate (54,50 + 10,00 -> 20,07 in app, 78,69 al banco)', () => {
+test('importiRichiesta, richiesta NUOVA: le colonne salvate (54,50 + 10,00 -> 12,87 in app, 78,69 al banco)', () => {
   const i = pricing.importiRichiesta(richiestaSalvata());
   assert.deepEqual(i.app, {
-    corriere: 10, servizio: 6.45, imponibile: 16.45, iva: 3.62, totale: 20.07,
+    corriere: 5, servizio: 6.45, servizioIva: 7.87, imponibile: 10.55, iva: 2.32, totale: 12.87, ivaInclusa: true,
     conPagamento: true, pagatoIl: '2026-10-17T09:00:00Z', rimborsato: false, rimborsatoIl: null, metodo: 'stripe',
   });
   assert.deepEqual(i.banco, { merce: 64.5, raee: 0, imponibile: 64.5, iva: 14.19, totale: 78.69 });
@@ -133,19 +133,26 @@ test('importiRichiesta, richiesta NUOVA: le colonne salvate (54,50 + 10,00 -> 20
   assert.equal(i.ivaPct, 22);
 });
 
+test('importiRichiesta, richiesta nata COL MODELLO DI PRIMA (IVA sopra: 10 + 6,45 + 3,62 = 20,07): resta com\'era, con la sua riga IVA', () => {
+  const i = pricing.importiRichiesta(richiestaSalvata({ corriere: 10, servizio: 6.45, iva_app: 3.62, da_pagare_app: 20.07, pagamento_importo: 20.07 }));
+  assert.equal(i.app.ivaInclusa, false);
+  assert.deepEqual([i.app.corriere, i.app.servizio, i.app.servizioIva, i.app.imponibile, i.app.iva, i.app.totale], [10, 6.45, 6.45, 16.45, 3.62, 20.07]);
+  assert.equal(i.ivaPct, 22, 'l\'IVA % si ricava dal materiale, non dalle due parti insieme');
+});
+
 test('importiRichiesta, richiesta VECCHIA: si ricalcola sulle righe (stessa funzione del carrello); la consegna è quanto è stato addebitato', async () => {
-  const calcolato = await pricing.calcolaDaRigheDb([riga(1, 54.5), riga(2, 10)], { costoConsegna: 10 });
-  assert.equal(calcolato.da_pagare_app, 20.07, 'calcolaDaRigheDb = calcolaOrdine sulle righe del DB');
+  const calcolato = await pricing.calcolaDaRigheDb([riga(1, 54.5), riga(2, 10)], { costoConsegna: 5 });
+  assert.equal(calcolato.da_pagare_app, 12.87, 'calcolaDaRigheDb = calcolaOrdine sulle righe del DB');
   const i = pricing.importiRichiesta(richiestaVecchia({ pagamento_importo: 66.9 }), calcolato);
   assert.equal(i.app.totale, 66.9, 'pagamento_importo: quello davvero addebitato');
   assert.equal(i.app.servizio, 6.45);
-  assert.equal(i.app.iva, 3.62);
+  assert.equal(i.app.iva, 2.32);
   assert.deepEqual(i.banco, { merce: 64.5, raee: 0, imponibile: 64.5, iva: 14.19, totale: 78.69 });
   assert.equal(i.servizioPct, 10);
   assert.equal(i.ivaPct, 22);
   // senza pagamento (vecchio flusso): il calcolo, e niente "conPagamento"
   const senza = pricing.importiRichiesta(richiestaVecchia({ pagamento_stato: null, pagamento_importo: null, pagato_il: null }), calcolato);
-  assert.equal(senza.app.totale, 20.07);
+  assert.equal(senza.app.totale, 12.87);
   assert.equal(senza.app.conPagamento, false);
 });
 
@@ -164,7 +171,7 @@ test('importiRichiesta, rimborso: quanto è tornato indietro, e la data (rimbors
 });
 
 test('importi(): un solo punto per ordine o richiesta', async () => {
-  const calcolato = await pricing.calcolaDaRigheDb([riga(1, 54.5), riga(2, 10)], { costoConsegna: 10 });
+  const calcolato = await pricing.calcolaDaRigheDb([riga(1, 54.5), riga(2, 10)], { costoConsegna: 5 });
   assert.deepEqual(pricing.importi({ richiesta: richiestaSalvata() }), pricing.importiRichiesta(richiestaSalvata()));
   assert.deepEqual(pricing.importi({ richiesta: richiestaVecchia(), calcolato }), pricing.importiRichiesta(richiestaVecchia(), calcolato));
   const ordine = { totale_netto: 64.5, totale_finale: 70.95, costo_consegna: 10, contributo_raee: 0, iva: 17.81 };
@@ -211,7 +218,7 @@ test('creaRichiesta con i banchi chiusi: il ripiego "broadcast" non include i ch
   const chiusoAdesso = Object.fromEntries(Object.keys(SETTIMANA).map((g) => [g, []]));
   chiusoAdesso[['lun', 'mar', 'mer', 'gio', 'ven', 'sab', 'dom'][(new Date(Date.now() + 86400000 * 3).getUTCDay() + 6) % 7]] = [['07:30', '12:30']]; // aperto solo fra tre giorni
   banchiAttivi = [{ id: 2, nome: 'BOREA SRL', filiale: 'Fegino', orari: chiusoAdesso }];
-  const { candidati } = await richieste.creaRichiesta({ id: 1, zona: 'Genova', ragione_sociale: 'Rossi' }, righeCarrello, { destinazione: 'Via Puggia 22/3', importo: 20.07 });
+  const { candidati } = await richieste.creaRichiesta({ id: 1, zona: 'Genova', ragione_sociale: 'Rossi' }, righeCarrello, { destinazione: 'Via Puggia 22/3', importo: 12.87 });
   assert.deepEqual(candidati, []);
   const ins = inserimento();
   assert.equal(ins.p[2], 'nessuna_offerta', 'la richiesta nasce chiusa');
@@ -219,7 +226,7 @@ test('creaRichiesta con i banchi chiusi: il ripiego "broadcast" non include i ch
 
   // con un banco aperto (senza orari) invece parte
   prepara();
-  const { candidati: aperti } = await richieste.creaRichiesta({ id: 1, zona: 'Genova', ragione_sociale: 'Rossi' }, righeCarrello, { destinazione: 'Via Puggia 22/3', importo: 20.07 });
+  const { candidati: aperti } = await richieste.creaRichiesta({ id: 1, zona: 'Genova', ragione_sociale: 'Rossi' }, righeCarrello, { destinazione: 'Via Puggia 22/3', importo: 12.87 });
   assert.equal(aperti.length, 1);
   assert.equal(inserimento().p[2], 'in_attesa');
 });

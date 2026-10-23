@@ -45,6 +45,21 @@ test('oggetto e testo dell\'email "Pagamento ricevuto"', () => {
   assert.doesNotMatch(t, /Scarica la ricevuta|Segui l'ordine/, 'senza APP_URL i link non ci sono');
 });
 
+test('email con l\'IVA DENTRO il servizio (dal 23/10/2026): corriere 5,00 + servizio 7,87 = 12,87, senza la riga IVA', () => {
+  const nuovo = pricing.importiOrdine(
+    { totale_netto: 64.5, totale_finale: 70.95, costo_consegna: 5, contributo_raee: 0, iva: 16.51, servizio: 6.45, imponibile_app: 10.55, iva_app: 2.32, da_pagare_app: 12.87, imponibile_banco: 64.5, iva_banco: 14.19, materiale_banco: 78.69 },
+    { stato: 'pagato', importo: 12.87, metodo: 'stripe' }, 22, 10
+  );
+  const d = conAmbiente({}, () => dati({ importi: nuovo }));
+  assert.equal(email.oggettoPagamentoRicevuto(d), 'Pagamento ricevuto · Ordine #97 · € 12,87');
+  const t = email.testoPagamentoRicevuto(d);
+  assert.match(t, /Consegna in cantiere: € 12,87\n  Corriere · costo fisso: € 5,00\n  Servizio · 10% della merce \+ IVA: € 7,87\n\nMateriale € 78,69/);
+  assert.doesNotMatch(t, /IVA 22%/);
+  const html = conAmbiente({}, () => email.htmlPagamentoRicevuto(d));
+  assert.match(html, /€ 5,00<\/td>[\s\S]*?€ 7,87<\/td>/);
+  assert.doesNotMatch(html, /IVA 22%/);
+});
+
 test('HTML: larga 520px, intestazione blu col nome, riquadro verde con le tre voci, riquadro grigio sul materiale, due pulsanti, piè di pagina', () => {
   const html = conAmbiente({ APP_URL: 'https://minuteria.example/', AZIENDA_NOME: 'Cantiere Facile' }, () => email.htmlPagamentoRicevuto(dati({ azienda: azienda() })));
   assert.match(html, /<title>Pagamento ricevuto · Ordine #97 · € 20,07<\/title>/);

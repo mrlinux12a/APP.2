@@ -13,6 +13,7 @@ const righe = []; // whatsapp_messaggi
 const scritture = [];
 const sqlViste = [];
 let prossimoId = 1;
+let puntoVendita = null; // la riga di store_locations della filiale (null = la filiale non ne ha: vale la riga di distributors)
 
 function esegui(sql, p) {
   const s = sql.replace(/\s+/g, ' ').trim();
@@ -79,7 +80,7 @@ function esegui(sql, p) {
   if (/^SELECT \* FROM requests WHERE id = \?$/.test(s)) return { id: p[0], cliente_id: 7 };
   if (/^SELECT \* FROM request_responses WHERE id = \?$/.test(s)) return { id: p[0], distributor_id: 2 };
   if (/^SELECT \* FROM distributors WHERE id = \?$/.test(s)) return { id: 2, nome: 'BOREA SRL', filiale: 'Fegino', indirizzo: 'Via Castel Morrone 1', zona: 'Genova', geo_lat: 44.44, geo_lng: 8.93 };
-  if (/FROM store_locations/.test(s)) return null;
+  if (/FROM store_locations/.test(s)) return puntoVendita;
   if (/^SELECT \* FROM users WHERE id = \?$/.test(s)) return { id: 7, indirizzo_consegna: 'Via Puggia 22/3, 16131 Genova (GE)', geo_lat: 44.43, geo_lng: 8.95 };
   throw new Error('query inattesa: ' + s);
 }
@@ -195,6 +196,19 @@ test('un messaggio accodato porta il nome dell\'istanza e lo invia solo lei: due
   assert.deepEqual(sock.mandati.map((m) => m.contenuto.text).sort(), ['prima', 'vps']);
   assert.deepEqual(righe.map((r) => [r.testo, r.stato]), [['locale', 'da_inviare'], ['vps', 'inviato'], ['prima', 'inviato']]);
   wa._prova.impostaSocket(null);
+});
+
+test('il "nuova consegna" dice dove si ritira: il punto vendita della filiale, con CAP, città e provincia e il link alla posizione', async () => {
+  ambiente({ WHATSAPP_ATTIVO: '1', WHATSAPP_ISTANZA: 'locale' });
+  // ritiro provvisorio delle due filiali (23/10/2026): l'Enoteca Squillari
+  puntoVendita = { indirizzo: 'Enoteca Squillari 1, Via Antonio Cantore, 266r', cap: '16149', citta: 'Genova', provincia: 'GE', geo_lat: 44.4127894, geo_lng: 8.8890556 };
+  try {
+    await wa.accodaRitiroConsegna(5, 50);
+  } finally {
+    puntoVendita = null;
+  }
+  assert.match(righe[0].testo, /1️⃣ PRELIEVO MERCI\nBOREA SRL — Fegino\nEnoteca Squillari 1, Via Antonio Cantore, 266r, 16149 Genova GE\n📍 https:\/\/www\.google\.com\/maps\/search\/\?api=1&query=44\.4127894,8\.8890556\n/);
+  assert.match(righe[0].testo, /tempo che ci metti ad arrivare dal venditore \(tappa 1, prelievo merci\)/);
 });
 
 test('l\'eliminazione di un messaggio scaduto la fa l\'istanza che l\'ha mandato, non l\'altra', async () => {

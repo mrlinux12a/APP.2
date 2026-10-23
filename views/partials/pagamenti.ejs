@@ -110,8 +110,11 @@
           <h3>Consegna · <%= bloccato ? 'bloccata sulla carta' : 'pagata' %></h3>
           <dl>
             <div><dt><span class="pg-et">Corriere</span> <span class="pg-sp">· costo fisso</span></dt><dd>€ <%= euro(app.corriere) %></dd></div>
-            <div><dt><span class="pg-et">Servizio</span> <span class="pg-sp">· <%= importi.servizioPct %>% della merce</span></dt><dd>€ <%= euro(app.servizio) %></dd></div>
-            <div><dt><span class="pg-et">IVA <%= importi.ivaPct %>%</span> <span class="pg-sp">· su € <%= euro(app.imponibile) %></span></dt><dd>€ <%= euro(app.iva) %></dd></div>
+            <%# Dal 23/10/2026 il servizio ha l'IVA dentro e non c'è la riga IVA; gli importi nati prima (app.ivaInclusa false) hanno ancora l'IVA sopra, con la sua riga. %>
+            <div><dt><span class="pg-et">Servizio</span> <span class="pg-sp">· <%= importi.servizioPct %>% della merce<%= app.ivaInclusa ? ' + IVA' : '' %></span></dt><dd>€ <%= euro(app.servizioIva) %></dd></div>
+            <% if (!app.ivaInclusa) { %>
+              <div><dt><span class="pg-et">IVA <%= importi.ivaPct %>%</span> <span class="pg-sp">· su € <%= euro(app.imponibile) %></span></dt><dd>€ <%= euro(app.iva) %></dd></div>
+            <% } %>
           </dl>
         </section>
         <section class="pg-piccolo pg-piccolo-grigio" aria-label="Materiale <%= bloccato ? 'se ' + nomeBanco + ' conferma' : aChi %>">

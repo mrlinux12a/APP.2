@@ -216,6 +216,24 @@ test('modelloRicevuta: cosa c\'è scritto (titolo, numero, emessa da / intestata
   assert.deepEqual(m.piede, ['Minuteria · Via dell\'Esempio 1, 16100 Genova (GE) · P. IVA 01234567890 · assistenza@example.com', 'La fattura elettronica è inviata tramite SDI.']);
 });
 
+test('modelloRicevuta con l\'IVA DENTRO il servizio (dal 23/10/2026): corriere e servizio sommano al totale, imponibile e IVA sono "di cui"', async () => {
+  scenario();
+  const pricing = require('../src/pricing');
+  const d = await conAzienda({ AZIENDA_NOME: 'Minuteria' }, () => ricevute.datiRicevuta(97, { clienteId: 1 }));
+  const nuovo = pricing.importiOrdine(
+    { totale_netto: 64.5, totale_finale: 70.95, costo_consegna: 5, contributo_raee: 0, iva: 16.51, servizio: 6.45, imponibile_app: 10.55, iva_app: 2.32, da_pagare_app: 12.87, imponibile_banco: 64.5, iva_banco: 14.19, materiale_banco: 78.69 },
+    null, 22, 10
+  );
+  const m = ricevute.modelloRicevuta({ ...d, importi: nuovo });
+  assert.deepEqual(m.voci, [
+    { testo: 'Corriere · consegna in cantiere (costo fisso)', importo: '€ 5,00', grassetto: false },
+    { testo: 'Servizio · 10% sulla merce di € 64,50 + IVA', importo: '€ 7,87', grassetto: false },
+    { testo: 'Di cui imponibile', importo: '€ 10,55', grassetto: false },
+    { testo: 'Di cui IVA 22%', importo: '€ 2,32', grassetto: false },
+  ]);
+  assert.deepEqual(m.totale, { etichetta: 'Totale pagato', importo: '€ 12,87' });
+});
+
 test('modelloRicevuta: i dati dell\'azienda vengono dal .env, mai dal codice; quello che manca non si stampa (nemmeno la nota fiscale)', async () => {
   scenario();
   const d = await conAzienda({}, () => ricevute.datiRicevuta(97, { clienteId: 1 }));

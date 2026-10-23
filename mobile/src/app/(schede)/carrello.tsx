@@ -169,9 +169,8 @@ export default function Carrello() {
                 <Card stile={{ backgroundColor: c.accentoChiaro, borderColor: c.accentoChiaro }}>
                   <Text style={[stili.cpEtichetta, { color: c.accento }]}>PAGHI ORA · CONSEGNA IN CANTIERE</Text>
                   <RigaRiepilogo voce="Corriere" valore={'€ ' + r.riepilogo.app_corriere} />
-                  <RigaRiepilogo voce={`Servizio · ${r.riepilogo.servizio_pct}% della merce`} valore={'€ ' + r.riepilogo.app_servizio} />
-                  <RigaRiepilogo voce={`IVA ${r.riepilogo.iva_pct}%`} valore={'€ ' + r.riepilogo.app_iva} />
-                  <RigaRiepilogo voce="Totale da pagare ora" valore={'€ ' + r.riepilogo.app_totale} forte />
+                  <RigaRiepilogo voce={`Servizio · ${r.riepilogo.servizio_pct}% della merce + IVA`} valore={'€ ' + r.riepilogo.app_servizio} />
+                  <RigaRiepilogo voce="Totale da pagare ora · IVA inclusa" valore={'€ ' + r.riepilogo.app_totale} forte />
                 </Card>
                 <Card>
                   <Text style={[stili.cpEtichetta, { color: c.grigio }]}>

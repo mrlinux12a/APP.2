@@ -277,14 +277,15 @@ async function datiRitiro(distributorId) {
   const d = await db.prepare('SELECT * FROM distributors WHERE id = ?').get(distributorId);
   const s = await db
     .prepare(
-      `SELECT indirizzo, citta, geo_lat, geo_lng FROM store_locations
+      `SELECT indirizzo, cap, citta, provincia, geo_lat, geo_lng FROM store_locations
         WHERE distributor_id = ? AND attivo = 1 AND geo_lat IS NOT NULL ORDER BY id LIMIT 1`
     )
     .get(distributorId);
   return {
     nome: [d.nome, d.filiale].filter(Boolean).join(' — '),
+    // "Via Antonio Cantore, 266r, 16149 Genova GE": il CAP e la provincia ci sono, il corriere deve trovare il posto giusto.
     indirizzo: s
-      ? [s.indirizzo, s.citta].filter(Boolean).join(', ')
+      ? [s.indirizzo, [s.cap, s.citta, s.provincia].filter(Boolean).join(' ')].filter(Boolean).join(', ')
       : [d.indirizzo, d.zona].filter(Boolean).join(', '),
     lat: s ? s.geo_lat : d.geo_lat,
     lng: s ? s.geo_lng : d.geo_lng,

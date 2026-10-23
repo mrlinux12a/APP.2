@@ -59,8 +59,8 @@ function vistaRiepilogo(totali, { nArticoli, minimo }) {
   return {
     // Consegna in cantiere: la paghi ORA in app
     app_corriere: e(app.corriere),
-    app_servizio: e(app.servizio),
-    app_imponibile: e(app.imponibile),
+    app_servizio: e(app.servizioIva), // il servizio con l'IVA dentro: nel riepilogo non c'è più la riga IVA (23/10/2026)
+    app_imponibile: e(app.imponibile), // "di cui": non sono righe del riepilogo, restano per chi le vuole (API)
     app_iva: e(app.iva),
     app_totale: e(app.totale),
     servizio_pct: String(totali.servizioPct),

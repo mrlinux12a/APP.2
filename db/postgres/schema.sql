@@ -252,7 +252,7 @@ CREATE INDEX IF NOT EXISTS idx_sottocategorie_macro ON sottocategorie(macro_slug
 
 INSERT INTO config (chiave, valore) VALUES ('finestra_scelta_min', '5') ON CONFLICT (chiave) DO NOTHING;
 INSERT INTO config (chiave, valore) VALUES ('ordine_minimo', '33') ON CONFLICT (chiave) DO NOTHING;
-INSERT INTO config (chiave, valore) VALUES ('spedizione_fissa', '10') ON CONFLICT (chiave) DO NOTHING;
+INSERT INTO config (chiave, valore) VALUES ('spedizione_fissa', '5') ON CONFLICT (chiave) DO NOTHING;
 INSERT INTO config (chiave, valore) VALUES ('velocita_media_kmh', '25') ON CONFLICT (chiave) DO NOTHING;
 
 -- colonne aggiunte via migrazioni (già in schema base per pg)

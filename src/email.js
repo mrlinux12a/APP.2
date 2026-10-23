@@ -106,8 +106,8 @@ function htmlPagamentoRicevuto(d) {
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
           <tr><td style="padding-bottom:6px;font-size:15px;font-weight:700;color:#1F5F2E">Consegna in cantiere</td><td align="right" style="padding-bottom:6px;font-size:26px;font-weight:800;color:#1F5F2E">€ ${euro(app.totale)}</td></tr>
           ${riga('Corriere · costo fisso', app.corriere)}
-          ${riga(`Servizio · ${d.importi.servizioPct}% della merce`, app.servizio)}
-          ${riga(`IVA ${d.importi.ivaPct}%`, app.iva)}
+          ${riga(`Servizio · ${d.importi.servizioPct}% della merce${app.ivaInclusa ? ' + IVA' : ''}`, app.servizioIva)}
+          ${app.ivaInclusa ? '' : riga(`IVA ${d.importi.ivaPct}%`, app.iva)}
         </table>
       </td></tr></table>
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:14px;background:#F7F6F2;border:1px solid #E2DED3;border-radius:14px"><tr><td style="padding:14px 18px;font-size:14px;line-height:1.5;color:#3F3E38">
@@ -138,8 +138,8 @@ function testoPagamentoRicevuto(d) {
     '',
     `Consegna in cantiere: € ${euro(app.totale)}`,
     `  Corriere · costo fisso: € ${euro(app.corriere)}`,
-    `  Servizio · ${d.importi.servizioPct}% della merce: € ${euro(app.servizio)}`,
-    `  IVA ${d.importi.ivaPct}%: € ${euro(app.iva)}`,
+    `  Servizio · ${d.importi.servizioPct}% della merce${app.ivaInclusa ? ' + IVA' : ''}: € ${euro(app.servizioIva)}`,
+    app.ivaInclusa ? '' : `  IVA ${d.importi.ivaPct}%: € ${euro(app.iva)}`,
     '',
     `Materiale € ${euro(d.importi.banco.totale)} IVA inclusa: non è in questo pagamento, lo paghi a ${d.ditta || 'il banco'} con la sua fattura.`,
     '',

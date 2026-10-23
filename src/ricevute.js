@@ -120,12 +120,21 @@ function modelloRicevuta(d) {
     intestataA: [c.ragione_sociale, indirizzoDi(c), fiscaliCliente].filter(Boolean),
     ordine: `Ordine #${d.ordineId}${d.richiestaId ? ` (richiesta #${d.richiestaId})` : ''}${d.ditta ? ` · materiale da ${d.ditta}` : ''}`,
     consegna: d.destinazione ? `Consegna in cantiere: ${d.destinazione}` : '',
-    voci: [
-      { testo: 'Corriere · consegna in cantiere (costo fisso)', importo: euro(app.corriere), grassetto: false },
-      { testo: `Servizio · ${d.importi.servizioPct}% sulla merce di ${euro(d.importi.banco.merce)}`, importo: euro(app.servizio), grassetto: false },
-      { testo: 'Imponibile', importo: euro(app.imponibile), grassetto: true },
-      { testo: `IVA ${d.importi.ivaPct}%`, importo: euro(app.iva), grassetto: false },
-    ],
+    // Dal 23/10/2026 il servizio ha l'IVA dentro: le voci sommano al totale e imponibile e IVA sono "di cui". Le ricevute degli importi nati prima
+    // (app.ivaInclusa false) restano com'erano, con l'IVA sopra.
+    voci: app.ivaInclusa
+      ? [
+          { testo: 'Corriere · consegna in cantiere (costo fisso)', importo: euro(app.corriere), grassetto: false },
+          { testo: `Servizio · ${d.importi.servizioPct}% sulla merce di ${euro(d.importi.banco.merce)} + IVA`, importo: euro(app.servizioIva), grassetto: false },
+          { testo: 'Di cui imponibile', importo: euro(app.imponibile), grassetto: false },
+          { testo: `Di cui IVA ${d.importi.ivaPct}%`, importo: euro(app.iva), grassetto: false },
+        ]
+      : [
+          { testo: 'Corriere · consegna in cantiere (costo fisso)', importo: euro(app.corriere), grassetto: false },
+          { testo: `Servizio · ${d.importi.servizioPct}% sulla merce di ${euro(d.importi.banco.merce)}`, importo: euro(app.servizio), grassetto: false },
+          { testo: 'Imponibile', importo: euro(app.imponibile), grassetto: true },
+          { testo: `IVA ${d.importi.ivaPct}%`, importo: euro(app.iva), grassetto: false },
+        ],
     totale: { etichetta: rimborso ? 'Totale rimborsato' : 'Totale pagato', importo: euro(app.totale) },
     pagamento: {
       etichetta: rimborso ? 'RIMBORSO' : 'PAGAMENTO',

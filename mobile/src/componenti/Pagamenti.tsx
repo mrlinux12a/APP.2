@@ -108,8 +108,8 @@ function Dettaglio({ importi, bloccato, aChi, nomeBanco }: { importi: Importi; b
           <View style={[stili.riquadro, { backgroundColor: c.verdeChiaro }]}>
             <Text style={[stili.riquadroTitolo, { color: c.verde }]}>Consegna · {bloccato ? 'bloccata sulla carta' : 'pagata'}</Text>
             {voce('Corriere', '· costo fisso', cons.corriere)}
-            {voce('Servizio', `· ${cons.servizio_pct}% della merce`, cons.servizio)}
-            {voce(`IVA ${cons.iva_pct}%`, `· su € ${cons.imponibile}`, cons.iva)}
+            {voce('Servizio', `· ${cons.servizio_pct}% della merce${cons.iva_inclusa ? ' + IVA' : ''}`, cons.servizio)}
+            {cons.iva_inclusa ? null : voce(`IVA ${cons.iva_pct}%`, `· su € ${cons.imponibile}`, cons.iva)}
           </View>
           <View style={[stili.riquadro, { backgroundColor: c.sfondo }]}>
             <Text style={[stili.riquadroTitolo, { color: c.grigio }]}>Materiale · {bloccato ? `se ${nomeBanco} conferma` : aChi}</Text>

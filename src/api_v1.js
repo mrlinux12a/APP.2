@@ -421,11 +421,12 @@ function importiJson(i) {
     consegna: {
       totale: e2(i.app.totale),
       corriere: e2(i.app.corriere),
-      servizio: e2(i.app.servizio),
+      servizio: e2(i.app.servizioIva), // il servizio come si mostra: con l'IVA dentro dal 23/10/2026 (`iva_inclusa`)
       servizio_pct: i.servizioPct,
       imponibile: e2(i.app.imponibile),
-      iva: e2(i.app.iva),
+      iva: e2(i.app.iva), // se `iva_inclusa` è "di cui" (già nel totale), altrimenti una riga in più (importi di prima)
       iva_pct: i.ivaPct,
+      iva_inclusa: !!i.app.ivaInclusa,
     },
     materiale: {
       totale: e2(i.banco.totale),
