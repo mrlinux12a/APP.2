@@ -18,8 +18,8 @@ Apri `http://localhost:3000`. Il DB di produzione ha già utenti e catalogo: `np
 ai valori della tabella qui sotto. `npm install` non lo lancia più.
 
 Sulla tua macchina `.env` punta al **Supabase Postgres di produzione condiviso**: `npm start` in
-locale scrive quindi sul DB vero. Senza `.env` l'app partirebbe in SQLite, ma è un percorso
-legacy non più mantenuto (dettagli in `CLAUDE.md`).
+locale scrive quindi sul DB vero. Il database è solo Postgres (SQLite non esiste più): senza `DATABASE_URL`
+nel `.env` l'app prova un Postgres locale di default (`postgres://minuteria:minuteria@localhost:5432/minuteria`).
 
 ## Produzione (VPS)
 
@@ -146,7 +146,7 @@ non si impostano più da lì (vedi "Sconti al banco").
 > **Non ancora applicato**: il codice non blocca né filtra sulla base dell'approvazione — un
 > cliente registrato ma non approvato da nessun banco può comunque inviare richieste, e queste
 > arrivano a **tutti** i distributori attivi, non solo a quelli che l'hanno approvato
-> (`distributoriApprovati()` in `src/anagrafiche.js` esiste ma nessuna route la richiama). Il
+> (nessuna funzione filtra i banchi per approvazione). Il
 > comportamento inteso ("finché nessuno approva non può ordinare") non è quello reale:
 > verificarlo prima di contarci in produzione.
 
@@ -323,9 +323,8 @@ la rotta risponde 404 al ruolo `distributore`; per gli altri ruoli esiste ancora
 `store_locations` ha oggi **2
 righe**: le filiali Borea (Fegino e Staglieno), con coordinate OpenStreetMap; da lì leggono anche
 la stima di consegna e il messaggio ai corrieri. Gli altri punti vendita (AFIS, Cambielli, Fidra,
-disattivati) sono solo in `db/punti_vendita.js`: lo script che li carica,
-`db/postgres/geocodifica.js`, **non parte** (fa `require('./punti_vendita')` ma il file sta in
-`db/`, non in `db/postgres/`).
+disattivati) non hanno più un punto vendita nel database: lo script che li caricava
+(`db/punti_vendita.js` e `db/postgres/geocodifica.js`) è stato eliminato il 24/10/2026 (resta nella cronologia di git).
 
 ## Il flusso, passo per passo
 
@@ -679,7 +678,12 @@ Le pagine che Google Play chiede sono nel sito: `/privacy` e `/elimina-account` 
 ## Struttura
 
 ```
-server.js              entrypoint Express e rotte del sito
+server.js              avvio: ambiente, database, app, cicli di vita (scadenze, WhatsApp, chiusura pulita)
+src/app.js             compone l'app Express: middleware nell'ordine giusto, route, gestori d'errore
+src/config/            ambiente (.env), impostazioni delle viste, soglie dei limiti di richieste, soglie della bacheca del banco
+src/middleware/        sicurezza (helmet), limiti (express-rate-limit), origine, sessione, corpo, compressione, file statici, contesto delle viste
+src/routes/            le rotte del sito divise per argomento (autenticazione, catalogo, carrello, richieste, pagamenti, ordini, banco...)
+src/services/          pezzi condivisi dalle rotte (banco, carrello in sessione, ciclo di vita, database, striscia ordini)
 src/api_v1.js          API JSON dell'app nativa
 src/flusso_cliente.js  richiesta pagata → ordine → stato ordini, condiviso fra sito e app
 src/token_app.js       token di accesso dell'app (solo hash nel DB)
@@ -689,7 +693,7 @@ src/richieste.js       ciclo di vita della richiesta: risposte dei banchi, scade
 src/pagamenti.js       pagamento dell'installatore: simulato o Stripe, punti di aggancio del flusso (rimborso, incasso)
 src/stripe_pagamenti.js  Stripe: PaymentIntent, pagina di pagamento, webhook, incassi/rilasci/rimborsi (carta autorizzata e poi incassata)
 src/whatsapp.js        gruppo WhatsApp dei corrieri (Baileys): messaggi, "preso", coda
-src/anagrafiche.js     registrazione cliente, approvazione banco, sconti per ambito
+src/anagrafiche.js     registrazione cliente, approvazione banco, legami cliente-banco
 src/consegna.js        tragitto dal banco all'installatore (mappa, con ripiego sulla stima in linea d'aria)
 src/percorso.js        tempo di guida fra due punti da un servizio di mappe (Google Maps se c'è la chiave, poi OSRM proprio, poi Valhalla)
 src/corriere.js        orari del corriere: il ritiro che vede il banco (risposta su WhatsApp + minuti scritti)
@@ -707,8 +711,7 @@ src/memo.js            cache a scadenza (60 s) per letture che il server non scr
 src/format.js          date, tempi di consegna, countdown
 src/auth.js            middleware di autenticazione/ruolo
 src/sede_installatori.js  indirizzo e coordinate fissi degli installatori (provvisorio)
-db/                    db/postgres (produzione, con schema e funzioni della ricerca) e
-                       db/sqlite (legacy, vedi CLAUDE.md)
+db/postgres/           connessione, schema (schema.sql, l'unico), funzioni della ricerca, seed e importazione dei listini
 db/seed.js             dati demo (utenti, distributori, legami cliente-banco)
 scripts/               schema (apply_schema_pg.js, applica_blocco_schema.js), sottocategorie, icone app,
                        export, prova_whatsapp.js, migrazioni una tantum (filiali Borea, Via Puggia)

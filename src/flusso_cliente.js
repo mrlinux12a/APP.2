@@ -18,6 +18,7 @@ const { QUANTITA_MASSIMA, leggiId, leggiQuantita } = require('./input');
 // Errore "previsto" del flusso (ordine minimo, richiesta già aperta...): il chiamante lo
 // mostra così com'è. codice serve a chi deve decidere dove mandare l'utente.
 class ErroreFlusso extends Error {
+  // Crea l'errore del flusso: un codice per i programmi, un titolo e un messaggio per le persone, più eventuali dati in più.
   constructor(codice, titolo, messaggio, extra = {}) {
     super(messaggio);
     this.codice = codice;
@@ -565,6 +566,7 @@ function ultimoInvio(richiesta) {
   return creato ? richiesta.creato_il : null;
 }
 
+// Gli orari delle tre fasi di un ordine (inviata, confermata, consegnata) e i minuti trascorsi dall'ultimo invio alla consegna.
 function fasiOrdine(ordine, richiesta) {
   const inviata = ultimoInvio(richiesta);
   const consegnata = ordine.consegnato_il || null;
@@ -579,6 +581,8 @@ function fasiOrdine(ordine, richiesta) {
   };
 }
 
+// Raccoglie tutto per la pagina di un ordine: righe, cliente, banco, richiesta, importi, pagamento, tempi di arrivo e fasi. Le letture partono
+// insieme per fare un solo giro di rete.
 async function dettaglioOrdine(ordine) {
   // Le letture non dipendono una dall'altra (tutto parte da `ordine`, già letto): partono insieme, un solo giro di rete
   // invece di cinque in fila. Questa pagina si apre a ogni passaggio fra gli ordini di "Stato ordini".
@@ -816,6 +820,8 @@ function leggiRichiesteRecenti(clienteId) {
     .all(clienteId);
 }
 
+// Legge le richieste recenti del cliente con ordine, risposte dei banchi e secondi rimasti, aggiornando la scadenza solo di quelle che ne hanno
+// bisogno.
 async function richiesteAttiveClienteLeggere(recenti) {
   // La scadenza si aggiorna solo per le richieste che ne hanno bisogno: quelle del vecchio flusso ('con_offerte')
   // e quelle in attesa con la finestra già finita. Una richiesta in attesa con tempo davanti non ha niente da
@@ -902,6 +908,7 @@ function scaduteRecenti(cards) {
     .sort((a, b) => secondiAllaScomparsa(a.richiesta) - secondiAllaScomparsa(b.richiesta) || a.richiesta.id - b.richiesta.id);
 }
 
+// Indica a quale pagina porta un'attività: l'ordine se è già nato, altrimenti la richiesta.
 function riferimentoAttivita(card) {
   return card.step === 3 ? { tipo: 'ordine', id: card.ordine.id } : { tipo: 'richiesta', id: card.richiesta.id };
 }

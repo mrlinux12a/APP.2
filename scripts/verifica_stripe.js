@@ -13,6 +13,7 @@ if (argomento) process.env.STRIPE_MODO = argomento.slice('--modo='.length);
 
 const config = require('../src/stripe_config');
 
+// Nasconde una chiave quasi per intero, così nel terminale se ne vedono solo l'inizio e la fine.
 const maschera = (k) => (k ? (k.length > 14 ? k.slice(0, 8) + '…' + k.slice(-4) : k.slice(0, 4) + '…') : '(manca)');
 const OK = '  ✔ ';
 const NO = '  ✘ ';
@@ -101,8 +102,10 @@ const EVENTI_ATTESI = ['payment_intent.amount_capturable_updated', 'payment_inte
   fine(problemi);
 })().catch((e) => { console.error('ERRORE', e.message); process.exit(1); });
 
+// Aggiunge il segno degli avvisi davanti a una frase.
 function AV_(testo) { return AVV + testo; }
 
+// Scrive il riepilogo finale e termina con un codice che dice se c'è qualcosa da sistemare.
 function fine(problemi) {
   console.log('');
   console.log(problemi ? `${problemi} cosa/e da sistemare prima di incassare.` : 'Tutto a posto per questo modo.');

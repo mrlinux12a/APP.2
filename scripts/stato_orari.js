@@ -9,6 +9,7 @@ require('dotenv').config({ quiet: true });
 const richieste = require('../src/richieste');
 const orari = require('../src/orari');
 
+// L'istante da controllare: quello scritto sulla riga di comando ("AAAA-MM-GG HH:MM"), altrimenti adesso.
 function quando() {
   const testo = process.argv[2];
   if (!testo) return new Date();

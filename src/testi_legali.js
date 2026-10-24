@@ -6,6 +6,7 @@
 // quanto li tiene). Va riletto e approvato da chi risponde del trattamento dei dati prima di pubblicare l'app.
 const { azienda } = require('./azienda');
 
+// I dati di chi gestisce il servizio (nome, indirizzo, partita IVA), presi dal .env, da scrivere nei testi legali.
 function titolare() {
   const az = azienda();
   const nome = az.ragioneSociale || az.nome;
@@ -13,10 +14,12 @@ function titolare() {
   return { az, nome, dettagli };
 }
 
+// La frase su come contattare il titolare: l'email se c'è, altrimenti un rimando generico.
 function contatto(az) {
   return az.email ? `all’indirizzo ${az.email}` : 'ai recapiti indicati dal servizio';
 }
 
+// Il testo dell'informativa sulla privacy, diviso in sezioni, per la pagina pubblica.
 function privacy() {
   const { az, nome, dettagli } = titolare();
   return {
@@ -78,6 +81,7 @@ function privacy() {
   };
 }
 
+// Il testo della pagina "Eliminazione dell'account" (richiesta da Google Play), diviso in sezioni.
 function eliminazione() {
   const { az } = titolare();
   return {

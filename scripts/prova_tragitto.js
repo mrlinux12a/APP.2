@@ -15,6 +15,7 @@ const consegna = require('../src/consegna');
 
 const FEGINO = { lat: 44.4470549, lng: 8.8890734 };
 
+// Legge due numeri scritti come "lat,lng" e li restituisce come coordinate; niente se non è in quella forma.
 function coppia(testo) {
   const m = /^\s*(-?\d+(?:[.,]\d+)?)\s*[,;]\s*(-?\d+(?:[.,]\d+)?)\s*$/.exec(String(testo || ''));
   return m ? { lat: Number(m[1].replace(',', '.')), lng: Number(m[2].replace(',', '.')) } : null;

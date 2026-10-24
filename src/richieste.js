@@ -24,6 +24,7 @@ async function richiestaConChiave(clienteId, chiaveInvio) {
   );
 }
 
+// Gli articoli di una richiesta, con i dati del catalogo (codice, nome, prezzo di listino, sconto base, RAEE).
 async function righeRichiesta(requestId) {
   return db
     .prepare(
@@ -55,6 +56,7 @@ async function righeRichieste(requestIds) {
   return perRichiesta;
 }
 
+// Le risposte dei banchi a una richiesta, con il nome del banco e della filiale.
 async function risposteRichiesta(requestId) {
   return db
     .prepare(
@@ -99,6 +101,7 @@ function raggruppaRisposteDitta(risposte) {
   return [...gruppi.values()];
 }
 
+// La risposta di un banco a una richiesta, se c'è.
 async function getRisposta(requestId, distributorId) {
   return db
     .prepare('SELECT * FROM request_responses WHERE request_id = ? AND distributor_id = ?')
@@ -142,6 +145,7 @@ async function distributoriCandidati(productIds, zona, clienteId = null, quando 
   return (await distributoriAttivi()).filter((d) => orari.apertoAdesso(d.orari, quando));
 }
 
+// Tutti i banchi attivi, in ordine di nome.
 async function distributoriAttivi() {
   return db.prepare(`SELECT * FROM distributors WHERE attivo = 1 ORDER BY nome`).all();
 }
@@ -355,6 +359,7 @@ async function reinviaRichiesta(requestId, { metodoPagamento = pagamenti.METODO_
 // degli ordini. Riceve la richiesta e la risposta, restituisce l'id dell'ordine o null (la richiesta
 // non era più aperta).
 let assegnatore = null;
+// Registra la funzione che crea l'ordine quando una risposta diventa valida (la fornisce src/flusso_cliente.js quando si carica).
 function impostaAssegnatore(fn) {
   assegnatore = fn;
 }

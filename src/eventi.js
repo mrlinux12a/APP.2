@@ -86,6 +86,7 @@ function chiudiTutti() {
   canali.clear();
 }
 
+// Quante pagine hanno il canale degli eventi aperto: di un utente, o in tutto se non si indica nessuno (serve alle prove).
 function connessioniAperte(utenteId) {
   if (utenteId === undefined) return [...canali.values()].reduce((somma, insieme) => somma + insieme.size, 0);
   return canali.has(utenteId) ? canali.get(utenteId).size : 0;

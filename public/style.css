@@ -60,7 +60,7 @@ a, button, input, select, textarea, summary, label { touch-action: manipulation;
 /* I pulsanti non ereditano il font da soli: senza questa regola restano in Arial. */
 button { font-family: inherit; }
 
-h1, .domanda, .sezione-titolo, .appbar .titolo, .nome, .tessera-grande .nome {
+h1, .domanda, .sezione-titolo, .appbar .titolo, .nome {
   font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
 }
 
@@ -217,12 +217,6 @@ a { color: var(--blu); }
 
 /* ---------- Macro categorie ---------- */
 
-.griglia-macro {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
-
 .tessera {
   background: var(--surface);
   border: 1px solid var(--bordo);
@@ -238,28 +232,8 @@ a { color: var(--blu); }
 .tessera .emoji { font-size: 1.6rem; }
 .tessera .nome { font-weight: 700; line-height: 1.25; }
 .tessera .conta { color: var(--grigio); font-size: 0.8rem; margin-top: auto; }
-.tessera-ico {
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  background: var(--blu-chiaro);
-  color: var(--blu);
-  font-size: 1.15rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
 
 /* ---------- Prodotti ---------- */
-
-.gruppo-titolo {
-  font-weight: 700;
-  color: var(--blu);
-  margin: 16px 2px 6px;
-  font-size: 0.95rem;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
 
 .prodotto {
   display: flex;
@@ -440,20 +414,6 @@ a { color: var(--blu); }
 .btn-logout { background: transparent; color: var(--su-blu); border: 1px solid currentColor; border-radius: 6px; padding: 8px 14px; font-weight: 600; }
 
 /* barra fissa in fondo con il pulsante Procedi */
-.barra-azione {
-  position: fixed;
-  /* Sopra la pillola della navbar (z-index 25), non sopra di lei: prima stava a bottom: 0 e la nascondeva. */
-  bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + 8px);
-  left: 0;
-  right: 0;
-  z-index: 24;
-  background: var(--surface);
-  border-top: 1px solid var(--bordo);
-  box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.08);
-  padding: 10px 14px;
-}
-.barra-azione .interno { max-width: 520px; margin: 0 auto; display: flex; gap: 10px; align-items: center; }
-.barra-azione .conteggio { font-size: 0.85rem; color: var(--grigio); }
 
 /* ---------- Attesa / countdown ---------- */
 
@@ -461,28 +421,7 @@ a { color: var(--blu); }
   text-align: center;
   padding: 26px 16px;
 }
-.cerchio-attesa {
-  width: 116px;
-  height: 116px;
-  border-radius: 50%;
-  margin: 0 auto 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.6rem;
-  font-weight: 700;
-  color: var(--blu);
-  background: var(--surface);
-  border: 4px solid var(--blu-chiaro);
-  border-top-color: var(--blu);
-  animation: gira 2.4s linear infinite;
-}
-.cerchio-attesa span { animation: gira-inverso 2.4s linear infinite; }
 @keyframes gira { to { transform: rotate(360deg); } }
-@keyframes gira-inverso { to { transform: rotate(-360deg); } }
-@media (prefers-reduced-motion: reduce) {
-  .cerchio-attesa, .cerchio-attesa span { animation: none; }
-}
 
 .pill-distributore {
   display: flex;
@@ -565,8 +504,6 @@ a { color: var(--blu); }
   margin: 8px 2px 16px;
 }
 
-.nota-mini { color: var(--grigio); font-size: 0.75rem; line-height: 1.4; margin: 10px 2px 4px; }
-
 /* Una .nota che è un link ("Vedi tutti gli ordini →"): area di tocco da 44px invece dei 19px del testo. */
 a.nota { display: flex; align-items: center; min-height: 44px; margin-top: 0; margin-bottom: 0; }
 
@@ -587,19 +524,6 @@ a.nota { display: flex; align-items: center; min-height: 44px; margin-top: 0; ma
 .ordine-hero.verde .sotto { color: var(--verde); }
 .ordine-hero.verde { background: #cdedd4; }
 .ordine-hero.verde .tempo { color: var(--verde); }
-
-.link-discreto {
-  display: block;
-  width: 100%;
-  background: none;
-  border: none;
-  color: var(--rosso);
-  font-size: 0.85rem;
-  padding: 10px;
-  margin-top: 6px;
-  text-align: center;
-  cursor: pointer;
-}
 
 .avviso {
   border-radius: var(--raggio);
@@ -679,7 +603,6 @@ a.nota { display: flex; align-items: center; min-height: 44px; margin-top: 0; ma
 }
 
 /* navbar sempre visibile, anche con barra carrello */
-body.con-azione .navbar { display: block; }
 .navbar { display: block !important; }
 
 /* ---------- Form ---------- */
@@ -698,16 +621,6 @@ input[type="email"], input[type="tel"], input[type="url"], textarea, select {
 }
 
 label { font-weight: 600; display: block; margin-bottom: 4px; }
-
-/* ---------- Login ---------- */
-
-.login-wrapper {
-  max-width: 380px;
-  margin: 48px auto;
-  padding: 0 16px;
-}
-.login-wrapper h1 { text-align: center; font-size: 1.5rem; }
-.login-wrapper .card { padding: 18px; }
 
 /* ---------- Viste desktop (agente) ---------- */
 
@@ -736,10 +649,6 @@ th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--bord
 th { color: var(--grigio); font-weight: 600; }
 
 .link-secondario { color: var(--blu); text-decoration: none; }
-
-@media (max-width: 330px) {
-  .griglia-macro { grid-template-columns: 1fr; }
-}
 
 /* ---------- Home del banco: bacheca a 3 colonne (views/distributore_richieste.ejs) ---------- */
 
@@ -1153,8 +1062,6 @@ th { color: var(--grigio); font-weight: 600; }
   .colonna-lista { overflow: visible; }
 }
 /* ---------- Geolocalizzazione ---------- */
-
-.geo-box .btn { margin-top: 4px; }
 /* Mappa Leaflet: alta zero finché non c'è niente da mostrare, così non lascia buchi. */
 .mappa {
   width: 100%;
@@ -1240,31 +1147,6 @@ th { color: var(--grigio); font-weight: 600; }
   margin-right: 4px;
 }
 
-.striscia-marchi {
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-  scrollbar-width: thin;
-  touch-action: pan-x; /* stesso motivo di .chip-riga: evita che lo scroll orizzontale da trackpad diventi uno zoom della pagina */
-}
-.tessera-marchio {
-  flex: 0 0 auto;
-  width: 118px;
-  background: var(--surface);
-  border: 1px solid var(--bordo);
-  border-radius: var(--raggio);
-  padding: 12px;
-  text-decoration: none;
-  color: inherit;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.tessera-marchio .nome { font-weight: 700; font-size: 0.9rem; line-height: 1.2; }
-.tessera-marchio .conta { color: var(--grigio); font-size: 0.75rem; }
-.tessera-marchio.tutti .nome { color: var(--grigio); }
-
 .testata-marchio { display: flex; align-items: center; gap: 14px; }
 .testata-marchio .nome-marchio { font-weight: 800; font-size: 1.2rem; }
 .testata-marchio .dettaglio { color: var(--grigio); font-size: 0.85rem; margin-top: 2px; }
@@ -1289,104 +1171,8 @@ th { color: var(--grigio); font-weight: 600; }
 
 /* ---------- Sconti al banco ---------- */
 
-.riga-sconto { display: flex; align-items: center; gap: 8px; }
-.riga-sconto input[type="number"] { margin: 0; }
-.riga-sconto .btn { padding: 10px 14px; font-size: 0.85rem; white-space: nowrap; }
-.riga-sconto.piccola { margin-top: 6px; gap: 6px; }
-.riga-sconto.piccola label { font-size: 0.78rem; color: var(--grigio); font-weight: 600; margin: 0; }
-.riga-sconto.piccola input[type="number"] {
-  width: 82px;
-  padding: 6px 8px;
-  font-size: 0.9rem;
-  border-radius: 8px;
-}
-
-.riga-check {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: normal;
-  font-size: 0.88rem;
-  margin: 10px 0 0;
-}
-.riga-check input { width: auto; margin: 0; }
-
-.riga-banco.sconto-modificato { background: #f2f9f3; }
-.riga-banco.sconto-modificato .riga-sconto.piccola input[type="number"] {
-  border-color: var(--verde);
-  color: var(--verde);
-  font-weight: 700;
-}
-
 /* Legenda con un colore per insegna sulla mappa dei punti vendita */
 .legenda-insegne span::before { background: var(--colore-insegna, var(--blu)); }
-
-/* ---------- Sconti per ambito ---------- */
-
-.riga-sconto-ambito input[type="number"] {
-  width: 84px;
-  flex: none;
-  margin: 0;
-  padding: 8px;
-  text-align: center;
-  font-weight: 700;
-  border-radius: 8px;
-}
-
-/* ---------- Sconti a scalare (5 colonne) ---------- */
-
-.riga-sconti { padding: 12px 14px; border-bottom: 1px solid var(--bordo); }
-.riga-sconti:last-child { border-bottom: none; }
-.riga-sconti-testa { display: flex; align-items: center; gap: 12px; }
-.riga-sconti-testa .icona { font-size: 1.2rem; width: 24px; text-align: center; color: var(--testo); }
-.riga-sconti-testa .corpo { flex: 1; min-width: 0; }
-.riga-sconti-testa .etichetta { font-weight: 600; display: block; }
-.riga-sconti-testa .dettaglio { color: var(--grigio); font-size: 0.82rem; display: block; margin-top: 2px; }
-
-.sconto-effettivo {
-  font-weight: 800;
-  color: var(--verde);
-  background: var(--verde-chiaro);
-  border-radius: 999px;
-  padding: 3px 10px;
-  font-size: 0.85rem;
-  white-space: nowrap;
-}
-
-.scaglioni { display: flex; gap: 6px; margin-top: 10px; }
-.scaglione { flex: 1; min-width: 0; margin: 0; }
-.scaglione .numero {
-  display: block;
-  font-size: 0.65rem;
-  color: var(--grigio);
-  font-weight: 600;
-  text-align: center;
-  margin-bottom: 3px;
-  white-space: nowrap;
-}
-.scaglione .campo {
-  display: flex;
-  align-items: center;
-  border: 1px solid var(--bordo);
-  border-radius: 8px;
-  background: var(--surface);
-  padding-right: 5px;
-}
-.scaglione input[type="number"] {
-  width: 100%;
-  min-width: 0;
-  min-height: 44px;
-  margin: 0;
-  padding: 0 2px 0 4px;
-  border: none;
-  border-radius: 0;
-  text-align: right;
-  font-weight: 700;
-  font-size: 16px; /* sotto i 16px Safari su iPhone ingrandisce la pagina al tocco del campo */
-  -moz-appearance: textfield;
-}
-.scaglione .segno { color: var(--grigio); font-size: 0.8rem; font-weight: 600; }
-.scaglione .campo:focus-within { border-color: var(--blu); }
 
 /* ---------- Menu account a tendina ---------- */
 
@@ -1415,8 +1201,7 @@ th { color: var(--grigio); font-weight: 600; }
 .menu-account .tendina-testata .ruolo { color: var(--grigio); font-size: 0.78rem; margin-top: 2px; }
 
 .menu-account .tendina a,
-.menu-account .tendina .voce-esci,
-.menu-account .tendina .voce-tema {
+.menu-account .tendina .voce-esci {
   display: block;
   width: 100%;
   padding: 12px 14px;
@@ -1432,8 +1217,7 @@ th { color: var(--grigio); font-weight: 600; }
 }
 .menu-account .tendina a:first-of-type { border-top: none; }
 .menu-account .tendina a:hover,
-.menu-account .tendina .voce-esci:hover,
-.menu-account .tendina .voce-tema:hover { background: var(--sfondo); }
+.menu-account .tendina .voce-esci:hover { background: var(--sfondo); }
 .menu-account .tendina form { margin: 0; }
 .menu-account .tendina .voce-esci { color: var(--rosso); font-weight: 700; }
 
@@ -1442,27 +1226,6 @@ th { color: var(--grigio); font-weight: 600; }
 .domanda { font-size: 1.5rem; font-weight: 800; margin: 6px 2px 12px; }
 .barra-ricerca.grande { padding: 12px 16px; margin-bottom: 6px; }
 .barra-ricerca.grande input[type="search"] { font-size: 1.05rem; }
-.nota.sotto-ricerca { margin: 0 2px 6px; }
-
-.griglia-evidenza { display: grid; gap: 10px; }
-.tessera-grande {
-  background: var(--surface);
-  border: 1px solid var(--bordo);
-  border-left: 5px solid var(--blu);
-  border-radius: var(--raggio);
-  padding: 16px;
-  text-decoration: none;
-  color: inherit;
-  display: grid;
-  grid-template-columns: 46px 1fr;
-  grid-template-rows: auto auto auto;
-  column-gap: 12px;
-  align-items: start;
-}
-.tessera-grande .emoji { grid-row: 1 / 4; font-size: 2rem; line-height: 1; color: var(--testo); }
-.tessera-grande .nome { font-weight: 800; font-size: 1.15rem; }
-.tessera-grande .desc { color: var(--grigio); font-size: 0.85rem; line-height: 1.35; margin-top: 2px; }
-.tessera-grande .conta { color: var(--blu); font-size: 0.8rem; font-weight: 700; margin-top: 6px; }
 
 .altre-categorie { margin: 16px 0; }
 .altre-categorie summary {
@@ -1476,30 +1239,7 @@ th { color: var(--grigio); font-weight: 600; }
 .altre-categorie[open] summary { border-radius: var(--raggio) var(--raggio) 0 0; margin-bottom: 0; }
 .altre-categorie[open] .card { border-top: none; border-radius: 0 0 var(--raggio) var(--raggio); }
 
-.avviso-selezione { border-color: var(--arancio); background: var(--arancio-chiaro); }
-
 /* riordino rapido */
-.frequenti { display: grid; gap: 8px; margin-bottom: 4px; }
-.pezzo-frequente {
-  display: block;
-  width: 100%;
-  text-align: left;
-  background: var(--surface);
-  border: 1px solid var(--bordo);
-  border-radius: var(--raggio);
-  padding: 12px 14px;
-  cursor: pointer;
-  font-family: inherit;
-}
-.pezzo-frequente .nome { display: block; font-weight: 600; line-height: 1.3; }
-.pezzo-frequente .meta { display: block; color: var(--grigio); font-size: 0.8rem; margin-top: 3px; }
-.pezzo-frequente .aggiungi {
-  display: inline-block;
-  margin-top: 8px;
-  color: var(--blu);
-  font-weight: 700;
-  font-size: 0.85rem;
-}
 
 /* ---------- Filtri a chip (misura, marchio) ---------- */
 
@@ -1730,17 +1470,6 @@ html.misura-aperta { overflow: hidden; }
 .misura-conferma:active { background: var(--blu-scuro); }
 .misura-conferma:focus-visible { outline: 2px solid var(--blu); outline-offset: 3px; }
 
-.svuota-link {
-  background: none;
-  border: none;
-  padding: 4px 0;
-  color: var(--rosso);
-  font-size: 0.82rem;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-}
-
 /* ---------- Nuovo carrello: prodotto-azioni, Aggiungi, mini-card ---------- */
 .prodotto-azioni {
   display: flex;
@@ -1779,28 +1508,6 @@ html.misura-aperta { overflow: hidden; }
 .mini-carrello[hidden] { display: none !important; }
 
 /* barra che porta al carrello (categoria / ricerca / marchio) */
-.barra-carrello {
-  position: fixed;
-  bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + 8px);
-  left: 0;
-  right: 0;
-  z-index: 29;
-  background: var(--surface);
-  border-top: 1px solid var(--bordo);
-  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
-  box-shadow: 0 -4px 16px rgba(0,0,0,0.06);
-}
-.barra-carrello[hidden] { display: none !important; }
-.barra-carrello .interno {
-  max-width: 520px;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  justify-content: space-between;
-}
-.barra-carrello-testo { font-size: 0.9rem; color: var(--testo); }
-.barra-carrello-testo strong { color: var(--blu); }
 
 /* pagina carrello: layout responsive (stili della pagina in fondo al file, sezione "Carrello") */
 .carrello-layout { display: grid; gap: 12px; }
@@ -1814,12 +1521,10 @@ html.misura-aperta { overflow: hidden; }
      dallo schermo e il pulsante "indietro" veniva tagliato. */
   .app { max-width: none; padding-bottom: calc(var(--barra-bassa) + 62px + 16px); }
   .app > .contenuto { max-width: 1400px; margin-left: auto; margin-right: auto; }
-  .barra-carrello .interno { max-width: 1400px; }
   .navbar .interno { max-width: 520px; }
   .carrello-layout { grid-template-columns: 1.6fr 0.9fr; align-items: start; }
   .carrello-riepilogo { position: sticky; top: 64px; }
   .prodotto { padding: 16px 18px; gap: 16px; }
-  .barra-carrello { bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + 8px); }
   body { background: var(--sfondo); }
 
   /* Da tablet in su la card entra in una sola riga: foto, poi nome/dettagli, poi lo
@@ -1837,8 +1542,6 @@ html.misura-aperta { overflow: hidden; }
   /* Griglia di categorie: da 2 colonne fisse a tante quante ci stanno (min 220px l'una),
      invece di restare a 2 anche quando lo schermo è largo il triplo. Le tessere "in
      evidenza" in home (più grandi) idem, con una soglia più larga. */
-  .griglia-macro { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
-  .griglia-evidenza { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
 
   /* Lista prodotti (ricerca/categoria/marchio): da elenco verticale a riga singola a una
      griglia di card affiancate. Ogni .prodotto diventa una card a sé (bordo/sfondo propri)
@@ -1861,25 +1564,9 @@ html.misura-aperta { overflow: hidden; }
 }
 
 /* geo mappa nascosta per ora — posizione richiesta all'ingresso ma non mostrata */
-.mappa, [data-mappa-punto], [data-segui-mappa], [data-segui-legenda], .geo-box { display: none !important; }
+.mappa, [data-mappa-punto], [data-segui-mappa], [data-segui-legenda] { display: none !important; }
 
 /* Stato ordini — card 3 stati */
-.card-richiesta { padding: 14px; margin-bottom: 12px; }
-.card-richiesta-head { display:flex; justify-content:space-between; align-items:center; gap:8px; }
-.card-richiesta-id { font-weight:700; font-size:0.92rem; }
-.card-richiesta-materiale { font-size:0.82rem; color:var(--grigio); margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.stepper-3 { display:flex; align-items:center; gap:4px; margin:14px 0 6px; }
-.stepper-3 .step { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; background:none; border:none; cursor:pointer; padding:4px 2px; border-radius:8px; }
-.stepper-3 .step:disabled { opacity:0.45; cursor:default; }
-.stepper-3 .pallino { width:30px; height:30px; border-radius:50%; background: var(--surface); border:2px solid var(--bordo); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:0.85rem; color:var(--grigio); }
-.stepper-3 .step.attivo .pallino { background:var(--blu); color:#fff; border-color:var(--blu); }
-.stepper-3 .step.corrente .pallino { box-shadow:0 0 0 4px var(--blu-chiaro); }
-.stepper-3 .etichetta { font-size:0.68rem; color:var(--grigio); font-weight:600; text-align:center; line-height:1.1; }
-.stepper-3 .step.attivo .etichetta { color:var(--blu); }
-.stepper-3 .linea { flex:1; height:3px; background:var(--bordo); border-radius:2px; margin:0 -2px; }
-.stepper-3 .linea.piena { background:var(--blu); }
-.pannelli .pannello { background:var(--sfondo); border:1px solid var(--bordo); border-radius:10px; padding:12px; }
-.pannello-titolo { font-weight:700; font-size:0.95rem; }
 
 /* ---------- Icona dinamica "Stato ordini" (partials/nav_ordini.ejs) ---------- */
 .navbar a .ico-stato { position: relative; width: 24px; height: 24px; margin: 0 auto; line-height: 0; }
@@ -2214,10 +1901,8 @@ html.misura-aperta { overflow: hidden; }
 .nota-dett textarea { display: block; width: calc(100% - 28px); margin: 0 14px 14px; font-size: 16px; }
 
 /* Riepilogo costi */
-.riepilogo-card { padding: 8px 14px; margin-bottom: 0; }
 .carrello-riepilogo .riepilogo-riga.forte { font-size: 17px; font-weight: 700; }
 /* "Paghi ora in app" e "Materiale, da pagare al banco": sotto il totale, separati da una riga */
-.riepilogo-riga.riepilogo-diviso { margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--bordo); }
 
 /* Barra di pagamento fissa, subito sopra la navbar */
 .barra-paga {
@@ -2611,15 +2296,6 @@ html.misura-aperta { overflow: hidden; }
 .att-desc { flex: 1; min-width: 0; }
 .att-nome { font-size: 15px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
 .att-cod { margin-top: 3px; font-size: 13px; color: var(--grigio); overflow-wrap: anywhere; }
-.att-pagato {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-top: 8px; padding-top: 14px; border-top: 1px solid var(--bordo);
-}
-.att-pagato span { font-size: 14px; color: var(--grigio); }
-.att-pagato strong {
-  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-  font-weight: 700; font-size: 17px;
-}
 
 /* "Annulla la richiesta": link centrato, rosso scuro, sottolineato */
 .att-annulla {
@@ -2671,48 +2347,12 @@ html.misura-aperta { overflow: hidden; }
 .att-voce { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 5px 0; font-size: 14.5px; }
 .att-voce dt { margin: 0; color: var(--grigio); }
 .att-voce dd { margin: 0; }
-.att-voce dd.att-inclusa { color: var(--verde); font-weight: 700; }
-.att-totale { margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--bordo); }
-.att-totale dt { color: var(--testo); font-weight: 700; font-size: 15px; }
-.att-totale dd {
-  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-  font-weight: 700; font-size: 17px;
-}
 
 /* Dettagli consegna e pagamento: <details> chiuso, una riga per voce */
-.att-dettagli { padding: 0; }
-.att-dettagli summary {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  min-height: 56px; padding: 10px 16px; font-weight: 700; font-size: 15px; cursor: pointer; list-style: none;
-}
-.att-dettagli summary::-webkit-details-marker { display: none; }
-.att-freccia { flex: none; color: var(--blu); transition: transform 0.2s ease; }
-.att-dettagli[open] .att-freccia { transform: rotate(180deg); }
-.att-voci { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--bordo); }
-.att-dett-riga { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; }
-.att-dett-riga + .att-dett-riga { border-top: 1px solid var(--bordo); }
-.att-dett-riga .att-icona { margin-top: 2px; }
-.att-dett-corpo { flex: 1; min-width: 0; }
-.att-dett-valore { margin-top: 2px; font-weight: 700; font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; }
-.att-dett-nota { font-weight: 600; white-space: pre-line; }
-.att-dett-sotto { margin-top: 2px; font-size: 13.5px; color: var(--grigio); }
-.att-dett-tempi { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; margin: 6px 0 0; font-size: 14px; }
-.att-dett-tempi dt { margin: 0; color: var(--grigio); }
-.att-dett-tempi dd { margin: 0; font-weight: 700; color: var(--testo); }
-.att-tag-prova {
-  flex: none; align-self: center; padding: 4px 10px; border-radius: 999px;
-  background: #fbebc7; color: #8a5a00; font-size: 12.5px; font-weight: 700;
-}
-.att-apri {
-  flex: none; align-self: center; display: inline-flex; align-items: center; justify-content: center;
-  min-width: 44px; min-height: 44px; padding: 0 4px; color: var(--blu); font-weight: 700; font-size: 15px; text-decoration: none;
-}
-
-.att-nota { margin: 4px 4px 12px; font-size: 12.5px; line-height: 1.4; color: var(--grigio); }
 
 @media (prefers-reduced-motion: reduce) {
   .att-furgone > span { animation: none; }
-  .att-riempimento, .att-freccia { transition: none; }
+  .att-riempimento { transition: none; }
 }
 
 /* ---------- Richiesta scaduta (views/richiesta_chiusa.ejs): stessa struttura delle altre pagine att-*, in rosso ---------- */
@@ -2752,7 +2392,6 @@ html.misura-aperta { overflow: hidden; }
 }
 
 /* Riga in fondo alla scheda del materiale */
-.att-piede { margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--bordo); font-size: 13px; color: var(--grigio); }
 
 /* "Rinvia richiesta": pulsante blu a tutta larghezza; "Elimina richiesta": link rosso scuro sottolineato */
 .att-rinvia {
@@ -2772,7 +2411,6 @@ html.misura-aperta { overflow: hidden; }
 /* Controlli che prima erano fra i 34 e i 42 px di altezza: il cantiere è fatto di guanti e dita sporche. Il
    centraggio del testo è esplicito perché alcuni sono link o inline-block. */
 .btn-logout,
-.link-discreto,
 .paginazione .btn,
 .chip {
   min-height: 44px;
@@ -2780,7 +2418,6 @@ html.misura-aperta { overflow: hidden; }
   align-items: center;
   justify-content: center;
 }
-.link-discreto { display: flex; width: 100%; }
 .menu-account .tendina a,
 .menu-account .tendina .voce-esci { min-height: 44px; }
 
@@ -3715,7 +3352,6 @@ html.misura-aperta { overflow: hidden; }
 .cli-indietro svg { font-size: 20px; }
 .cli-indietro:hover { text-decoration: underline; }
 .cli-indietro:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; border-radius: 8px; }
-.cli-avviso { margin-bottom: 16px; }
 
 .cli-intesta { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
 .cli-intesta-testi { min-width: 0; }
@@ -3732,7 +3368,6 @@ html.misura-aperta { overflow: hidden; }
 .cli-dati { display: grid; gap: 16px 20px; margin: 0; }
 .cli-dati-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .cli-dati-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.cli-dati-1 { grid-template-columns: minmax(0, 1fr); }
 .cli-dato { min-width: 0; }
 .cli-dato dd { margin: 0; }
 .cli-dato-eti {
@@ -3846,10 +3481,8 @@ html.misura-aperta { overflow: hidden; }
 .cli-approva:focus-visible, .cli-rifiuta:focus-visible { outline: 3px solid var(--blu); outline-offset: 2px; }
 .cli-approva:disabled, .cli-rifiuta:disabled { opacity: 0.6; cursor: default; }
 
-/* Nota sotto una scheda. `.cli-sotto-titolo` e `.cli-elenco-sconti` sono dell'elenco sconti (partials/riga_sconti), oggi non in pagina. */
+/* Nota sotto una scheda. */
 .cli-nota { margin: 12px 0 0; color: var(--grigio); font-size: 14px; line-height: 1.45; }
-.cli-sotto-titolo { margin: 20px 0 8px; font-family: var(--cli-sora); font-size: 15px; font-weight: 700; }
-.cli-elenco-sconti { overflow: hidden; border: 1px solid var(--bordo); border-radius: 12px; }
 
 /* Sotto i 900px (menu in basso): colonne una sotto l'altra, prima la decisione (o, per l'approvato, il materiale) poi i dati; tabella a righe impilate. */
 @media (max-width: 899.98px) {

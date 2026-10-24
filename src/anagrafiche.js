@@ -145,6 +145,8 @@ function approvazioneAutomatica() {
   return pulisci(process.env.APPROVAZIONE_AUTOMATICA) !== '0';
 }
 
+// Registra un nuovo installatore: crea l'account con la password cifrata e lo collega ai banchi indicati (già approvato, se l'approvazione è
+// automatica).
 async function iscriviCliente(dati, distributoriScelti) {
   const utente = normalizzaUtente(dati.username);
   const automatica = approvazioneAutomatica() && distributoriScelti.length > 0;
@@ -252,6 +254,7 @@ async function conTutteLeFiliali(ids) {
 // Fidra) non compaiono: le righe restano, perché lo storico di richieste e ordini le referenzia.
 const PRIORITA_LEGAME = { approvato: 0, in_attesa: 1, rifiutato: 2 };
 
+// I collegamenti di un cliente con i banchi attivi (nome della ditta e filiale compresi), in ordine di nome.
 async function legamiDelCliente(clienteId) {
   const righe = await db
     .prepare(
@@ -316,6 +319,7 @@ async function clientiDelDistributore(distributorId) {
     .all(distributorId, distributorId);
 }
 
+// Il collegamento fra un banco e un cliente, se esiste (altrimenti niente).
 async function legame(distributorId, clienteId) {
   return db
     .prepare('SELECT * FROM client_distributors WHERE distributor_id = ? AND cliente_id = ?')
@@ -361,18 +365,6 @@ async function decidi(distributorId, clienteId, { approva, codiceCliente = '', n
   return { ok: true, stato };
 }
 
-// Distributori che hanno approvato il cliente: sono gli unici a cui può ordinare.
-async function distributoriApprovati(clienteId) {
-  const rows = await db
-    .prepare(
-      `SELECT d.* FROM client_distributors cd
-         JOIN distributors d ON d.id = cd.distributor_id
-        WHERE cd.cliente_id = ? AND cd.stato = 'approvato' AND d.attivo = 1`
-    )
-    .all(clienteId);
-  return rows.map((d) => d.id);
-}
-
 // ---------- Sconti per ambito ----------
 
 async function regoleSconto(distributorId, clienteId) {
@@ -385,17 +377,6 @@ async function regoleSconto(distributorId, clienteId) {
     .all(distributorId, clienteId);
 }
 
-// Sconto a scalare: 40+10+5 non fa 55, fa 48,7 — ogni sconto si applica sul residuo.
-function scontoEffettivo(scaglioni) {
-  const validi = (scaglioni || [])
-    .map((s) => parseFloat(String(s === undefined || s === null ? '' : s).replace(',', '.')))
-    .filter((n) => Number.isFinite(n) && n > 0)
-    .map((n) => Math.min(90, n));
-  if (!validi.length) return null;
-  const residuo = validi.reduce((acc, s) => acc * (1 - s / 100), 1);
-  return Math.round((1 - residuo) * 1000) / 10;
-}
-
 // Riscrive gli scaglioni come li scrive il banco: "40+10+5".
 function formattaScalare(regola) {
   if (!regola) return '';
@@ -403,36 +384,6 @@ function formattaScalare(regola) {
     .filter((s) => s !== null && s !== undefined && s > 0)
     .map((s) => String(s).replace('.', ','));
   return parti.length ? parti.join('+') : String(regola.sconto_pct).replace('.', ',');
-}
-
-async function salvaRegola(distributorId, clienteId, ambito, chiave, scaglioni) {
-  const chiavePulita = pulisci(chiave).slice(0, 200); // la chiave di una regola è uno slug: un testo enorme scritto a mano non serve a nessuno
-  const effettivo = scontoEffettivo(scaglioni);
-
-  // Tutti i campi vuoti: la regola sparisce e torna a valere quella più generale.
-  if (effettivo === null) {
-    await db.prepare(
-      `DELETE FROM client_discount_rules
-        WHERE distributor_id = ? AND cliente_id = ? AND ambito = ? AND chiave = ?`
-    ).run(distributorId, clienteId, ambito, chiavePulita);
-    return null;
-  }
-
-  const s = [0, 1, 2, 3, 4].map((i) => {
-    const n = parseFloat(String(scaglioni[i] === undefined ? '' : scaglioni[i]).replace(',', '.'));
-    return Number.isFinite(n) && n > 0 ? Math.round(Math.min(90, n) * 10) / 10 : null;
-  });
-
-  await db.prepare(
-    `INSERT INTO client_discount_rules
-       (distributor_id, cliente_id, ambito, chiave, sconto_pct, sconto1, sconto2, sconto3, sconto4, sconto5)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(distributor_id, cliente_id, ambito, chiave) DO UPDATE SET
-       sconto_pct = excluded.sconto_pct, sconto1 = excluded.sconto1, sconto2 = excluded.sconto2,
-       sconto3 = excluded.sconto3, sconto4 = excluded.sconto4, sconto5 = excluded.sconto5,
-       aggiornato_il = NOW()`
-  ).run(distributorId, clienteId, ambito, chiavePulita, effettivo, s[0], s[1], s[2], s[3], s[4]);
-  return effettivo;
 }
 
 // Sconto valido per un prodotto: vince la regola più specifica che lo riguarda.
@@ -465,7 +416,6 @@ function scontoPerProdotto(regole, prodotto) {
 
 module.exports = {
   TIPI_SOGGETTO,
-  scontoEffettivo,
   formattaScalare,
   validaIscrizione,
   primoPassoConErrori,
@@ -478,8 +428,6 @@ module.exports = {
   clientiDelDistributore,
   legame,
   decidi,
-  distributoriApprovati,
   regoleSconto,
-  salvaRegola,
   scontoPerProdotto,
 };

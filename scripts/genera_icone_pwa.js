@@ -15,12 +15,14 @@ function tratti(scala) {
   return punti.map(([x, y]) => [0.5 + (x - 0.5) * scala, 0.5 + (y - 0.5) * scala]);
 }
 
+// Distanza di un punto da un segmento: serve a disegnare la lettera a tratto spesso.
 function distSegmento(px, py, [ax, ay], [bx, by]) {
   const dx = bx - ax, dy = by - ay;
   const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)));
   return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
 }
 
+// Dice se un punto cade sul tratto della lettera, cioè abbastanza vicino a uno dei suoi segmenti.
 function sulleLettera(x, y, punti, mezzoSpessore) {
   for (let i = 0; i < punti.length - 1; i++) {
     if (distSegmento(x, y, punti[i], punti[i + 1]) <= mezzoSpessore) return true;
@@ -71,6 +73,7 @@ function disegna(dimensione, { maskable, distintivo }) {
   return codificaPng(dimensione, raw);
 }
 
+// Costruisce un blocco di un file PNG: lunghezza, tipo, dati e controllo di integrità (CRC).
 function chunk(tipo, dati) {
   const lunghezza = Buffer.alloc(4);
   lunghezza.writeUInt32BE(dati.length);
@@ -80,6 +83,7 @@ function chunk(tipo, dati) {
   return Buffer.concat([lunghezza, corpo, crc]);
 }
 
+// Trasforma i pixel in un file PNG quadrato, senza librerie esterne.
 function codificaPng(dimensione, raw) {
   const testata = Buffer.alloc(13);
   testata.writeUInt32BE(dimensione, 0);

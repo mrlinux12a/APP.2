@@ -30,6 +30,7 @@ const CODA_S = 1.35; // quanto dopo l'ultima nota il suono è praticamente spent
 const SFUMATA_FINALE_S = 0.12;
 const PICCO_DBFS = -6;
 
+// Genera i campioni del suono d'avviso: due note con attacco dolce e armoniche che si spengono.
 function sintetizza() {
   const durata = NOTE[NOTE.length - 1].inizio + CODA_S;
   const n = Math.round(durata * SR);
@@ -57,6 +58,7 @@ function sintetizza() {
   return pcm;
 }
 
+// Mette i campioni audio dentro un file WAV (testata + dati), pronto da convertire in MP3.
 function wav(pcm) {
   const testa = Buffer.alloc(44);
   testa.write('RIFF', 0);

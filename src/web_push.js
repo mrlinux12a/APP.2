@@ -31,12 +31,15 @@ const MASSIMO_ENDPOINT = 1500;
 const HOST_AMMESSI = [/(^|\.)googleapis\.com$/, /(^|\.)push\.apple\.com$/, /(^|\.)push\.services\.mozilla\.com$/, /(^|\.)notify\.windows\.com$/];
 
 let avvisatoTabellaMancante = false;
+// Il modo in cui si manda una notifica al servizio push del browser (sostituibile nelle prove).
 let invio = (iscrizione, payload, opzioni) => webpush.sendNotification(iscrizione, payload, opzioni); // sostituibile nelle prove
 
+// Cambia il modo di mandare le notifiche (serve alle prove, per non fare chiamate vere).
 function impostaInvio(fn) {
   invio = fn;
 }
 
+// Legge le chiavi VAPID dal .env (pubblica, privata e contatto) e dice se le notifiche push del sito sono utilizzabili.
 function configurazione() {
   const pubblica = String(process.env.VAPID_PUBLIC_KEY || '').trim();
   const privata = String(process.env.VAPID_PRIVATE_KEY || '').trim();
@@ -75,6 +78,8 @@ function descriviConfigurazione() {
   return '[web push] spente: nel .env manca ' + manca.join(' e ') + '. Le notifiche arrivano solo con l\'app aperta.';
 }
 
+// Riconosce l'errore "la tabella non esiste" (schema non aggiornato) e lo scrive nel log una volta sola: le notifiche ad app chiusa restano spente
+// invece di rompere il resto.
 function tabellaAssente(err) {
   // 42P01 = la tabella non esiste (schema non aggiornato).
   if (err && err.code === '42P01') {
@@ -135,6 +140,7 @@ async function registra(userId, sub, { userAgent = '' } = {}) {
   }
 }
 
+// Toglie un browser dalle notifiche: solo quello di questo utente se si indica l'utente, altrimenti ovunque.
 async function rimuovi(endpoint, userId = null) {
   try {
     if (userId === null) await db.prepare('DELETE FROM iscrizioni_push WHERE endpoint = ?').run(String(endpoint || ''));
@@ -144,6 +150,7 @@ async function rimuovi(endpoint, userId = null) {
   }
 }
 
+// Toglie tutti i browser di un utente dalle notifiche (uscita o eliminazione dell'account).
 async function rimuoviUtente(userId) {
   try {
     await db.prepare('DELETE FROM iscrizioni_push WHERE user_id = ?').run(userId);
@@ -176,6 +183,7 @@ function percorsoInterno(link) {
   return /^\/(?!\/)[^\s\\]*$/.test(l) ? l.slice(0, 300) : null;
 }
 
+// Il nome del server di un indirizzo (per il log, che non deve mai contenere l'indirizzo intero: porta un segreto).
 function hostDi(endpoint) {
   try {
     return new URL(endpoint).hostname;

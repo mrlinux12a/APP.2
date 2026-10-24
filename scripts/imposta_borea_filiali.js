@@ -39,6 +39,7 @@ const pool = new Pool({
   ssl: process.env.DATABASE_URL.includes('supabase.co') ? { rejectUnauthorized: false } : false,
 });
 
+// Esegue la migrazione delle filiali di Borea in una transazione: senza --applica la annulla alla fine (prova a secco), con --applica la conferma.
 async function main() {
   const c = await pool.connect();
   try {

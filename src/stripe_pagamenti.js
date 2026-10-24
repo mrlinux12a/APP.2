@@ -102,6 +102,7 @@ const descrizioneModo = () => stripeConfig.descrizione();
 const webhookConfigurato = () => stripeConfig.segretiWebhook().length > 0;
 
 let clienteStripe = null;
+// Il collegamento a Stripe, creato la prima volta che serve con la chiave segreta del modo in uso (errore se la chiave manca).
 function stripe() {
   if (clienteStripe) return clienteStripe;
   const Stripe = require('stripe');
@@ -119,6 +120,7 @@ function impostaStripe(cliente) {
   clienteStripe = cliente;
 }
 
+// Converte euro in centesimi interi, come vuole Stripe.
 const centesimi = (euro) => Math.round(Number(euro) * 100);
 const SQL_RIGA = `SELECT *, EXTRACT(EPOCH FROM (NOW() - creato_il))::int AS eta_sec FROM stripe_pagamenti`;
 
@@ -435,6 +437,7 @@ function leggiEvento(corpoGrezzo, firma) {
   throw ultimoErrore || new Error('Nessun segreto del webhook configurato');
 }
 
+// Lavora un evento ricevuto da Stripe: scarta quelli dell'altro modo (prova o reale) e, quando la carta risulta autorizzata, fa nascere la richiesta.
 async function gestisciEvento(evento) {
   // Un evento dell'altro modo (prova/produzione) non ci riguarda.
   if (Boolean(evento.livemode) !== (pagamenti.modoStripe() === 'live')) return;
@@ -495,6 +498,8 @@ async function dopoIncasso(lavoro) {
   }
 }
 
+// Esegue su Stripe il lavoro segnato su un pagamento (incassare, rilasciare il blocco o rimborsare), con chiavi che impediscono di ripeterlo; dopo
+// troppi tentativi lo segna da verificare.
 async function eseguiLavoro(lavoro) {
   const s = stripe();
   const intento = lavoro.payment_intent_id;
@@ -559,6 +564,8 @@ async function eseguiLavoro(lavoro) {
 // pagamenti rimasti a metà, carte autorizzate che nessuno ha raccolto. Un giro alla volta; ogni lavoro che fallisce si
 // riprova al giro dopo, fino a TENTATIVI_MASSIMI (poi 'da_verificare': serve una persona, il motivo è in `errore`).
 let inElaborazione = false;
+// Il giro periodico sui pagamenti: esegue i lavori in sospeso e fa nascere le richieste dei pagamenti già autorizzati. Non parte se Stripe è spento o
+// se un altro giro è ancora in corso.
 async function elabora() {
   if (!attivo() || inElaborazione) return;
   inElaborazione = true;

@@ -61,6 +61,7 @@ async function upsertUser(u) {
 const FASCE_PREDEFINITE = [['07:30', '12:30'], ['14:00', '18:00']];
 const ORARI_PREDEFINITI = { lun: FASCE_PREDEFINITE, mar: FASCE_PREDEFINITE, mer: FASCE_PREDEFINITE, gio: FASCE_PREDEFINITE, ven: FASCE_PREDEFINITE, sab: [['07:30', '12:00']], dom: [] };
 
+// Crea un banco di prova con i suoi dati, oppure lo aggiorna se esiste già (e lo riattiva).
 async function upsertDistributor(d) {
   await db.prepare(
     `INSERT INTO distributors (nome, filiale, zona, consegna_ore_default, costo_consegna, attivo,

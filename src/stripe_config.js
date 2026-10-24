@@ -18,12 +18,12 @@
 // Il modo di ogni pagamento si salva sulla riga (stripe_pagamenti.modo) e ogni istanza lavora solo i suoi: passando da reale a prova (o viceversa) i
 // pagamenti dell'altro modo restano fermi finché non si torna. Vedi README, "Pagamenti con Stripe".
 
-const MODI = ['live', 'test'];
 const NOMI_MODO = { live: 'live', reale: 'live', produzione: 'live', prod: 'live', test: 'test', prova: 'test', sandbox: 'test' };
 const PREFISSO_SEGRETA = { live: /^(sk|rk)_live_/, test: /^(sk|rk)_test_/ };
 const PREFISSO_PUBBLICA = { live: /^pk_live_/, test: /^pk_test_/ };
 const DESCRIZIONE_CHIAVE = { live: 'reale (sk_live_...)', test: 'di prova (sk_test_...)' };
 
+// Legge una variabile del .env come testo, senza spazi ai bordi (vuoto se manca).
 const env = (nome) => String(process.env[nome] || '').trim();
 
 // Cosa c'è scritto in STRIPE_MODO: { modo: 'live' | 'test' | null, nonValido: testo | null }.
@@ -112,7 +112,9 @@ function attivo() {
   return c.dichiarato || c.segreta !== '';
 }
 
+// La chiave segreta di Stripe per il modo in uso (vuota se manca).
 const chiaveSegreta = () => configurazione().segreta;
+// La chiave pubblicabile così come è scritta nel .env per il modo in uso (può mancare del prefisso: la corregge chi la usa).
 const chiavePubblicabileGrezza = () => configurazione().pubblicabile;
 
 // I segreti con cui si controlla la firma di un webhook: prima quello del modo in uso, poi (se c'è) quello dell'altro. Un endpoint di Stripe per modo può
@@ -132,4 +134,4 @@ function descrizione() {
     : `modalità PROVA (sandbox, ${origine}): nessun addebito reale, carta di prova 4242 4242 4242 4242.`;
 }
 
-module.exports = { MODI, configurazione, modo, attivo, chiaveSegreta, chiavePubblicabileGrezza, segretiWebhook, descrizione };
+module.exports = { configurazione, modo, attivo, chiaveSegreta, chiavePubblicabileGrezza, segretiWebhook, descrizione };

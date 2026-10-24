@@ -13,8 +13,10 @@ const { azienda } = require('./azienda');
 let trasporto = null;
 let avvisatoNonConfigurato = false;
 
+// Dice se la posta è configurata: serve almeno l'indirizzo del server SMTP nel .env.
 const configurato = () => String(process.env.SMTP_HOST || '').trim() !== '';
 
+// Prepara il collegamento al server di posta (SMTP) con i dati del .env, con attese brevi per non bloccare mai il sito.
 function creaTrasporto() {
   const nodemailer = require('nodemailer');
   const porta = Number(process.env.SMTP_PORT) || 587;
@@ -35,6 +37,7 @@ function impostaTrasporto(t) {
   trasporto = t;
 }
 
+// L'indirizzo da cui partono le email: quello scritto nel .env, altrimenti l'utente SMTP col nome dell'azienda.
 function mittente() {
   const da = String(process.env.EMAIL_DA || '').trim();
   if (da) return da;
@@ -64,13 +67,17 @@ async function invia({ a, oggetto, html, testo }) {
 const esc = (t) =>
   String(t === null || t === undefined ? '' : t)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+// Scrive un importo in euro come testo, con due decimali.
 const euro = (n) => pricing.euro(n);
 
+// L'oggetto dell'email di pagamento ricevuto: numero dell'ordine e importo.
 const oggettoPagamentoRicevuto = (d) => `Pagamento ricevuto · Ordine #${d.ordineId} · € ${euro(d.importi.app.totale)}`;
 
+// La frase che spiega il pagamento: il banco ha confermato l'ordine e la consegna è stata addebitata sulla carta.
 const frasePagamento = (d) =>
   `${d.ditta || 'Il banco'} ha confermato il tuo ordine #${d.ordineId}. Abbiamo addebitato la consegna in cantiere sulla tua ${d.carta ? d.carta.testo : 'carta'}.`;
 
+// Data e ora del pagamento, in ora italiana, scritte per l'email.
 function quandoTesto(d) {
   return `${format.dataSolaRoma(d.data)}, ${format.oraSolaRoma(d.data)}`;
 }
@@ -175,6 +182,8 @@ const fraseRecupero = (d) => [
   'Se non l’hai chiesto tu, ignora questa email: la tua password non cambia.',
 ];
 
+// L'email di recupero password in HTML (stili in linea, come vogliono i programmi di posta), con il pulsante verso il link per scegliere la nuova
+// password.
 function htmlRecuperoPassword(d) {
   const az = d.azienda || azienda();
   const frasi = fraseRecupero(d);
@@ -202,6 +211,7 @@ function htmlRecuperoPassword(d) {
 </body></html>`;
 }
 
+// La stessa email di recupero password in solo testo, per chi non vede l'HTML.
 function testoRecuperoPassword(d) {
   const frasi = fraseRecupero(d);
   return ['Reimposta la password', '', frasi[0], frasi[1], '', 'Scegli una nuova password da questo indirizzo:', d.link, '', frasi[2], '', frasi[3]].join('\n');

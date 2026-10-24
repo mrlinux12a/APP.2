@@ -47,6 +47,7 @@ const contestoTransazione = new AsyncLocalStorage();
 const rete = creaEsecutore({ pool });
 const sulPool = { query: (testo, params) => rete.interroga(testo, params) };
 
+// Sceglie dove eseguire una query: nella transazione in corso se c'è, altrimenti sul gruppo di connessioni.
 function esecutore() {
   const store = contestoTransazione.getStore();
   return store ? store.client : sulPool;
@@ -56,40 +57,25 @@ function esecutore() {
 // non può chiedere "RETURNING id", altrimenti Postgres dà errore "column id does not exist".
 const TABELLE_SENZA_ID = new Set(['session', 'config', 'macro_categorie', 'brands', 'product_sottocategorie']);
 
+// Ricava da un INSERT il nome della tabella in cui scrive.
 function tabellaInsert(sql) {
   const m = sql.match(/^\s*INSERT INTO\s+"?(\w+)"?/i);
   return m ? m[1] : null;
 }
 
-function toPg(sql) {
-  let s = sql;
-  // sqlite -> pg translations
-  s = s.replace(/datetime\('now',\s*'\+'\s*\|\|\s*\?\s*\|\|\s*'\s*minutes'\)/g, "NOW() + (? * INTERVAL '1 minute')");
-  s = s.replace(/datetime\('now',\s*'\+'\s*\|\|\s*\?\s*\|\|\s*'\s*minutes'\)/gi, "NOW() + (? * INTERVAL '1 minute')");
-  s = s.replace(/datetime\('now'\)/g, 'NOW()');
-  s = s.replace(/strftime\('%Y',\s*'now'\)/g, 'EXTRACT(YEAR FROM NOW())');
-  s = s.replace(/CAST\(\(julianday\(r\.scade_il\) - julianday\('now'\)\) \* 86400 AS INTEGER\)/g, 'EXTRACT(EPOCH FROM (r.scade_il - NOW()))::int');
-  s = s.replace(/CAST\(\(julianday\(\?\) - julianday\('now'\)\) \* 86400 AS INTEGER\)/g, "EXTRACT(EPOCH FROM (?::timestamp - NOW()))::int");
-  s = s.replace(/julianday\('now'\)/g, 'NOW()');
-  s = s.replace(/julianday\(([^)]+)\)/g, '$1');
-  s = s.replace(/\bIFNULL\(/g, 'COALESCE(');
-  // handle @named params and ?
-  // We will replace ? with $n later, but need to handle mixed
-  return s;
-}
-
+// Prepara una query. I valori non entrano MAI nel testo SQL: nel testo ci sono i segnaposto `?` (o `@nome`), che qui diventano $1, $2, ... e i valori viaggiano
+// a parte, come parametri della query (Postgres non li interpreta mai come SQL). Ritorna { get, all, run }: get = la prima riga (o null), all = tutte le
+// righe, run = esegue e dice quante righe ha toccato (e l'id dell'ultimo INSERT).
 function prepare(sql) {
-  // keep original for named detection
-  const translated = toPg(sql);
   // detect named params @xxx
   const named = [];
   let m;
   const re = /@(\w+)/g;
-  while ((m = re.exec(translated)) !== null) named.push(m[1]);
+  while ((m = re.exec(sql)) !== null) named.push(m[1]);
   let pgSql;
   if (named.length) {
     let idx = 0;
-    pgSql = translated.replace(/@\w+/g, () => `$${++idx}`);
+    pgSql = sql.replace(/@\w+/g, () => `$${++idx}`);
     // also replace remaining ? with $n continuing count
     pgSql = pgSql.replace(/\?/g, () => `$${++idx}`);
     return {
@@ -143,7 +129,7 @@ function prepare(sql) {
   }
   // positional only
   let i=0;
-  let pgSql2 = translated.replace(/\?/g, () => `$${++i}`);
+  let pgSql2 = sql.replace(/\?/g, () => `$${++i}`);
   return {
     get: async (...params) => {
       const res = await esecutore().query(pgSql2, params);
@@ -164,10 +150,9 @@ function prepare(sql) {
   };
 }
 
+// Esegue un'istruzione senza parametri (per esempio un CREATE TABLE IF NOT EXISTS).
 async function exec(sql) {
-  if (/^\s*PRAGMA/i.test(sql.trim())) return;
-  const pgSql = toPg(sql);
-  await esecutore().query(pgSql);
+  await esecutore().query(sql);
 }
 
 // ensureInit() NON applica più lo schema in automatico ad ogni avvio. L'avevamo protetto
@@ -182,6 +167,8 @@ async function exec(sql) {
 // non ad ogni richiesta/avvio. Qui resta solo un controllo economico (una SELECT) per
 // intercettare un database vuoto e avvisare, senza mai eseguire DDL in automatico.
 let inited = false;
+// Controlla una volta sola che lo schema del database esista (una query leggera); se manca avvisa nel log, senza mai crearlo da sé. Se la rete è giù
+// non segna il controllo come fatto.
 async function ensureInit() {
   if (inited) return;
   try {
@@ -197,6 +184,8 @@ async function ensureInit() {
   inited = true;
 }
 
+// Trasforma una funzione in una transazione: tutte le query al suo interno riescono insieme o vengono annullate insieme. Se è già dentro una
+// transazione usa quella.
 function transaction(fn) {
   return async (...args) => {
     // Transazione già in corso su questa stessa catena di chiamate (una funzione
@@ -231,6 +220,8 @@ function transaction(fn) {
 // le prime richieste dopo l'avvio (o dopo una lunga pausa) trovano già connessioni pronte.
 // Si chiama dal server, non dagli script: a loro non serve.
 const CONNESSIONI_CALDE = 3;
+// Tiene sveglie alcune connessioni al database con una query minuscola ogni minuto, e scrive nel log quando il database smette di rispondere e quando
+// torna.
 function mantieniCalde() {
   // Una riga di log quando il database smette di rispondere e una quando torna: senza, il log si riempie di "Connection
   // terminated" uno per richiesta e non si capisce che è la rete (o il database) il problema, non il codice.
@@ -267,7 +258,7 @@ function fuoriDallaTransazione(fn) {
 const db = {
   prepare,
   exec,
-  query: (sql, params=[]) => esecutore().query(toPg(sql).replace(/\?/g, (()=>{let i=0; return ()=>`$${++i}`})()), params),
+  query: (sql, params=[]) => esecutore().query(sql.replace(/\?/g, (()=>{let i=0; return ()=>`$${++i}`})()), params),
   get: async (sql, ...p) => {
     await ensureInit();
     const prep = prepare(sql);

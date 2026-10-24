@@ -1,5 +1,5 @@
-// Le date su Postgres arrivano già come oggetti Date (il driver pg le converte da solo);
-// su SQLite invece sono testo "YYYY-MM-DD HH:MM:SS" in UTC, salvato da datetime('now').
+// Le date su Postgres arrivano già come oggetti Date (il driver pg le converte da solo); alcune
+// prove e vecchi dati le hanno come testo "YYYY-MM-DD HH:MM:SS" in UTC.
 // Qui riportiamo entrambe all'ora locale italiana per la visualizzazione.
 function toDate(sqlUtc) {
   if (!sqlUtc) return null;
@@ -9,6 +9,7 @@ function toDate(sqlUtc) {
   return isNaN(d.getTime()) ? null : d;
 }
 
+// Data e ora di una colonna del database, scritte all'italiana ("—" se manca).
 function dataOra(sqlUtc) {
   const d = toDate(sqlUtc);
   if (!d) return '—';
@@ -21,16 +22,11 @@ function dataOra(sqlUtc) {
   });
 }
 
+// La sola data di una colonna del database, scritta all'italiana ("—" se manca).
 function dataSola(sqlUtc) {
   const d = toDate(sqlUtc);
   if (!d) return '—';
   return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-function oraSola(sqlUtc) {
-  const d = toDate(sqlUtc);
-  if (!d) return '—';
-  return d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 }
 
 // Ora italiana fissa, per gli orari d'arrivo dati dal corriere: la VPS può essere in UTC.
@@ -52,6 +48,7 @@ function tempoConsegna(ore) {
   return `${parteGiorni} e ${resto === 1 ? '1 ora' : resto + ' ore'}`;
 }
 
+// Trasforma i secondi in minuti e secondi tipo "07:42" (mai sotto zero).
 function mmss(secondi) {
   const s = Math.max(0, Math.floor(secondi || 0));
   const m = Math.floor(s / 60);
@@ -227,6 +224,7 @@ function durataFinestraSec(creato, scade, finestraMin) {
 // "In arrivo" (richiesta esplicita). `secondi` = secondi che mancano all'arrivo (anche negativi: l'orario è passato e l'ordine non è ancora
 // segnato consegnato). La stessa soglia c'è in public/app.js (IN_ARRIVO_SEC, blocco "Consegna in arrivo"): vanno tenute uguali.
 const SOGLIA_IN_ARRIVO_SEC = 3 * 60;
+// Dice se mancano pochi secondi all'arrivo: dalla soglia in giù la consegna si scrive solo "In arrivo".
 function inArrivo(secondi) {
   return Number.isFinite(secondi) && secondi <= SOGLIA_IN_ARRIVO_SEC;
 }
@@ -253,4 +251,4 @@ function indirizzoCompleto(a) {
   return [a.indirizzo, riga2].filter(Boolean).join(' — ');
 }
 
-module.exports = { indirizzoCompleto, giornoMeseRoma, nomeCommerciale, SOGLIA_IN_ARRIVO_SEC, inArrivo, toDate, istanteUtc, dataOra, dataSola, oraSola, oraRoma, dataOraRoma, dataSolaRoma, dataBreveRoma, dataCortaRoma, dataEstesaRoma, oraSolaRoma, oraFaseRoma, durataArrivo, giornoRoma, durataMinuti, durataBreve, daMinuti, tempoTrascorso, meseRoma, tempoConsegna, mmss, durataFinestraSec };
+module.exports = { indirizzoCompleto, giornoMeseRoma, nomeCommerciale, SOGLIA_IN_ARRIVO_SEC, inArrivo, toDate, istanteUtc, dataOra, dataSola, oraRoma, dataOraRoma, dataSolaRoma, dataBreveRoma, dataCortaRoma, dataEstesaRoma, oraSolaRoma, oraFaseRoma, durataArrivo, giornoRoma, durataMinuti, durataBreve, daMinuti, tempoTrascorso, meseRoma, tempoConsegna, mmss, durataFinestraSec };

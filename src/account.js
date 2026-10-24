@@ -15,6 +15,7 @@ const db = require('../db');
 const push = require('./push');
 
 class AccountNonEliminabile extends Error {
+  // Crea l'errore "c'è ancora qualcosa in corso": il testo va anche al cliente così com'è.
   constructor(messaggio) {
     super(messaggio);
     this.messaggioCliente = messaggio;

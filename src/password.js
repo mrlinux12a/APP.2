@@ -21,6 +21,8 @@ async function passwordValida(password, utente) {
 const LUNGHEZZA_MINIMA_PASSWORD = 8;
 const LUNGHEZZA_MASSIMA_PASSWORD = 72;
 
+// Controlla una nuova password e la sua ripetizione (lunghezza minima e massima, devono coincidere); restituisce gli errori per campo, vuoto se va
+// bene.
 function erroriNuovaPassword(nuova, ripeti) {
   const errori = {};
   const pwd = typeof nuova === 'string' ? nuova : '';

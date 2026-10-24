@@ -54,6 +54,7 @@ function eSessione(sql) {
   return /\b(INTO|UPDATE|FROM)\s+"?session"?\b/i.test(String(sql || ''));
 }
 
+// Dice se una query si può ripetere senza rischi in caso di rete caduta: le letture e le istruzioni di sessione sì, le scritture mai.
 function eRiprovabile(sql) {
   return eLettura(sql) || eSessione(sql);
 }
@@ -61,6 +62,7 @@ function eRiprovabile(sql) {
 // L'errore che arriva a chi ha chiamato quando la rete non c'è (dopo i tentativi, o subito se l'interruttore è aperto).
 // `status` 503: src/http.js lo trasforma nella pagina/JSON "servizio non raggiungibile" invece di un 500 "imprevisto".
 class ErroreDbNonRaggiungibile extends Error {
+  // Crea l'errore "database non raggiungibile" (503), dicendo se è stato dato subito perché la rete è giù da pochi secondi.
   constructor(causa, { subito = false } = {}) {
     super(subito ? 'database non raggiungibile (tentativo saltato: la rete è giù da pochi secondi)' : 'database non raggiungibile: ' + (causa && causa.message));
     this.name = 'ErroreDbNonRaggiungibile';

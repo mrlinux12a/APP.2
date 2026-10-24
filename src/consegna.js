@@ -14,6 +14,8 @@ const sede = require('./sede_installatori');
 
 const FATTORE_STRADA = 1.35; // le strade non vanno in linea d'aria
 
+// La velocità media dei corrieri in km/h, dalla configurazione (25 se manca o non è valida): serve alla stima del tragitto quando la mappa non
+// risponde.
 async function velocitaMedia() {
   const row = await db.prepare("SELECT valore FROM config WHERE chiave = 'velocita_media_kmh'").get();
   const v = row ? parseFloat(row.valore) : 25;

@@ -7,10 +7,12 @@ const db = require('../db');
 // sessione web "rolling", che resta viva finché si usa l'app.
 const GIORNI_INATTIVITA = 60;
 
+// L'impronta (hash) di un token: nel database si salva questa, mai il token.
 function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
+// Crea il token di accesso per l'app di un utente, salva nel database solo la sua impronta e restituisce il token da dare al telefono.
 async function creaToken(userId, dispositivo) {
   const token = crypto.randomBytes(32).toString('base64url');
   await db
@@ -26,6 +28,7 @@ async function creaToken(userId, dispositivo) {
 const DURATA_RICORDO_MS = 60 * 1000;
 const ricordati = new Map(); // hash del token -> { riga, scade }
 
+// Tiene in memoria per poco tempo un token già controllato, così non si interroga il database a ogni richiesta dell'app.
 function ricorda(hash, riga) {
   const adesso = Date.now();
   ricordati.set(hash, { riga, scade: adesso + DURATA_RICORDO_MS });
@@ -63,6 +66,7 @@ async function utenteDaToken(token) {
   return riga;
 }
 
+// Rende inutilizzabile un token (uscita dall'app): lo toglie dalla memoria e lo segna revocato nel database.
 async function revocaToken(token) {
   if (!token) return;
   ricordati.delete(hashToken(token));

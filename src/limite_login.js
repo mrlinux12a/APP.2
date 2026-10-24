@@ -66,27 +66,19 @@ const MAX_RECUPERI_PER_INDIRIZZO = 10;
 const recuperiPerCoppia = creaLimite({ finestraMs: FINESTRA_RECUPERI_MS, massimo: MAX_RECUPERI_PER_COPPIA });
 const recuperiPerIndirizzo = creaLimite({ finestraMs: FINESTRA_RECUPERI_MS, massimo: MAX_RECUPERI_PER_INDIRIZZO });
 
+// L'indirizzo di rete di chi fa la richiesta ("sconosciuto" se manca).
 const indirizzo = (req) => String((req && req.ip) || 'sconosciuto');
 
+// La chiave del contatore dei tentativi: indirizzo e nome utente insieme.
 function chiaveLogin(req, username) {
   return indirizzo(req) + '|' + String(username || '').toLowerCase();
-}
-
-// ---- Interfaccia per chi ha già la chiave (compatibilità) ----
-function loginBloccato(chiave) {
-  return perCoppia.colpito(chiave);
-}
-function registraTentativoFallito(chiave) {
-  perCoppia.registra(chiave);
-}
-function azzeraTentativi(chiave) {
-  perCoppia.azzera(chiave);
 }
 
 // ---- Interfaccia per le route di login: guarda anche l'indirizzo da solo ----
 function accessoBloccato(req, username) {
   return perCoppia.colpito(chiaveLogin(req, username)) || perIndirizzo.colpito(indirizzo(req));
 }
+// Conta un accesso sbagliato, sia per la coppia indirizzo + utente sia per il solo indirizzo.
 function registraAccessoFallito(req, username) {
   perCoppia.registra(chiaveLogin(req, username));
   perIndirizzo.registra(indirizzo(req));
@@ -101,6 +93,7 @@ function accessoRiuscito(req, username) {
 function iscrizioneBloccata(req) {
   return iscrizioni.colpito(indirizzo(req));
 }
+// Conta una registrazione fatta da questo indirizzo (ce ne sono al massimo alcune all'ora).
 function registraIscrizione(req) {
   iscrizioni.registra(indirizzo(req));
 }
@@ -109,11 +102,13 @@ function registraIscrizione(req) {
 function recuperoBloccato(req, identificativo) {
   return recuperiPerCoppia.colpito(chiaveLogin(req, identificativo)) || recuperiPerIndirizzo.colpito(indirizzo(req));
 }
+// Conta una richiesta di recupero password, sia che l'account esista o no.
 function registraRecupero(req, identificativo) {
   recuperiPerCoppia.registra(chiaveLogin(req, identificativo));
   recuperiPerIndirizzo.registra(indirizzo(req));
 }
 
+// Azzera tutti i contatori (serve alle prove).
 function svuotaTutto() {
   recuperiPerCoppia.svuota();
   recuperiPerIndirizzo.svuota();
@@ -124,9 +119,6 @@ function svuotaTutto() {
 
 module.exports = {
   chiaveLogin,
-  loginBloccato,
-  registraTentativoFallito,
-  azzeraTentativi,
   accessoBloccato,
   registraAccessoFallito,
   accessoRiuscito,

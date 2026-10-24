@@ -26,6 +26,7 @@ function leggiQuery(testo) {
 // sequence for encoding UTF8: 0x00" e chi lo mandava (anche senza nessuna ragione, basta un `?q=a%00b`) otteneva un 500 e una
 // riga di errore nel log. Non serve a nessuno: si toglie da query, corpo e percorso prima che arrivi a una query.
 const RE_NUL = /\u0000/g;
+// Toglie i caratteri NUL da un testo (il database li rifiuta); gli altri valori restano com'erano.
 function senzaNul(valore) {
   return typeof valore === 'string' ? valore.replace(RE_NUL, '') : valore;
 }
@@ -81,6 +82,7 @@ function percorsoInterno(valore, ripiego = '/') {
 // di questo sito (percorsoInterno) E solo una delle pagine del banco da cui si arriva (Storico con i suoi filtri, elenco e scheda
 // cliente, dettaglio di una richiesta, home), con query e ancora; il resto vale `ripiego`.
 const PAGINE_DI_RITORNO_BANCO = /^\/distributore(?:\/storico|\/clienti(?:\/\d+)?|\/richieste\/\d+)?(?:[?#].*)?$/;
+// Controlla la pagina a cui far tornare il banco: vale solo una pagina del banco, tutto il resto (anche un sito esterno) ripiega sulla home.
 function ritornoBanco(valore, ripiego = '/distributore') {
   const percorso = percorsoInterno(valore, '');
   return percorso && percorso.length <= 1000 && PAGINE_DI_RITORNO_BANCO.test(percorso) ? percorso : ripiego;
@@ -127,6 +129,8 @@ function salvaSessionePrimaDelRedirect(req, res, next) {
 // se non è valido il percorso viene saltato e si arriva al 404.
 const ID_VALIDO = /^[1-9]\d{0,8}$/;
 
+// Controllo dell':id negli indirizzi: se non è un numero intero valido l'indirizzo viene trattato come inesistente (404) invece di arrivare al
+// database.
 function idNumerico(req, res, next, valore) {
   if (ID_VALIDO.test(String(valore))) return next();
   return next('route');
@@ -148,6 +152,7 @@ const MESSAGGI = {
   503: ['Servizio non raggiungibile', 'Il servizio non riesce a collegarsi al database in questo momento. Riprova tra poco.'],
 };
 
+// Il testo di errore da mostrare per un certo codice (404, 403, 500...).
 function messaggioPer(stato) {
   return MESSAGGI[stato] || MESSAGGI[stato >= 500 ? 500 : 400];
 }
@@ -161,6 +166,7 @@ function vuoleJson(req) {
   return accept.includes('application/json') && !accept.includes('text/html');
 }
 
+// Rende innocuo un testo da mettere in una pagina HTML (sostituisce i simboli speciali).
 function escapaHtml(testo) {
   return String(testo).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -217,6 +223,7 @@ function gestoreNonTrovato(req, res) {
 // che a qualcuno dovrebbe essere già validato.
 const CODICI_INPUT_NON_VALIDO = new Set(['22021', '22P05', '22003', '22P02', '22007', '22008']);
 
+// Sceglie il codice della risposta per un errore: quello che porta con sé, 400 per i valori non validi per il database, 500 per tutto il resto.
 function statoDaErrore(err) {
   const stato = Number(err && (err.status || err.statusCode));
   if (Number.isInteger(stato) && stato >= 400 && stato <= 599) return stato;

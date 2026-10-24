@@ -26,6 +26,7 @@
 require('dotenv').config();
 const db = require('../db');
 
+// Legge un'opzione scritta come "--nome=valore" dalla riga di comando.
 const arg = (nome) => {
   const trovato = process.argv.find((a) => a.startsWith(`--${nome}=`));
   return trovato ? trovato.slice(nome.length + 3) : null;
@@ -42,6 +43,7 @@ const richieste = require('../src/richieste');
 require('../src/flusso_cliente'); // registra l'assegnatore: senza, "preso" non crea l'ordine
 const sede = require('../src/sede_installatori');
 
+// Aspetta il numero di millisecondi indicato.
 const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
 const BANCO_DI_PROVA = 1; // AFIS, disattivato
 
@@ -49,6 +51,7 @@ let clienteId = null;
 let requestId = null;
 let orderId = null;
 
+// Cancella dal database tutto quello che la prova ha creato (richiesta, messaggi, notifiche, cliente).
 async function pulisci() {
   if (requestId) {
     await db.prepare('DELETE FROM whatsapp_messaggi WHERE request_id = ?').run(requestId);
@@ -70,6 +73,7 @@ async function pulisci() {
   clienteId = requestId = orderId = null;
 }
 
+// Chiude la prova: cancella i dati di prova e termina con il codice indicato.
 async function fine(codice) {
   try {
     await pulisci();
@@ -83,6 +87,7 @@ async function fine(codice) {
 
 process.on('SIGINT', () => fine(1));
 
+// Rilegge lo stato della richiesta di prova e la risposta del banco di prova.
 async function stato() {
   const r = await richieste.aggiornaScadenza(requestId); // come una visita alla pagina: chiude le finestre scadute
   const risposta = await richieste.getRisposta(requestId, BANCO_DI_PROVA);

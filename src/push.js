@@ -23,16 +23,21 @@ const MASSIMO_PER_CHIAMATA = 100;
 const TOKEN_VALIDO = /^(Expo|Exponent)PushToken\[[A-Za-z0-9_-]{10,60}\]$/;
 
 let avvisatoTabellaMancante = false;
+// Il modo in cui si chiama il servizio delle notifiche push di Expo (sostituibile nelle prove).
 let invio = (url, opzioni) => fetch(url, opzioni); // sostituibile nelle prove
 
+// Cambia il modo di chiamare il servizio push (serve alle prove, per non fare chiamate vere).
 function impostaInvio(fn) {
   invio = fn;
 }
 
+// Dice se le notifiche push dell'app sono accese (si spengono con PUSH_ATTIVO=0).
 function attivo() {
   return String(process.env.PUSH_ATTIVO || '').trim() !== '0';
 }
 
+// Riconosce l'errore "la tabella non esiste" (schema non aggiornato) e lo scrive nel log una volta sola: le push restano spente invece di rompere il
+// resto.
 function tabellaAssente(err) {
   // 42P01 = la tabella non esiste (schema non aggiornato).
   if (err && err.code === '42P01') {
@@ -64,6 +69,7 @@ async function registra(userId, token, piattaforma = 'android') {
   }
 }
 
+// Toglie un telefono dalle notifiche: solo quello di questo utente se si indica l'utente, altrimenti ovunque.
 async function rimuovi(token, userId = null) {
   try {
     if (userId === null) await db.prepare('DELETE FROM dispositivi_push WHERE token = ?').run(String(token || ''));
@@ -73,6 +79,7 @@ async function rimuovi(token, userId = null) {
   }
 }
 
+// Toglie tutti i telefoni di un utente dalle notifiche (per esempio quando elimina l'account).
 async function rimuoviUtente(userId) {
   try {
     await db.prepare('DELETE FROM dispositivi_push WHERE user_id = ?').run(userId);
@@ -81,6 +88,7 @@ async function rimuoviUtente(userId) {
   }
 }
 
+// I codici dei telefoni di un utente che possono ricevere notifiche (solo quelli scritti bene).
 async function tokenDi(userId) {
   try {
     const righe = await db.prepare('SELECT token FROM dispositivi_push WHERE user_id = ?').all(userId);

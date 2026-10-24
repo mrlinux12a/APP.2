@@ -7,8 +7,22 @@ già scritto lì.
 ## Stack e ambiente
 
 - Node/Express + EJS, niente build, JS vanilla in `public/app.js`.
-- DB: `db/index.js` sceglie Postgres se c'è `DATABASE_URL`, altrimenti SQLite — **in pratica
-  gira solo su Postgres** (sintassi diretta in `server.js`/`src/*.js`). SQLite è legacy/rotto.
+- DB: **solo Postgres** (`db/index.js` rimanda a `db/postgres/index.js`). SQLite e tutti i suoi file (`db/sqlite/`, `db/minuteria.db`) sono stati eliminati il 24/10/2026.
+  Nei testi SQL i valori sono SEMPRE segnaposto (`?` o `@nome`), che `db.prepare` traduce in `$1, $2…`: nessun valore entra mai nel testo della query. Le uniche interpolazioni `${}` ammesse sono quelle
+  strutturali (nomi di colonne/tabelle fissi, elenchi di segnaposto, costanti numeriche) e stanno tutte in una lista controllata da `test/sql_parametri.test.js`: una nuova va aggiunta lì dopo averla verificata.
+- **Struttura del server (24/10/2026, refactoring)**: `server.js` è solo l'avvio (config, database, app, cicli di vita). L'app Express si compone in `src/app.js` (`creaApp`) da:
+  `src/config/` (ambiente, viste, soglie `limiti`, `bacheca`), `src/middleware/` (sicurezza con **helmet**, **express-rate-limit**, origine, sessione, corpo, compressione, file statici, contesto delle viste),
+  `src/routes/` (un modulo per argomento: autenticazione, profilo, catalogo, carrello, richieste, pagamenti, ordini, notifiche, banco, banco_anagrafica, banco_clienti, agente, eventi, webhook_stripe; `index.js`
+  li monta nell'ordine giusto) e `src/services/` (pezzi condivisi dalle route: banco, carrello in sessione, ciclo di vita, database, striscia ordini...). I moduli piatti `src/*.js` (flusso_cliente, richieste, pricing…)
+  restano la logica di business. **Nel resto di questo file "`server.js`" indica la route o la funzione che prima stava in quel file: oggi sta in `src/routes/` o `src/services/` (si trova con `grep`).**
+  Ordine dei middleware da non cambiare: rifiuto di `%00` → sicurezza → compressione → webhook Stripe (corpo grezzo, PRIMA dei parser) → file statici → limite generale → corpo → `/api/v1` (token, senza cookie) →
+  controllo origine → sessione → `/api/eventi` → contesto viste → route → 404 → errori. Il router di ogni modulo ripete `router.param('id', idNumerico)` (`app.param` non si eredita).
+  Sopra ogni funzione e ogni route c'è un commento in italiano che spiega in parole semplici cosa fa: i nuovi vanno scritti allo stesso modo.
+- **Limiti di richieste (express-rate-limit, in memoria per processo)** in `src/config/limiti.js`: generale 1000/min per indirizzo (`LIMITE_RICHIESTE_AL_MINUTO`), accessi falliti (login, registrazione e recupero password, anche dell'app)
+  60 ogni 15 min, conta solo i tentativi andati male (`LIMITE_ACCESSI_FALLITI`), ricerche nel catalogo 300/min (`LIMITE_RICERCHE_AL_MINUTO`), indirizzo dalla posizione 30/min (`LIMITE_INDIRIZZI_AL_MINUTO`); variabili tutte facoltative.
+  Le soglie sono larghe di proposito (un proxy mal configurato fa condividere l'indirizzo a tutti) e si sommano a `src/limite_login.js` (tentativi per utente). Superato il limite: 429 + `Retry-After`, in JSON per `/api`.
+  `LIMITE_RICHIESTE_DISATTIVATO=1` spegne tutto **solo per le prove** (`test/server.test.js` lo imposta); mai sul server vero. Helmet: CSP **senza** `script-src` (le pagine hanno script in linea), niente COOP/CORP/COEP,
+  HSTS solo se la richiesta è HTTPS, `Permissions-Policy` con `geolocation=(self)`. Sulla VPS servono `npm ci` (helmet, express-rate-limit) e il riavvio di pm2. Prove: `test/limiti_richieste.test.js`.
 - **Produzione: una VPS** sotto pm2 (processo `minuteria`, vedi README), stesso Supabase. `.env` non è in
   git: sulla VPS va creato a mano (`DATABASE_URL`, `SESSION_SECRET`, `PORT` facoltativa, default 3000, più
   le variabili WhatsApp). Dopo un `git pull` serve `npm ci` e il riavvio: due processi pm2 sullo stesso
@@ -37,8 +51,7 @@ già scritto lì.
   tornare dal pagamento su un indirizzo sbagliato: per provare i pagamenti da telefono serve un tunnel HTTPS.
 - Server locale **senza auto-reload**: dopo modifiche a `server.js`/file `require`-ati serve
   riavvio manuale (`.ejs`/`public/*` no).
-- Modifiche schema in **entrambi** `db/postgres/schema.sql` e `db/schema.pg.sql` (root, copie
-  identiche; il file ha fine riga CRLF), poi `node scripts/apply_schema_pg.js` (transazione unica:
+- Modifiche schema in `db/postgres/schema.sql` (l'unico file di schema: la copia `db/schema.pg.sql` è stata eliminata il 24/10/2026; il file ha fine riga CRLF), poi `node scripts/apply_schema_pg.js` (transazione unica:
   un pezzo fallito annulla tutto). **Col ruolo attuale l'intero file non si applica**: `CREATE OR
   REPLACE FUNCTION ricerca_simili` dà "permission denied to set parameter
   pg_trgm.word_similarity_threshold". Per un blocco nuovo: leggere `schema.sql` dal suo commento
@@ -196,7 +209,7 @@ provvisorie). Variabili CSS in cima a `public/style.css`.
 - **Righe compatte ovunque (richiesta esplicita del 16/10/2026)**: ricerca (`/cerca` e ricerca live della home), "Elementi con foto" (`/con-foto`), marchio (elenco di una famiglia) e
   categoria usano **tutte** `partials/prodotto_riga.ejs` (foto 56×56 a sinistra, stepper `− N +` che salva a ogni tocco, niente "Aggiungi", barra `.barra-vai` in basso);
   `.app-categoria` dà lo spazio in fondo. Ogni pagina ha `#risultati[data-righe-compatte]` con `data-carrello`, `data-pezzi`, `data-icona-vuota` (la home li ha sull'elenco
-  delle categorie: la ricerca live ci disegna le righe con `rigaCompattaHtml`, e `/home` passa `carrello`). **La card classica `partials/prodotto.ejs` non è più usata da nessuna pagina**, e con lei
+  delle categorie: la ricerca live ci disegna le righe con `rigaCompattaHtml`, e `/home` passa `carrello`). **La card classica `partials/prodotto.ejs` non è più usata da nessuna pagina (il file è stato eliminato il 24/10/2026)**, e con lei
   il blocco "scelte" qui sotto (`[data-passo]`, "Aggiungi (N)", sessionStorage) è codice rimasto in `app.js` ma senza pagine che lo usino: non reintrodurre card diverse, e se
   si pulisce `app.js` si può togliere. Prova: test "ricerca, "Elementi con foto" e home: righe compatte..." in `test/server.test.js`.
 - **Quantità scelte e non ancora aggiunte** (card classica: ricerca, marchio, con-foto e ricerca live della home; richiesta esplicita del
@@ -1127,7 +1140,7 @@ Richiesta esplicita ("fai 1 e 2" dopo l'elenco di cosa mancava). Solo **clienti*
   subito e il modulo non c'è (anche un POST a mano riceve 409); a buon fine `tokenApp.dimenticaUtente`, sessione distrutta, `/login?avviso=eliminato`. Le frasi del login (`?avviso=`) sono solo `AVVISI_LOGIN` in `server.js`.
   `/elimina-account` (pagina pubblica per Google Play, `src/testi_legali.js`) ora ha anche la sezione "Dal sito".
 - **App Expo**: nel login c'è "Password dimenticata?" che apre `SERVER + '/password-dimenticata'` nel browser (come Privacy ed Elimina account); il cambio password dentro l'app non c'è (solo `tsc` provato, non su un telefono).
-- **Schema** (blocco "Recupero della password dell'installatore (20/10/2026)" in fondo a `schema.sql` e `schema.pg.sql`, DOPO quello dell'anagrafica del banco): tabella `recupero_password` + indice. **Applicato solo al DB locale
+- **Schema** (blocco "Recupero della password dell'installatore (20/10/2026)" in fondo a `schema.sql`, DOPO quello dell'anagrafica del banco): tabella `recupero_password` + indice. **Applicato solo al DB locale
   di prova, NON al condiviso** (`node scripts/applica_blocco_schema.js "-- Recupero della password dell'installatore"`). Senza la tabella il recupero dà errore 500; il resto (cambio password, elimina) funziona.
   Nota: `applica_blocco_schema.js` applica **dal commento indicato fino in fondo**, quindi lanciarlo con "-- Anagrafica del banco: orari" applica entrambi i blocchi.
 - **Prove**: `test/recupero_password.test.js` (modulo e email, DB e posta finti), `test/anagrafica_banco.test.js` (la revoca degli accessi dell'app), e in `test/server.test.js` "login: link …", "recupero password: …", "profilo: scheda
@@ -1185,7 +1198,7 @@ non ci sono più, vale quella unica di `banco_testa`). **Un solo profilo con tut
   **"Email per ogni nuova richiesta" è NASCOSTA**: la riga compare solo quando `email.inviaNuovaRichiesta` esiste (oggi `src/email.js` manda solo "Pagamento ricevuto"); la colonna `distributors.email_nuove_richieste` e la
   rotta `POST /distributore/anagrafica/email-richieste` (JSON `{acceso}`) ci sono già.
 - **Intestazione**: `intestazioneBanco` (server.js) ha una "versione" per banco, alzata dopo ogni salvataggio di ditta/filiale (`rileggiIntestazioneBanco`): il nuovo nome si vede subito, non fra 60 secondi.
-- **Schema** (blocco "Anagrafica del banco: orari, email delle richieste, posizione spostata a mano" in fondo a `schema.sql` e `schema.pg.sql`): `distributors.orari JSONB`, `email_nuove_richieste INTEGER DEFAULT 0`,
+- **Schema** (blocco "Anagrafica del banco: orari, email delle richieste, posizione spostata a mano" in fondo a `schema.sql`): `distributors.orari JSONB`, `email_nuove_richieste INTEGER DEFAULT 0`,
   `geo_manuale INTEGER DEFAULT 0`. **Applicato solo al DB locale di prova; NON al DB condiviso di produzione**: va applicato PRIMA di mettere il codice sulla VPS (`node scripts/applica_blocco_schema.js "-- Anagrafica del banco: orari" [--applica]`).
   Senza le colonne il carrello e l'invio funzionano lo stesso (leggono `SELECT *`: `orari` mancante = filiale chiusa), ma la pagina dell'anagrafica non può salvare orari né email (`geo_manuale` non serve più: la posizione è fissa).
 - **Provato su Postgres vero** (locale usa-e-getta, server vero da una cartella senza `.env`; la parte sulla posizione di sotto è **superata dal 21/10/2026**, la posizione del banco ora è fissa): salvataggio di ditta e filiale, orari e banco chiuso nel carrello (pulsante, rifiuto del server, nessuna richiesta creata, ripiego broadcast),
@@ -1207,7 +1220,7 @@ Richiesta esplicita (mockup in `docs/mockup/notifiche-banco-pagina.png` e `notif
 home NON ci sono la striscia né gli avvisi a comparsa** (le colonne mostrano già tutto); il pallino su "Banco", il titolo, la favicon, il suono e la notifica di sistema valgono anche lì.
 Codice: `src/banco_avvisi.js` (dati), `views/partials/banco_avviso.ejs` (striscia + icone) e `banco_testa.ejs` (pallino, voci del menu), blocco "Avvisi del banco" in fondo a `public/app.js`,
 blocco "Avvisi del banco" in fondo a `public/style.css`, `public/suoni/avviso.mp3` (5 KB, generato: due note). Prove: `test/banco_avvisi.test.js` e cinque test "banco: ..."/"avvisi del banco: ..." in `test/server.test.js`.
-- **Schema** (blocco "Notifiche del banco: tipo e richiesta (20/10/2026)" in fondo a `schema.sql` e `schema.pg.sql`): `notifications.tipo TEXT` e `notifications.request_id INTEGER`, nullable, senza chiave esterna.
+- **Schema** (blocco "Notifiche del banco: tipo e richiesta (20/10/2026)" in fondo a `schema.sql`): `notifications.tipo TEXT` e `notifications.request_id INTEGER`, nullable, senza chiave esterna.
   **Applicato al DB condiviso il 20/10/2026** (prova a secco e poi `--applica`): `notifiche.notifica()` scrive le due colonne a ogni notifica, quindi il codice nuovo NON gira su un DB senza il blocco (anche sulla VPS: schema prima del riavvio).
 - **Tipi** (`notifica(..., { tipo, request_id })`): `nuova_richiesta` (`richieste.creaRichiesta` e `reinviaRichiesta`), `corriere_trovato` (`flusso.creaOrdineDaRisposta`, è la notifica "Nuovo ordine da preparare", con `order_id`),
   `nessun_corriere` e `richiesta_scaduta` (**solo** `richieste.chiudiFinestraRisposte`, con `UPDATE ... RETURNING distributor_id`: la prima va al banco che aveva confermato aspettando un corriere, la seconda a chi non ha risposto; chi
@@ -1411,7 +1424,7 @@ Valgono per cliente, agente e banco (stessa rotta). L'app Android **nativa** ha 
 - **Configurazione**: `.env` `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (`mailto:` o `https:`; se manca vale `APP_URL` se è https). Senza una di queste, `PUSH_ATTIVO=0`, o senza la tabella: **tutto come prima** (avvisi solo con l'app aperta); all'avvio il log scrive `[web push] accese/spente (cosa manca)`.
   `node scripts/genera_chiavi_vapid.js` ne genera una coppia (una per ambiente, non va cambiata dopo); `node scripts/prova_push.js <utente> [--elenco]` manda una prova ai suoi browser e scrive l'esito di ognuno (201 = accettata dal servizio push). `test/server.test.js` imposta chiavi di prova sue (mai quelle del `.env`).
   Il `.env` del PC ha una coppia **sua** con `VAPID_SUBJECT=https://localhost` (aggiunta il 21/10/2026, diversa da quella che andrà sulla VPS).
-- **Schema** (blocco "Notifiche push del sito e della web app (21/10/2026)" in fondo a `schema.sql` e `schema.pg.sql`): `iscrizioni_push(user_id, endpoint UNIQUE, p256dh, auth, chiave, user_agent, ...)`, max 10 per utente. **Applicato solo al DB locale di prova, NON al condiviso**:
+- **Schema** (blocco "Notifiche push del sito e della web app (21/10/2026)" in fondo a `schema.sql`): `iscrizioni_push(user_id, endpoint UNIQUE, p256dh, auth, chiave, user_agent, ...)`, max 10 per utente. **Applicato solo al DB locale di prova, NON al condiviso**:
   `node scripts/applica_blocco_schema.js "-- Notifiche push del sito e della web app" [--applica]` (a secco senza il flag) PRIMA di accendere le chiavi sulla VPS. Senza la tabella le rotte rispondono 503 e il log lo dice una volta.
 - **Iscrizione** (`POST /api/push/iscrivi`, `{ subscription }` = `PushSubscription.toJSON()`): salva e mette `req.session.pushEndpoint`. Ogni pagina porta `<meta name="push-chiave">` (la chiave pubblica; **assente = push spente**) e `<meta name="push-endpoint">` (l'iscrizione che il server ha per QUESTA sessione):
   `iscriviPush()` confronta con l'iscrizione del browser e manda solo se diversa, quindi **nessuna chiamata a ogni pagina**; dopo un nuovo login (sessione nuova → endpoint vuoto) il browser si riscrive e la riga passa al nuovo utente (ON CONFLICT sull'endpoint). Uscita (`POST /logout`) e `POST /api/push/disiscrivi` cancellano la riga;
@@ -1543,9 +1556,9 @@ Solo sito/PWA (`mobile/` non toccata, schema DB e logica di business invariati).
   se si è appena passata la mezzanotte (era il caso di `test/pricing.test.js`, sistemato).
 - Resta da decidere/fare (non toccato): l'avvio crea i dati con `db/seed` se `products` è vuota (rischioso in
   produzione se il catalogo viene svuotato durante un reimport: il seed riscrive le password demo); CSS non più
-  usato (`.offerta*`, `.stepper-3`, `.card-richiesta*`, `.tessera-marchio`...); funzioni senza chiamanti ma
-  pensate per flussi futuri (`anagrafiche.distributoriApprovati`, `catalogo.misureDisponibili`,
-  `notifiche.spostaInOrdini`/`aggiornaStatoOrdine`: quest'ultima servirà all'evento "consegnato").
+  usato (`.offerta*`, `.stepper-3`, `.card-richiesta*`, `.tessera-marchio`...). Il 24/10/2026 sono state tolte le funzioni
+  senza chiamanti (`anagrafiche.distributoriApprovati`/`salvaRegola`/`scontoEffettivo`, `catalogo.misureDisponibili`, `notifiche.spostaInOrdini`/`aggiornaStatoOrdine`, `pricing.prezzoCliente*`, `format.oraSola`,
+  le funzioni di `limite_login` non più usate, 5 icone), il partial dello storico sconti (`riga_sconti.ejs`, con il suo CSS e script) e `anagrafica_cliente.ejs`.
 
 ## App Android e sicurezza (19/10/2026)
 
@@ -1567,7 +1580,7 @@ Test di sicurezza + correzioni + app Android finita. Il cosa-fare per pubblicare
   l'indirizzo), registrazioni 12 all'ora per indirizzo (la registrazione è pubblica e approva da sola). Contano sull'indirizzo vero: serve `X-Forwarded-For` dal proxy (README). Intestazioni: CSP
   **senza** `script-src` (le pagine hanno script in linea) ma con `frame-ancestors`, `base-uri`, `object-src`, `form-action`; `Permissions-Policy` (`camera=(), microphone=(), geolocation=(self)`: **la posizione è permessa a questo sito** per il pulsante del carrello, vedi "Posizione"; con `geolocation=()` il browser la bloccava sempre); HSTS solo se `req.secure`. Niente COOP: romperebbe le
   finestre di Google Pay/Link.
-- **Da sapere / non toccato**: `db/minuteria.db` (SQLite legacy) è **tracciato in git** nonostante il `.gitignore` (togliere con `git rm --cached`, serve un commit); `xlsx` ha vulnerabilità senza correzione ma
+- **Da sapere / non toccato**: `db/minuteria.db` (SQLite legacy) è stato eliminato il 24/10/2026 (resta nella cronologia di git); `xlsx` ha vulnerabilità senza correzione ma
   si usa solo negli script di importazione; `/ordini/:id/consegnato-prova` e la registrazione con approvazione automatica restano (scelte esplicite); `trust proxy` è 1 (un proxy solo).
 - **API dell'app** (`src/api_v1.js`, tutta riscritta; provata contro Postgres e Stripe prova): `POST /richieste` e `/richieste/:id/reinvia` con Stripe → `{ pagamento: { id, client_secret, chiave_pubblica,
   importo, modo } }`, la richiesta nasce da `GET /pagamenti/:id` (stessa `stripe_pagamenti.preparaPagina`/`completaRiga` del sito; senza Stripe → `{ id }` come prima); `POST /registrazione` (token subito, errori per

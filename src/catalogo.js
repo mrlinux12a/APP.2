@@ -5,6 +5,7 @@ const { conCache } = require('./memo');
 
 const PER_PAGINA = 40;
 
+// Legge i valori di una variante (misura, diametro...) come elenco di testi; se non c'è niente di leggibile restituisce niente.
 function valoriVariante(variante_valori) {
   try {
     const arr = typeof variante_valori === 'string' ? JSON.parse(variante_valori) : variante_valori;
@@ -19,6 +20,7 @@ function valoriVariante(variante_valori) {
 // all'altro (c'è anche "L1000xh400xp180"). Qualunque altra forma (Ø, Dn, gradi, più valori) non è una misura.
 const RE_DIMENSIONI = /^\s*((?:[hlp]\s*\d+(?:[.,]\d+)?\s*[x×]\s*){1,2}[hlp]\s*\d+(?:[.,]\d+)?)\s*(cm|mm|m)?\s*$/i;
 
+// Riconosce nel testo una misura tipo "H108xL60xP44cm" e la restituisce come altezza, larghezza e profondità; se non è una misura, niente.
 function leggiDimensioni(testo) {
   const m = RE_DIMENSIONI.exec(String(testo));
   if (!m) return null;
@@ -28,6 +30,7 @@ function leggiDimensioni(testo) {
   return { lettere, numeri: coppie.map((c) => c[2]), unita: m[2] ? m[2].toLowerCase() : '' };
 }
 
+// Le dimensioni di una variante, ma solo se la variante è una sola misura scritta come altezza/larghezza/profondità.
 function dimensioniVariante(variante_valori) {
   const arr = valoriVariante(variante_valori);
   return arr && arr.length === 1 ? leggiDimensioni(arr[0]) : null;
@@ -92,6 +95,8 @@ function senzaColonneDiServizio(righe) {
   return righe.map(({ _gruppo, _ord, _primo, _pri, _rn, ...resto }) => resto);
 }
 
+// Riunisce in un'unica scheda i prodotti che sono varianti dello stesso articolo (stesso gruppo), con le loro misure; gli altri restano schede
+// singole.
 async function raggruppaVarianti(righe) {
   const conGruppo = righe.filter((r) => r.gruppo_id);
   if (!conGruppo.length) return senzaColonneDiServizio(righe);
@@ -201,6 +206,7 @@ const SINONIMI_FRAZIONE_A_PAROLE = [
   [/\bmezzo\b/g, '1/2'],
 ];
 
+// Riscrive le frazioni a parole ("un mezzo", "tre quarti") come cifre, così la ricerca le trova.
 function sostituisciFrazioniAParole(testo) {
   return SINONIMI_FRAZIONE_A_PAROLE.reduce((acc, [pattern, sostituzione]) => acc.replace(pattern, sostituzione), testo);
 }
@@ -219,6 +225,7 @@ const PAROLE_GENERICHE_MISURA = {
 };
 const CHIAVI_PAROLE_GENERICHE_MISURA = Object.keys(PAROLE_GENERICHE_MISURA);
 
+// Conta quante lettere bisogna cambiare, togliere o aggiungere per passare da una parola all'altra (serve a perdonare i refusi).
 function distanzaLevenshtein(a, b) {
   const righe = a.length;
   const colonne = b.length;
@@ -363,11 +370,14 @@ function corrispondeConRefusi(riga, termini) {
   });
 }
 
+// Segna sull'elenco dei risultati se ce n'erano altri oltre il limite ("troncato"), senza che finisca nei dati.
 function conTroncato(righe, troncato) {
   Object.defineProperty(righe, 'troncato', { value: !!troncato, enumerable: false });
   return righe;
 }
 
+// La ricerca del catalogo: prima i risultati esatti, e solo se sono pochi anche quelli con refusi. Restituisce le schede (varianti riunite), al
+// massimo il limite.
 async function cercaProdotti(query, opzioni = {}) {
   const limite = Number(opzioni.limite) > 0 ? Math.floor(Number(opzioni.limite)) : LIMITE_RISULTATI;
   if (!dividiTermini(query).length) return conTroncato([], false); // niente di cercabile (vuoto, solo segni): non tutto il catalogo
@@ -398,6 +408,7 @@ async function cercaProdotti(query, opzioni = {}) {
   return conTroncato(await raggruppaVarianti(righe), buone.length > limite);
 }
 
+// Esegue la ricerca nel modo veloce (funzioni SQL con indice); se non è disponibile o fallisce, ripiega sul modo lento con lo stesso risultato.
 async function cercaConModo(query, opzioni) {
   if (ricercaVeloceAttiva) {
     try {
@@ -418,6 +429,8 @@ function testoRicerca(alias) {
   return `ricerca_testo(${alias}.nome, ${alias}.codice, ${alias}.categoria, ${alias}.ean, ${alias}.macro_slug, ${alias}.brand_slug)`;
 }
 
+// Costruisce ed esegue la query di ricerca vera: parole, misure e filtri (categoria, marchio, sottocategoria), una riga per gruppo di varianti e il
+// limite sulle schede.
 async function eseguiRicerca(
   query,
   {
@@ -632,7 +645,6 @@ async function eseguiRicerca(
   const righeGrezze = await db.prepare(conMembriDelGruppo(sql)).all(...paramsInterna, limite + 1);
   const schede = await raggruppaVarianti(righeGrezze);
   return conTroncato(schede.slice(0, limite), schede.length > limite);
-  return raggruppaVarianti(righeGrezze);
 }
 
 // ---------- Macro categorie ----------
@@ -646,6 +658,7 @@ async function eseguiRicerca(
 // "Elementi con foto" non hanno il file e restano con la loro icona.
 const CARTELLA_IMMAGINI_CATEGORIE = path.join(__dirname, '..', 'public', 'img', 'categorie');
 
+// L'indirizzo dell'immagine di una categoria, se il file esiste; altrimenti niente (e il sito usa l'icona).
 async function immagineCategoria(slug) {
   if (typeof slug !== 'string' || !/^[a-z0-9-]+$/.test(slug)) return null; // lo slug viene dal DB, ma non si costruisce mai un percorso da un valore strano
   try {
@@ -674,6 +687,7 @@ const macroCategorie = conCache(60 * 1000, async function macroCategorie() {
 // `inEvidenza` poi `altre`, quindi la si toglie da dov'è e la si mette in fondo ad `altre`. "Elementi con foto" non è una categoria e resta l'ultima tessera della home.
 const CATEGORIA_IN_FONDO = 'riscaldamento-e-caldaie';
 
+// Le categorie per la home: quelle in evidenza e, per ultima, "Riscaldamento e Caldaie".
 async function categorieHome() {
   const cats = await macroCategorie();
   const inFondo = cats.filter((m) => m.slug === CATEGORIA_IN_FONDO && (m.in_evidenza === 1 || m.n_prodotti > 0));
@@ -691,6 +705,7 @@ async function categorieHome() {
 // /img cade nel resto dell'app (sessione e query delle viste) prima di arrivare al 404.
 const CARTELLA_FOTO_SOTTO = path.join(__dirname, '..', 'public', 'img', 'sottocategorie');
 
+// L'indirizzo della foto di una sottocategoria, se il file esiste; altrimenti niente.
 async function fotoSottocategoria(macroSlug, slug) {
   const file = (slug === 'varie' ? macroSlug + '-varie' : slug) + '.webp';
   try {
@@ -717,38 +732,11 @@ const sottocategorieDi = conCache(60 * 1000, async function sottocategorieDi(mac
   return conArticoli.map((s, i) => ({ ...s, foto: foto[i] }));
 });
 
+// Una sottocategoria, cercata per categoria madre e nome breve.
 async function sottocategoria(macroSlug, slug) {
   return db
     .prepare('SELECT * FROM sottocategorie WHERE macro_slug = ? AND slug = ?')
     .get(macroSlug, slug);
-}
-
-// Misure realmente presenti fra i prodotti di un elenco: è il primo filtro che serve
-// a un installatore, prima ancora della marca.
-async function misureDisponibili({ macroSlug = null, sotto = null, brandSlug = null } = {}) {
-  const where = ["p.attivo = 1", "p.misura <> ''"];
-  const params = [];
-  if (macroSlug) {
-    where.push('p.macro_slug = ?');
-    params.push(macroSlug);
-  }
-  if (sotto) {
-    where.push('EXISTS (SELECT 1 FROM product_sottocategorie ps WHERE ps.product_id = p.id AND ps.sottocategoria_slug = ?)');
-    params.push(sotto);
-  }
-  if (brandSlug) {
-    where.push('p.brand_slug = ?');
-    params.push(brandSlug);
-  }
-  return db
-    .prepare(
-      `SELECT p.misura, COUNT(*) AS n FROM products p
-        WHERE ${where.join(' AND ')}
-        GROUP BY p.misura
-        ORDER BY n DESC, p.misura
-        LIMIT 24`
-    )
-    .all(...params);
 }
 
 // Marchi presenti dentro una categoria: la categoria è il livello principale,
@@ -791,6 +779,7 @@ const contaRighe = conCache(60 * 1000, async (where, params) => {
   return row ? Number(row.n) : 0;
 });
 
+// Un elenco di prodotti a pagine: conta le schede (non i singoli prodotti), legge la pagina richiesta e riunisce le varianti.
 async function paginato({ where, params, pagina = 1, perPagina = PER_PAGINA }) {
   const leggiPagina = (p) =>
     db
@@ -900,10 +889,12 @@ async function marchi() {
     .all();
 }
 
+// Un marchio attivo, cercato per nome breve.
 async function marchio(slug) {
   return db.prepare('SELECT * FROM brands WHERE slug = ? AND attivo = 1').get(slug);
 }
 
+// Le famiglie di prodotti di un marchio, con quanti prodotti attivi hanno.
 async function famiglieDelMarchio(slug) {
   return db
     .prepare(
@@ -917,12 +908,14 @@ async function famiglieDelMarchio(slug) {
     .all(slug);
 }
 
+// Una famiglia di un marchio, cercata per codice.
 async function famigliaDelMarchio(slug, codice) {
   return db
     .prepare('SELECT * FROM brand_families WHERE brand_slug = ? AND codice = ?')
     .get(slug, codice);
 }
 
+// I prodotti di un marchio (o di una sua famiglia), a pagine.
 async function prodottiDelMarchio(slug, famiglia, pagina) {
   if (famiglia) {
     return paginato({
@@ -950,7 +943,6 @@ module.exports = {
   macroCategoria,
   sottocategorieDi,
   sottocategoria,
-  misureDisponibili,
   marchiNellaCategoria,
   prodottiDellaCategoria,
   prodottiConFoto,

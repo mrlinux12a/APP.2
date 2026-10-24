@@ -1,27 +1,27 @@
 const session = require('express-session');
 const db = require('../db');
 
-// Archivio di sessione su Postgres.
-// Usa la tabella "session" creata da schema.pg.sql (connect-pg-simple compatibile).
+// Archivio delle sessioni su Postgres (compatibile con connect-pg-simple): ogni utente collegato è una riga della tabella "session" (db/postgres/schema.sql),
+// così un riavvio del server non scollega nessuno.
 
 const DURATA_PREDEFINITA = 1000 * 60 * 60 * 24 * 30; // 30 giorni
 
 const INTERVALLO_TOUCH_MS = 10 * 60 * 1000;
 
-class ArchivioSqlite extends session.Store {
+// Dice a express-session come leggere, scrivere, rinnovare ed eliminare le sessioni nel database.
+class ArchivioSessioni extends session.Store {
+  // Prepara l'archivio: crea la tabella se manca, toglie le sessioni scadute e ripete la pulizia ogni ora.
   constructor() {
     super();
     this.ultimoTouch = new Map(); // sid -> istante dell'ultimo rinnovo scritto sul DB
-    // crea tabella session se manca (per sqlite e postgres)
-    const isPg = !!process.env.DATABASE_URL;
-    const createSql = isPg
-      ? `CREATE TABLE IF NOT EXISTS session (sid VARCHAR PRIMARY KEY, sess JSON NOT NULL, expire TIMESTAMP NOT NULL)`
-      : `CREATE TABLE IF NOT EXISTS session (sid TEXT PRIMARY KEY, sess TEXT NOT NULL, expire TEXT NOT NULL)`;
-    db.exec(createSql).catch(()=>{}).finally(()=> this.pulisci());
+    db.exec('CREATE TABLE IF NOT EXISTS session (sid VARCHAR PRIMARY KEY, sess JSON NOT NULL, expire TIMESTAMP NOT NULL)')
+      .catch(() => {})
+      .finally(() => this.pulisci());
     this.timer = setInterval(() => this.pulisci(), 60 * 60 * 1000);
     if (this.timer.unref) this.timer.unref();
   }
 
+  // Dice fino a quando vale una sessione: la scadenza del suo cookie, o 30 giorni da adesso.
   scadenza(sess) {
     if (sess && sess.cookie && sess.cookie.expires) {
       return new Date(sess.cookie.expires);
@@ -29,18 +29,10 @@ class ArchivioSqlite extends session.Store {
     return new Date(Date.now() + DURATA_PREDEFINITA);
   }
 
-  // Formato compatibile con datetime('now') di SQLite ("YYYY-MM-DD HH:MM:SS"), così i
-  // confronti WHERE expire > datetime('now') restano corretti anche testuali.
-  formatoSqlite(date) {
-    return date.toISOString().slice(0, 19).replace('T', ' ');
-  }
-
+  // Legge una sessione ancora valida dal database (o null se non c'è o è scaduta).
   get(sid, callback) {
-    const isPg = !!process.env.DATABASE_URL;
-    const sql = isPg ? 'SELECT sess FROM session WHERE sid = ? AND expire > NOW()' : "SELECT sess FROM session WHERE sid = ? AND expire > datetime('now')";
-    // then(esito, errore) e non then(...).catch(...): se la callback lancia, un .catch la richiamerebbe
-    // una seconda volta con l'errore.
-    db.prepare(sql).get(sid)
+    // then(esito, errore) e non then(...).catch(...): se la callback lancia, un .catch la richiamerebbe una seconda volta con l'errore.
+    db.prepare('SELECT sess FROM session WHERE sid = ? AND expire > NOW()').get(sid)
       .then(row => {
         if (!row) return callback(null, null);
         const sess = row.sess;
@@ -53,31 +45,24 @@ class ArchivioSqlite extends session.Store {
       }, err => callback(err));
   }
 
+  // Salva (o aggiorna) una sessione nel database, con la sua scadenza.
   set(sid, sess, callback) {
-    const isPg = !!process.env.DATABASE_URL;
-    const expire = this.scadenza(sess);
-    const expireParam = isPg ? expire : this.formatoSqlite(expire);
-    const sessJson = JSON.stringify(sess);
-    const sql = isPg
-      ? `INSERT INTO session (sid, sess, expire) VALUES (?, ?, ?) ON CONFLICT(sid) DO UPDATE SET sess = EXCLUDED.sess, expire = EXCLUDED.expire`
-      : `INSERT INTO session (sid, sess, expire) VALUES (?, ?, ?) ON CONFLICT(sid) DO UPDATE SET sess = excluded.sess, expire = excluded.expire`;
-    db.prepare(sql).run(sid, sessJson, expireParam)
+    db.prepare(
+      `INSERT INTO session (sid, sess, expire) VALUES (?, ?, ?)
+       ON CONFLICT(sid) DO UPDATE SET sess = EXCLUDED.sess, expire = EXCLUDED.expire`
+    ).run(sid, JSON.stringify(sess), this.scadenza(sess))
       .then(() => callback(null), err => callback(err));
   }
 
-  // Con rolling: true express-session chiama touch a ogni richiesta e ASPETTA che finisca prima di
-  // chiudere la risposta: un UPDATE sul DB (un giro di rete, ~50 ms) su ogni pagina. La scadenza
-  // è a 30 giorni: rinnovarla al massimo ogni 10 minuti per sessione cambia solo di pochi
-  // minuti quando scade, e toglie quell'attesa dal 99% delle richieste.
+  // Rinnova la scadenza di una sessione. Con rolling: true express-session chiama touch a ogni richiesta e ASPETTA che finisca prima di chiudere la
+  // risposta: un UPDATE sul DB (un giro di rete, ~50 ms) su ogni pagina. La scadenza è a 30 giorni: rinnovarla al massimo ogni 10 minuti per sessione
+  // cambia solo di pochi minuti quando scade, e toglie quell'attesa dal 99% delle richieste.
   touch(sid, sess, callback) {
     const adesso = Date.now();
     const ultimo = this.ultimoTouch.get(sid);
     if (ultimo && adesso - ultimo < INTERVALLO_TOUCH_MS) return callback(null);
 
-    const isPg = !!process.env.DATABASE_URL;
-    const expire = this.scadenza(sess);
-    const expireParam = isPg ? expire : this.formatoSqlite(expire);
-    db.prepare('UPDATE session SET expire = ? WHERE sid = ?').run(expireParam, sid)
+    db.prepare('UPDATE session SET expire = ? WHERE sid = ?').run(this.scadenza(sess), sid)
       .then(() => {
         this.ultimoTouch.set(sid, adesso);
         if (this.ultimoTouch.size > 5000) {
@@ -87,20 +72,20 @@ class ArchivioSqlite extends session.Store {
       }, err => callback(err));
   }
 
+  // Cancella una sessione (uscita dall'account).
   destroy(sid, callback) {
-    // express-session può chiamarla senza callback (req.session.destroy()): senza questa riga, il
-    // `callback(null)` sotto lanciava un TypeError dentro la promessa.
+    // express-session può chiamarla senza callback (req.session.destroy()): senza questa riga, il `callback(null)` sotto lanciava un TypeError dentro la
+    // promessa.
     const fine = typeof callback === 'function' ? callback : () => {};
     this.ultimoTouch.delete(sid);
     db.prepare('DELETE FROM session WHERE sid = ?').run(sid)
       .then(() => fine(null), err => fine(err || null));
   }
 
+  // Toglie dal database le sessioni scadute.
   pulisci() {
-    const isPg = !!process.env.DATABASE_URL;
-    const sql = isPg ? 'DELETE FROM session WHERE expire < NOW()' : "DELETE FROM session WHERE expire < datetime('now')";
-    db.prepare(sql).run().catch(() => {});
+    db.prepare('DELETE FROM session WHERE expire < NOW()').run().catch(() => {});
   }
 }
 
-module.exports = { ArchivioSqlite };
+module.exports = { ArchivioSessioni };

@@ -64,6 +64,7 @@ const MACRO_EXTRA = {
   },
 };
 
+// Legge dalla riga di comando le opzioni scritte come "--nome valore" (per esempio --marchio e --file).
 function argomenti() {
   const a = {};
   const v = process.argv.slice(2);
@@ -73,6 +74,7 @@ function argomenti() {
   return a;
 }
 
+// Legge un numero scritto in un foglio Excel (anche con la virgola o il punto delle migliaia); niente se non si capisce.
 function numero(valore) {
   const s = String(valore === undefined || valore === null ? '' : valore).trim();
   if (!s) return null;
@@ -100,6 +102,7 @@ function numero(valore) {
   return Number.isFinite(n) ? n : null;
 }
 
+// Un valore del foglio come testo, senza spazi ai bordi (vuoto se manca).
 function testo(valore) {
   return String(valore === undefined || valore === null ? '' : valore).trim();
 }
@@ -110,6 +113,7 @@ const GRIGLIA_SCONTI = [
   [2, 3, 7],
 ];
 
+// Importa un listino Excel di un marchio: controlla marchio e file indicati, legge le righe e le scrive nel database.
 async function importa() {
   await db.ensureInit();
   const arg = argomenti();

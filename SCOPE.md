@@ -105,8 +105,8 @@ Aggiornato al 19/10/2026 (app Android completata; il resto com'era al 04/10/2026
   vanno sostituiti prima di emettere documenti veri.
 - **Sconti reali per marchio e distributore**: oggi l'importatore applica uno sconto Base unico
   (`--sconto`) con una piccola variazione per banco. Vanno caricate le condizioni vere.
-- **Punti vendita degli altri banchi**: `store_locations` ha solo le due filiali Borea e lo script di
-  caricamento (`db/postgres/geocodifica.js`) ha il percorso di `punti_vendita` sbagliato (vedi README).
+- **Punti vendita degli altri banchi**: `store_locations` ha solo le due filiali Borea; lo script che
+  caricava gli altri (`db/punti_vendita.js`, `db/postgres/geocodifica.js`) è stato eliminato il 24/10/2026.
 - **Stima di consegna senza posizione del cliente**: `minutiStimati()` in `src/consegna.js`
   ignora la consegna dichiarata dal banco e mostra solo la partenza (vedi
   `AUDIT_DISTRIBUTORE.md`); serve decidere il comportamento giusto.

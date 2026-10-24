@@ -5,7 +5,7 @@
   //  · approvato (22/10/2026, per dare spazio agli ordini): i dati del cliente stanno in UNA barra bianca sotto l'intestazione del banco (freccia,
   //    iniziali, nome, "cod. cliente · P.IVA", telefono ed email come pillole) e nel pannello "Dati cliente", chiuso all'arrivo; sotto, a tutta
   //    larghezza, "Materiale ordinato" (tutti gli ordini fatti a questo banco, col materiale a prezzi IVA inclusa), che scorre con la PAGINA.
-  // Una voce senza dato non si disegna. Gli sconti concordati non stanno più qui (la rotta POST .../sconti c'è ancora, senza modulo).
+  // Una voce senza dato non si disegna. Gli sconti concordati non stanno più qui (la rotta per salvarli è stata tolta).
   const stato = rapporto.stato;
   const eApprovato = stato === 'approvato';
   const eRifiutato = stato === 'rifiutato';

@@ -605,6 +605,8 @@ process.env.SESSION_SECRET = 'segreto-di-prova';
 process.env.WHATSAPP_ATTIVO = '0';
 // Nessuna chiamata di rete dalle prove: il tragitto sulla mappa (src/percorso.js) è spento, come ogni altro servizio esterno.
 process.env.ROUTING_ATTIVO = '0';
+// I limiti di richieste per indirizzo (express-rate-limit) restano spenti qui: le prove fanno centinaia di richieste dallo stesso indirizzo. Si provano a parte (test/limiti_richieste.test.js).
+process.env.LIMITE_RICHIESTE_DISATTIVATO = '1';
 const percorsoDb = require.resolve(path.join(radice, 'db/index.js'));
 require.cache[percorsoDb] = { id: percorsoDb, filename: percorsoDb, loaded: true, exports: dbFinto };
 

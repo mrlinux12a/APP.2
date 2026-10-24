@@ -5,6 +5,7 @@
 const orariCorriere = require('./corriere');
 const format = require('./format');
 
+// Arrotonda a due decimali (centesimi).
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
 // Le righe del materiale, a prezzo del banco: prezzo cad. = prezzo netto + RAEE unitario, totale di riga = subtotale + RAEE di riga (MAI il prezzo
@@ -78,6 +79,7 @@ function quando(m) {
   return m.giorno ? `il ${m.giorno} alle ${m.ora}` : `alle ${m.ora}`;
 }
 
+// Mette la prima lettera maiuscola.
 const maiuscola = (testo) => testo.charAt(0).toUpperCase() + testo.slice(1);
 
 // Quando la merce è partita: il momento del "Preparato" (in_evasione_il) o, negli ordini vecchi (stato `evaso`), evaso_il.

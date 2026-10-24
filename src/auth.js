@@ -7,11 +7,13 @@ function nonCollegato(req, res) {
   return res.redirect('/login');
 }
 
+// Lascia passare solo chi è collegato; gli altri vanno al login (o ricevono un errore 401 se chiedono dati).
 function requireLogin(req, res, next) {
   if (!req.session.user) return nonCollegato(req, res);
   next();
 }
 
+// Crea il controllo "solo questo ruolo": chi non è collegato va al login, chi ha un ruolo diverso riceve un errore 403.
 function requireRole(ruolo) {
   return (req, res, next) => {
     if (!req.session.user) return nonCollegato(req, res);

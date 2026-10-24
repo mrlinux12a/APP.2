@@ -15,6 +15,7 @@ const GIORNO_DA_INGLESE = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun:
 
 const RE_ORA = /^([01]\d|2[0-3]):[0-5]\d$/;
 
+// Controlla che un testo sia un'ora scritta bene ("07:30").
 function oraValida(testo) {
   return typeof testo === 'string' && RE_ORA.test(testo);
 }
@@ -167,6 +168,7 @@ function statoBanchi(distributori, quando = new Date()) {
 
 // Sotto questi minuti dalla chiusura il carrello avvisa "Ancora N min per inviare: alle 17:00 chiudiamo" (richiesta esplicita del 22/10/2026).
 const IN_CHIUSURA_MIN = 30;
+// Dice se il banco è aperto ma sta per chiudere (mancano meno minuti della soglia).
 function inChiusura(stato, soglia = IN_CHIUSURA_MIN) {
   return !!(stato && stato.aperto && stato.chiude && stato.chiude.mancanoMin <= soglia);
 }

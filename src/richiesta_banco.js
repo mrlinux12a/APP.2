@@ -6,6 +6,7 @@
 // qui la soglia è quella chiesta per questa pagina.)
 const SOGLIA_URGENTE_SEC = 120;
 
+// Arrotonda a due decimali (centesimi).
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
 // Lo stato della richiesta per il banco: { chiave, etichetta }. La chiave sceglie il colore (classe ric-st-<chiave>).

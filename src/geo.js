@@ -35,6 +35,7 @@ function distanzaKm(a, b) {
   return Math.round(2 * R * Math.asin(Math.sqrt(h)) * 10) / 10;
 }
 
+// Scrive una distanza per le persone: in metri sotto il chilometro, altrimenti in km con la virgola.
 function formattaDistanza(km) {
   if (km === null || km === undefined) return null;
   if (km < 1) return `${Math.round(km * 1000)} m`;
@@ -59,6 +60,8 @@ function ricercheGeocodifica({ indirizzo, cap, citta, provincia }) {
   return via ? [...new Set([completa, senzaCap])] : [];
 }
 
+// Trasforma un indirizzo nelle sue coordinate chiedendole al servizio di mappe, con più tentativi da un indirizzo completo a uno più generico. Non
+// lancia errori: se non trova niente restituisce niente.
 async function geocodifica(dati, opzioni = {}) {
   const chiama = opzioni.fetch || (typeof fetch === 'function' ? fetch : null);
   const pausaMs = opzioni.pausaMs === undefined ? PAUSA_TRA_TENTATIVI_MS : opzioni.pausaMs;
@@ -105,6 +108,8 @@ function posizioneValida(lat, lng) {
 // NON si scrive: si prende la via più vicina (zoom 17, senza numero) e chi chiama chiede di aggiungerlo. Senza `precisioneM` si fida, come prima.
 const NOMINATIM_INVERSA_URL = 'https://nominatim.openstreetmap.org/reverse';
 const PRECISIONE_CIVICO_M = 30;
+// Trasforma le coordinate di un punto nell'indirizzo più vicino (con il civico solo se la posizione è abbastanza precisa), dicendo se il civico c'è.
+// Non lancia errori.
 async function indirizzoDaPosizioneDettaglio(lat, lng, opzioni = {}) {
   const chiama = opzioni.fetch || (typeof fetch === 'function' ? fetch : null);
   if (!chiama || !posizioneValida(lat, lng)) return null;

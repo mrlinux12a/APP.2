@@ -56,6 +56,7 @@ function calcolaOrdine(o, righe, ivaConfig, servizioPct) {
   return { iva, righe: righeCalcolate, totale: importi.banco.totale, servizio: importi.app.totale, importi, netto };
 }
 
+// Data breve e ora di un istante, in ora italiana (tipo "12 set, 14:30").
 function dataCompatta(naive) {
   return `${format.dataCortaRoma(naive)}, ${format.oraSolaRoma(naive)}`;
 }
@@ -82,6 +83,7 @@ function articoliSommati(ordini, { perPrezzo = true } = {}) {
   return [...mappa.values()].sort((a, b) => b.totale - a.totale || a.nome.localeCompare(b.nome));
 }
 
+// I totali di un elenco di ordini: quanto si deve per il materiale, quanto è stato pagato in app per il servizio e quanti sono.
 function riepilogoDi(ordini) {
   return {
     totale: arrotonda2(ordini.reduce((s, o) => s + o.totale, 0)),
@@ -344,6 +346,7 @@ function cella(valore) {
   if (/^[=+\-@\t\r]/.test(testo)) testo = "'" + testo;
   return /[;"\r\n]/.test(testo) ? '"' + testo.replace(/"/g, '""') + '"' : testo;
 }
+// Scrive un numero per il file CSV: due decimali con la virgola, come vuole Excel in italiano.
 const numeroCsv = (n) => arrotonda2(n).toFixed(2).replace('.', ',');
 
 // Il CSV del materiale del periodo: ";" come separatore (Excel italiano), BOM UTF-8, una riga per articolo, il servizio pagato sulla
@@ -364,6 +367,7 @@ function csvMateriale(materiale) {
   return '﻿' + righe.join('\r\n') + '\r\n';
 }
 
+// Il nome del file CSV del materiale, con il mese scelto (o "tutto").
 function nomeFileCsv(materiale) {
   return `materiale-${materiale.mese === 'tutto' ? 'tutto' : materiale.mese}.csv`;
 }

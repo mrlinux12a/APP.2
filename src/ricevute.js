@@ -44,6 +44,7 @@ async function assegna(ordineId, tipo = 'pagamento') {
   throw new Error('numero di ricevuta non assegnato per l\'ordine ' + ordineId);
 }
 
+// Scrive l'indirizzo di un utente su una riga: via, CAP, città e provincia.
 const indirizzoDi = (u) =>
   [String(u.indirizzo || '').trim(), [u.cap, u.citta, u.provincia ? '(' + u.provincia + ')' : ''].filter(Boolean).join(' ')].filter(Boolean).join(', ');
 
@@ -96,7 +97,9 @@ async function datiRicevuta(ordineId, { tipo = 'pagamento', clienteId = null } =
 const COL = { blu: '#245A8F', testo: '#1C1917', grigio: '#6B6A5F', riga: '#ECE9E2', bordo: '#E2DED3', riquadro: '#F7F6F2' };
 const MARGINE_X = 48;
 const MARGINE_Y = 44;
+// Scrive un importo con il simbolo dell'euro e due decimali.
 const euro = (n) => '€ ' + pricing.euro(n);
+// Data e ora scritte per la ricevuta, in ora italiana.
 const dataOra = (d) => `${format.dataSolaRoma(d)}, ${format.oraSolaRoma(d)}`;
 
 // Tutto quello che c'è scritto sulla ricevuta, senza disegnare niente (funzione pura: si prova da sola). `d` = datiRicevuta. Il disegno (disegnaRicevuta) non

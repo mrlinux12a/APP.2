@@ -28,6 +28,7 @@ const { prodottoJson } = require('./prodotto_json');
 const { accessoBloccato, registraAccessoFallito, accessoRiuscito, iscrizioneBloccata, registraIscrizione } = require('./limite_login');
 const { passwordValida } = require('./password');
 const { idNumerico } = require('./http');
+const limiti = require('./middleware/limiti');
 
 const router = express.Router();
 
@@ -47,16 +48,20 @@ router.use((req, res, next) => {
   next();
 });
 
+// Prende il token di accesso dalla richiesta (intestazione "Authorization: Bearer ..."), o niente se manca.
 function tokenDellaRichiesta(req) {
   const intestazione = req.get('authorization') || '';
   const m = intestazione.match(/^Bearer\s+(\S+)$/i);
   return m ? m[1] : null;
 }
 
+// I dati dell'utente che l'app può vedere: id, nome utente, ragione sociale e ruolo.
 function utenteJson(u) {
   return { id: u.id, username: u.username, ragione_sociale: u.ragione_sociale, ruolo: u.ruolo };
 }
 
+// Controllo d'accesso dell'API: lascia passare solo un installatore con un token valido (401 se il token manca o è scaduto, 403 se il ruolo non è
+// quello giusto).
 async function richiedeCliente(req, res, next) {
   const utente = await tokenApp.utenteDaToken(tokenDellaRichiesta(req));
   if (!utente) return res.status(401).json({ errore: 'Accesso scaduto: entra di nuovo.' });
@@ -84,6 +89,7 @@ function prodottoApp(p) {
   };
 }
 
+// Trasforma un elenco di prodotti nella risposta dell'app: schede con i prezzi, più pagina, numero di pagine e totale.
 async function elencoJson(elenco) {
   return {
     risultati: elenco.righe.map((p) => prodottoApp(p)),
@@ -101,10 +107,12 @@ function urlAssoluto(req, percorso) {
   return base + percorso;
 }
 
+// Una categoria come la vede l'app: nome, descrizione, numero di prodotti e immagine (con indirizzo completo).
 function macroJson(m, req) {
   return { slug: m.slug, nome: m.nome, descrizione: m.descrizione, n_prodotti: Number(m.n_prodotti) || 0, immagine: urlAssoluto(req, m.immagine) };
 }
 
+// Scrive un importo in euro come testo, con due decimali.
 const e2 = (n) => pricing.euro(n);
 // Un istante letto da una colonna TIMESTAMP senza fuso (ora UTC che pg legge come ora locale) come stringa ISO vera, o null se manca.
 const isoFase = (naive) => {
@@ -114,7 +122,7 @@ const isoFase = (naive) => {
 
 // ---------- Accesso ----------
 
-router.post('/login', async (req, res) => {
+router.post('/login', limiti.accesso, async (req, res) => {
   const username = String((req.body && req.body.username) || '').trim().slice(0, 100);
 
   if (accessoBloccato(req, username)) {
@@ -135,7 +143,7 @@ router.post('/login', async (req, res) => {
 
 // Registrazione dall'app: gli stessi controlli e la stessa iscrizione del sito (anagrafiche.validaIscrizione / iscriviCliente), poi si entra
 // subito, senza un secondo passaggio dal login. Con gli errori per campo (`errori`) l'app evidenzia i campi sbagliati.
-router.post('/registrazione', async (req, res) => {
+router.post('/registrazione', limiti.accesso, async (req, res) => {
   if (iscrizioneBloccata(req)) {
     return res.status(429).json({ errore: 'Da questo dispositivo sono state fatte troppe registrazioni. Riprova più tardi.' });
   }
@@ -159,6 +167,7 @@ router.post('/registrazione', async (req, res) => {
   res.json({ token, utente: utenteJson(cliente) });
 });
 
+// Uscita dell'app: rende inutilizzabile il token e toglie il telefono dalle notifiche di questo utente.
 router.post('/logout', async (req, res) => {
   const token = tokenDellaRichiesta(req);
   // Il telefono che esce non deve più ricevere le notifiche di questo utente (se manda il suo token push).
@@ -169,6 +178,7 @@ router.post('/logout', async (req, res) => {
   res.json({ ok: true });
 });
 
+// Dice all'app chi è collegato (serve a controllare che il token valga ancora).
 router.get('/me', richiedeCliente, async (req, res) => {
   res.json({ utente: utenteJson(req.utente) });
 });
@@ -210,6 +220,7 @@ router.post('/dispositivi', richiedeCliente, async (req, res) => {
   res.json({ ok: true });
 });
 
+// Toglie un telefono dall'elenco di quelli che ricevono le notifiche push.
 router.delete('/dispositivi', richiedeCliente, async (req, res) => {
   await push.rimuovi((req.body && req.body.token) || '', req.utente.id);
   res.json({ ok: true });
@@ -249,7 +260,7 @@ router.get('/catalogo', richiedeCliente, async (req, res) => {
 // Ricerca mentre si digita, con lo stesso ambito delle pagine del sito (categoria,
 // sottocategoria). I marchi non ci sono: nel sito /marchi non è collegato da nessuna
 // pagina e oggi nessun marchio ha prodotti attivi.
-router.get('/cerca', richiedeCliente, async (req, res) => {
+router.get('/cerca', limiti.ricerca, richiedeCliente, async (req, res) => {
   const q = String(req.query.q || '').trim();
   if (q.length < 2) return res.json({ risultati: [] });
   const risultati = await catalogo.cercaProdotti(q, {
@@ -259,6 +270,7 @@ router.get('/cerca', richiedeCliente, async (req, res) => {
   res.json({ risultati: risultati.map((p) => prodottoApp(p)), troncato: !!risultati.troncato });
 });
 
+// Una categoria con le sue sottocategorie (404 se non esiste).
 router.get('/categorie/:slug', richiedeCliente, async (req, res) => {
   const macro = await catalogo.macroCategoria(req.params.slug);
   if (!macro) return res.status(404).json({ errore: 'Categoria non trovata.' });
@@ -270,7 +282,8 @@ router.get('/categorie/:slug', richiedeCliente, async (req, res) => {
   });
 });
 
-router.get('/categorie/:slug/prodotti', richiedeCliente, async (req, res) => {
+// I prodotti di una categoria, pagina per pagina (anche di una sola sottocategoria); ha il limite sulle ricerche.
+router.get('/categorie/:slug/prodotti', limiti.ricerca, richiedeCliente, async (req, res) => {
   const macro = await catalogo.macroCategoria(req.params.slug);
   if (!macro) return res.status(404).json({ errore: 'Categoria non trovata.' });
   const elenco = await catalogo.prodottiDellaCategoria(macro.slug, {
@@ -280,6 +293,7 @@ router.get('/categorie/:slug/prodotti', richiedeCliente, async (req, res) => {
   res.json(await elencoJson(elenco));
 });
 
+// I prodotti che hanno una foto, pagina per pagina.
 router.get('/con-foto', richiedeCliente, async (req, res) => {
   res.json(await elencoJson(await catalogo.prodottiConFoto({ pagina: req.query.pagina })));
 });
@@ -350,6 +364,7 @@ async function esitoPagamentoJson(id, clienteId) {
   }
 }
 
+// Risposta d'errore (400) per un invio che non si può fare: testo, titolo e codice, più, se il banco è chiuso, quando riapre.
 function rispostaErroreFlusso(res, e) {
   return res.status(400).json({
     errore: e.message, titolo: e.titolo, codice: e.codice, request_id: e.requestId || null,
@@ -416,6 +431,7 @@ const ESITO_RISPOSTA = {
   non_disponibile: 'Non disponibile',
 };
 
+// Le righe di una richiesta in forma semplice per l'app: quantità, nome e codice.
 function righeJson(righe) {
   return righe.map((r) => ({ quantita: r.quantita, nome: r.nome, codice: r.codice }));
 }
@@ -478,6 +494,8 @@ function pagamentoJson(r) {
   };
 }
 
+// Trova la richiesta indicata nell'indirizzo (aggiornando prima la scadenza) e controlla che sia di questo cliente; altrimenti risponde 404 e
+// restituisce niente.
 async function richiestaDelCliente(req, res) {
   const richiesta = await richieste.aggiornaScadenza(req.params.id);
   if (!richiesta || richiesta.cliente_id !== req.utente.id) {
@@ -555,6 +573,7 @@ router.post('/richieste/:id/reinvia', richiedeCliente, async (req, res) => {
   }
 });
 
+// Annulla o elimina una richiesta del cliente, se la regola lo permette (altrimenti spiega perché no).
 router.delete('/richieste/:id', richiedeCliente, async (req, res) => {
   const richiesta = await richiestaDelCliente(req, res);
   if (!richiesta) return;
@@ -579,6 +598,7 @@ function statoOrdineTesto(ordine) {
   return ordine.consegnato_il ? 'Consegnato' : 'In preparazione';
 }
 
+// Trova l'ordine indicato nell'indirizzo e controlla che sia di questo cliente; altrimenti risponde 404 e restituisce niente.
 async function ordineDelCliente(req, res) {
   const ordine = await db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!ordine || ordine.cliente_id !== req.utente.id) {
@@ -609,6 +629,7 @@ function arrivoOrdine(ordine) {
   };
 }
 
+// Il dettaglio di un ordine per l'app: stato, tempi di arrivo, righe a prezzo del banco, importi e pagamento. Segna come lette le sue notifiche.
 router.get('/ordini/:id', richiedeCliente, async (req, res) => {
   const ordine = await ordineDelCliente(req, res);
   if (!ordine) return;
@@ -726,6 +747,7 @@ router.get('/ordini/:id/riordina', richiedeCliente, async (req, res) => {
   res.json({ articoli, saltati });
 });
 
+// Prova ad annullare un ordine: oggi il cliente non può più farlo, quindi risponde con il motivo.
 router.delete('/ordini/:id', richiedeCliente, async (req, res) => {
   const ordine = await ordineDelCliente(req, res);
   if (!ordine) return;
@@ -746,16 +768,20 @@ router.delete('/ordini/:id', richiedeCliente, async (req, res) => {
 // scarica da un indirizzo firmato (HMAC) valido pochi minuti, fatto per UN ordine e UN cliente. Chi non ha il link non scarica niente; chi lo
 // perde dopo cinque minuti non scarica più.
 const VALIDITA_LINK_RICEVUTA_SEC = 5 * 60;
+// La chiave segreta con cui si firmano gli indirizzi temporanei delle ricevute (ricavata dal segreto del server).
 const segretoLink = () =>
   crypto.createHash('sha256').update('ricevuta-app|' + (process.env.SESSION_SECRET || process.env.DATABASE_URL || 'sviluppo-locale')).digest();
+// La firma di un indirizzo temporaneo di ricevuta: lega insieme ordine, cliente e scadenza, così nessuno può cambiarli.
 const firmaLink = (ordineId, clienteId, scadenza) =>
   crypto.createHmac('sha256', segretoLink()).update(`${ordineId}|${clienteId}|${scadenza}`).digest('hex');
 
+// L'indirizzo base del sito: quello fisso del .env se c'è, altrimenti quello da cui è arrivata la richiesta.
 function baseUrl(req) {
   const fisso = String(process.env.APP_URL || '').trim().replace(/\/+$/, '');
   return fisso || req.protocol + '://' + req.get('host');
 }
 
+// Dà all'app un indirizzo firmato e a scadenza per aprire la ricevuta PDF dell'ordine (il telefono non può mandare il token quando apre un PDF).
 router.post('/ordini/:id/ricevuta', richiedeCliente, async (req, res) => {
   const ordine = await ordineDelCliente(req, res);
   if (!ordine) return;
@@ -766,6 +792,7 @@ router.post('/ordini/:id/ricevuta', richiedeCliente, async (req, res) => {
   res.json({ url: `${baseUrl(req)}/api/v1/ricevute/${ordine.id}.pdf?c=${req.utente.id}&e=${scadenza}&s=${firma}` });
 });
 
+// Scarica la ricevuta PDF di un ordine, ma solo con un indirizzo firmato ancora valido.
 router.get('/ricevute/:ordineId.pdf', async (req, res) => {
   const ordineId = Number(req.params.ordineId);
   const clienteId = Number(req.query.c);
@@ -813,6 +840,7 @@ router.get('/stato-ordini', richiedeCliente, async (req, res) => {
   res.json({ attivo: prima ? { tipo: prima.tipo, id: prima.id } : null, voci: voci.map(voceJson) });
 });
 
+// Lo storico dell'app: tutte le richieste e gli ordini del cliente, dal più recente, con il loro stato.
 router.get('/storico', richiedeCliente, async (req, res) => {
   const cards = await flusso.richiesteClienteConStato(req.utente.id);
   res.json({
@@ -889,6 +917,7 @@ router.get('/materiale', richiedeCliente, async (req, res) => {
   });
 });
 
+// Qualsiasi altro indirizzo dell'API: 404 in JSON.
 router.use((req, res) => {
   res.status(404).json({ errore: 'Risorsa non trovata.' });
 });

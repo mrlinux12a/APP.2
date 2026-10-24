@@ -14,6 +14,7 @@ const dns = require('dns').promises;
 
 const LIMITE_MS = 6000;
 
+// Prova a collegarsi al database su un indirizzo e una porta e dice a che punto si ferma (connessione di rete, richiesta SSL, accesso).
 function fase(porta, ip, host) {
   return new Promise((risolvi) => {
     const t0 = Date.now();

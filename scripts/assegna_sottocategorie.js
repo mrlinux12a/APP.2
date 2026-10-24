@@ -439,6 +439,7 @@ const MACRO_CONFIG = {
 const SLUG_VARIE = 'varie';
 const NOME_VARIE = 'Varie';
 
+// Decide in quali sottocategorie va un prodotto, guardando prima la sua categoria e poi le parole del nome.
 function classifica(cfg, categoriaRaw, nomeRaw) {
   const categoriaNorm = String(categoriaRaw || '').trim().toLowerCase();
   const tier1 = cfg.categoriaMap[categoriaNorm];
@@ -454,6 +455,7 @@ function classifica(cfg, categoriaRaw, nomeRaw) {
   return [SLUG_VARIE];
 }
 
+// Assegna le sottocategorie a tutti i prodotti di ogni categoria madre, dentro un'unica transazione (se qualcosa va storto non resta niente a metà).
 async function main() {
   const macroSlugs = Object.keys(MACRO_CONFIG);
 

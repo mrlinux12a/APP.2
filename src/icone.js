@@ -86,6 +86,7 @@ const ICONE = {
 
 const FALLBACK = ICONE.generico;
 
+// L'icona di una categoria dal suo nome breve; se non c'è ne usa una generica.
 function iconaCategoria(slug) {
   return ICONE[slug] || FALLBACK;
 }
@@ -151,8 +152,7 @@ const iconaNotifiche = svg(
   '<path d="M10 19.3a2 2 0 0 0 4 0"/>'
 );
 
-// Icone delle righe di anagrafica/contatto, riusate sia nel profilo installatore sia nella
-// scheda cliente del venditore (stesso partial partials/anagrafica_cliente.ejs).
+// Icone delle righe di anagrafica/contatto, riusate nel profilo installatore e nella scheda cliente del venditore.
 const iconaPosizione = svg(
   '<path d="M12 21s-6.5-6.1-6.5-11A6.5 6.5 0 0 1 18.5 10c0 4.9-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.2"/>'
 );
@@ -218,8 +218,6 @@ const iconaNota = svg(
   '<path d="M13.6 7l3.4 3.4"/>'
 );
 
-const iconaMappa = svg('<path d="M9 4 4 6v14l5-2 6 2 5-2V4l-5 2-6-2Z"/><path d="M9 4v14M15 6v14"/>');
-
 const iconaPagamento = svg('<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/>');
 
 // Catalogo e marchi.
@@ -236,18 +234,6 @@ const iconaListino = svg(
   '<path d="M12 6.3c-1.8-1.3-4-1.9-6.5-1.9v13c2.5 0 4.7.6 6.5 1.9 1.8-1.3 4-1.9 6.5-1.9v-13c-2.5 0-4.7.6-6.5 1.9Z"/>' +
   '<path d="M12 6.3v13"/>'
 );
-
-// Badge di stato (solo banco venditore).
-const iconaNuovo = svg('<path d="M12 3l1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7Z"/>');
-
-// Stesso disegno della categoria "Fissaggi e utensili": è già la chiave inglese del set.
-const iconaLavorazione = ICONE['fissaggi-e-utensili'];
-
-const iconaRifiutato = svg('<circle cx="12" cy="12" r="8.5"/><path d="M9 9l6 6M15 9l-6 6"/>');
-
-// Stati vuoti: stesso stile, dimensionati più grandi da CSS (.vuoto .emoji) al posto
-// dell'emoji isolata.
-const iconaVuotoOk = svg('<circle cx="12" cy="12" r="8.5"/><path d="M8.3 12.3l2.4 2.4 4.8-5"/>');
 
 const iconaVuotoRicerca = svg(
   '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.2 15.2l5 5"/><path d="M8 10.5h5"/>'
@@ -335,15 +321,10 @@ module.exports = {
   iconaNegozio,
   iconaConsegna,
   iconaNota,
-  iconaMappa,
   iconaPagamento,
   iconaMarchio,
   iconaFamiglia,
   iconaListino,
-  iconaNuovo,
-  iconaLavorazione,
-  iconaRifiutato,
-  iconaVuotoOk,
   iconaVuotoRicerca,
   iconaVuotoScatola,
   iconaVuotoNotifiche,

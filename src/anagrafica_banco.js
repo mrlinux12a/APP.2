@@ -13,6 +13,7 @@ const eventi = require('./eventi');
 // Il cambio password è condiviso con l'installatore e con il recupero della password: sta in src/password_account.js.
 const { controllaCambioPassword, cambiaPassword, chiudiAltreSessioni } = require('./password_account');
 
+// Pulisce un testo scritto in un modulo: toglie gli spazi ai bordi e lo taglia al massimo di caratteri (vuoto se non è un testo).
 const testo = (v, massimo = 300) => (typeof v === 'string' ? v.trim().slice(0, massimo) : '');
 
 const RE_PIVA = /^\d{11}$/;
@@ -158,6 +159,7 @@ async function salvaFiliale(distributorId, valori) {
   return { ok: true };
 }
 
+// Salva gli orari di apertura della filiale (o li toglie) e avvisa subito gli installatori collegati, così il carrello si aggiorna da solo.
 async function salvaOrari(distributorId, valore) {
   await db.prepare('UPDATE distributors SET orari = ?::jsonb WHERE id = ?').run(valore ? JSON.stringify(valore) : null, distributorId);
   // Richiesta esplicita del 22/10/2026: gli installatori collegati se ne accorgono subito. Evento 'orari' a ogni installatore con una pagina aperta: il carrello e la pagina
@@ -165,6 +167,7 @@ async function salvaOrari(distributorId, valore) {
   try { eventi.emettiARuolo('cliente', 'orari', {}); } catch (e) { /* pagine non avvisate: restano il controllo al ritorno in primo piano e il timer */ }
 }
 
+// Salva se la filiale vuole ricevere un'email a ogni nuova richiesta (sì o no).
 async function salvaEmailNuoveRichieste(distributorId, acceso) {
   await db.prepare('UPDATE distributors SET email_nuove_richieste = ? WHERE id = ?').run(acceso ? 1 : 0, distributorId);
 }

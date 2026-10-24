@@ -18,9 +18,11 @@ const { scriviNuovaPassword } = require('./password_account');
 const VALIDITA_MIN = 60;
 const MAX_ACCOUNT_PER_RICHIESTA = 3; // più account con la stessa email: al massimo tre mail (una per account), non un'inondazione
 
+// L'impronta (hash) del codice di recupero: nel database si salva questa, mai il codice.
 const hashCodice = (codice) => crypto.createHash('sha256').update(String(codice)).digest('hex');
 // Un codice fatto come quelli che generiamo (32 byte in base64url = 43 caratteri): qualunque altra cosa non si cerca nemmeno nel DB.
 const codiceBenFatto = (codice) => typeof codice === 'string' && /^[A-Za-z0-9_-]{43}$/.test(codice);
+// Controlla che un testo sia un indirizzo email scritto in modo plausibile.
 const emailValida = (testo) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(testo || '').trim());
 
 // I clienti attivi con questo nome utente o questa email (senza badare alle maiuscole).

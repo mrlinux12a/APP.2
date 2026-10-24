@@ -48,6 +48,8 @@ function simulatoRichiesto() {
 function simulatoForzatoInProduzione() {
   return /^(1|true|si|sì|yes)$/i.test(String(process.env.PAGAMENTO_SIMULATO_FORZA || '').trim());
 }
+// Dice se il pagamento simulato è davvero attivo: serve la richiesta esplicita nel .env e, con Stripe reale o in produzione, anche il consenso doppio
+// (altrimenti si ignora).
 function pagamentoSimulatoForzato() {
   if (!simulatoRichiesto()) return false;
   if (simulatoForzatoInProduzione()) return true;
@@ -68,6 +70,7 @@ function modoStripe() {
 function incasso(importo, metodo = METODO_SIMULATO) {
   return { stato: 'pagato', metodo, importo };
 }
+// L'incasso di un pagamento simulato (senza Stripe): stessa forma degli altri incassi, con metodo "simulato".
 function incassoSimulato(importo) {
   return incasso(importo, METODO_SIMULATO);
 }
@@ -76,9 +79,12 @@ function incassoSimulato(importo) {
 // il flusso ha segnato nel DB un incasso o un rilascio da fare, dà il tempo alla transazione di chiudersi e poi
 // lo esegue. Se non parte (processo che si ferma, errore di rete) lo riprende il timer di server.js.
 let elaboratore = null;
+// Registra chi sa lavorare i pagamenti Stripe in sospeso (lo fa src/stripe_pagamenti.js quando si carica).
 function impostaElaboratore(fn) {
   elaboratore = fn;
 }
+// Chiede di lavorare i pagamenti in sospeso fra pochi secondi, fuori da qualsiasi transazione in corso, così la scrittura sul database ha il tempo di
+// chiudersi.
 function richiediElaborazione() {
   if (!elaboratore) return;
   // Si chiama anche da dentro le transazioni del flusso (creazione dell'ordine, chiusura della finestra): il timer non deve ereditare il
@@ -173,6 +179,7 @@ async function rigaPagamento(requestId) {
 
 // "visa" -> "Visa", "amex" -> "American Express": come si scrive la marca accanto alle ultime 4 cifre.
 const NOMI_MARCA = { visa: 'Visa', mastercard: 'Mastercard', amex: 'American Express', maestro: 'Maestro', diners: 'Diners Club', discover: 'Discover', jcb: 'JCB', unionpay: 'UnionPay' };
+// Il nome della carta scritto bene (Visa, Mastercard...); se non lo conosce, il nome con la prima lettera maiuscola.
 function nomeMarca(marca) {
   const m = String(marca || '').trim().toLowerCase();
   return NOMI_MARCA[m] || (m ? m.charAt(0).toUpperCase() + m.slice(1) : '');

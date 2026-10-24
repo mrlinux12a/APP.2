@@ -48,8 +48,10 @@ const pool = new Pool({
   connectionTimeoutMillis: 8000,
 });
 
+// Tiene di una riga solo le colonne indicate.
 const scegli = (riga, colonne) => Object.fromEntries(colonne.map((c) => [c, riga[c]]));
 
+// Legge dal database le due filiali e i loro punti vendita (errore se non sono quelle attese).
 async function leggi(c) {
   const distributori = (await c.query('SELECT * FROM distributors WHERE nome = $1 AND filiale = ANY($2::text[]) ORDER BY id', [NOME_DITTA, FILIALI])).rows;
   if (distributori.length !== FILIALI.length) {
@@ -59,12 +61,14 @@ async function leggi(c) {
   return { distributori, punti };
 }
 
+// Stampa in tabella gli indirizzi e le coordinate di filiali e punti vendita, per confrontarli prima e dopo.
 function stampa(titolo, { distributori, punti }) {
   console.log(`\n${titolo}`);
   console.table(distributori.map((d) => ({ id: d.id, filiale: d.filiale, indirizzo: d.indirizzo, cap: d.cap, citta: d.citta, prov: d.provincia, lat: d.geo_lat, lng: d.geo_lng })));
   console.table(punti.map((p) => ({ id: p.id, distributor_id: p.distributor_id, nome: p.nome, indirizzo: p.indirizzo, cap: p.cap, citta: p.citta, prov: p.provincia, lat: p.geo_lat, lng: p.geo_lng, attivo: p.attivo })));
 }
 
+// Scrive l'indirizzo provvisorio di ritiro su filiali e punti vendita (e crea il punto vendita se manca).
 async function imposta(c, prima) {
   const creati = [];
   for (const d of prima.distributori) {
@@ -92,6 +96,7 @@ async function imposta(c, prima) {
   return creati;
 }
 
+// Rimette gli indirizzi veri, leggendoli dalla copia di sicurezza fatta prima del cambio.
 async function ripristina(c) {
   if (!fs.existsSync(FILE_BACKUP)) throw new Error(`Non trovo la copia di sicurezza: ${FILE_BACKUP}`);
   const copia = JSON.parse(fs.readFileSync(FILE_BACKUP, 'utf8'));
@@ -111,6 +116,7 @@ async function ripristina(c) {
   console.log(`Ripristinati ${copia.distributori.length} distributori e ${copia.punti.length} punti vendita` + ((copia.creati || []).length ? `, tolti ${copia.creati.length} punti creati dallo script.` : '.'));
 }
 
+// Esegue l'operazione scelta (imposta o ripristina) in transazione: senza --applica è una prova a secco che si annulla.
 async function main() {
   let c;
   try {

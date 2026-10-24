@@ -73,6 +73,7 @@ async function segnaConsegnataAlBrowser(userId, id) {
   ).run(id, userId, userId);
 }
 
+// Manda la stessa notifica a tutti i dipendenti attivi di un banco.
 async function notificaDistributore(distributorId, payload) {
   const utenti = await db
     .prepare(`SELECT id FROM users WHERE distributor_id = ? AND attivo = 1`)
@@ -80,21 +81,7 @@ async function notificaDistributore(distributorId, payload) {
   for (const u of utenti) await notifica(u.id, payload);
 }
 
-// Una richiesta confermata non resta una richiesta: quando diventa ordine, le sue
-// notifiche si spostano nella categoria Ordini invece di restare doppie.
-async function spostaInOrdini(userId, requestId, orderId) {
-  await db.prepare(
-    `UPDATE notifications
-        SET categoria = 'ordini', sottostato = 'in_approvazione', order_id = ?
-      WHERE user_id = ? AND categoria = 'richieste' AND link = ?`
-  ).run(orderId, userId, '/richieste/' + requestId);
-}
-
-// Aggiorna il sottostato delle notifiche già emesse per un ordine (spedito, consegnato...).
-async function aggiornaStatoOrdine(orderId, sottostato) {
-  await db.prepare(`UPDATE notifications SET sottostato = ? WHERE order_id = ?`).run(sottostato, orderId);
-}
-
+// Le notifiche di un utente, dalle più recenti, con filtri facoltativi per categoria e sottostato.
 async function elenco(userId, { categoria = null, sottostato = null, limite = 100 } = {}) {
   const where = ['user_id = ?'];
   const params = [userId];
@@ -126,6 +113,7 @@ async function conteggiPerCategoria(userId) {
   return mappa;
 }
 
+// Quante notifiche ci sono per ogni sottostato di una categoria.
 async function conteggiPerSottostato(userId, categoria) {
   return db
     .prepare(
@@ -136,6 +124,7 @@ async function conteggiPerSottostato(userId, categoria) {
     .all(userId, categoria);
 }
 
+// Quante notifiche non lette ha un utente, in tutto.
 async function nonLette(userId) {
   const row = await db
     .prepare(`SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND letta = 0`)
@@ -167,14 +156,17 @@ async function segnaTutteNotificate(userId) {
   await db.prepare(`UPDATE notifications SET notificata = 1 WHERE user_id = ? AND notificata = 0`).run(userId);
 }
 
+// Segna come lette tutte le notifiche di un utente.
 async function segnaLette(userId) {
   await db.prepare(`UPDATE notifications SET letta = 1 WHERE user_id = ?`).run(userId);
 }
 
+// Segna come lette le notifiche di una sola categoria (per esempio solo quelle degli ordini).
 async function segnaLetteCategoria(userId, categoria) {
   await db.prepare(`UPDATE notifications SET letta = 1 WHERE user_id = ? AND categoria = ?`).run(userId, categoria);
 }
 
+// Quante notifiche non lette ha un utente in una categoria.
 async function nonLetteCategoria(userId, categoria) {
   const row = await db
     .prepare(`SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND categoria = ? AND letta = 0`)
@@ -185,6 +177,8 @@ async function nonLetteCategoria(userId, categoria) {
 // Gli avvisi a comparsa del banco (aperti o chiusi) risultano letti. Si segnano per id e, perché un avviso sopravvive alle ricariche della pagina (che perdono gli id
 // delle notifiche da cui è nato), anche per richiesta ("Nuova richiesta") e per ordine ("Corriere trovato"). Solo quelle dell'utente: un id altrui non conta.
 const idValido = (n) => Number.isInteger(n) && n > 0 && n < 2147483647;
+// Segna come lette le notifiche indicate per numero, più quelle di "nuova richiesta" legate a certe richieste e quelle di "corriere trovato" legate a
+// certi ordini (al massimo 50 per tipo); dice quante ne ha toccate.
 async function segnaLettePerId(userId, ids, { richieste = [], ordini = [] } = {}) {
   const lista = (v) => (Array.isArray(v) ? v : []).map(Number).filter(idValido).slice(0, 50);
   const perId = lista(ids);
@@ -205,8 +199,6 @@ module.exports = {
   CATEGORIE,
   notifica,
   notificaDistributore,
-  spostaInOrdini,
-  aggiornaStatoOrdine,
   elenco,
   conteggiPerCategoria,
   conteggiPerSottostato,

@@ -2,6 +2,7 @@ const db = require('../db');
 const { conCache } = require('./memo');
 const stripeConfig = require('./stripe_config');
 
+// Arrotonda a due decimali (centesimi).
 function round2(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
@@ -16,10 +17,12 @@ const getConfigNum = conCache(60 * 1000, async (chiave, fallback) => {
   return Number.isFinite(numero) ? numero : fallback;
 });
 
+// La percentuale del servizio, dalla configurazione (10 se manca).
 async function getServizioPct() {
   return getConfigNum('servizio_pct', 10);
 }
 
+// La percentuale di IVA, dalla configurazione (22 se manca).
 async function getIvaPct() {
   return getConfigNum('iva_pct', 22);
 }
@@ -34,6 +37,7 @@ if (FINESTRA_FORZATA_MIN !== null) {
   console.log(`[config] FINESTRA_CONFERMA_SEC=${FINESTRA_SEC_ENV}: la finestra di conferma è di ${FINESTRA_SEC_ENV} s (il valore del DB è ignorato).`);
 }
 
+// I minuti che i banchi hanno per rispondere, usati dai timer: la configurazione, o il valore forzato nel .env di questo computer.
 async function getFinestraMinuti() {
   if (FINESTRA_FORZATA_MIN !== null) return FINESTRA_FORZATA_MIN;
   return getConfigNum('finestra_conferma_min', 10);
@@ -59,12 +63,15 @@ async function getFinestraMinutiTesto() {
 const MINIMO_STRIPE = 0.5;
 const GIORNI_MASSIMI_LIVE = 7;
 const avvisiProva = new Set(); // ogni avviso si scrive una volta sola
+// Scrive un avviso nel log una volta sola per ogni chiave (per non riempirlo a ogni calcolo).
 function avvisaProva(chiave, testo, livello = 'warn') {
   if (avvisiProva.has(chiave)) return;
   avvisiProva.add(chiave);
   console[livello](testo);
 }
 const giornoRoma = (data = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(data);
+// L'importo di prova che l'installatore paga ora (PAGAMENTO_APP_PROVA), se è attivo e permesso; con Stripe reale o in produzione conta solo con la
+// data di scadenza e mai sotto 0,50.
 function importoProvaApp() {
   const grezzo = String(process.env.PAGAMENTO_APP_PROVA || '').trim().replace(',', '.');
   if (!grezzo) return null;
@@ -118,20 +125,6 @@ function prezzoNetto({ prezzo_listino, sconto_base_pct }) {
   return round2(prezzo_listino * (1 - sconto_base_pct / 100));
 }
 
-// Prezzo esposto al cliente: netto + 10% di servizio. È IVA esclusa: in interfaccia
-// va sempre accompagnato da "+ IVA".
-async function prezzoCliente(riga) {
-  const pct = await getServizioPct();
-  return prezzoClienteConPct(riga, pct);
-}
-
-// Versione sincrona per i template EJS (che non possono fare "await" dentro <%= %>):
-// la percentuale di servizio si legge una volta sola per richiesta, poi il calcolo
-// per riga è puro e non tocca il DB.
-function prezzoClienteConPct(riga, servizioPct) {
-  return round2(prezzoNetto(riga) * (1 + servizioPct / 100));
-}
-
 // Formattazione in euro, formato italiano (1.234,56).
 function euro(n) {
   return (n || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -154,6 +147,8 @@ function scorporaIva(totale, ivaPct) {
   return { iva, imponibile: round2(totale - iva) };
 }
 
+// Il calcolo unico dei prezzi: separa quanto si paga ora in app (corriere + servizio con IVA inclusa) da quanto si paga dopo al banco (materiale +
+// RAEE + IVA), con tutte le voci già arrotondate.
 function dividiTotale({ netto, raee = 0, consegna = 0, servizioPct, ivaPct }) {
   const servizio = round2((netto * servizioPct) / 100); // esattamente "il 10% della merce", non la somma di righe arrotondate una per una
   const servizioIva = round2(servizio * (1 + ivaPct / 100));
@@ -439,8 +434,6 @@ module.exports = {
   getOrdineMinimo,
   getSpedizioneFissa,
   prezzoNetto,
-  prezzoCliente,
-  prezzoClienteConPct,
   dividiTotale,
   appIvaInclusa,
   ivaPctOrdine,

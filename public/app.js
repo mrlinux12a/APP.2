@@ -1686,46 +1686,6 @@ const Minuteria = (function () {
   });
 })();
 
-/* Sconti a scalare: mostra lo sconto effettivo mentre il banco scrive gli scaglioni. */
-(function () {
-  'use strict';
-
-  const righe = document.querySelectorAll('[data-riga-sconti]');
-  if (!righe.length) return;
-
-  function calcola(riga) {
-    const campi = riga.querySelectorAll('[data-scaglione]');
-    let residuo = 1;
-    let almenoUno = false;
-
-    campi.forEach(function (c) {
-      const n = parseFloat(String(c.value).replace(',', '.'));
-      if (Number.isFinite(n) && n > 0) {
-        residuo *= 1 - Math.min(90, n) / 100;
-        almenoUno = true;
-      }
-    });
-
-    const box = riga.querySelector('[data-effettivo]');
-    const valore = riga.querySelector('[data-valore-effettivo]');
-    if (!box || !valore) return;
-
-    if (!almenoUno) {
-      box.setAttribute('hidden', '');
-      return;
-    }
-    valore.textContent = String(Math.round((1 - residuo) * 1000) / 10).replace('.', ',');
-    box.removeAttribute('hidden');
-  }
-
-  righe.forEach(function (riga) {
-    riga.addEventListener('input', function (e) {
-      if (e.target.matches('[data-scaglione]')) calcola(riga);
-    });
-    calcola(riga);
-  });
-})();
-
 /* Menu del profilo in alto a destra: dentro ci sta anche l'uscita. Il cliente ha un pannello con un velo scuro
    dietro (partials/appbar.ejs), banco e agente una tendina. Il pannello del cliente sta fuori dall'appbar, quindi
    pulsante, pannello e velo si cercano nella pagina e non dentro un contenitore comune. */

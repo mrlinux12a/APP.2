@@ -25,6 +25,7 @@ const pool = new Pool({
   connectionTimeoutMillis: 8000,
 });
 
+// Cambia un valore della tabella di configurazione: senza --applica mostra solo cosa cambierebbe, con --applica lo scrive.
 async function main() {
   let c;
   try {

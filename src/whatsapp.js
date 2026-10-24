@@ -58,6 +58,7 @@ const format = require('./format');
 const MINUTI_MAX = 600; // oltre 10 ore non è un tempo per arrivare dal venditore: probabile errore di battitura
 const TENTATIVI_MAX = 5;
 
+// Dice se il collegamento con il gruppo WhatsApp dei corrieri è acceso (WHATSAPP_ATTIVO=1 nel .env).
 function attivo() {
   return String(process.env.WHATSAPP_ATTIVO || '').trim() === '1';
 }
@@ -68,6 +69,7 @@ function istanzaConfigurata() {
   return (process.env.WHATSAPP_ISTANZA || '').trim();
 }
 
+// Il nome di questa istanza del server (dal .env, altrimenti il nome del computer): serve a sapere di chi sono i messaggi in coda.
 function nomeIstanza() {
   return istanzaConfigurata() || os.hostname();
 }
@@ -93,6 +95,7 @@ async function istanzaDellaRichiesta(requestId) {
   return (riga && riga.istanza) || nomeIstanza();
 }
 
+// La parola con cui un corriere prende la consegna (di solito "preso").
 function parolaChiave() {
   return (process.env.WHATSAPP_PAROLA_CHIAVE || 'preso').trim() || 'preso';
 }
@@ -102,6 +105,7 @@ function parolaChiave() {
 const MINUTI_SONDAGGIO = [5, 10, 15, 20, 30, 45, 60, 90];
 const OPZIONI_SONDAGGIO_MAX = 12; // il massimo di WhatsApp
 
+// Dice se i corrieri possono prendere la consegna votando un sondaggio (WHATSAPP_SONDAGGIO=1 nel .env).
 function sondaggioAcceso() {
   return String(process.env.WHATSAPP_SONDAGGIO || '').trim() === '1';
 }
@@ -140,6 +144,7 @@ function datiSondaggio(richiestaId) {
 // La colonna del blocco di schema c'è? Se manca il sondaggio non parte (e il messaggio non lo promette): si riprova a guardare ogni 5 minuti, così dopo aver applicato lo schema
 // parte da solo, senza riavviare.
 let colonnaSondaggio = { presente: null, letta: 0 };
+// Dice se il sondaggio si può mandare davvero: è acceso e il database ha la colonna per la sua chiave (si ricontrolla ogni 5 minuti se manca).
 async function sondaggioPossibile() {
   if (!sondaggioAcceso()) return false;
   const ora = Date.now();
@@ -202,6 +207,7 @@ function normalizza(testo) {
     .trim();
 }
 
+// Rende letterale un testo da usare dentro un'espressione regolare (neutralizza i simboli speciali).
 function escapaRegex(testo) {
   return testo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -246,6 +252,7 @@ function linkMappa(lat, lng) {
   return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
 }
 
+// Scrive una tappa del messaggio ai corrieri: titolo, nome, indirizzo e il link alla mappa.
 function tappa(titolo, nome, indirizzo, lat, lng) {
   const righe = [titolo];
   if (nome) righe.push(nome);
@@ -255,6 +262,7 @@ function tappa(titolo, nome, indirizzo, lat, lng) {
   return righe.join('\n');
 }
 
+// Il messaggio per i corrieri nel gruppo: tappe di ritiro e consegna, e come prendere la consegna (sondaggio o risposta con "preso <minuti>").
 function testoRitiroConsegna({ richiestaId, banco, consegnaA, conSondaggio = false }) {
   const p = parolaChiave();
   const come = conSondaggio
@@ -375,6 +383,7 @@ async function ritiraRichiesta(requestId, { motivo = null, tranne = null } = {})
   }
 }
 
+// Mette in coda un messaggio di esito per il gruppo (per esempio "già presa" o annullamento) e fa partire l'invio.
 async function accodaEsito(requestId, responseId, testo) {
   await db
     .prepare(`INSERT INTO whatsapp_messaggi (request_id, response_id, tipo, testo, istanza) VALUES (?, ?, 'esito', ?, ?)`)
@@ -402,6 +411,8 @@ async function inviaSondaggio(gruppo, riga) {
   });
 }
 
+// Manda nel gruppo i messaggi in coda di questa istanza (testi e sondaggi) segnando l'esito di ognuno; se uno è stato annullato proprio mentre
+// partiva, lo toglie subito dal gruppo.
 async function inviaMessaggiInCoda() {
   const gruppo = await gruppoId();
   if (!gruppo) return;
@@ -495,6 +506,8 @@ function testoDelMessaggio(contenuto) {
 // numero di richiesta, quindi se tornassero indietro come messaggi "miei" verrebbero letti come risposte.
 const inviatiDalBot = new Set();
 
+// Scrive una risposta nel gruppo, citando il messaggio del corriere (tranne che per i voti dei sondaggi); registra l'id del messaggio così il bot non
+// risponde a se stesso.
 async function rispondi(msg, testo, citare = true) {
   try {
     // Una risposta a un voto di un sondaggio non cita niente (il voto non è un messaggio da citare): il testo dice già a quale richiesta si riferisce.
@@ -562,6 +575,7 @@ async function gestisciMessaggio(msg) {
   await prendiConsegna(msg, riga, letta.minuti, nome, true);
 }
 
+// Il nome con cui compare chi ha scritto nel gruppo (massimo 60 caratteri).
 function nomeDi(msg) {
   return (msg.pushName || (msg.key.fromMe && sock && sock.user && sock.user.name) || '').trim().slice(0, 60);
 }
@@ -722,10 +736,12 @@ let connesso = false;
 let gruppo = null;
 let ritardoRiconnessione = 2000;
 
+// Dice se il collegamento a WhatsApp è attivo e connesso in questo momento.
 function pronto() {
   return !!(sock && connesso);
 }
 
+// Toglie gli involucri di un messaggio WhatsApp (temporaneo, visualizzazione singola...) per arrivare al contenuto vero.
 function normalizzaContenuto(messaggio) {
   return baileys && baileys.normalizeMessageContent ? baileys.normalizeMessageContent(messaggio) || messaggio : messaggio;
 }
@@ -746,6 +762,7 @@ async function gruppoId() {
   return (gruppo = trovato.id);
 }
 
+// Scrive nel log i gruppi di cui fa parte il numero, con il loro id, così si può scegliere quello dei corrieri.
 async function elencaGruppi() {
   const tutti = await sock.groupFetchAllParticipating();
   console.log('WhatsApp, gruppi di questo numero (copia l’id in WHATSAPP_GRUPPO):');
@@ -754,6 +771,7 @@ async function elencaGruppi() {
 
 const logger = {
   level: 'error',
+  // Il logger fa finta di creare sotto-logger: restituisce se stesso.
   child() {
     return logger;
   },
@@ -761,11 +779,14 @@ const logger = {
   debug() {},
   info() {},
   warn() {},
+  // Gli errori di Baileys finiscono nel log del server; tutti gli altri messaggi del logger vengono ignorati.
   error(...args) {
     console.error('Baileys:', ...args);
   },
 };
 
+// Collega il server a WhatsApp con la sessione salvata (se manca mostra il codice QR), ascolta i messaggi del gruppo e si ricollega da solo se la
+// connessione cade.
 async function collega() {
   baileys = baileys || (await import('baileys'));
   const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } = baileys;

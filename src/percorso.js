@@ -24,12 +24,15 @@ const URL_VALHALLA = 'https://valhalla1.openstreetmap.de';
 const URL_GOOGLE = 'https://routes.googleapis.com/directions/v2:computeRoutes';
 const ATTESA_MS = 3500; // per ogni servizio: con due servizi lenti il banco aspetta al massimo ~7 s, poi c'è comunque la stima
 
+// Dice se il calcolo del tragitto con i servizi di mappe è acceso (si spegne con ROUTING_ATTIVO=0).
 function attivo() {
   return String(process.env.ROUTING_ATTIVO === undefined ? '1' : process.env.ROUTING_ATTIVO).trim() !== '0';
 }
 
+// Toglie spazi e barre finali da un indirizzo web.
 const senzaBarra = (u) => String(u || '').trim().replace(/\/+$/, '');
 
+// Controlla che un punto abbia latitudine e longitudine numeriche.
 function puntoValido(p) {
   return !!p && Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng)) && p.lat !== null && p.lng !== null;
 }
