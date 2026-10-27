@@ -1,4 +1,4 @@
-// Applica a un DB solo una parte di db/postgres/schema.sql: dal commento indicato fino in fondo, in
+// Applica a un DB solo una parte di db/schema.sql: dal commento indicato fino in fondo, in
 // un'unica transazione (se un pezzo fallisce non cambia niente). Serve perché l'intero file non si
 // applica col ruolo attuale ("permission denied" sulla funzione ricerca_simili), mentre i blocchi
 // nuovi in fondo sì. I blocchi sono scritti per poter essere rilanciati (IF NOT EXISTS).
@@ -18,7 +18,7 @@ if (!inizio) {
   process.exit(1);
 }
 
-const file = path.join(__dirname, '..', 'db', 'postgres', 'schema.sql');
+const file = path.join(__dirname, '..', 'db', 'schema.sql');
 const schema = fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
 const i = schema.indexOf(inizio);
 if (i === -1 || schema.indexOf(inizio, i + 1) !== -1) {

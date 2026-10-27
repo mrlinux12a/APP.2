@@ -1,5 +1,5 @@
 // Guardia contro le iniezioni SQL: i valori che arrivano da fuori (indirizzo della richiesta, moduli, JSON, cookie) vanno SEMPRE nei parametri della query
-// (`?` nel testo, trasformato in $1, $2... da db/postgres/index.js e mandato a Postgres come parametro), mai incollati nel testo SQL.
+// (`?` nel testo, trasformato in $1, $2... da db/index.js e mandato a Postgres come parametro), mai incollati nel testo SQL.
 // Questa prova guarda tutto il backend: ogni `${...}` dentro una stringa SQL deve essere una di quelle verificate a mano qui sotto, cioè pezzi di query fatti
 // SOLO di testo scritto da noi (nomi di colonna, condizioni con i loro `?`, costanti numeriche). Chi aggiunge un'interpolazione nuova fa fallire la prova e
 // deve guardare con calma se dentro può finire qualcosa che arriva da fuori: se sì, usare un `?` e passare il valore come parametro.
@@ -99,7 +99,7 @@ test('le costanti numeriche usate dentro le query sono davvero numeri scritti ne
   }
 });
 
-test('db/postgres/index.js manda i valori come parametri: ogni ? diventa $1, $2... e i valori restano a parte', async () => {
+test('db/index.js manda i valori come parametri: ogni ? diventa $1, $2... e i valori restano a parte', async () => {
   // Il wrapper è quello vero; la connessione è finta. Si guarda cosa arriva a pg: testo con $n e array di valori.
   const percorso = require.resolve('pg');
   const originale = require.cache[percorso];
@@ -111,10 +111,10 @@ test('db/postgres/index.js manda i valori come parametri: ogni ? diventa $1, $2.
     async connect() { return { query: (t, v) => { chiamate.push({ testo: t, valori: v }); return Promise.resolve({ rows: [], rowCount: 0 }); }, release() {} }; }
   }
   require.cache[percorso] = { id: percorso, filename: percorso, loaded: true, exports: { Pool: PoolFinto } };
-  const wrapper = require.resolve('../db/postgres/index.js');
+  const wrapper = require.resolve('../db/index.js');
   delete require.cache[wrapper];
   try {
-    const db = require('../db/postgres/index.js');
+    const db = require('../db/index.js');
     const cattivo = "x'; DROP TABLE users; --";
     await db.prepare('SELECT * FROM users WHERE username = ? AND attivo = ?').get(cattivo, 1);
     await db.prepare('UPDATE users SET zona = ? WHERE id = ?').run(cattivo, 7);

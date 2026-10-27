@@ -1,7 +1,7 @@
 const session = require('express-session');
 const db = require('../db');
 
-// Archivio delle sessioni su Postgres (compatibile con connect-pg-simple): ogni utente collegato è una riga della tabella "session" (db/postgres/schema.sql),
+// Archivio delle sessioni su Postgres (compatibile con connect-pg-simple): ogni utente collegato è una riga della tabella "session" (db/schema.sql),
 // così un riavvio del server non scollega nessuno.
 
 const DURATA_PREDEFINITA = 1000 * 60 * 60 * 24 * 30; // 30 giorni

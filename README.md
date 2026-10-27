@@ -17,17 +17,17 @@ Apri `http://localhost:3000`. Il DB di produzione ha già utenti e catalogo: `np
 (dati demo, idempotente) serve solo su un DB vuoto, e **riscrive le password degli utenti demo**
 ai valori della tabella qui sotto. `npm install` non lo lancia più.
 
-Sulla tua macchina `.env` punta al **Supabase Postgres di produzione condiviso**: `npm start` in
+Sulla tua macchina `.env` punta al **Postgres di produzione condiviso** (quello sul server, raggiunto con un tunnel SSH su `127.0.0.1:5433` da aprire a mano): `npm start` in
 locale scrive quindi sul DB vero. Il database è solo Postgres (SQLite non esiste più): senza `DATABASE_URL`
 nel `.env` l'app prova un Postgres locale di default (`postgres://minuteria:minuteria@localhost:5432/minuteria`).
 
 ## Produzione (VPS)
 
-Il sito gira su una VPS con Node.js 22.5 o superiore, collegata allo stesso Supabase. `.env` non è
+Il sito gira su una VPS con Node.js 22.5 o superiore, collegata allo stesso database. `.env` non è
 nel repository: va creato a mano sul server con
 
 ```
-DATABASE_URL=...      # stringa di connessione Postgres (pooler di Supabase)
+DATABASE_URL=...      # stringa di connessione Postgres (se il database richiede SSL: aggiungere ?sslmode=require)
 SESSION_SECRET=...    # firma i cookie di login: se cambia, tutti devono rifare l'accesso
 PORT=3000             # facoltativa
 HOST=127.0.0.1        # facoltativa: indirizzo su cui ascolta. Di default solo il computer stesso; in LOCALE, per aprire il
@@ -63,7 +63,7 @@ pm2 restart minuteria
 
 `npm ci` non si può saltare: le dipendenze cambiano (es. `compression`, `baileys`) e senza il
 server non parte. Node non rilegge il codice da solo: dopo ogni `git pull` serve il riavvio. Se il
-commit tocca lo schema (`db/postgres/schema.sql`), il blocco nuovo si applica una volta sola (vedi
+commit tocca lo schema (`db/schema.sql`), il blocco nuovo si applica una volta sola (vedi
 `CLAUDE.md`). Resta da fare l'HTTPS con un dominio davanti al sito (vedi `SCOPE.md`): serve anche
 perché funzionino il service worker (`public/sw.js`), le notifiche su Chrome Android e l'installazione
 sulla schermata Home (`public/manifest.webmanifest`); in HTTP semplice il sito va, ma senza queste tre cose.
@@ -306,7 +306,7 @@ EMAIL_DA=Minuteria <ordini@tuodominio.it>   # facoltativa: se manca "Nome" <SMTP
 I pulsanti della mail ("Scarica la ricevuta", "Segui l'ordine") usano `APP_URL`; senza non compaiono.
 
 **Messa in produzione di questa parte**: lo schema (blocco "Ricevute di pagamento e dati della carta" in fondo a
-`db/postgres/schema.sql`: 4 colonne nuove su `stripe_pagamenti` e la tabella `ricevute`) è **già applicato al database condiviso**
+`db/schema.sql`: 4 colonne nuove su `stripe_pagamenti` e la tabella `ricevute`) è **già applicato al database condiviso**
 (19/10/2026, e la VPS usa lo stesso); in un altro database va applicato **prima** del riavvio di pm2. Sulla VPS: `npm ci`
 (nuove dipendenze `pdfkit` e `nodemailer`) e le righe del `.env` qui sopra. Anche se lo schema mancasse, l'incasso non
 si ferma: ricevuta e dati della carta sono "best effort" (errore nel log, nessun effetto sui soldi).
@@ -390,7 +390,7 @@ I listini dei produttori si caricano da Excel con un importatore generico, idemp
 (rilanciarlo aggiorna, non duplica):
 
 ```
-node db/postgres/importa_listino.js --marchio toshiba --file "listino.xlsx" --sconto 30
+node db/importa_listino.js --marchio toshiba --file "listino.xlsx" --sconto 30
 ```
 
 Per ogni prodotto importa codice, descrizione, famiglia, EAN, contributo RAEE, refrigerante,
@@ -446,7 +446,7 @@ con tutti i permessi.
   "Rinvia richiesta").
 - **Posizione**: è **fissa**, quella scritta nel DB (`distributors.geo_*` e `store_locations.geo_*`). Cambiare l'indirizzo di ritiro dalla pagina non la ricalcola e non c'è nessun modo di spostarla da lì.
 - **Schema**: servono le colonne `distributors.orari` ed `email_nuove_richieste` (`geo_manuale` c'è ma non si usa più; blocco "Anagrafica del banco" in fondo a
-  `db/postgres/schema.sql`): sulla VPS applicarlo **prima** di riavviare, con
+  `db/schema.sql`): sulla VPS applicarlo **prima** di riavviare, con
   `node scripts/applica_blocco_schema.js "-- Anagrafica del banco: orari"` (a secco) e poi con `--applica`.
 
 ## Password dimenticata, cambio password ed eliminazione dell'account (installatore)
@@ -456,7 +456,7 @@ con tutti i permessi.
   si costruisce da lì, mai dall'indirizzo con cui arriva la richiesta). Senza, in produzione non parte niente. In locale, senza SMTP, il link compare nel log del server.
 - **La mia anagrafica → Accesso**: cambio della password da dentro (con quella attuale). **Elimina account**: pagina di conferma con la password; si disattiva e si anonimizzano i dati personali, restano
   ordini e ricevute. Con una richiesta o un ordine in corso non si può.
-- **Schema**: tabella `recupero_password` (blocco "Recupero della password dell'installatore" in fondo a `db/postgres/schema.sql`): applicarla sul DB condiviso **prima** di riavviare, con
+- **Schema**: tabella `recupero_password` (blocco "Recupero della password dell'installatore" in fondo a `db/schema.sql`): applicarla sul DB condiviso **prima** di riavviare, con
   `node scripts/applica_blocco_schema.js "-- Recupero della password dell'installatore"` (a secco) e poi con `--applica`.
 
 ## Contributo RAEE
@@ -593,7 +593,7 @@ sopra nel `.env`, `pm2 restart minuteria` (il log dice "sondaggio per prendere l
 La sessione sta in `whatsapp_auth/` (non in git: sono le credenziali del numero; se si cancella
 bisogna ricollegare). I messaggi passano da una coda (`whatsapp_messaggi`): se il collegamento è
 giù partono appena torna. Prima del primo avvio vanno applicati i due blocchi WhatsApp in fondo a
-`db/postgres/schema.sql` (già applicati al DB di produzione il 30/09 e il 02/10/2026):
+`db/schema.sql` (già applicati al DB di produzione il 30/09 e il 02/10/2026):
 `node scripts/applica_blocco_schema.js "-- WhatsApp: il corriere prende la consegna PRIMA" --applica`
 (senza `--applica` prova a secco; il primo blocco comincia con "-- Gruppo WhatsApp dei corrieri: coda
 dei messaggi").
@@ -711,8 +711,9 @@ src/memo.js            cache a scadenza (60 s) per letture che il server non scr
 src/format.js          date, tempi di consegna, countdown
 src/auth.js            middleware di autenticazione/ruolo
 src/sede_installatori.js  indirizzo e coordinate fissi degli installatori (provvisorio)
-db/postgres/           connessione, schema (schema.sql, l'unico), funzioni della ricerca, seed e importazione dei listini
-db/seed.js             dati demo (utenti, distributori, legami cliente-banco)
+db/index.js            l'unico accesso al database (Postgres): db.prepare, db.transaction, db.exec; poi resilienza.js (rete che cade)
+db/schema.sql          lo schema (l'unico file) e le funzioni SQL della ricerca
+db/seed.js             dati demo (utenti, distributori, legami cliente-banco); db/importa_listino.js importa i listini Excel
 scripts/               schema (apply_schema_pg.js, applica_blocco_schema.js), sottocategorie, icone app,
                        export, prova_whatsapp.js, migrazioni una tantum (filiali Borea, Via Puggia)
 views/                 pagine EJS (cliente e distributore mobile-first)
@@ -720,6 +721,6 @@ public/                style.css, app.js (quantità, ricerca live, countdown), i
 mobile/                app React Native / Expo (vedi "App nativa")
 ```
 
-Il database di produzione è **Postgres su Supabase** (`DATABASE_URL` in `.env`).
+Il database di produzione è **Postgres sul server** (`DATABASE_URL` in `.env`).
 
 Vedi anche `SCOPE.md` per cosa c'è oggi e cosa è volutamente fuori.

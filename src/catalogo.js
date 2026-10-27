@@ -264,7 +264,7 @@ function correggiParolaChiave(termine) {
 }
 
 // Tolleranza ai refusi di battitura (richiede l'estensione pg_trgm, attivata in
-// db/postgres/schema.sql): sotto i 4 caratteri il confronto per somiglianza è troppo
+// db/schema.sql): sotto i 4 caratteri il confronto per somiglianza è troppo
 // rumoroso, sopra la soglia 0.45 verificata sui dati distingue bene i refusi reali
 // (racordo, otone, sfeera...) dal rumore.
 // Nota tecnica: l'operatore <% userebbe l'indice GIN esistente invece di scansionare
@@ -276,7 +276,7 @@ function correggiParolaChiave(termine) {
 // deprecazione di pg proprio su questo). La ricerca lenta resta quindi sulla funzione
 // esplicita, con scansione sequenziale. Quella veloce (eseguiRicerca) usa l'indice senza
 // stato di sessione: la funzione SQL ricerca_simili porta la soglia nella sua clausola SET,
-// che vale solo durante la chiamata (vedi db/postgres/schema.sql).
+// che vale solo durante la chiamata (vedi db/schema.sql).
 const SOGLIA_MINIMA_FUZZY = 4;
 const SOGLIA_FUZZY = 0.45;
 const SOGLIA_REFUSI = 0.55; // ricerca per refusi: solo le parole davvero simili (la 0.45 dell'indice è il minimo per essere candidate)
@@ -298,7 +298,7 @@ function frammentoDiametroMm(valoriMm) {
 //
 // Due modi di eseguirla, con gli stessi risultati:
 //  - veloce: le parole che l'indice sa cercare (3+ caratteri) diventano insiemi di id
-//    (funzioni SQL ricerca_esatti / ricerca_simili, vedi db/postgres/schema.sql) che si
+//    (funzioni SQL ricerca_esatti / ricerca_simili, vedi db/schema.sql) che si
 //    intersecano sull'indice; le altre (misure, parole di 1-2 caratteri) filtrano le poche
 //    righe rimaste. ~45 ms nel DB.
 //  - lenta: la vecchia query con sei LIKE in OR per parola e scansione dell'intera tabella,

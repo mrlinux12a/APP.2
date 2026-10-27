@@ -1,8 +1,7 @@
-// Applica db/postgres/schema.sql al database Postgres puntato da DATABASE_URL.
+// Applica db/schema.sql al database Postgres puntato da DATABASE_URL.
 // Va lanciato a mano, una volta, quando si modifica lo schema (nuova colonna/tabella) —
-// NON gira più in automatico ad ogni avvio dell'app (vedi db/postgres/index.js: su Supabase
-// in modalità "transaction pooler" un lucchetto applicato ad ogni richiesta non è affidabile
-// e rischiava un deadlock se più istanze partivano in contemporanea, es. su Vercel).
+// NON gira più in automatico ad ogni avvio dell'app (vedi db/index.js: un lucchetto applicato
+// ad ogni avvio non è affidabile e rischiava un deadlock se più istanze partivano in contemporanea).
 //
 // Uso:  node scripts/apply_schema_pg.js
 // Richiede DATABASE_URL nell'ambiente (o nel file .env).
@@ -17,13 +16,11 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
-const isSupabase = DATABASE_URL.includes('supabase.co');
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  ssl: isSupabase ? { rejectUnauthorized: false } : false,
 });
 
-const schemaPath = path.join(__dirname, '..', 'db', 'postgres', 'schema.sql');
+const schemaPath = path.join(__dirname, '..', 'db', 'schema.sql');
 const schema = fs.readFileSync(schemaPath, 'utf8');
 
 pool

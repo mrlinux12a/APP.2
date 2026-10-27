@@ -1,6 +1,4 @@
 node_modules/
-db/supabase_dump.sql
-db/supabase_dump_nt.sql
 .env
 foto_catalogo
 

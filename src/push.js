@@ -8,7 +8,7 @@
 //
 // Regole che non si rompono:
 //  · MAI far fallire la richiesta o il flusso che ha generato la notifica: ogni errore finisce nel log e basta (`inviaAUtente` non lancia);
-//  · senza la tabella `dispositivi_push` (blocco "Notifiche push" di db/postgres/schema.sql non ancora applicato) non succede niente: si
+//  · senza la tabella `dispositivi_push` (blocco "Notifiche push" di db/schema.sql non ancora applicato) non succede niente: si
 //    scrive una volta nel log e le push restano spente;
 //  · si può spegnere del tutto con PUSH_ATTIVO=0 nel .env (per esempio sul PC, che parla col DB di produzione: una prova locale non deve
 //    mandare notifiche ai telefoni dei clienti veri). Per le prove con un telefono vero si lascia acceso.
@@ -43,7 +43,7 @@ function tabellaAssente(err) {
   if (err && err.code === '42P01') {
     if (!avvisatoTabellaMancante) {
       avvisatoTabellaMancante = true;
-      console.warn('[push] la tabella dispositivi_push non esiste: applica il blocco "Notifiche push" di db/postgres/schema.sql (node scripts/applica_blocco_schema.js "-- Notifiche push dell\'app Android" --applica). Intanto le push restano spente.');
+      console.warn('[push] la tabella dispositivi_push non esiste: applica il blocco "Notifiche push" di db/schema.sql (node scripts/applica_blocco_schema.js "-- Notifiche push dell\'app Android" --applica). Intanto le push restano spente.');
     }
     return true;
   }

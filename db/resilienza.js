@@ -1,6 +1,6 @@
 // Rete instabile verso il database: cosa si può riprovare in sicurezza e come rispondere subito quando non c'è proprio rete.
 //
-// Il caso che l'ha fatto nascere: dalla Wi-Fi dell'università (eduroam) la connessione TCP al pooler di Supabase si apre, ma il
+// Il caso che l'ha fatto nascere: dalla Wi-Fi dell'università (eduroam) la connessione TCP al database remoto (allora un pooler) si apre, ma il
 // traffico Postgres viene tagliato (la richiesta SSL del protocollo non riceve mai risposta, o la connessione è resettata dopo ~19 s).
 // Ogni richiesta restava appesa 15 secondi e finiva in "errore imprevisto", e il log si riempiva di "Connection terminated".
 // Il codice non può far passare un firewall: può però (1) riprovare quello che è sicuro riprovare, (2) smettere di aspettare quando la

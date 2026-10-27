@@ -148,22 +148,23 @@ async function importa() {
   await db.prepare(
     `INSERT INTO brands (slug, nome, descrizione, colore, iniziali, distributore_ufficiale,
                          listino_nome, listino_aggiornato, ordine, attivo, sconto_default_pct)
-     VALUES (@slug, @nome, @descrizione, @colore, @iniziali, @distributore_ufficiale,
-             @listino_nome, @listino_aggiornato, @ordine, 1, @sconto_default_pct)
+     VALUES (?, ?, ?, ?, ?, ?,
+             ?, ?, ?, 1, ?)
      ON CONFLICT(slug) DO UPDATE SET
        nome = excluded.nome, descrizione = excluded.descrizione, colore = excluded.colore,
        iniziali = excluded.iniziali, distributore_ufficiale = excluded.distributore_ufficiale,
        listino_nome = excluded.listino_nome, listino_aggiornato = excluded.listino_aggiornato,
        ordine = excluded.ordine, attivo = 1, sconto_default_pct = excluded.sconto_default_pct`
-  ).run({ ...m, sconto_default_pct: scontoDefault });
+  ).run(m.slug, m.nome, m.descrizione, m.colore, m.iniziali, m.distributore_ufficiale, m.listino_nome, m.listino_aggiornato, m.ordine, scontoDefault);
 
   const insMacro = db.prepare(
     `INSERT INTO macro_categorie (slug, nome, icona, descrizione, ordine)
-     VALUES (@slug, @nome, @icona, @descrizione, @ordine)
+     VALUES (?, ?, ?, ?, ?)
      ON CONFLICT(slug) DO NOTHING`
   );
   for (const f of Object.values(config.famiglie)) {
-    if (MACRO_EXTRA[f.macro]) await insMacro.run(MACRO_EXTRA[f.macro]);
+    const x = MACRO_EXTRA[f.macro];
+    if (x) await insMacro.run(x.slug, x.nome, x.icona, x.descrizione, x.ordine);
   }
 
   const insFamiglia = db.prepare(
@@ -176,9 +177,9 @@ async function importa() {
     `INSERT INTO products (codice, nome, categoria, macro_slug, prezzo_listino, sconto_base_pct,
                            disponibilita, brand_slug, famiglia, ean, raee, cat_raee,
                            refrigerante, fgas_kg, gwp)
-     VALUES (@codice, @nome, @categoria, @macro_slug, @prezzo_listino, @sconto_base_pct,
-             'disponibile', @brand_slug, @famiglia, @ean, @raee, @cat_raee,
-             @refrigerante, @fgas_kg, @gwp)
+     VALUES (?, ?, ?, ?, ?, ?,
+             'disponibile', ?, ?, ?, ?, ?,
+             ?, ?, ?)
      ON CONFLICT(codice) DO UPDATE SET
        nome = excluded.nome, categoria = excluded.categoria, macro_slug = excluded.macro_slug,
        prezzo_listino = excluded.prezzo_listino, sconto_base_pct = excluded.sconto_base_pct,
@@ -215,22 +216,23 @@ async function importa() {
         await insFamiglia.run(m.slug, famigliaCod, famiglia.nome, famiglia.ordine);
       }
 
-      await insProdotto.run({
+      // L'ordine dei valori è quello delle colonne nella INSERT qui sopra.
+      await insProdotto.run(
         codice,
         nome,
-        categoria: famiglia.nome,
-        macro_slug: famiglia.macro,
-        prezzo_listino: prezzo,
-        sconto_base_pct: scontoDefault,
-        brand_slug: m.slug,
-        famiglia: famigliaCod,
-        ean: testo(r[col.ean]),
-        raee: numero(r[col.raee]) || 0,
-        cat_raee: testo(r[col.cat_raee]),
-        refrigerante: testo(r[col.refrigerante]),
-        fgas_kg: numero(r[col.fgas_kg]),
-        gwp: numero(r[col.gwp]),
-      });
+        famiglia.nome, // categoria
+        famiglia.macro, // macro_slug
+        prezzo, // prezzo_listino
+        scontoDefault, // sconto_base_pct
+        m.slug, // brand_slug
+        famigliaCod, // famiglia
+        testo(r[col.ean]),
+        numero(r[col.raee]) || 0,
+        testo(r[col.cat_raee]),
+        testo(r[col.refrigerante]),
+        numero(r[col.fgas_kg]),
+        numero(r[col.gwp])
+      );
       importati += 1;
     }
   });

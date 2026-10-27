@@ -161,7 +161,7 @@ async function sondaggioPossibile() {
       return false; // il database non risponde: non si ricorda, si riguarda al prossimo messaggio
     }
     if (!colonnaSondaggio.presente) {
-      console.error('WhatsApp: WHATSAPP_SONDAGGIO=1 ma manca la colonna whatsapp_messaggi.segreto_sondaggio: applica il blocco "WhatsApp: sondaggio per prendere la consegna" di db/postgres/schema.sql. Intanto la consegna si prende scrivendo "' + parolaChiave() + ' <minuti>".');
+      console.error('WhatsApp: WHATSAPP_SONDAGGIO=1 ma manca la colonna whatsapp_messaggi.segreto_sondaggio: applica il blocco "WhatsApp: sondaggio per prendere la consegna" di db/schema.sql. Intanto la consegna si prende scrivendo "' + parolaChiave() + ' <minuti>".');
     }
   }
   return colonnaSondaggio.presente;

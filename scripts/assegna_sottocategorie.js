@@ -498,7 +498,7 @@ async function main() {
       }
 
       // Insert a blocchi (una sola andata/ritorno di rete ogni ~500 righe, invece di una
-      // per prodotto: su una connessione remota come Supabase sarebbero altrimenti decine
+      // per prodotto: su una connessione remota sarebbero altrimenti decine
       // di migliaia di round-trip dentro un'unica transazione aperta).
       const BLOCCO = 500;
       for (let i = 0; i < righe.length; i += BLOCCO) {

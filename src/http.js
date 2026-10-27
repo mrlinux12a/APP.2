@@ -148,7 +148,7 @@ const MESSAGGI = {
   415: ['Formato non supportato', 'Il formato della richiesta non è supportato.'],
   429: ['Troppe richieste', 'Troppe richieste: riprova tra poco.'],
   500: ['Errore imprevisto', 'Si è verificato un problema imprevisto. Riprova tra poco.'],
-  // Il database non risponde (rete giù: db/postgres/resilienza.js): non è un errore del sito, e riprovare tra poco serve davvero.
+  // Il database non risponde (rete giù: db/resilienza.js): non è un errore del sito, e riprovare tra poco serve davvero.
   503: ['Servizio non raggiungibile', 'Il servizio non riesce a collegarsi al database in questo momento. Riprova tra poco.'],
 };
 

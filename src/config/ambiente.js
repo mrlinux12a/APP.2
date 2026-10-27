@@ -22,7 +22,7 @@ const HOST = process.env.HOST || '127.0.0.1';
 // azione): meglio un ripiego STABILE, derivato da DATABASE_URL (che non cambia da un riavvio all'altro). Non è un segreto in più da proteggere: chi ha già
 // DATABASE_URL ha accesso diretto al DB, ben oltre quello che potrebbe fare forgiando un cookie di sessione.
 function scegliSegretoSessione() {
-  if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
+if (process.env.SESSION_SECRET && process.env.SESSION_SECRET !== '0') return process.env.SESSION_SECRET;
   console.warn(
     'ATTENZIONE: SESSION_SECRET non impostata nell\'ambiente. Uso un valore derivato da ' +
     'DATABASE_URL (stabile fra i riavvii, ma meglio impostare SESSION_SECRET esplicitamente ' +

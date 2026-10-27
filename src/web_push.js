@@ -12,7 +12,7 @@
 //  · MAI far fallire la richiesta o il flusso che ha generato la notifica: ogni errore finisce nel log e basta (`inviaAUtente` non lancia);
 //  · senza le chiavi VAPID nel .env (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY e un contatto: VAPID_SUBJECT, o APP_URL se è https) non succede niente: gli
 //    avvisi restano quelli di sempre, solo con l'app aperta. Si genera una coppia con `node scripts/genera_chiavi_vapid.js`;
-//  · senza la tabella `iscrizioni_push` (blocco "Notifiche push del sito e della web app" di db/postgres/schema.sql non ancora applicato) idem: si scrive
+//  · senza la tabella `iscrizioni_push` (blocco "Notifiche push del sito e della web app" di db/schema.sql non ancora applicato) idem: si scrive
 //    una volta nel log;
 //  · PUSH_ATTIVO=0 spegne tutto (come per l'app Android);
 //  · ogni server usa SOLO le iscrizioni nate con la sua chiave pubblica (colonna `chiave`): il PC di sviluppo parla col DB di produzione ma ha un'altra
@@ -85,7 +85,7 @@ function tabellaAssente(err) {
   if (err && err.code === '42P01') {
     if (!avvisatoTabellaMancante) {
       avvisatoTabellaMancante = true;
-      console.warn('[web push] la tabella iscrizioni_push non esiste: applica il blocco "Notifiche push del sito e della web app" di db/postgres/schema.sql (node scripts/applica_blocco_schema.js "-- Notifiche push del sito e della web app" --applica). Intanto le notifiche ad app chiusa restano spente.');
+      console.warn('[web push] la tabella iscrizioni_push non esiste: applica il blocco "Notifiche push del sito e della web app" di db/schema.sql (node scripts/applica_blocco_schema.js "-- Notifiche push del sito e della web app" --applica). Intanto le notifiche ad app chiusa restano spente.');
     }
     return true;
   }

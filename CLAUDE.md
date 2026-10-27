@@ -7,8 +7,8 @@ già scritto lì.
 ## Stack e ambiente
 
 - Node/Express + EJS, niente build, JS vanilla in `public/app.js`.
-- DB: **solo Postgres** (`db/index.js` rimanda a `db/postgres/index.js`). SQLite e tutti i suoi file (`db/sqlite/`, `db/minuteria.db`) sono stati eliminati il 24/10/2026.
-  Nei testi SQL i valori sono SEMPRE segnaposto (`?` o `@nome`), che `db.prepare` traduce in `$1, $2…`: nessun valore entra mai nel testo della query. Le uniche interpolazioni `${}` ammesse sono quelle
+- DB: **solo Postgres**, tutto in `db/` (`index.js` = accesso, `resilienza.js`, `schema.sql`, `seed.js`, `importa_listino.js`; la cartella `db/postgres/` e i due file passacarte `db/index.js`/`db/seed.js` di prima non esistono più, spostati il 24/10/2026). SQLite e tutti i suoi file (`db/sqlite/`, `db/minuteria.db`) sono stati eliminati lo stesso giorno.
+  Nei testi SQL i valori sono SEMPRE segnaposto `?` (i parametri nominati `@nome` non esistono più), che `db.prepare` traduce in `$1, $2…`: nessun valore entra mai nel testo della query. Le uniche interpolazioni `${}` ammesse sono quelle
   strutturali (nomi di colonne/tabelle fissi, elenchi di segnaposto, costanti numeriche) e stanno tutte in una lista controllata da `test/sql_parametri.test.js`: una nuova va aggiunta lì dopo averla verificata.
 - **Struttura del server (24/10/2026, refactoring)**: `server.js` è solo l'avvio (config, database, app, cicli di vita). L'app Express si compone in `src/app.js` (`creaApp`) da:
   `src/config/` (ambiente, viste, soglie `limiti`, `bacheca`), `src/middleware/` (sicurezza con **helmet**, **express-rate-limit**, origine, sessione, corpo, compressione, file statici, contesto delle viste),
@@ -23,18 +23,18 @@ già scritto lì.
   Le soglie sono larghe di proposito (un proxy mal configurato fa condividere l'indirizzo a tutti) e si sommano a `src/limite_login.js` (tentativi per utente). Superato il limite: 429 + `Retry-After`, in JSON per `/api`.
   `LIMITE_RICHIESTE_DISATTIVATO=1` spegne tutto **solo per le prove** (`test/server.test.js` lo imposta); mai sul server vero. Helmet: CSP **senza** `script-src` (le pagine hanno script in linea), niente COOP/CORP/COEP,
   HSTS solo se la richiesta è HTTPS, `Permissions-Policy` con `geolocation=(self)`. Sulla VPS servono `npm ci` (helmet, express-rate-limit) e il riavvio di pm2. Prove: `test/limiti_richieste.test.js`.
-- **Produzione: una VPS** sotto pm2 (processo `minuteria`, vedi README), stesso Supabase. `.env` non è in
+- **Produzione: una VPS** sotto pm2 (processo `minuteria`, vedi README), stesso database del PC (Postgres sul server, **niente Supabase**). `.env` non è in
   git: sulla VPS va creato a mano (`DATABASE_URL`, `SESSION_SECRET`, `PORT` facoltativa, default 3000, più
   le variabili WhatsApp). Dopo un `git pull` serve `npm ci` e il riavvio: due processi pm2 sullo stesso
   `server.js` si contendono la porta e, con WhatsApp acceso, la stessa sessione. `npm run seed` è manuale,
   **riscrive le password demo** e riattiva i banchi disattivati.
-- `.env` locale punta al **Supabase di produzione condiviso**, nessun DB di test — girare in
+- `.env` locale punta al **database di produzione condiviso** (il Postgres sul server, raggiunto con un **tunnel SSH** su `127.0.0.1:5433` che apre l'utente: senza tunnel gli script e il server locale danno `ECONNREFUSED`), nessun DB di test — girare in
   locale scrive sul DB vero, e il server locale esegue anche il timer delle scadenze (30 s) come
   la VPS: fermarlo quando non serve.
-- **Rete che blocca il database (eduroam, 16/10/2026)**: dalla Wi-Fi dell'università il TCP verso il pooler Supabase si apre (in 50 ms: risponde un
+- **Rete che blocca il database (eduroam, 16/10/2026)**: dalla Wi-Fi dell'università il TCP verso il database remoto (allora un pooler Supabase, oggi non più usato) si apre (in 50 ms: risponde un
   firewall di mezzo) ma la richiesta SSL di Postgres non riceve mai risposta, su tutti gli IP e su 5432 e 6543 (provato: 0 connessioni su 10).
   **Non si risolve dal codice**: serve l'hotspot del telefono, una VPN o un tunnel SSH. `node scripts/diagnosi_rete_db.js` dice a che fase si
-  ferma. Il codice però non deve appendersi né riempire il log: `db/postgres/resilienza.js` (provato in `test/resilienza.test.js`, pool finto)
+  ferma. Il codice però non deve appendersi né riempire il log: `db/resilienza.js` (provato in `test/resilienza.test.js`, pool finto)
   riprova la **connessione** (nessuna query è partita: sicuro anche per le scritture) e le **letture** + le istruzioni su `session` se la
   connessione cade a metà, ma **mai una scrittura persa a metà** (potrebbe essere arrivata: si duplicherebbe un ordine o un pagamento) né
   dentro una transazione; dopo 3 fallimenti di rete di fila un interruttore risponde subito per 5 s. A chi chiama arriva
@@ -51,7 +51,7 @@ già scritto lì.
   tornare dal pagamento su un indirizzo sbagliato: per provare i pagamenti da telefono serve un tunnel HTTPS.
 - Server locale **senza auto-reload**: dopo modifiche a `server.js`/file `require`-ati serve
   riavvio manuale (`.ejs`/`public/*` no).
-- Modifiche schema in `db/postgres/schema.sql` (l'unico file di schema: la copia `db/schema.pg.sql` è stata eliminata il 24/10/2026; il file ha fine riga CRLF), poi `node scripts/apply_schema_pg.js` (transazione unica:
+- Modifiche schema in `db/schema.sql` (l'unico file di schema: la copia `db/schema.pg.sql` è stata eliminata il 24/10/2026; il file ha fine riga CRLF), poi `node scripts/apply_schema_pg.js` (transazione unica:
   un pezzo fallito annulla tutto). **Col ruolo attuale l'intero file non si applica**: `CREATE OR
   REPLACE FUNCTION ricerca_simili` dà "permission denied to set parameter
   pg_trgm.word_similarity_threshold". Per un blocco nuovo: leggere `schema.sql` dal suo commento
@@ -94,7 +94,7 @@ sua filiale (una sola) e `nome`/`cognome`. Login, token app, sessioni e notifich
   scritto su tutte le filiali della ditta. Gli sconti (`client_discount_rules`)
   sono per filiale, non per ditta.
 - Un `distributors` senza `ditta_id` (per esempio creato dal seed) funziona: ogni riga è una ditta a
-  sé. Il seed (`db/postgres/seed.js`) non crea ditte.
+  sé. Il seed (`db/seed.js`) non crea ditte.
 - **RITIRO PROVVISORIO (23/10/2026, richiesta esplicita "momentaneamente")**: le due filiali ritirano la merce da **"Enoteca Squillari 1, Via Antonio Cantore, 266r, 16149 Genova GE"**: il corriere va lì ("PRELIEVO MERCI" del messaggio WhatsApp, con CAP e provincia dal 23/10), il tempo
   scritto su WhatsApp è il tempo per arrivare lì (già era "tempo per arrivare dal venditore, tappa 1": `corriere_risposto_il` + `corriere_minuti` = ritiro), e il tragitto verso l'installatore (`consegna.minutiStimati`) parte da lì. Si fa con `node scripts/imposta_ritiro_provvisorio.js` (prova a secco; `--applica` scrive
   `distributors.indirizzo/cap/citta/provincia/geo_*` e `store_locations` di Fegino e Staglieno, e ne crea uno se manca; copia degli indirizzi veri in `_tmp_backup_ritiro_provvisorio.json`, fuori da git e MAI riscritta da un secondo `--applica`). **Per tornare agli indirizzi veri: `--ripristina` (a secco) e `--ripristina --applica`.**
@@ -154,7 +154,7 @@ di query in sequenza**, non la loro complessità. Mai query dentro un ciclo (N+1
   (`catalogo.js`), token dell'app (`token_app.js`). Sono letture che il server non scrive mai: una
   modifica fatta da script compare entro un minuto. Gli oggetti restituiti sono condivisi fra le
   richieste: non modificarli.
-- **Connessioni** (`db/postgres/index.js`): tenute aperte 5 min e 3 svegliate ogni minuto
+- **Connessioni** (`db/index.js`): tenute aperte 5 min e 3 svegliate ogni minuto
   (`mantieniCalde`, chiamata da `server.js`). Il default di pg le chiude dopo 10 s e la richiesta
   dopo ogni pausa pagava ~330-420 ms di connessione nuova (una query calda: ~45).
 - **Ricerca**: due modi con gli stessi risultati. *Veloce* (~45 ms nel DB): funzioni SQL
@@ -694,7 +694,7 @@ Le regole stanno in cima a `src/pagamenti.js` (commento). Dove questa sezione co
   **Le richieste ANNULLATE** (scheda "Annullata", in fila con gli ordini) **non si aprono e non sono un link** (19/10/2026, richiesta esplicita: `materialeOrdini` dà `href: null` e la partial disegna un `<div class="sm-ordine sm-ordine-chiusa">`
   senza freccia né `<details>`); quelle chiuse per "Nessuna risposta" sono un `<details>` come l'ordine, e aperte portano a "Dettagli ›" (da lì si rinvia). La rotta `/richieste/:id` di una annullata resta raggiungibile con l'indirizzo; l'app mobile ha il suo storico e non è stata toccata.
 - **Schema**: blocco "Ricevute di pagamento e dati della carta (18/10/2026)" in fondo a `schema.sql` (4 colonne su `stripe_pagamenti`, tabella `ricevute`, due indici unici). **Applicato al DB condiviso il 19/10/2026** (prova a secco e poi `--applica`; verificate colonne, tabella e la query di numerazione su Postgres vero, in una transazione annullata): la VPS usa lo stesso
-  Supabase, quindi lo schema c'è già; sulla VPS servono `git pull`, `npm ci` (`pdfkit`, `nodemailer`) e le righe del `.env` (`AZIENDA_*`, `SMTP_*`). Nel `.env` **locale** c'è solo `AZIENDA_EMAIL=qako746@gmail.com`
+  database, quindi lo schema c'è già; sulla VPS servono `git pull`, `npm ci` (`pdfkit`, `nodemailer`) e le righe del `.env` (`AZIENDA_*`, `SMTP_*`). Nel `.env` **locale** c'è solo `AZIENDA_EMAIL=qako746@gmail.com`
   (provvisoria, richiesta esplicita del 19/10/2026): senza `SMTP_HOST` le email "Pagamento ricevuto" non partono.
 - **Prove**: `test/pagamenti_stato.test.js`, `test/ricevute.test.js`, `test/email.test.js`, `test/annullamento.test.js`, i test "incasso: …" di `test/stripe_pagamenti.test.js` e, in `test/server.test.js`, "richiesta in attesa/scaduta/annullata",
   "ordine pagato con Stripe", "ordine con il pagamento rimborsato", "il cliente non annulla MAI un ordine" e "storico con pagamenti incassati". Per **vedere** un PDF senza poppler: `pypdfium2` in una cartella fuori dal progetto
@@ -1293,7 +1293,7 @@ Flusso e variabili in README. Qui solo ciò che non si deduce dal codice.
   (la pagina del banco dice ancora "confermato dal cliente": non toccata). **Lato installatore, in tempo reale (Server-Sent Events, `src/eventi.js`, richiesta esplicita del 21/10/2026: "niente controlli, avvisata dal server")**: le pagine del cliente con l'icona "Stato ordini" aprono UNA connessione `GET /api/eventi` (in `server.js`, PRIMA del middleware pesante di `res.locals`; ruolo `cliente` e, dal 21/10/2026, `distributore` (il banco ascolta l'evento `notifica`, vedi "Suono, tempo reale e notifiche del computer del banco"), altrimenti 401;
   `compression` la salta; battito `: ` ogni 25 s; `X-Accel-Buffering: no`; max 8 per utente; chiusa su SIGTERM da `eventi.chiudiTutti()`, altrimenti terrebbe aperto `server.close`). `flusso.scriviConsegna` (UPDATE riuscita, una volta sola) fa `eventi.emetti(cliente_id, 'consegnato', { ordine })`. In `app.js`: se l'evento è dell'ordine della pagina
   (`<span data-attendi-consegna="<id>">`) ricarica e il server disegna "Consegnato"; altrimenti manda `window` l'evento `minuteria:stato-ordini`, che `partials/nav_ordini.ejs` ascolta e rilegge icona e scheda della home subito. La connessione si chiude a `pagehide` e si riapre a `pageshow` persisted (bfcache); EventSource si riconnette da solo.
-  **Vale dentro un processo solo** (nessun LISTEN/NOTIFY: il pooler Supabase in modalità transazione non lo supporta): se l'evento nasce in un altro processo (es. voto letto da un server locale con la stessa base dati) o la connessione cade in silenzio, resta il controllo lento di sicurezza `GET /api/ordini/:id/consegnato` → `{ consegnato }` ogni 60 s, al ritorno in primo piano e alla riapertura della connessione.
+  **Vale dentro un processo solo** (nessun LISTEN/NOTIFY: lo escludeva il pooler Supabase di allora; con il Postgres sul server sarebbe possibile, ma non è stato fatto): se l'evento nasce in un altro processo (es. voto letto da un server locale con la stessa base dati) o la connessione cade in silenzio, resta il controllo lento di sicurezza `GET /api/ordini/:id/consegnato` → `{ consegnato }` ogni 60 s, al ritorno in primo piano e alla riapertura della connessione.
   L'icona e la scheda hanno poi il loro giro (15 s con richieste in attesa, 60 s in consegna). Altri eventi (ordine nato, richiesta accettata…) si possono mandare con lo stesso canale: oggi c'è solo `consegnato`. Nessuna notifica push all'installatore per la consegna (non richiesta). L'app Expo non si aggiorna da sola (non ha il controllo). Prove: "l'installatore NON conferma la consegna…" in `test/server.test.js`, `test/banco_avvisi.test.js` ("consegna: …").
 - **Dopo il "preso": sondaggio "consegna" (21/10/2026, richiesta esplicita)**: `prendiConsegna` → `dopoPreso`: il sondaggio dei minuti passa a `da_eliminare` (il messaggio "nuova consegna" resta; vale anche con "preso 30" scritto a mano), poi la risposta "✅ Preso da X!…" e, se `sondaggioPossibile()` e l'ordine è nato
   (`esito.ordineId` di `corriereHaPreso`), una riga `tipo = 'consegna'` (con `order_id`, domanda "Ordine #N: consegna", opzioni "🚀 Segna come Consegnato" `id: 'consegnato'` e "⏳ Ancora in viaggio" `id: 'in_viaggio'`: **la seconda c'è solo perché WhatsApp vuole almeno due scelte**, non fa niente; chiave in `segreto_sondaggio`, nessuno schema nuovo).

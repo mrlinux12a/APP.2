@@ -1,8 +1,8 @@
-// db/postgres/resilienza.js: cosa si riprova e cosa no quando la rete verso il database cade, e la risposta immediata quando è giù.
+// db/resilienza.js: cosa si riprova e cosa no quando la rete verso il database cade, e la risposta immediata quando è giù.
 // Pool finto: nessuna connessione vera.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { eErroreDiRete, eLettura, eSessione, eRiprovabile, ErroreDbNonRaggiungibile, creaInterruttore, creaEsecutore } = require('../db/postgres/resilienza');
+const { eErroreDiRete, eLettura, eSessione, eRiprovabile, ErroreDbNonRaggiungibile, creaInterruttore, creaEsecutore } = require('../db/resilienza');
 
 const errRete = (messaggio = 'Connection terminated unexpectedly', code) => Object.assign(new Error(messaggio), code ? { code } : {});
 
@@ -32,7 +32,7 @@ const esecutore = (pool, opzioni = {}) => creaEsecutore({ pool, attesa: senzaAtt
 test('eErroreDiRete: riconosce rete e server giù, non gli errori della query', () => {
   for (const e of [
     errRete('read ECONNRESET', 'ECONNRESET'),
-    errRete('getaddrinfo ENOTFOUND aws-1-eu-west-1.pooler.supabase.com', 'ENOTFOUND'),
+    errRete('getaddrinfo ENOTFOUND db.example.com', 'ENOTFOUND'),
     errRete('Connection terminated unexpectedly'),
     errRete('Connection terminated due to connection timeout'),
     errRete('timeout exceeded when trying to connect'),

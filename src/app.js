@@ -33,6 +33,10 @@ function creaApp() {
   const app = express();
   configuraApp(app);
 
+//Un middleware è una funzione intermedia che si frappone tra la richiesta ricevuta dal server (req) 
+// e la risposta finale inviata al client (res). Ogni volta che una richiesta HTTP arriva al server, Express la fa
+//  passare attraverso la catena dei middleware registrati con app.use()
+
   // Un %00 nel percorso non è mai valido (Postgres lo rifiuta): 400 subito, prima di qualunque route.
   app.use(rifiutaNulNelPercorso);
   // Intestazioni di sicurezza su ogni risposta (helmet e regole del sito).

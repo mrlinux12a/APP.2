@@ -1,11 +1,11 @@
 // Preparazione del database all'avvio del server.
 const db = require('../../db');
+const { seed } = require('../../db/seed');
 
-// Tiene sveglie le connessioni al database (solo Postgres, vedi db/postgres/index.js) e, se il database è vuoto (dopo un clone), lo riempie con i dati di
-// prova: dopo un clone/pull basta `npm start`. Non aspetta niente e non blocca l'avvio: un guasto qui si scrive nel log.
+// Tiene sveglie le connessioni al database (vedi db/index.js) e, se il database è vuoto (dopo un clone), lo riempie con i dati di prova: dopo un
+// clone/pull basta `npm start`. Non aspetta niente e non blocca l'avvio: un guasto qui si scrive nel log.
 function preparaDatabase() {
-  // Connessioni al DB già aperte e tenute sveglie (solo Postgres): vedi db/postgres/index.js.
-  if (typeof db.mantieniCalde === 'function') db.mantieniCalde();
+  db.mantieniCalde();
   (async () => {
     try {
       await db.ensureInit();
@@ -13,7 +13,7 @@ function preparaDatabase() {
       const nProd = r1 ? Number(r1.n) : 0;
       if (nProd === 0) {
         console.log('DB vuoto -> eseguo seed automatico...');
-        await require('../../db/seed');
+        await seed();
       }
       // Il popolamento di distributor_products (prezzo/sconto per distributore) non è più automatico: con un catalogo reale da migliaia di articoli,
       // riempirlo con sconto 0% per tutti sarebbe dato finto, non un listino vero. Va fatto deliberatamente quando sono disponibili le condizioni reali

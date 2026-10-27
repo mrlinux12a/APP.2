@@ -71,10 +71,10 @@ Aggiornato al 19/10/2026 (app Android completata; il resto com'era al 04/10/2026
 - **Isolamento dati**: un cliente vede solo i propri ordini, un distributore solo le proprie
   richieste e gli ordini assegnati a lui.
 - **Sessioni su database** (un riavvio non scollega nessuno) e menu account in alto a destra.
-- **Produzione su una VPS** (Node, `npm start`), collegata allo stesso Supabase; non più su
+- **Produzione su una VPS** (Node, `npm start`), collegata allo stesso database; non più su
   Vercel. Come si aggiorna: README, "Produzione (VPS)".
 - **Marchi con listini dei produttori** caricabili da Excel con un importatore generico
-  (`db/postgres/importa_listino.js`). Oggi nel DB non ci sono marchi attivi.
+  (`db/importa_listino.js`). Oggi nel DB non ci sono marchi attivi.
 
 ## Da costruire (prossimi passi)
 
@@ -147,7 +147,7 @@ Aggiornato al 19/10/2026 (app Android completata; il resto com'era al 04/10/2026
 - 20/10/2026 — **La posizione torna sul sito, legata all'indirizzo di consegna del pagamento** (tragitto banco → installatore, si somma ai minuti
   del corriere). La sede in Via Puggia resta come ripiego per chi non ne ha una.
 - **Solo tema chiaro**, su app (29/09/2026) e sito (02/10/2026): niente modalità scura né interruttore.
-- 29/09/2026 — **Il sito passa da Vercel a una VPS**, con lo stesso Supabase; **l'app usa lo stesso
+- 29/09/2026 — **Il sito passa da Vercel a una VPS**, con lo stesso database; **l'app usa lo stesso
   database del sito**: niente DB di test separato.
 - 23-26/09/2026 — **App nativa in React Native (Expo), senza WebView**: prima solo l'installatore, il
   banco in versione ridotta dopo, l'agente resta sul sito.
