@@ -7,13 +7,14 @@ import { FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, 
 import { chiamaApi, ErroreApi, urlFoto } from '@/api';
 import { carrello, useRigheCarrello, type RigaCarrello } from '@/carrello';
 import { chiedi, informa } from '@/componenti/dialoghi';
+import { NotaChiuso, RiquadroChiuso, StrisciaInChiusura } from '@/componenti/OrariBanco';
 import { stileRigaCard } from '@/componenti/rigaCard';
 import { completaInvio, type RispostaInvio } from '@/pagamento';
 import { useSessione } from '@/sessione';
 import { Stepper } from '@/componenti/Stepper';
 import { Vuoto } from '@/componenti/Stato';
 import { Avviso, Bottone, Card, Forte, RigaInfo, RigaRiepilogo, SezioneTitolo } from '@/componenti/ui';
-import { useRiepilogoCarrello } from '@/dati';
+import { useOrari, useRiepilogoCarrello } from '@/dati';
 import { FONT, useTema } from '@/tema';
 
 function Riga({ r, ultima, tolto }: { r: RigaCarrello; ultima: boolean; tolto: boolean }) {
@@ -61,6 +62,10 @@ export default function Carrello() {
   const righe = useRigheCarrello();
   const voci = useMemo(() => righe.map((r) => ({ id: r.id, quantita: r.quantita })), [righe]);
   const riepilogo = useRiepilogoCarrello(voci);
+  // Gli orari del banco (richiesta del 22/10/2026): fuori orario il carrello si riempie e resta salvato ma la richiesta non parte. Se gli orari non si riescono a
+  // leggere NON si blocca l'invio: l'ultima parola ce l'ha il server, che risponde "banco_chiuso" (vedi inviaRichiesta).
+  const orari = useOrari(righe.length > 0);
+  const bancoChiuso = orari.data ? !orari.data.aperto : false;
   const [invio, setInvio] = useState(false);
   const [destinazione, setDestinazione] = useState<string | null>(null);
   const [note, setNote] = useState('');
@@ -118,7 +123,9 @@ export default function Carrello() {
       await clientDati.invalidateQueries({ queryKey: ['stato-ordini'], refetchType: 'all' });
       router.navigate('/ordini');
     } catch (e) {
-      informa('Richiesta non inviata', e instanceof ErroreApi ? e.message : 'Invio non riuscito, riprova.');
+      // Il banco ha chiuso proprio mentre si compilava il carrello: si rileggono subito gli orari, così compare il riquadro "Ordini chiusi".
+      if (e instanceof ErroreApi && e.dati?.codice === 'banco_chiuso') clientDati.invalidateQueries({ queryKey: ['orari'], refetchType: 'all' });
+      informa(e instanceof ErroreApi && e.dati?.titolo ? String(e.dati.titolo) : 'Richiesta non inviata', e instanceof ErroreApi ? e.message : 'Invio non riuscito, riprova.');
     } finally {
       inviando.current = false;
       setInvio(false);
@@ -154,6 +161,11 @@ export default function Carrello() {
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View style={stili.testata}>
+            {orari.data && !orari.data.aperto ? (
+              <View style={{ marginBottom: 12 }}>
+                <RiquadroChiuso orari={orari.data} />
+              </View>
+            ) : null}
             <Text style={[stili.sottotitolo, { color: c.grigio }]}>
               <Text style={{ fontFamily: FONT.testoForte, color: c.testo }}>{pezzi} pezzi</Text> nel carrello — controlla le
               quantità prima di pagare.
@@ -235,13 +247,16 @@ export default function Carrello() {
               />
             </Card>
 
+            {orari.data ? <StrisciaInChiusura orari={orari.data} lettoIl={orari.dataUpdatedAt} /> : null}
             <Bottone
               titolo={r ? `Paga € ${r.da_pagare_ora} e invia la richiesta` : 'Paga e invia la richiesta'}
               onPress={inviaRichiesta}
-              disabilitato={!r || !r.raggiunto || riepilogo.isFetching || riepilogo.inAttesa}
+              disabilitato={!r || !r.raggiunto || riepilogo.isFetching || riepilogo.inAttesa || bancoChiuso}
               inCorso={invio}
             />
-            {r ? (
+            {orari.data && bancoChiuso ? (
+              <NotaChiuso orari={orari.data} />
+            ) : r ? (
               <Text style={[stili.notaCentro, { color: c.grigio }]}>
                 {r.ditta || 'Il banco'} risponde entro {r.minuti_risposta} minuti. Appena un corriere prende la consegna ti arriva la
                 conferma dell’ordine con il tempo stimato: non devi scegliere né confermare altro.

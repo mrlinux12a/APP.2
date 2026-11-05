@@ -108,3 +108,16 @@ Test di sicurezza + correzioni + app Android finita. Il cosa-fare per pubblicare
 - **Non verificato** (niente telefono né SDK Android qui): il foglio di Stripe e Google Pay su un dispositivo vero, la ricezione delle push (serve `google-services.json` + chiave FCM v1 su EAS), la
   compilazione Gradle (la fa EAS). Il testo di `/privacy` e `/elimina-account` (`src/comune/testi_legali.js`) è una **bozza** da far rileggere. Il nome del pacchetto `it.minuteria.ordini` è una scelta mia da
   confermare prima della prima pubblicazione (poi non si cambia).
+
+## App Android: orari del banco, cambio password, avvisi (05/11/2026)
+
+Richiesta: "finisci e completa l'app mobile per android, solo l'interfaccia per installatori, e configura le notifiche". Confronto con l'interfaccia web dell'installatore: mancavano tre cose, ora ci sono. Niente per il banco (resta sul sito).
+- **Orari del banco** (mockup `docs/mockup/carrello-chiuso.png`, `carrello-in-chiusura.png`, `orari-borea.png`): `mobile/src/componenti/OrariBanco.tsx` (riquadro "Ordini chiusi", striscia "Ancora N min", nota sotto il pulsante), pagina `mobile/src/app/orari.tsx`
+  (titolo "Orari di BOREA" dal parametro `titolo`, come le categorie), hook `useOrari` in `mobile/src/dati.ts`. I testi li scrive il server (`GET /api/v1/orari` → `src/logica/ordini/orari.js`), mai l'app. Dettagli e perché non c'è il tempo reale: «Anagrafica del banco, orari» in `docs/banco/anagrafica-e-orari.md`.
+- **Cambio password**: Profilo → Sicurezza (`componenti/CambioPassword.tsx`, `cambiaPassword` in `sessione.tsx`, `POST /api/v1/password`): vedi `docs/account-installatore.md`. Un dettaglio che si rompe facilmente: dopo il cambio il vecchio token è revocato, quindi
+  `chiamaApi` (`mobile/src/api.ts`) fa uscire dalla sessione solo se il 401 arriva a una richiesta partita **con il token ancora in uso**; una richiesta rimasta in volo col token vecchio non deve buttare fuori chi ha già quello nuovo.
+- **Notifiche** (`mobile/src/notifiche.ts`, `componenti/AvvisiTelefono.tsx`): comportamento e interruttore in `docs/notifiche.md`. `useNotifichePush` ora riceve l'id dell'utente (non più un booleano) perché la preferenza è per utente. Le Expo push passano dal servizio Expo (`push.js`);
+  per farle arrivare serve ancora la parte che dipende da te (account, Firebase, chiave FCM, progetto EAS): è l'elenco di `mobile/ANDROID.md`, sezione 2 e 5.
+- **Controlli fatti**: `tsc --noEmit` pulito; `expo lint`: gli stessi 6 problemi già presenti (carrello, `Stepper`, `VistaOrdine`, `VistaRichiesta`, `dati.ts`), nessuno nei file nuovi; `expo export --platform android` riuscito; `expo-doctor` 20/21 (segnala 5 pacchetti Expo indietro di una
+  patch: `expo`, `expo-constants`, `expo-notifications`, `expo-router`, `expo-splash-screen`; si allineano con `npx expo install --check`, non fatto per non cambiare le dipendenze senza chiedere); `npm test` 604 test, tutti verdi (5 nuovi).
+- **Non verificato**: l'interfaccia su un telefono vero o un emulatore (nessuno qui), la ricezione delle push, il permesso di Android 13+, il passaggio dalle impostazioni di sistema. Da provare con una build `preview` (vedi `mobile/ANDROID.md`).

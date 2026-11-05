@@ -5,7 +5,9 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ErroreApi, SERVER } from '@/api';
+import { AvvisiTelefono } from '@/componenti/AvvisiTelefono';
 import { Campo } from '@/componenti/Campo';
+import { CambioPassword } from '@/componenti/CambioPassword';
 import { informa } from '@/componenti/dialoghi';
 import { Caricamento, Errore } from '@/componenti/Stato';
 import { Avviso, Bottone, Card, Nota, RigaInfo, SezioneTitolo } from '@/componenti/ui';
@@ -97,6 +99,11 @@ export default function Profilo() {
           ) : null}
           <RigaInfo etichetta="Versione dell’app" dettaglio={Constants.expoConfig?.version || ''} ultima />
         </Card>
+
+        <AvvisiTelefono />
+
+        <SezioneTitolo>Sicurezza</SezioneTitolo>
+        <CambioPassword />
 
         <Bottone
           titolo="Esci"

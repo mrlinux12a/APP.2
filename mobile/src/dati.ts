@@ -12,6 +12,7 @@ import {
   type Categoria,
   type Materiale,
   type Ordine,
+  type Orari,
   type Profilo,
   type Pagina,
   type Prodotto,
@@ -276,6 +277,31 @@ export function useStorico() {
     queryFn: () => chiamaApi<{ voci: VoceStorico[] }>('/storico'),
     staleTime: 0,
   });
+}
+
+// Gli orari del banco: aperto o chiuso adesso, quando chiude o riapre, i sette giorni. L'app se ne accorge da sola quando il banco cambia gli orari o quando
+// scatta l'ora (richiesta del 22/10/2026 per l'installatore; il sito usa un canale in tempo reale, qui si rilegge): ogni minuto a schermata in primo piano, subito
+// al ritorno e allo scadere dello stato (chiude o riapre, con 1,5 secondi di margine come sul sito).
+export function useOrari(attivo = true) {
+  const inPrimoPiano = useIsFocused();
+  const query = useQuery({
+    queryKey: ['orari'],
+    queryFn: () => chiamaApi<Orari>('/orari'),
+    enabled: attivo,
+    staleTime: 0,
+    refetchInterval: inPrimoPiano ? 60000 : false,
+  });
+  useRileggiAlRitorno(query.refetch, inPrimoPiano && attivo);
+  const cambiaSec = query.data?.cambia_sec;
+  const lettoIl = query.dataUpdatedAt;
+  const rileggi = query.refetch;
+  useEffect(() => {
+    if (!attivo || !inPrimoPiano || cambiaSec === null || cambiaSec === undefined) return;
+    const attesa = Math.max(1500, cambiaSec * 1000 + 1500 - (Date.now() - lettoIl));
+    const t = setTimeout(() => rileggi(), attesa);
+    return () => clearTimeout(t);
+  }, [attivo, inPrimoPiano, cambiaSec, lettoIl, rileggi]);
+  return query;
 }
 
 // Conto alla rovescia locale fra una lettura e l'altra dal server: parte dai secondi letti

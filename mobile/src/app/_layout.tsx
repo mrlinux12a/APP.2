@@ -14,6 +14,7 @@ import { Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { CarrelloProvider } from '@/carrello';
+import { intestazione } from '@/componenti/BarraTitolo';
 import { useNotifichePush } from '@/notifiche';
 import { SessioneProvider, useSessione } from '@/sessione';
 import { FONT, STILE_TITOLO, useTema } from '@/tema';
@@ -37,7 +38,7 @@ function Navigazione() {
   const { c } = useTema();
 
   // Le notifiche push servono a chi è dentro: registra il telefono e porta alla richiesta o all'ordine quando si tocca una notifica.
-  useNotifichePush(!!utente);
+  useNotifichePush(utente ? utente.id : null);
 
   // All'uscita si butta la cache: chi entra dopo sullo stesso telefono non deve vedere,
   // nemmeno per un attimo, dati letti con l'account precedente.
@@ -72,6 +73,15 @@ function Navigazione() {
         <Stack.Protected guard={!!utente}>
           <Stack.Screen name="(schede)" />
           <Stack.Screen name="profilo" options={{ presentation: 'modal', headerShown: true, title: 'Il mio account' }} />
+          {/* "Orari di BOREA": ci si arriva da "Vedi orari" del carrello. Il titolo arriva dal parametro "titolo" (vedi apriOrari), come per le categorie. */}
+          <Stack.Screen
+            name="orari"
+            options={({ route }) => ({
+              headerShown: true,
+              header: intestazione,
+              title: (route.params as { titolo?: string } | undefined)?.titolo ?? 'Orari del banco',
+            })}
+          />
         </Stack.Protected>
         <Stack.Protected guard={!utente}>
           <Stack.Screen name="login" />

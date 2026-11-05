@@ -39,6 +39,9 @@ type ValoreSessione = {
   // Registra una nuova impresa (stessi campi del sito) ed entra subito. Con dei campi sbagliati lancia ErroreApi con `dati.errori`.
   registra: (dati: Record<string, string>) => Promise<void>;
   esci: () => Promise<void>;
+  // Cambia la password (stessi controlli del sito). Con dei campi sbagliati lancia ErroreApi con `dati.errori` (chiavi attuale / nuova / ripeti). Il server chiude
+  // le altre sessioni e revoca anche il token di questo telefono: ne manda uno nuovo, che qui si salva al posto del vecchio, così chi cambia password resta dentro.
+  cambiaPassword: (attuale: string, nuova: string, ripeti: string) => Promise<void>;
   // Elimina l'account (serve la password) ed esce. Con qualcosa in corso il server rifiuta (409) e l'account resta com'era.
   eliminaAccount: (password: string) => Promise<void>;
 };
@@ -127,6 +130,15 @@ export function SessioneProvider({ children }: { children: ReactNode }) {
     await dimentica();
   }, [dimentica]);
 
+  const cambiaPassword = useCallback(async (attuale: string, nuova: string, ripeti: string) => {
+    const { token } = await chiamaApi<{ ok: boolean; token: string }>('/password', {
+      metodo: 'POST',
+      corpo: { attuale, nuova, ripeti, dispositivo: Platform.OS },
+    });
+    impostaToken(token);
+    await archivio.scrivi(CHIAVE_TOKEN, token);
+  }, []);
+
   const eliminaAccount = useCallback(
     async (password: string) => {
       await chiamaApi('/account', { metodo: 'DELETE', corpo: { password } });
@@ -137,8 +149,8 @@ export function SessioneProvider({ children }: { children: ReactNode }) {
   );
 
   const valore = useMemo(
-    () => ({ pronta, utente, entra, registra, esci, eliminaAccount }),
-    [pronta, utente, entra, registra, esci, eliminaAccount]
+    () => ({ pronta, utente, entra, registra, esci, cambiaPassword, eliminaAccount }),
+    [pronta, utente, entra, registra, esci, cambiaPassword, eliminaAccount]
   );
   return <ContestoSessione.Provider value={valore}>{children}</ContestoSessione.Provider>;
 }

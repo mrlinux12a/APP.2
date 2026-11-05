@@ -93,10 +93,18 @@ router.get('/orari', richiedeCliente, async (req, res) => {
   res.json({
     nome: banco.nome || null,
     aperto: pagina.aperto,
+    // Lo stato come lo scrive la pagina "Orari di BOREA" del sito: "Chiuso ora" / "Riapre " + "domani alle 07:30" (la seconda parte va in grassetto).
+    titolo: pagina.titolo,
+    sotto_prefisso: pagina.sottoPrefisso,
+    quando: pagina.quando,
     sempre_aperto: pagina.sempreAperto,
-    chiude: pagina.chiude ? { ora: pagina.chiude.ora, minuti_mancanti: pagina.chiude.mancanoMin, in_chiusura: orari.inChiusura(banco.stato) } : null,
+    chiude: pagina.chiude
+      ? { ora: pagina.chiude.ora, minuti_mancanti: pagina.chiude.mancanoMin, secondi: pagina.chiude.secondi, in_chiusura: orari.inChiusura(banco.stato) }
+      : null,
     riapre: pagina.riapre ? { giorno: pagina.riapre.giorno, ora: pagina.riapre.ora, testo: pagina.riapre.testo } : null,
     testi: pagina.testi,
+    // Fra quanti secondi lo stato cambia da solo (chiude o riapre): l'app si rilegge a quell'ora. null se non cambia mai (sempre aperto o mai aperto).
+    cambia_sec: pagina.cambiaSec,
     giorni: pagina.giorni.map((g) => ({ giorno: g.chiave, nome: g.nome, fasce: g.fasce, chiuso: g.chiuso, oggi: g.oggi, riapre: g.riapre })),
   });
 });

@@ -1,9 +1,10 @@
-// Profilo dell'app: dati del cliente, dispositivi per le notifiche push ed eliminazione dell'account.
+// Profilo dell'app: dati del cliente, cambio della password, dispositivi per le notifiche push ed eliminazione dell'account.
 const { creaRouter } = require('../base');
 const format = require('../../comune/format');
 const tokenApp = require('../../logica/account/token_app');
 const anagrafiche = require('../../logica/account/anagrafiche');
 const account = require('../../logica/account/account');
+const passwordAccount = require('../../logica/account/password_account');
 const push = require('../../logica/notifiche/push');
 const { azienda } = require('../../logica/pagamenti/azienda');
 const { accessoBloccato, registraAccessoFallito, accessoRiuscito } = require('../../logica/account/limite_login');
@@ -37,6 +38,25 @@ router.get('/profilo', richiedeCliente, async (req, res) => {
     distributore: riferimento ? format.nomeCommerciale(riferimento.distributore) : null,
     assistenza: azienda().email || null,
   });
+});
+
+// Cambia la password dall'app: stesse regole e stesso limite di tentativi della pagina "La mia anagrafica" del sito (src/logica/account/password_account.js:
+// attuale giusta, nuova di 8-72 caratteri e diversa). Il cambio revoca TUTTI gli accessi dell'app, compreso quello di questo telefono: per non far uscire
+// chi l'ha appena cambiata, a questo telefono si dà subito un accesso nuovo (`token`), che l'app tiene al posto del vecchio.
+router.post('/password', richiedeCliente, async (req, res) => {
+  const chiaveLimite = 'cambio-password:' + String(req.utente.username || req.utente.id);
+  if (accessoBloccato(req, chiaveLimite)) {
+    return res.status(429).json({ errore: 'Troppi tentativi non riusciti. Riprova tra qualche minuto.' });
+  }
+  const esito = await passwordAccount.cambiaPassword(req.utente.id, '', req.body);
+  if (!esito.ok) {
+    // La password attuale sbagliata conta nel limite dei tentativi; un campo scritto male (nuova troppo corta, ripetizione diversa) no.
+    if (esito.passwordSbagliata) registraAccessoFallito(req, chiaveLimite);
+    return res.status(400).json({ errore: Object.values(esito.errori)[0], errori: esito.errori });
+  }
+  accessoRiuscito(req, chiaveLimite);
+  const token = await tokenApp.creaToken(req.utente.id, req.body && req.body.dispositivo);
+  res.json({ ok: true, token });
 });
 
 // Il telefono comunica il suo token push (Expo) appena l'utente entra nell'app.

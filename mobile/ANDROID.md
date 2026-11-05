@@ -61,5 +61,20 @@ Verificato (con server e database locali usa-e-getta, e Stripe in modalità prov
 - l'app: controllo dei tipi (`npx tsc --noEmit`), pacchetto Android (`npx expo export --platform android`), generazione del progetto nativo (`npx expo prebuild`, manifest e permessi controllati),
   e la versione web di sviluppo collegata al server di prova (accesso, registrazione a tre passi, carrello, attesa, ordine, storico, profilo).
 
-**Non** verificato, perché qui non c'è un telefono né l'SDK Android: il foglio di pagamento di Stripe e Google Pay su un dispositivo vero, la ricezione delle notifiche push (servono i punti 2 e 3), la compilazione Gradle (la fa EAS).
+Aggiunto il 05/11/2026 (stesso controllo: `tsc`, pacchetto Android, 604 test del server): carrello con gli orari del banco ("Ordini chiusi", "Ancora N min", pagina "Orari di BOREA"), cambio password dal profilo, interruttore "Avvisi sul telefono", notifiche
+silenziose con l'app aperta e schermate che si aggiornano da sole.
+
+**Non** verificato, perché qui non c'è un telefono né l'SDK Android: il foglio di pagamento di Stripe e Google Pay su un dispositivo vero, la ricezione delle notifiche push (servono i punti 2 e 3), la compilazione Gradle (la fa EAS), e le tre schermate nuove su un dispositivo.
 Prima di pubblicare prova su un telefono, con una build `preview` e la chiave Stripe di prova (carta `4242 4242 4242 4242`): paga, annulla la richiesta, fai confermare un ordine al banco, tocca la notifica.
+
+## 6. Le notifiche, passo per passo (l'unica parte che non posso fare io)
+
+Il codice è pronto (`src/notifiche.ts`, `src/componenti/AvvisiTelefono.tsx`, `src/logica/notifiche/push.js` sul server). Perché le notifiche **arrivino** servono, in quest'ordine, queste cose che richiedono i tuoi account:
+1. `cd mobile && npx eas-cli login && npx eas-cli init` → scrive `extra.eas.projectId` in `app.json`. **Senza, l'app non può ottenere il token** (e nel profilo, accendendo l'interruttore, dice che gli avvisi non sono ancora attivi).
+2. Progetto Firebase + app Android con lo stesso nome del pacchetto (`it.minuteria.ordini`) → `google-services.json` in `mobile/` e `"googleServicesFile": "./google-services.json"` in `app.json`, dentro `android` (vedi sezione 2).
+3. La chiave di servizio FCM v1 caricata su EAS: `npx eas-cli credentials` → Android → Google Service Account Key for Push Notifications.
+4. Sul server: blocco di schema "Notifiche push dell'app Android" applicato al database condiviso (sezione 1, punto 2) e `PUSH_ATTIVO` non a 0.
+5. Una build **non** Expo Go: `npx eas-cli build --platform android --profile preview` (in Expo Go le push non esistono).
+
+Prova sul telefono: entra, accetta il permesso, controlla in Profilo che "Avvisi sul telefono" sia acceso, chiudi l'app, poi dal banco accetta una richiesta di prova: deve comparire la notifica; toccandola si apre l'ordine.
+Con l'app aperta non deve comparire niente (è voluto), ma Stato ordini si aggiorna da solo. Se non arriva nulla: nel profilo, se si prova ad accendere l'interruttore, compare il motivo (permesso negato, avvisi non attivi su questa versione, connessione); il log del server scrive solo gli errori (righe `[push] ...`: tabella mancante, risposta di Expo non accettata, notifica rifiutata).

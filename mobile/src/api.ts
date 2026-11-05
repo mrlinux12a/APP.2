@@ -51,7 +51,10 @@ export function suAccessoScaduto(fn: () => void) {
 
 export async function chiamaApi<T>(percorso: string, opzioni: { metodo?: string; corpo?: unknown } = {}): Promise<T> {
   const intestazioni: Record<string, string> = { Accept: 'application/json' };
-  if (tokenCorrente) intestazioni.Authorization = 'Bearer ' + tokenCorrente;
+  // Il token con cui parte QUESTA chiamata: dopo un cambio password il server revoca tutti i token e l'app ne riceve uno nuovo; una chiamata partita col vecchio
+  // e rimasta in volo prende 401, ma non deve far uscire chi ha già il token nuovo.
+  const tokenUsato = tokenCorrente;
+  if (tokenUsato) intestazioni.Authorization = 'Bearer ' + tokenUsato;
   if (opzioni.corpo !== undefined) intestazioni['Content-Type'] = 'application/json';
 
   // Senza un limite, con il server spento o il segnale che cade la chiamata restava appesa
@@ -79,7 +82,7 @@ export async function chiamaApi<T>(percorso: string, opzioni: { metodo?: string;
   } catch {}
 
   if (!risposta.ok) {
-    if (risposta.status === 401 && tokenCorrente && allaScadenza) allaScadenza();
+    if (risposta.status === 401 && tokenUsato && tokenUsato === tokenCorrente && allaScadenza) allaScadenza();
     throw new ErroreApi((dati && dati.errore) || 'Errore imprevisto (' + risposta.status + ').', risposta.status, dati);
   }
   return dati as T;
@@ -369,4 +372,24 @@ export type Profilo = {
   };
   distributore: string | null;
   assistenza: string | null;
+};
+
+// Gli orari del banco (GET /orari): la stessa fonte del carrello e della pagina "Orari di BOREA" del sito. Tutti i testi sono già pronti, scritti dal server.
+export type Orari = {
+  nome: string | null;
+  aperto: boolean;
+  // Lo stato com'è scritto sulla pagina degli orari: `titolo` ("Chiuso ora"), `sotto_prefisso` ("Riapre ") e `quando` (da scrivere in grassetto: "domani alle 07:30").
+  titolo: string;
+  sotto_prefisso: string;
+  quando: string;
+  // true = nessun orario impostato: il banco riceve sempre e non c'è un elenco di giorni.
+  sempre_aperto: boolean;
+  // Solo da aperto: fino a che ora e quanto manca. `in_chiusura` = mancano 30 minuti o meno (compare la striscia arancio nel carrello).
+  chiude: { ora: string; minuti_mancanti: number; secondi: number; in_chiusura: boolean } | null;
+  riapre: { giorno: string; ora: string; testo: string } | null;
+  // Solo da chiuso. `quando` è la parte da scrivere in grassetto ("domani alle 07:30"), `nota` la frase sotto il pulsante di invio.
+  testi: { titolo: string; sottoPrefisso: string; quando: string; sotto: string; notaPrefisso: string; nota: string } | null;
+  // Fra quanti secondi lo stato cambia da solo (chiude o riapre); null se non cambia mai.
+  cambia_sec: number | null;
+  giorni: { giorno: string; nome: string; fasce: string[]; chiuso: boolean; oggi: boolean; riapre: boolean }[];
 };
