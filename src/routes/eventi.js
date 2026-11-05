@@ -1,6 +1,6 @@
 // Il canale "in tempo reale" dal server alla pagina (Server-Sent Events).
 const { creaRouter } = require('./base');
-const eventi = require('../eventi');
+const eventi = require('../logica/notifiche/eventi');
 
 const router = creaRouter();
 

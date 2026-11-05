@@ -60,7 +60,7 @@ function eRiprovabile(sql) {
 }
 
 // L'errore che arriva a chi ha chiamato quando la rete non c'è (dopo i tentativi, o subito se l'interruttore è aperto).
-// `status` 503: src/http.js lo trasforma nella pagina/JSON "servizio non raggiungibile" invece di un 500 "imprevisto".
+// `status` 503: src/middleware/errori.js lo trasforma nella pagina/JSON "servizio non raggiungibile" invece di un 500 "imprevisto".
 class ErroreDbNonRaggiungibile extends Error {
   // Crea l'errore "database non raggiungibile" (503), dicendo se è stato dato subito perché la rete è giù da pochi secondi.
   constructor(causa, { subito = false } = {}) {

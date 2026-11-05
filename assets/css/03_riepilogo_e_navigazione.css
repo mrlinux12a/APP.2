@@ -1,0 +1,183 @@
+/* ---------- Riepilogo ordine ---------- */
+
+.riepilogo-riga {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  font-size: 0.95rem;
+}
+.riepilogo-riga .voce { color: var(--grigio); }
+.riepilogo-riga.forte { font-weight: 800; font-size: 1.1rem; padding-top: 12px; border-top: 1px solid var(--bordo); margin-top: 6px; }
+.riepilogo-riga.forte .voce { color: var(--testo); }
+
+.riga-articolo {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--bordo);
+}
+.riga-articolo:last-child { border-bottom: none; }
+.riga-articolo .qta {
+  min-width: 30px;
+  font-weight: 700;
+  color: var(--blu);
+}
+.riga-articolo .desc { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.riga-articolo .desc .meta { font-size: 0.8rem; color: var(--grigio); margin-top: 2px; }
+.riga-articolo .imp { text-align: right; white-space: nowrap; font-weight: 600; }
+
+.nota {
+  color: var(--grigio);
+  font-size: 0.83rem;
+  line-height: 1.45;
+  margin: 8px 2px 16px;
+}
+
+/* Una .nota che è un link ("Vedi tutti gli ordini →"): area di tocco da 44px invece dei 19px del testo. */
+a.nota { display: flex; align-items: center; min-height: 44px; margin-top: 0; margin-bottom: 0; }
+
+.ordine-hero { border-radius: var(--raggio); padding: 14px 16px; margin-bottom: 10px; }
+.ordine-hero.verde { background: var(--verde-chiaro); }
+.ordine-hero .badge {
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: var(--surface);
+  padding: 3px 10px;
+  border-radius: 999px;
+  margin-bottom: 8px;
+}
+.ordine-hero.verde .badge { color: var(--verde); }
+.ordine-hero .tempo { font-size: 1.1rem; font-weight: 700; color: var(--testo); }
+.ordine-hero .sotto { font-size: 0.85rem; margin-top: 3px; }
+.ordine-hero.verde .sotto { color: var(--verde); }
+.ordine-hero.verde { background: #cdedd4; }
+.ordine-hero.verde .tempo { color: var(--verde); }
+
+.avviso {
+  border-radius: var(--raggio);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+.avviso-info { background: var(--blu-chiaro); color: var(--blu-scuro); }
+.avviso-ok { background: var(--verde-chiaro); color: var(--verde); }
+.avviso-attenzione { background: var(--arancio-chiaro); color: #8a5a12; }
+.errore { background: var(--rosso-chiaro); color: var(--rosso); border-radius: var(--raggio); padding: 12px 14px; margin-bottom: 12px; }
+
+.vuoto {
+  text-align: center;
+  color: var(--grigio);
+  padding: 34px 16px;
+}
+.vuoto .emoji { font-size: 2rem; display: block; margin-bottom: 8px; }
+
+/* ---------- Barra di navigazione bassa ---------- */
+
+/* Pillola tonda sollevata dal fondo. Il contenitore .navbar copre tutta la larghezza ma non intercetta i
+   tocchi: solo la pillola (.interno), così ai lati si vede e si tocca il contenuto sotto. */
+.navbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 25;
+  padding: 0 12px calc(var(--nav-stacco) + env(safe-area-inset-bottom));
+  pointer-events: none;
+  /* iOS: livello proprio, e agganciata al bordo basso VISIBILE: --vv-sposta lo scrive assets/js ("iPhone / web app installata") quando il viewport del
+     layout e quello visibile non coincidono (dopo la tastiera, con la barra di Safari). Di norma vale 0 e non cambia niente. */
+  -webkit-transform: translate3d(0, var(--vv-sposta, 0px), 0);
+  transform: translate3d(0, var(--vv-sposta, 0px), 0);
+}
+.navbar .interno {
+  pointer-events: auto;
+  max-width: 496px;
+  margin: 0 auto;
+  display: flex;
+  padding: 3px 6px;
+  background: var(--surface);
+  border: 1px solid var(--bordo);
+  border-radius: 31px;
+  box-shadow: 0 8px 24px rgba(35, 32, 25, 0.14), 0 1px 3px rgba(35, 32, 25, 0.08);
+}
+.navbar a:active { background: var(--sfondo); }
+.navbar a {
+  flex: 1;
+  padding: 6px 4px;
+  border-radius: 26px;
+  text-align: center;
+  text-decoration: none;
+  color: var(--grigio);
+  font-size: 13px;
+  position: relative;
+}
+.navbar a .ico { display: block; font-size: 1.25rem; line-height: 1.2; color: var(--icona-nav); }
+.navbar a.attivo { color: var(--blu); font-weight: 700; }
+.navbar a .pallino.pallino-azzurro { background: #2e97e6; }
+.navbar a .pallino {
+  position: absolute;
+  top: 4px;
+  right: 50%;
+  margin-right: -22px;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--rosso);
+  color: #fff;
+  font-size: 0.65rem;
+  line-height: 16px;
+  padding: 0 4px;
+  font-weight: 700;
+}
+
+/* navbar sempre visibile, anche con barra carrello */
+.navbar { display: block !important; }
+
+/* ---------- Form ---------- */
+
+input[type="text"], input[type="password"], input[type="search"], input[type="number"],
+input[type="email"], input[type="tel"], input[type="url"], textarea, select {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--bordo);
+  border-radius: 10px;
+  font-size: 1rem;
+  margin-bottom: 12px;
+  background: var(--surface);
+  color: var(--testo);
+  font-family: inherit;
+}
+
+label { font-weight: 600; display: block; margin-bottom: 4px; }
+
+/* ---------- Viste desktop (agente) ---------- */
+
+header.topbar {
+  background: var(--blu);
+  color: var(--su-blu);
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+header.topbar .brand { font-weight: 600; font-size: 1.05rem; }
+header.topbar form { margin: 0; }
+
+main { max-width: 900px; margin: 0 auto; padding: 16px; }
+
+h1 { font-size: 1.35rem; margin-top: 0; }
+h2 { font-size: 1.1rem; }
+
+.tabella-scroll { overflow-x: auto; touch-action: pan-x; }
+table { width: 100%; border-collapse: collapse; }
+.tabella-scroll table { min-width: 640px; }
+th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--bordo); font-size: 0.92rem; }
+th { color: var(--grigio); font-weight: 600; }
+
+.link-secondario { color: var(--blu); text-decoration: none; }
+

@@ -1,4 +1,4 @@
-// GENERATO da scripts/genera_icone_app.js a partire da src/icone.js: non modificare a mano.
+// GENERATO da scripts/genera/genera_icone_app.js a partire da src/comune/icone.js: non modificare a mano.
 
 export const ICONE_CATEGORIA: Record<string, string> = {
   "riscaldamento-e-caldaie": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"4\" y=\"6\" width=\"16\" height=\"13\" rx=\"1\"/><path d=\"M8 6V4M12 6V4M16 6V4\"/><path d=\"M8 19v1M12 19v1M16 19v1\"/></svg>",

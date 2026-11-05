@@ -1,0 +1,313 @@
+/* ---------- Card e liste ---------- */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.card-fitta { padding: 0; overflow: hidden; }
+
+.riga-lista {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-bottom: 1px solid var(--bordo);
+  text-decoration: none;
+  color: inherit;
+}
+.riga-lista:last-child { border-bottom: none; }
+.riga-lista .icona { font-size: 1.25rem; width: 26px; text-align: center; color: var(--testo); }
+.riga-lista .corpo { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.riga-lista .etichetta { font-weight: 600; }
+.riga-lista .dettaglio { color: var(--grigio); font-size: 0.85rem; margin-top: 2px; }
+.riga-lista .freccia { color: #b9c0c9; font-size: 1.1rem; }
+
+/* ---------- Ricerca ---------- */
+
+.barra-ricerca {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--bordo);
+  border-radius: 999px;
+  padding: 0 14px; /* l'altezza la dà il campo (44px): la barra resta alta quasi quanto prima */
+  margin-bottom: 14px;
+}
+.barra-ricerca input[type="search"] {
+  border: none;
+  border-radius: 0;
+  outline: none;
+  font-size: 1rem;
+  width: 100%;
+  min-height: 44px; /* area di tocco: prima 30px di altezza */
+  background: transparent;
+  margin: 0;
+  padding: 4px 0;
+}
+.barra-ricerca .lente { color: var(--icona-nav); }
+.barra-ricerca button {
+  border: none;
+  background: var(--blu);
+  color: var(--su-blu);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+/* ---------- Macro categorie ---------- */
+
+.tessera {
+  background: var(--surface);
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio);
+  padding: 16px 14px;
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 108px;
+}
+.tessera .emoji { font-size: 1.6rem; }
+.tessera .nome { font-weight: 700; line-height: 1.25; }
+.tessera .conta { color: var(--grigio); font-size: 0.8rem; margin-top: auto; }
+
+/* ---------- Prodotti ---------- */
+
+.prodotto {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--bordo);
+}
+.prodotto:last-child { border-bottom: none; }
+.prodotto .info { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+/* Colonna a destra della card: la foto sta in alto, lo stepper viene spinto in basso
+   (justify-content: space-between) così la foto ha lo spazio in alto senza convivere con
+   il tasto +/-. Centrata (non a destra): così il centro della foto cade sopra al numero
+   dello stepper, non sopra al bordo destro della card. Senza foto reale c'è comunque
+   .prodotto-foto-vuota, stesse dimensioni ma invisibile: lo stepper resta spinto in basso
+   fin da ora, pronto per quando arriverà la foto vera, senza spostamenti dell'ultimo minuto. */
+.prodotto-laterale {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+  gap: 8px;
+}
+.prodotto-foto {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: var(--surface);
+}
+.prodotto-foto-vuota { background: none; visibility: hidden; }
+.prodotto-foto:not(.prodotto-foto-vuota) { cursor: zoom-in; }
+
+/* Foto prodotto a schermo intero (apertura in app.js al click sulla miniatura). */
+.foto-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+.foto-overlay[hidden] { display: none; }
+.foto-overlay-img {
+  max-width: 90vw;
+  max-height: 90vh;
+  max-height: 90dvh; /* dvh: la barra degli indirizzi dei browser mobile non la taglia */
+  object-fit: contain;
+  border-radius: 8px;
+  background: var(--surface);
+}
+.foto-overlay-chiudi {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top, 0px));
+  right: max(16px, env(safe-area-inset-right, 0px));
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  /* Sfondo scuro pieno (non il solito translucido): la foto sotto può essere bianca,
+     un cerchio semi-trasparente ci sparirebbe sopra. */
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.prodotto .nome { font-weight: 600; line-height: 1.3; }
+.prodotto .meta { font-size: 0.8rem; color: var(--grigio); margin-top: 3px; }
+.prodotto .prezzo { margin-top: 6px; font-weight: 700; color: var(--blu); }
+.prodotto .prezzo .iva { font-weight: 500; color: var(--grigio); font-size: 0.8rem; }
+.prodotto .prezzo .barrato {
+  text-decoration: line-through;
+  color: #a7aeb8;
+  font-weight: 500;
+  font-size: 0.85rem;
+  margin-right: 6px;
+}
+
+/* selettore quantità */
+.stepper {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  background: var(--sfondo);
+  border: 1px solid var(--bordo);
+  border-radius: 999px;
+  padding: 3px;
+}
+.stepper button {
+  /* 44px: soglia minima raccomandata per un target da toccare (WCAG 2.5.5) — prima erano
+     30px, il controllo più usato in assoluto in un'app pensata per l'uso da cantiere
+     (guanti, dita sporche/bagnate). */
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: var(--surface);
+  color: var(--blu);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+.stepper button:disabled { color: #c2c8d0; cursor: default; box-shadow: none; }
+.stepper input[type="number"] {
+  width: 44px;
+  min-width: 44px;
+  height: 44px; /* il campo si può toccare per scrivere la quantità: area di 44px come i pulsanti ai lati */
+  flex: none;
+  text-align: center;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  font-size: 1rem; /* sotto i 16px Safari su iPhone ingrandisce la pagina quando si tocca il campo */
+  font-weight: 600;
+  margin: 0;
+  padding: 0;
+  -moz-appearance: textfield;
+}
+.stepper input::-webkit-outer-spin-button,
+.stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* ---------- Badge e stati ---------- */
+
+.badge {
+  display: inline-block;
+  font-size: 0.75rem; /* 12px, come i badge dell'app: 11.5px era sotto la soglia di leggibilità */
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.badge-disponibile { background: var(--verde-chiaro); color: var(--verde); }
+.badge-in_esaurimento { background: var(--arancio-chiaro); color: var(--arancio); }
+.badge-non_disponibile { background: var(--rosso-chiaro); color: var(--rosso); }
+
+.stato-badge {
+  display: inline-block;
+  font-size: 0.78rem;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+.stato-inviato, .stato-in_attesa { background: var(--blu-chiaro); color: var(--blu); }
+.stato-in_evasione, .stato-con_offerte { background: var(--arancio-chiaro); color: var(--arancio); }
+.stato-evaso, .stato-ordinata, .stato-confermato, .stato-consegnato { background: var(--verde-chiaro); color: var(--verde); }
+.stato-nessuna_offerta, .stato-annullata, .stato-non_disponibile, .stato-scaduto {
+  background: var(--rosso-chiaro); color: var(--rosso);
+}
+
+/* ---------- Pulsanti ---------- */
+
+.btn {
+  display: inline-block;
+  border: none;
+  border-radius: 999px;
+  padding: 14px 20px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  text-align: center;
+}
+.btn-primary { background: var(--blu); color: var(--su-blu); }
+.btn-primary:hover { background: var(--blu-scuro); }
+.btn-chiaro { background: var(--surface); color: var(--blu); border: 1px solid var(--bordo); }
+.btn-rosso { background: var(--surface); color: var(--rosso); border: 1px solid #f0c8c3; }
+.btn-blocco { display: block; width: 100%; }
+.btn:disabled { background: #c9d0d8; color: #fff; cursor: default; }
+.btn-logout { background: transparent; color: var(--su-blu); border: 1px solid currentColor; border-radius: 6px; padding: 8px 14px; font-weight: 600; }
+
+/* barra fissa in fondo con il pulsante Procedi */
+
+/* ---------- Attesa / countdown ---------- */
+
+.attesa {
+  text-align: center;
+  padding: 26px 16px;
+}
+@keyframes gira { to { transform: rotate(360deg); } }
+
+.pill-distributore {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--bordo);
+}
+.pill-distributore:last-child { border-bottom: none; }
+.pill-distributore .nome { font-weight: 600; }
+.pill-distributore .filiale { font-size: 0.8rem; color: var(--grigio); }
+
+/* ---------- Offerta ---------- */
+
+.offerta {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.offerta.migliore { border-color: var(--verde); box-shadow: 0 0 0 1px var(--verde); }
+.offerta .testa { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.offerta .nome { font-weight: 700; font-size: 1.05rem; }
+.offerta .filiale { color: var(--grigio); font-size: 0.85rem; margin-top: 2px; }
+.offerta .tempo { margin-top: 10px; display: flex; align-items: center; gap: 6px; color: var(--testo); font-size: 0.92rem; }
+.offerta .totale { text-align: right; white-space: nowrap; }
+.offerta .totale .valore { font-weight: 800; font-size: 1.15rem; color: var(--blu); }
+.offerta .totale .iva { font-size: 0.78rem; color: var(--grigio); }
+.offerta .piede {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--bordo);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--blu);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+

@@ -1,0 +1,17 @@
+<%# Menu in basso del banco: solo sotto i 900px. Da lì in su c'è lo stesso menu nell'intestazione (partials/banco/banco_testa.ejs), quindi qui
+    sotto non si mostra (.nav-solo-stretta). %>
+<nav class="navbar nav-solo-stretta">
+  <div class="interno">
+    <a href="/distributore" class="<%= attivo === 'home' ? 'attivo' : '' %>">
+      <span class="ico"><%- iconaHome %></span>Home
+      <% if (contatori && contatori.daRispondere > 0) { %><span class="pallino"><%= contatori.daRispondere %></span><% } %>
+    </a>
+    <a href="/distributore/clienti" class="<%= attivo === 'clienti' ? 'attivo' : '' %>">
+      <span class="ico"><%- iconaClienti %></span>Clienti
+      <% if (contatori && contatori.daApprovare > 0) { %><span class="pallino"><%= contatori.daApprovare %></span><% } %>
+    </a>
+    <a href="/distributore/storico" class="<%= attivo === 'storico' ? 'attivo' : '' %>">
+      <span class="ico"><%- iconaOrdini %></span>Storico
+    </a>
+  </div>
+</nav>

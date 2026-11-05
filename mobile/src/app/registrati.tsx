@@ -10,7 +10,7 @@ import { Avviso, Bottone, Card, Forte } from '@/componenti/ui';
 import { useSessione } from '@/sessione';
 import { FONT, RAGGIO, useTema } from '@/tema';
 
-// Registrazione dell'impresa: gli stessi dati e gli stessi tre passi del sito (views/registrati.ejs). Il server fa i controlli veri
+// Registrazione dell'impresa: gli stessi dati e gli stessi tre passi del sito (views/auth/registrati.ejs). Il server fa i controlli veri
 // (anagrafiche.validaIscrizione) e dice quali campi sono sbagliati; qui si controlla solo che i campi obbligatori non siano vuoti prima di andare avanti.
 // Dopo l'iscrizione si entra subito, e il distributore di riferimento è quello predefinito (BOREA): non si sceglie.
 const CAMPI_PER_PASSO: string[][] = [

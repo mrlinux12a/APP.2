@@ -1,6 +1,6 @@
 // Il mattoncino di partenza di ogni gruppo di rotte.
 const express = require('express');
-const { idNumerico } = require('../http');
+const { idNumerico } = require('../middleware/percorso');
 
 // Crea un gruppo di rotte (router) con la regola comune a tutto il sito: un `:id` nell'indirizzo (/ordini/:id, /richieste/:id...) è un numero intero
 // positivo; con qualsiasi altra cosa il percorso non esiste (404) invece di far fallire la query sul database e dare un errore 500.

@@ -1,16 +1,16 @@
 // Prepara, a ogni richiesta, tutto quello che le pagine (EJS) trovano già pronto: chi è collegato, le funzioni per scrivere importi e date, le icone, il
 // numero di pezzi nel carrello, le notifiche non lette e, per banco e installatore, i dati della barra in basso.
-const pricing = require('../pricing');
-const format = require('../format');
-const icone = require('../icone');
-const notifiche = require('../notifiche');
-const geo = require('../geo');
-const anagrafiche = require('../anagrafiche');
-const flusso = require('../flusso_cliente');
-const webPush = require('../web_push');
-const { TESTO_DISPONIBILITA } = require('../prodotto_json');
-const { contaCarrello } = require('../services/carrello_sessione');
-const { letturaBanco, intestazioneBanco } = require('../services/banco');
+const pricing = require('../logica/pagamenti/pricing');
+const format = require('../comune/format');
+const icone = require('../comune/icone');
+const notifiche = require('../logica/notifiche/notifiche');
+const geo = require('../logica/ordini/geo');
+const anagrafiche = require('../logica/account/anagrafiche');
+const flusso = require('../logica/ordini/flusso_cliente');
+const webPush = require('../logica/notifiche/web_push');
+const { TESTO_DISPONIBILITA } = require('../logica/catalogo/prodotto_json');
+const { contaCarrello } = require('../logica/ordini/carrello_sessione');
+const { letturaBanco, intestazioneBanco } = require('../logica/banco/banco');
 
 // Rende disponibili utente, funzioni di aiuto e contatori a tutte le viste (res.locals). Una pagina non deve mai rompersi perché una di queste letture
 // è fallita: gli errori si scrivono nel log e la parte relativa resta vuota.
@@ -34,7 +34,7 @@ async function contestoViste(req, res, next) {
       utente && utente.ruolo === 'distributore' && utente.distributor_id
         ? letturaBanco(utente.distributor_id)
         : Promise.resolve(null),
-      // Icona dinamica "Stato ordini" (partials/nav_ordini.ejs): solo per il cliente e solo per le pagine, non per le API dell'app. Un errore qui non
+      // Icona dinamica "Stato ordini" (partials/cliente/nav_ordini.ejs): solo per il cliente e solo per le pagine, non per le API dell'app. Un errore qui non
       // deve mai rompere la pagina, ma va scritto nel log: se lo si ingoia in silenzio l'icona resta quella di prima e nessuno capisce perché.
       utente && utente.ruolo === 'cliente' && !req.path.startsWith('/api/')
         ? flusso.statoIconaOrdini(utente.id).catch((err) => {
@@ -42,7 +42,7 @@ async function contestoViste(req, res, next) {
             return null;
           })
         : Promise.resolve(null),
-      // Menu del profilo nell'appbar del cliente (partials/appbar.ejs): referente e distributore di riferimento. Come sopra, un errore non rompe la
+      // Menu del profilo nell'appbar del cliente (partials/comune/appbar.ejs): referente e distributore di riferimento. Come sopra, un errore non rompe la
       // pagina: il menu mostra solo la ragione sociale.
       utente && utente.ruolo === 'cliente' && !req.path.startsWith('/api/')
         ? anagrafiche.intestazioneCliente(utente.id).catch((err) => {
@@ -75,8 +75,8 @@ async function contestoViste(req, res, next) {
   res.locals.profiloCliente = profiloCliente;
   res.locals.bancoTesta = bancoTesta;
   res.locals.percorso = req.path; // la voce attiva dell'intestazione del banco si sceglie da qui
-  // Notifiche ad app chiusa (src/web_push.js): la chiave pubblica con cui il browser si iscrive (vuota = le push sono spente) e l'iscrizione che il
-  // server già ha per QUESTA sessione. Le legge public/app.js dai <meta> di partials/app_head.ejs: se l'iscrizione del browser è un'altra (primo
+  // Notifiche ad app chiusa (src/logica/notifiche/web_push.js): la chiave pubblica con cui il browser si iscrive (vuota = le push sono spente) e l'iscrizione che il
+  // server già ha per QUESTA sessione. Le legge assets/js dai <meta> di partials/comune/app_head.ejs: se l'iscrizione del browser è un'altra (primo
   // accesso, nuovo login, uscita e rientro) la manda di nuovo; senza questo confronto servirebbe una chiamata a ogni pagina.
   res.locals.pushChiave = utente ? webPush.chiavePubblica() : '';
   res.locals.pushEndpoint = (req.session && req.session.pushEndpoint) || '';

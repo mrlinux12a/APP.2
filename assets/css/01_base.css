@@ -1,0 +1,155 @@
+:root {
+  /* Un solo tema, chiaro: bianco caldo (non abbagliante), accento blu petrolio. */
+  --blu: #245a8f;
+  --blu-scuro: #1a4468;
+  --blu-chiaro: #e3edf7;
+  --su-blu: #ffffff; /* testo sopra l'accento */
+  /* Verde, arancio e rosso scuriti quel tanto che serve a portare il testo sul proprio badge a
+     4.5:1 (prima 3.55, 3.04 e 4.34). Stessi valori di mobile/src/tema.tsx. */
+  --verde: #297c3c;
+  --verde-chiaro: #e3f3e6;
+  --arancio: #ab4d24;
+  --arancio-chiaro: #fbe6da;
+  --rosso: #bd3a3a;
+  --rosso-chiaro: #fbe4e2;
+  /* Fase "attesa corriere" della home del banco (testo scuro sopra il chiaro: #4b3480). */
+  --viola: #6b4fa0;
+  --viola-chiaro: #eee8f7;
+  --grigio: #6b6a5f;
+  --sfondo: #f3f1ec;
+  --surface: #ffffff;
+  --bordo: #e2ded3;
+  --testo: #232019;
+  --account: #0f9d93;
+  --icona-nav: #000000;
+  --raggio: 14px;
+  /* Barra in basso: pillola tonda che galleggia a --nav-stacco dal fondo. --nav-alt è la sua altezza (si legge
+     dal browser: se cambia, aggiornarla), --barra-bassa lo spazio che occupa: le barre fisse che stanno sopra
+     (carrello, "Vai al carrello", pagamento) e il riempimento in fondo alle pagine partono da lì. */
+  --nav-alt: 62px;
+  --nav-stacco: 10px;
+  --barra-bassa: calc(var(--nav-alt) + var(--nav-stacco));
+}
+
+* { box-sizing: border-box; }
+
+/* I .btn hanno un display esplicito che coprirebbe l'attributo hidden del browser. */
+[hidden] { display: none !important; }
+
+html, body { height: 100%; background: var(--sfondo); }
+
+body {
+  font-family: "Source Sans 3", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  margin: 0;
+  background: var(--sfondo);
+  color: var(--testo);
+  -webkit-text-size-adjust: 100%;
+  /* Rete di sicurezza: nessuna pagina deve poter scorrere di lato. Le cause note (testi lunghi senza spazi,
+     l'appbar a tutta larghezza da tablet in su, che con 100vw conta anche la barra di scorrimento) sono
+     sistemate dove nascono; questo ritaglia il poco che dovesse sfuggire. `clip` (non `hidden`) non crea un
+     contenitore di scorrimento e lascia funzionare gli elementi sticky. */
+  overflow-x: clip;
+}
+
+img { max-width: 100%; }
+
+/* Il doppio tocco ravvicinato (tipico su + e −) non deve ingrandire la pagina su iPhone, e il tocco è subito
+   un clic, senza attesa. */
+a, button, input, select, textarea, summary, label { touch-action: manipulation; }
+
+/* I pulsanti non ereditano il font da soli: senza questa regola restano in Arial. */
+button { font-family: inherit; }
+
+h1, .domanda, .sezione-titolo, .appbar .titolo, .nome {
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+a { color: var(--blu); }
+
+/* ---------- Impalcatura mobile ---------- */
+
+.app {
+  max-width: 520px;
+  margin: 0 auto;
+  min-height: 100%;
+  background: var(--sfondo);
+  padding-bottom: calc(var(--barra-bassa) + 62px + 16px);
+}
+
+.app-largo { max-width: 900px; }
+
+.appbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--surface);
+  border-bottom: 1px solid var(--bordo);
+  display: grid;
+  /* Due colonne laterali uguali: il titolo resta al centro della barra anche se a destra ci sono
+     più icone che a sinistra (prima 44px | 1fr | auto lo spostava di qualche pixel). */
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  min-height: 52px;
+  /* viewport-fit=cover (partials/comune/app_head.ejs): senza questi spazi, con lo schermo girato o l'app installata, i
+     pulsanti ai lati della barra finivano sotto la tacca. Fuori da quei casi valgono 0. */
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
+}
+.appbar > :first-child { justify-self: start; }
+
+.appbar .titolo {
+  text-align: center;
+  font-weight: 700;
+  font-size: 1.05rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.appbar .icona-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  min-width: 44px; /* area di tocco: prima 34px di larghezza, sotto i 44 raccomandati */
+  color: var(--blu);
+  text-decoration: none;
+  font-size: 1.3rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  position: relative;
+}
+.appbar .icona-account { color: var(--account); }
+
+.appbar .icona-btn .pallino {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--rosso);
+  color: #fff;
+  font-size: 0.65rem;
+  line-height: 16px;
+  text-align: center;
+  padding: 0 4px;
+  font-weight: 700;
+}
+
+.contenuto { padding: 14px; }
+
+.sezione-titolo {
+  font-weight: 700;
+  font-size: 1.05rem;
+  margin: 18px 2px 8px;
+}
+.sezione-titolo:first-child { margin-top: 4px; }
+
+.sottotitolo {
+  color: var(--grigio);
+  font-size: 0.9rem;
+  margin: 0 2px 12px;
+  line-height: 1.4;
+}
+

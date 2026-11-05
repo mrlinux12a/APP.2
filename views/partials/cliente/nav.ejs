@@ -1,0 +1,10 @@
+<nav class="navbar">
+  <div class="interno">
+    <a href="/home" class="<%= (attivo === 'home' || attivo === 'catalogo') ? 'attivo' : '' %>"><span class="ico"><%- iconaCatalogo %></span>Catalogo</a>
+    <a href="/carrello" class="<%= attivo === 'carrello' ? 'attivo' : '' %>">
+      <span class="ico"><%- iconaCarrello %></span>Carrello
+      <% if (typeof carrelloPezzi !== 'undefined' && carrelloPezzi > 0) { %><span class="pallino" data-nav-badge><%= carrelloPezzi %></span><% } else { %><span class="pallino" data-nav-badge hidden>0</span><% } %>
+    </a>
+    <%- include('./nav_ordini', { attivo }) %>
+  </div>
+</nav>

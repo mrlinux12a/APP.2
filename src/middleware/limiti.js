@@ -1,9 +1,9 @@
 // Limiti di richieste per indirizzo (express-rate-limit): fermano chi inonda il sito, senza dare fastidio a chi lo usa. Si aggiungono ai limiti per nome
-// utente di src/limite_login.js (tentativi di accesso sbagliati, registrazioni, richieste di recupero password), che restano.
+// utente di src/logica/account/limite_login.js (tentativi di accesso sbagliati, registrazioni, richieste di recupero password), che restano.
 // I contatori stanno in memoria del processo: sulla VPS c'è un solo processo, quindi bastano; con più processi ognuno conterebbe per conto suo.
 const rateLimit = require('express-rate-limit');
 const impostazioni = require('../config/limiti');
-const { rispondiErrore } = require('../http');
+const { rispondiErrore } = require('./errori');
 
 // Una risposta "troppe richieste" (429): JSON per le API, la pagina di errore per il resto, con quanti secondi aspettare.
 function rispostaTroppeRichieste(req, res) {

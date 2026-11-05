@@ -14,7 +14,7 @@ module.exports = {
   // Tutte le pagine e le API (non i file statici, non il webhook di Stripe): richieste al minuto per indirizzo.
   generale: { finestraMs: 60 * 1000, massimo: numeroDaAmbiente('LIMITE_RICHIESTE_AL_MINUTO', 1000) },
   // Accesso e registrazione (login, registrazione, recupero password; anche quelli dell'app): contano solo i tentativi andati male, in 15 minuti.
-  // Si aggiunge ai limiti per nome utente di src/limite_login.js.
+  // Si aggiunge ai limiti per nome utente di src/logica/account/limite_login.js.
   accesso: { finestraMs: 15 * 60 * 1000, massimo: numeroDaAmbiente('LIMITE_ACCESSI_FALLITI', 60) },
   // Ricerche nel catalogo (ogni digitazione è una query sul database): richieste al minuto per indirizzo.
   ricerca: { finestraMs: 60 * 1000, massimo: numeroDaAmbiente('LIMITE_RICERCHE_AL_MINUTO', 300) },

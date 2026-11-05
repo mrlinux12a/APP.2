@@ -1,0 +1,371 @@
+/* ---------- Clienti del banco (views/banco/clienti.ejs, banco/cliente.ejs; classi cli-*) ---------- */
+
+/* Pagine interne del banco con l'intestazione unica (partials/banco/banco_testa.ejs) e un contenuto largo al massimo 1120px
+   (1168px con i 24px di margine per lato). Il cerchio con le iniziali (partials/comune/iniziali.ejs, parametro `tono`) può
+   essere arancio (da verificare) o grigio (rifiutato); il blu è quello di sempre. */
+.pagina-clienti {
+  --cli-sora: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  --cli-bordo-arancio: #f1c9b3;
+  --cli-testo-arancio: #8a3a14;
+  --cli-testo-verde: #1f5f2e;
+  --cli-testo-rosso: #a33232;
+  --cli-bordo-rosso: #e8b4b4;
+  --cli-bordo-campo: #d6d1c6;
+}
+.avatar-arancio { background: var(--arancio); }
+.avatar-grigio { background: var(--grigio); }
+
+.cli-pagina {
+  max-width: 1168px;
+  margin: 0 auto;
+  padding: 24px max(24px, env(safe-area-inset-right, 0px)) 56px max(24px, env(safe-area-inset-left, 0px));
+}
+/* Etichette di stato (DA VERIFICARE, APPROVATO, RIFIUTATO). */
+.cli-etichetta {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.cli-etichetta-arancio { background: var(--arancio-chiaro); color: var(--cli-testo-arancio); }
+.cli-etichetta-verde { background: var(--verde-chiaro); color: var(--cli-testo-verde); }
+.cli-etichetta-rosso { background: var(--rosso-chiaro); color: var(--cli-testo-rosso); }
+.cli-grigio { color: var(--grigio); }
+.cli-cifre { font-variant-numeric: tabular-nums; }
+
+/* ----- Elenco ----- */
+
+.cli-testata { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+.cli-titolo { margin: 0; font-family: var(--cli-sora); font-size: 28px; font-weight: 800; line-height: 1.2; }
+.cli-cerca { position: relative; flex: 0 1 380px; min-width: 0; }
+.cli-cerca-ico {
+  position: absolute;
+  top: 50%;
+  left: 16px;
+  display: inline-flex;
+  transform: translateY(-50%);
+  color: var(--testo);
+  font-size: 20px;
+  pointer-events: none;
+}
+.cli-cerca input[type="search"] {
+  display: block;
+  width: 100%;
+  height: 46px;
+  margin: 0;
+  padding: 0 18px 0 46px;
+  border: 1px solid var(--bordo);
+  border-radius: 23px;
+  background: var(--surface);
+  color: var(--testo);
+  font-size: 16px; /* sotto i 16px Safari su iPhone ingrandisce la pagina al tocco */
+}
+.cli-cerca input[type="search"]::placeholder { color: var(--grigio); opacity: 1; }
+.cli-cerca input[type="search"]:focus { border-color: var(--blu); outline: 2px solid var(--blu); outline-offset: 1px; }
+
+.cli-nessuno { margin: 8px 0 24px; padding: 32px 16px; color: var(--grigio); font-size: 16px; text-align: center; }
+.cli-vuoto {
+  margin: 0;
+  padding: 28px 16px;
+  border: 1px solid var(--bordo);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--grigio);
+  text-align: center;
+}
+
+.cli-sezione { margin-bottom: 32px; }
+.cli-sezione-testa { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 12px; }
+.cli-sezione-titolo { margin: 0; font-family: var(--cli-sora); font-size: 18px; font-weight: 700; line-height: 1.3; }
+.cli-pillola {
+  min-width: 28px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--arancio-chiaro);
+  color: var(--cli-testo-arancio);
+  font-family: var(--cli-sora);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+}
+.cli-conta { color: var(--grigio); font-family: var(--cli-sora); font-size: 14px; font-weight: 600; }
+.cli-sezione-nota { color: var(--grigio); font-size: 14px; }
+
+.cli-richieste, .cli-tab-corpo { margin: 0; padding: 0; list-style: none; }
+.cli-richieste { display: flex; flex-direction: column; gap: 12px; }
+
+/* Cliente da approvare: scheda con bordo arancio, cerchio con le iniziali, dati e pulsante "Verifica". */
+.cli-richiesta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border: 1.5px solid var(--cli-bordo-arancio);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 3px 12px rgba(171, 77, 36, 0.1);
+}
+.cli-richiesta-corpo { flex: 1; min-width: 0; }
+.cli-richiesta-nome { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
+.cli-richiesta-nome strong { font-size: 17px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.cli-richiesta-dati { display: flex; flex-wrap: wrap; gap: 2px 24px; margin-top: 6px; color: #4f4d44; font-size: 15px; }
+.cli-richiesta-dati strong { color: var(--testo); font-weight: 700; font-variant-numeric: tabular-nums; }
+.cli-verifica {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 48px;
+  padding: 0 22px;
+  border-radius: 24px;
+  background: var(--arancio);
+  color: #fff;
+  font-family: var(--cli-sora);
+  font-size: 16px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.cli-verifica svg { width: 18px; height: 18px; vertical-align: 0; }
+.cli-verifica:hover { background: #963f1c; }
+.cli-verifica:focus-visible { outline: 3px solid var(--blu); outline-offset: 2px; }
+
+/* Clienti approvati (e non riconosciuti): una scheda con la tabella. Su schermo largo cinque colonne, sotto i 900px
+   righe impilate: nome sopra, codice · città · ultimo ordine sotto (.cli-c-meta passa da display: contents a flex). */
+.cli-tabella { overflow: hidden; border: 1px solid var(--bordo); border-radius: 16px; background: var(--surface); }
+.cli-tab-testa, .cli-tab-riga {
+  display: grid;
+  grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) 40px;
+  align-items: center;
+  column-gap: 16px;
+  padding-right: 20px;
+  padding-left: 20px;
+}
+.cli-tab-testa {
+  min-height: 44px;
+  border-bottom: 1px solid var(--bordo);
+  color: var(--grigio);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.cli-tab-riga {
+  min-height: 64px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--bordo);
+  color: var(--testo);
+  font-size: 15px;
+  text-decoration: none;
+}
+.cli-tab-corpo li:last-child .cli-tab-riga { border-bottom: none; }
+.cli-tab-riga:hover { background: #faf9f6; }
+.cli-tab-riga:focus-visible { outline: 2px solid var(--blu); outline-offset: -2px; }
+.cli-c-cliente { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.cli-nome { min-width: 0; overflow: hidden; font-size: 16px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.cli-c-meta { display: contents; }
+.cli-c-codice, .cli-c-citta, .cli-c-ordine { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cli-c-codice, .cli-c-ordine { font-variant-numeric: tabular-nums; }
+.cli-c-freccia { display: flex; justify-content: flex-end; color: #8f8d82; font-size: 18px; }
+.cli-solo-stretta { display: none; }
+
+/* ----- Pagina del cliente ----- */
+
+.cli-indietro {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 44px;
+  margin: 0 0 8px -6px;
+  padding-right: 12px;
+  color: var(--blu);
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.cli-indietro svg { font-size: 20px; }
+.cli-indietro:hover { text-decoration: underline; }
+.cli-indietro:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; border-radius: 8px; }
+
+.cli-intesta { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+.cli-intesta-testi { min-width: 0; }
+.cli-intesta-riga { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; }
+.cli-nome-grande { margin: 0; font-family: var(--cli-sora); font-size: 28px; font-weight: 800; line-height: 1.15; overflow-wrap: anywhere; }
+.cli-intesta-sotto { margin: 4px 0 0; color: var(--grigio); font-size: 15px; }
+
+.cli-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.cli-colonna { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+.cli-scheda { padding: 18px 20px; border: 1px solid var(--bordo); border-radius: 16px; background: var(--surface); }
+.cli-scheda-titolo { margin: 0 0 14px; font-family: var(--cli-sora); font-size: 18px; font-weight: 700; line-height: 1.3; }
+
+.cli-dati { display: grid; gap: 16px 20px; margin: 0; }
+.cli-dati-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.cli-dati-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.cli-dato { min-width: 0; }
+.cli-dato dd { margin: 0; }
+.cli-dato-eti {
+  display: block;
+  margin: 0 0 4px;
+  color: var(--grigio);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.cli-dato-val { display: block; font-size: 16px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
+.cli-dato-det { display: block; margin-top: 2px; color: var(--grigio); font-size: 14px; }
+.cli-dato-note { font-weight: 400; white-space: pre-line; }
+
+.cli-vies {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  margin-top: 2px;
+  color: var(--blu);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.cli-vies:hover { text-decoration: underline; }
+.cli-vies svg { font-size: 14px; }
+.cli-linea { margin: 4px 0 16px; border: 0; border-top: 1px solid var(--bordo); }
+
+.cli-contatti { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.cli-contatto {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 56px;
+  padding: 10px 14px;
+  border: 1px solid var(--bordo);
+  border-radius: 14px;
+  color: var(--testo);
+  text-decoration: none;
+}
+.cli-contatto:hover { background: #faf9f6; }
+.cli-contatto-fisso, .cli-contatto-fisso:hover { background: transparent; cursor: default; }
+.cli-contatto:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; }
+.cli-contatto-ico {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--blu-chiaro);
+  color: var(--blu);
+  font-size: 18px;
+}
+.cli-contatto-testi { flex: 1; min-width: 0; }
+.cli-contatto-val { display: block; overflow: hidden; font-size: 16px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+
+/* "È un tuo cliente?": resta in alto mentre si scorre. top = 64px dell'intestazione (anch'essa sticky) + 16px. */
+.cli-decisione {
+  position: sticky;
+  top: 80px;
+  padding: 20px;
+  border: 1.5px solid var(--bordo);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 6px 20px rgba(35, 32, 25, 0.07);
+}
+.cli-decisione h2 { margin: 0 0 6px; font-family: var(--cli-sora); font-size: 20px; font-weight: 800; line-height: 1.25; }
+.cli-decisione > p { margin: 0 0 18px; color: var(--grigio); font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+.cli-campo-eti { display: block; margin: 0 0 6px; font-size: 14px; font-weight: 700; }
+.cli-campo-eti span { color: var(--grigio); font-weight: 400; }
+.cli-decisione .cli-campo {
+  display: block;
+  width: 100%;
+  height: 48px;
+  margin: 0 0 16px;
+  padding: 0 14px;
+  border: 1.5px solid var(--cli-bordo-campo);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--testo);
+  font-family: inherit;
+  font-size: 16px;
+}
+.cli-decisione textarea.cli-campo { height: auto; padding: 12px 14px; line-height: 1.4; resize: vertical; }
+.cli-decisione .cli-campo:focus { border-color: var(--blu); outline: 2px solid var(--blu); outline-offset: 1px; }
+.cli-decisione .cli-campo::placeholder { color: var(--grigio); opacity: 1; }
+
+.cli-approva, .cli-rifiuta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  border-radius: 999px;
+  font-family: var(--cli-sora);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cli-approva svg, .cli-rifiuta svg { font-size: 20px; vertical-align: 0; }
+.cli-approva { height: 52px; border: none; background: var(--verde); color: #fff; }
+.cli-approva:hover { background: #236a33; }
+.cli-rifiuta { height: 46px; margin-top: 12px; border: 1.5px solid var(--cli-bordo-rosso); background: var(--surface); color: var(--cli-testo-rosso); }
+.cli-rifiuta:hover { background: var(--rosso-chiaro); }
+.cli-approva:focus-visible, .cli-rifiuta:focus-visible { outline: 3px solid var(--blu); outline-offset: 2px; }
+.cli-approva:disabled, .cli-rifiuta:disabled { opacity: 0.6; cursor: default; }
+
+/* Nota sotto una scheda. */
+.cli-nota { margin: 12px 0 0; color: var(--grigio); font-size: 14px; line-height: 1.45; }
+
+/* Sotto i 900px (menu in basso): colonne una sotto l'altra, prima la decisione (o, per l'approvato, il materiale) poi i dati; tabella a righe impilate. */
+@media (max-width: 899.98px) {
+  .cli-pagina { padding-top: 16px; padding-bottom: calc(var(--barra-bassa) + 32px); }
+  .cli-layout { grid-template-columns: minmax(0, 1fr); }
+  .cli-layout-decisione .cli-colonna-destra { order: -1; }
+  .cli-layout-approvato .cli-colonna-materiale { order: -1; }
+  .cli-decisione { position: static; }
+
+  .cli-tab-testa { display: none; }
+  .cli-tab-riga {
+    grid-template-columns: minmax(0, 1fr) 24px;
+    grid-template-areas: "cliente freccia" "meta freccia";
+    row-gap: 2px;
+    padding: 12px 16px;
+  }
+  .cli-c-cliente { grid-area: cliente; }
+  .cli-c-meta { display: flex; flex-wrap: wrap; grid-area: meta; padding-left: 52px; color: var(--grigio); font-size: 14px; }
+  .cli-c-meta > * + *::before { content: "·"; margin: 0 6px; }
+  .cli-c-codice, .cli-c-citta, .cli-c-ordine { overflow: visible; text-overflow: clip; }
+  .cli-c-codice.cli-c-manca { display: none; }
+  .cli-c-codice.cli-c-manca + .cli-c-citta::before { content: none; }
+  .cli-c-freccia { grid-area: freccia; }
+  .cli-solo-stretta { display: inline; }
+}
+
+@media (max-width: 639.98px) {
+  .cli-testata { flex-direction: column; align-items: stretch; gap: 12px; }
+  .cli-cerca { flex: 0 0 auto; }
+  .cli-richiesta { flex-wrap: wrap; padding: 16px; }
+  .cli-richiesta-corpo { flex: 1 1 calc(100% - 64px); }
+  .cli-richiesta-dati { gap: 2px 16px; }
+  .cli-verifica { width: 100%; }
+}
+
+@media (max-width: 559.98px) {
+  /* Sul telefono codice · città non lasciano posto all'ultimo ordine: va sulla riga sotto, senza "·" a inizio riga. */
+  .cli-c-ordine { flex-basis: 100%; }
+  .cli-c-meta > .cli-c-ordine::before { content: none; }
+  .cli-dati-3, .cli-dati-2, .cli-contatti { grid-template-columns: minmax(0, 1fr); }
+  .cli-intesta { gap: 12px; }
+  .cli-nome-grande { font-size: 24px; }
+  .cli-pagina { padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-left: max(16px, env(safe-area-inset-left, 0px)); }
+}
+

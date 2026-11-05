@@ -3,9 +3,9 @@
    Volutamente minimo: NON mette in cache pagine, CSS, JS o API. Le pagine sono dati di chi è collegato
    (richieste, ordini) e CSS/JS si aggiornano con una verifica ETag: una copia in cache li farebbe vedere
    vecchi. Serve a quattro cose:
-   0. ricevere le notifiche push ANCHE CON L'APP CHIUSA (evento `push`, src/web_push.js) e gestirne il tocco;
+   0. ricevere le notifiche push ANCHE CON L'APP CHIUSA (evento `push`, src/logica/notifiche/web_push.js) e gestirne il tocco;
    1. mostrare le notifiche di sistema dove `new Notification(...)` non esiste (Chrome per Android, e su iPhone è
-      la via sicura): public/app.js chiama registration.showNotification(...) e qui si gestisce il tocco;
+      la via sicura): assets/js chiama registration.showNotification(...) e qui si gestisce il tocco;
    2. rendere l'app installabile sulla schermata Home (insieme a /manifest.webmanifest);
    3. al posto dell'errore del browser, quando una pagina non si carica perché manca la rete, mostrare /offline.html
       (l'unico file tenuto in cache). Solo per le navigazioni: immagini, script e chiamate /api non passano da qui
@@ -49,7 +49,7 @@ self.addEventListener('fetch', function (evento) {
   );
 });
 
-// Una notifica push (src/web_push.js): arriva dal servizio push di Google/Apple/Mozilla anche con l'app CHIUSA, il browser sveglia questo file e qui si
+// Una notifica push (src/logica/notifiche/web_push.js): arriva dal servizio push di Google/Apple/Mozilla anche con l'app CHIUSA, il browser sveglia questo file e qui si
 // mostra la notifica di sistema, col suono e la vibrazione del telefono. Regole (richiesta esplicita del 21/10/2026):
 //  · app CHIUSA o in SECONDO PIANO (nessuna finestra del sito in primo piano): notifica di sistema con suono;
 //  · app APERTA e in PRIMO PIANO: nessuna notifica (si vede già tutto sullo schermo), né suono: il "ding" del sito non c'è più;
@@ -120,7 +120,7 @@ self.addEventListener('push', function (evento) {
 });
 
 // Il browser ha cambiato o perso l'iscrizione (scadenza, chiavi ruotate): se sa dire con quali opzioni si era iscritto si rinnova da soli, altrimenti lo
-// fa la pagina alla prossima apertura (public/app.js la confronta col <meta name="push-endpoint">). Safari non manda questo evento.
+// fa la pagina alla prossima apertura (assets/js la confronta col <meta name="push-endpoint">). Safari non manda questo evento.
 self.addEventListener('pushsubscriptionchange', function (evento) {
   const manda = function (iscrizione) {
     if (!iscrizione) return null;
@@ -140,12 +140,12 @@ self.addEventListener('pushsubscriptionchange', function (evento) {
 });
 
 // Tocco su una notifica: porta sulla pagina indicata (solo di questo sito), riusando una finestra già aperta.
-// Se la finestra non si lascia portare sulla pagina (`navigate` manca o fallisce: capita su iPhone) le si manda un messaggio e ci va da sola (public/app.js, "vai");
+// Se la finestra non si lascia portare sulla pagina (`navigate` manca o fallisce: capita su iPhone) le si manda un messaggio e ci va da sola (assets/js, "vai");
 // se non si riesce neppure a metterla in primo piano se ne apre una nuova.
 self.addEventListener('notificationclick', function (evento) {
   evento.notification.close();
   // Si entra nell'app: spariscono dalla tendina anche tutte le altre notifiche del sito (richiesta esplicita del 21/10/2026; la pagina fa lo stesso quando si apre
-  // o torna in primo piano, public/app.js). Un errore qui non deve impedire di aprire la pagina.
+  // o torna in primo piano, assets/js). Un errore qui non deve impedire di aprire la pagina.
   const chiudiLeAltre = Promise.resolve().then(function () {
     return self.registration.getNotifications();
   }).then(function (aperte) {

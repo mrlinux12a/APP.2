@@ -13,7 +13,8 @@
 //   9. canale degli eventi in tempo reale (prima del middleware che prepara le viste, che fa una decina di query);
 //  10. preparazione delle viste e, infine, le rotte e i gestori degli errori.
 const express = require('express');
-const { rifiutaNulNelPercorso, gestoreNonTrovato, gestoreErrori } = require('./http');
+const { rifiutaNulNelPercorso } = require('./middleware/percorso');
+const { gestoreNonTrovato, gestoreErrori } = require('./middleware/errori');
 const { configuraApp } = require('./config/viste');
 const { intestazioniSicurezza } = require('./middleware/sicurezza');
 const { comprimiRisposte } = require('./middleware/compressione');
@@ -26,7 +27,7 @@ const limiti = require('./middleware/limiti');
 const webhookStripe = require('./routes/webhook_stripe');
 const eventi = require('./routes/eventi');
 const { montaRotte } = require('./routes');
-const apiV1 = require('./api_v1');
+const apiV1 = require('./routes/api_v1');
 
 // Costruisce l'app completa, pronta ad ascoltare.
 function creaApp() {
@@ -74,7 +75,7 @@ function creaApp() {
   // Senza un gestore dedicato, un errore lanciato da una rotta finiva nel gestore di default di Express: fuori da NODE_ENV=production può restituire lo
   // stack trace al client, e comunque non è coerente con le pagine di errore già esistenti nell'app. Vanno registrati dopo tutte le rotte (Express
   // riconosce il gestore d'errore dai 4 parametri). Per /api/... rispondono in JSON, per il resto con la pagina `errore`; gli errori del client (JSON
-  // malformato, corpo troppo grande) tengono il loro 4xx. Vedi src/http.js.
+  // malformato, corpo troppo grande) tengono il loro 4xx. Vedi src/middleware/errori.js.
   // Indirizzo che non esiste: pagina o JSON di "non trovato".
   app.use(gestoreNonTrovato);
   // Ultima rete: ogni errore diventa una risposta pulita, senza dettagli tecnici.

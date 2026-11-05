@@ -1,0 +1,453 @@
+/* ---------- Categoria: elenco delle sottocategorie con foto (views/cliente/categoria.ejs, ramo senza elenco prodotti) ---------- */
+
+/* Ricerca fissa sotto l'appbar (--altezza-appbar sta nella sezione "Home installatore"). Ha lo sfondo della pagina,
+   così le schede che scorrono sotto non si vedono attraverso. */
+.ricerca-fissa-sotto {
+  position: sticky;
+  top: var(--altezza-appbar);
+  z-index: 15;
+  padding: 12px;
+  background: var(--sfondo);
+}
+.ricerca-fissa-sotto .barra-ricerca { margin: 0; }
+
+/* Il vuoto in fondo lo dà la griglia (sotto): senza la barra "Vai al carrello" quello di .app-categoria è troppo. */
+.app-categoria.app-sotto { padding-bottom: 0; }
+
+.griglia-sotto {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 12px;
+  /* Navbar sospesa (--barra-bassa) + margine: l'ultima riga di schede non resta coperta. In tutto circa 96px. */
+  padding-bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + 24px);
+}
+
+.sotto-scheda {
+  display: block;
+  background: var(--surface);
+  border: 1px solid var(--bordo);
+  border-radius: 14px;
+  overflow: hidden;
+  color: var(--testo);
+  text-decoration: none;
+}
+.sotto-scheda:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+
+/* Riquadro 4:3: sotto, sempre, il fondo grigio con l'icona della categoria madre; la foto (se c'è) ci sta sopra e
+   lo copre. Se la foto non si carica l'<img> viene tolta (onerror) e resta il segnaposto: mai un riquadro vuoto. */
+.sotto-foto {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 4 / 3;
+  background: #e7e3da;
+  color: #8a887e;
+  font-size: 32px; /* le icone di src/comune/icone.js sono 1em */
+}
+/* Sottocategoria senza foto ma con l'immagine della categoria: su bianco, centrata, alta circa il 55% del riquadro; la foto vera (se c'è) la copre. */
+.sotto-foto:has(.sotto-segnaposto-img) { background: #ffffff; }
+.sotto-segnaposto-img { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
+.sotto-foto .sotto-segnaposto-img img { position: static; inset: auto; display: block; height: 55%; width: auto; max-width: 70%; object-fit: contain; } /* più specifico di `.sotto-foto img` (foto a tutto riquadro) */
+.sotto-foto img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.sotto-nome {
+  display: block;
+  padding: 10px 12px 12px;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 600;
+  font-size: 13.5px;
+  line-height: 1.25;
+}
+/* Il troncamento sta sul <span> interno: con il padding sul blocco che tronca la terza riga si vedrebbe a metà. */
+.sotto-testo {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  min-height: 2.5em; /* due righe, così le schede di una riga restano allineate alle altre */
+}
+
+/* Da tablet in su tante colonne quante ne stanno (come le categorie in home), nei 1400px del resto delle pagine. */
+@media (min-width: 720px) {
+  .griglia-sotto {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    max-width: 1400px;
+    margin: 0 auto;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+
+/* ---------- La mia anagrafica (views/cliente/profilo.ejs): schede in sola lettura ---------- */
+
+/* Il vuoto in fondo è la navbar sospesa + un margine (circa 96px): i ~150px di .app servono alle barre fisse
+   di carrello e pagamento, che qui non ci sono. */
+.app-anagrafica { padding-bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + 24px); }
+
+.an-scheda {
+  background: var(--surface);
+  border: 1px solid var(--bordo);
+  border-radius: 16px;
+  padding: 16px 14px;
+  margin-bottom: 12px;
+}
+.an-titolo {
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0 0 14px;
+}
+
+/* Scheda col nome: cerchio con le iniziali (.avatar, qui sotto), ragione sociale e "referente · tipo". */
+.an-nome { display: flex; align-items: center; gap: 14px; }
+.an-nome-testi { min-width: 0; }
+.an-ragione {
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.an-sotto { color: var(--grigio); font-size: 14px; margin-top: 2px; overflow-wrap: anywhere; }
+
+/* Una voce: riquadro icona, etichetta in maiuscolo sopra, valore sotto. Le voci si dividono con una linea sottile;
+   la prima e l'ultima di una scheda non hanno aria in più. */
+.an-riga {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #ece9e2;
+}
+.an-titolo + .an-riga { padding-top: 0; }
+.an-riga:last-child { border-bottom: none; padding-bottom: 0; }
+.an-icona {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #f1efea;
+  color: var(--testo);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px; /* le icone di src/comune/icone.js sono 1em */
+}
+.an-icona-blu { width: 44px; height: 44px; border-radius: 12px; background: var(--blu-chiaro); color: var(--blu); font-size: 24px; }
+.an-testi { flex: 1; min-width: 0; }
+.an-etichetta {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--grigio);
+}
+.an-valore { font-size: 15px; font-weight: 700; line-height: 1.35; margin-top: 2px; overflow-wrap: anywhere; }
+.an-cifre { font-variant-numeric: tabular-nums; }
+.an-dettaglio { color: var(--grigio); font-size: 14px; line-height: 1.35; margin-top: 2px; overflow-wrap: anywhere; }
+.an-dettaglio strong { color: var(--testo); }
+.an-distributore {
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+/* Partita IVA, codice fiscale e SDI/PEC: due colonne, senza icona. */
+.an-riga.an-fiscali { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; align-items: start; }
+.an-fiscali .an-largo { grid-column: 1 / -1; }
+
+.an-nota {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 4px 4px 0;
+  color: var(--grigio);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.an-nota-icona { flex: none; font-size: 18px; line-height: 1; margin-top: 1px; color: var(--blu); }
+
+@media (min-width: 720px) {
+  /* Pagina di sola lettura: sui 1400px del resto del sito le schede si allungherebbero senza motivo. */
+  .app > .contenuto.anag { max-width: 640px; }
+}
+
+/* ---------- Profilo: cerchio con le iniziali, pulsante e menu (views/partials/comune/appbar.ejs, partials/comune/iniziali.ejs) ---------- */
+
+/* Il cerchio è uno solo, in tre misure: pulsante dell'appbar (36), cima del menu (48), pagina anagrafica (56). */
+.avatar {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--blu);
+  color: #fff;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 700;
+  line-height: 1;
+}
+.avatar-36 { width: 36px; height: 36px; font-size: 13px; }
+.avatar-40 { width: 40px; height: 40px; font-size: 14px; }
+.avatar-42 { width: 42px; height: 42px; font-size: 15px; }
+.avatar-48 { width: 48px; height: 48px; font-size: 17px; }
+.avatar-56 { width: 56px; height: 56px; font-size: 20px; }
+.avatar svg { width: 55%; height: 55%; } /* l'omino, quando non ci sono iniziali */
+
+/* Il pulsante è alto 44px (area di tocco); il cerchio da 36 ha un anello di 3px che ci sta dentro. */
+.profilo-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+.profilo-btn .avatar { box-shadow: 0 0 0 3px var(--blu-chiaro); }
+.profilo-btn:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; }
+
+/* Velo e pannello sono fuori dall'appbar (z-index 20) per stare sopra la navbar (25) e le barre fisse (24-29). Il
+   velo parte sotto l'intestazione, che resta in luce. L'apertura è una dissolvenza veloce; chiuso è `hidden`. */
+.profilo-velo {
+  position: fixed;
+  top: var(--altezza-appbar);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  background: rgba(28, 25, 23, 0.28);
+  animation: profilo-dissolvi 150ms ease-out;
+}
+.profilo-pannello {
+  position: fixed;
+  top: calc(var(--altezza-appbar) + 6px);
+  right: 10px;
+  z-index: 31;
+  width: 300px;
+  max-width: calc(100vw - 20px);
+  max-height: calc(100vh - var(--altezza-appbar) - 16px);
+  max-height: calc(100dvh - var(--altezza-appbar) - 16px);
+  overflow-y: auto;
+  padding-bottom: 6px;
+  background: var(--surface);
+  border-radius: 18px;
+  box-shadow: 0 16px 36px rgba(28, 25, 23, 0.22);
+  animation: profilo-dissolvi 150ms ease-out;
+}
+@keyframes profilo-dissolvi { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .profilo-velo, .profilo-pannello { animation: none; }
+}
+/* Fra 521 e 719px .app è una colonna di 520px al centro: il pannello segue il suo bordo, non quello dello schermo. */
+@media (min-width: 521px) and (max-width: 719px) {
+  .profilo-pannello { right: calc((100vw - 520px) / 2 + 10px); }
+}
+
+.pp-testata { display: flex; align-items: center; gap: 12px; padding: 16px 14px 14px; }
+.pp-testi { min-width: 0; }
+.pp-ragione {
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.pp-sotto { color: var(--grigio); font-size: 13.5px; line-height: 1.35; margin-top: 2px; overflow-wrap: anywhere; }
+.pp-linea { height: 1px; margin: 0 14px; background: #ece9e2; }
+
+.pp-voce {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  margin: 0;
+  padding: 0 14px;
+  border: none;
+  background: none;
+  color: var(--testo);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.pp-voce:hover, .pp-voce:focus-visible { background: var(--sfondo); }
+.pp-voce:focus-visible { outline: 2px solid var(--blu); outline-offset: -2px; }
+.pp-icona {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #f1efea;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px; /* le icone di src/comune/icone.js sono 1em */
+}
+.pp-testo { flex: 1; min-width: 0; }
+.pp-freccia { flex: none; color: #a8a69b; font-size: 20px; line-height: 1; }
+.pp-form { margin: 0; }
+.pp-esci, .pp-esci .pp-testo { color: #a33232; }
+.pp-esci .pp-icona { background: var(--rosso-chiaro); color: #a33232; }
+
+/* ---------- Storico ordini (views/cliente/storico.ejs, partials/cliente/storico_riquadro.ejs, partials/cliente/storico_ordine.ejs) ---------- */
+
+/* Come .app-anagrafica: in fondo solo la navbar sospesa + un margine (circa 96px). */
+.app-storico { padding-bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + 24px); }
+
+.st-titolo {
+  margin: 14px 2px 10px;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #5c5b52;
+}
+
+/* a) Riquadro "Da pagare a BOREA": blu, testo bianco */
+.sm-riquadro {
+  background: #245A8F; color: #fff; border-radius: 18px; padding: 14px 16px 16px; margin-bottom: 12px;
+}
+/* chip del mese: scorrono in orizzontale, senza barra */
+.sm-mesi { display: flex; gap: 8px; overflow-x: auto; margin: 0 -16px 12px; padding: 0 16px; scrollbar-width: none; }
+.sm-mesi::-webkit-scrollbar { display: none; }
+.sm-chip {
+  flex: none; display: inline-flex; align-items: center; height: 34px; padding: 0 14px; border-radius: 17px; box-sizing: border-box;
+  border: 1.5px solid rgba(255, 255, 255, 0.45); color: #fff; font-size: 14px; font-weight: 700; text-decoration: none; white-space: nowrap;
+}
+.sm-chip.attivo { background: #fff; border-color: #fff; color: #1A4468; }
+.sm-chip:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.sm-occhiello { font-size: 13px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; opacity: 0.85; }
+.sm-totale { display: flex; align-items: baseline; gap: 10px; margin-top: 4px; }
+.sm-importo {
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 34px; font-weight: 800; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+}
+.sm-iva { font-size: 14px; opacity: 0.85; white-space: nowrap; }
+.sm-sotto { margin-top: 2px; font-size: 14px; opacity: 0.9; }
+.sm-fondo {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.22); font-size: 13.5px;
+}
+.sm-fondo strong { font-variant-numeric: tabular-nums; }
+/* "Ricevute del mese" ed "Esporta elenco": due pulsanti affiancati da 38px, bianco al 14%, testo bianco */
+.sm-bottoni { display: flex; gap: 8px; margin-top: 10px; }
+.sm-esporta {
+  flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; min-height: 38px; padding: 0 10px; box-sizing: border-box;
+  border-radius: 19px; background: rgba(255, 255, 255, 0.14); color: #fff; font-size: 14px; font-weight: 700; text-decoration: none; white-space: nowrap;
+}
+.sm-esporta:hover { background: rgba(255, 255, 255, 0.22); }
+.sm-esporta svg { flex: none; font-size: 18px; }
+.sm-esporta:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* b) selettore Per ordine | Per articolo */
+.sm-vista { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin-bottom: 14px; background: #E7E4DC; border-radius: 14px; }
+.sm-vista a {
+  display: flex; align-items: center; justify-content: center; height: 38px; border-radius: 11px; color: #5c5b52;
+  font-size: 14.5px; font-weight: 700; text-decoration: none;
+}
+.sm-vista a.attiva { background: #fff; color: var(--testo); box-shadow: 0 1px 3px rgba(35, 32, 25, 0.14); }
+.sm-vista a:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; }
+
+/* c) una scheda per ordine (details) */
+.sm-ordine { background: var(--surface); border: 1px solid var(--bordo); border-radius: 16px; margin-bottom: 10px; overflow: hidden; }
+.sm-ordine > summary { display: block; padding: 12px 14px; list-style: none; cursor: pointer; }
+.sm-ordine > summary::-webkit-details-marker { display: none; }
+.sm-ordine > summary:focus-visible { outline: 2px solid var(--blu); outline-offset: -2px; }
+.sm-riga1 { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.sm-nome { min-width: 0; font-size: 15.5px; }
+.sm-data { margin-left: 4px; color: var(--grigio); font-size: 13px; white-space: nowrap; }
+.sm-tot {
+  flex: none; font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+.sm-riga2 { display: flex; align-items: center; gap: 8px; margin-top: 8px; min-width: 0; }
+.sm-primo { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; color: #3f3e38; }
+.sm-altri { flex: none; color: var(--grigio); font-size: 13px; font-weight: 600; }
+.sm-freccia { flex: none; margin-left: auto; color: var(--grigio); font-size: 12px; transition: transform 0.15s; }
+.sm-ordine[open] .sm-freccia { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .sm-freccia { transition: none; } }
+
+.st-stato { flex: none; padding: 3px 9px; border-radius: 10px; font-size: 12.5px; font-weight: 700; line-height: 1.3; white-space: nowrap; }
+.st-stato.st-consegna, .st-stato.st-consegnato { background: var(--verde-chiaro); color: #1f5f2e; }
+.st-stato.st-attesa, .st-stato.st-preparazione { background: var(--arancio-chiaro); color: #8a3c16; }
+.st-stato.st-nessuna { background: var(--rosso-chiaro); color: #991b1b; }
+.st-stato.st-annullata { background: #ece9e2; color: #3f3e38; }
+
+.sm-dettaglio { background: #FAF9F6; border-top: 1px solid #ece9e2; padding: 4px 14px 12px; }
+.sm-riga { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid #ece9e2; }
+.sm-qta {
+  flex: none; min-width: 30px; padding: 2px 7px; box-sizing: border-box; border-radius: 8px; text-align: center;
+  background: var(--blu-chiaro); color: var(--blu-scuro); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.sm-riga-corpo, .sm-art-corpo { flex: 1; min-width: 0; }
+.sm-riga-nome, .sm-art-nome { font-size: 14.5px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.sm-riga-sotto, .sm-art-sotto { margin-top: 2px; color: var(--grigio); font-size: 12.5px; }
+.sm-riga-totale, .sm-art-totale { flex: none; font-size: 14.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sm-servizio { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0 2px; color: var(--grigio); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.sm-azioni { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
+/* "Ricevuta" e "Dettagli ›" a destra, uno accanto all'altro */
+.sm-destra { margin-left: auto; display: inline-flex; align-items: center; gap: 18px; }
+.sm-ricevuta { display: inline-flex; align-items: center; gap: 5px; min-height: 44px; color: var(--blu); font-weight: 700; font-size: 14.5px; text-decoration: none; }
+.sm-ricevuta svg { font-size: 17px; }
+.sm-ricevuta:hover { text-decoration: underline; }
+.sm-ricevuta:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; border-radius: 4px; }
+.sm-dettagli { margin-left: auto; display: inline-flex; align-items: center; min-height: 44px; color: var(--blu); font-weight: 700; font-size: 14.5px; text-decoration: none; }
+.sm-dettagli:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+
+/* richieste chiuse senza ordine: la scheda è quella dell'ordine (.sm-ordine); "Nessun costo" al posto dell'importo */
+.sm-tot-zero { font-family: inherit; font-size: 14px; font-weight: 600; color: var(--grigio); }
+/* richiesta annullata: la scheda c'è ma non si apre e non è un link (niente mano, niente freccia, niente pagina) */
+.sm-ordine > .sm-fissa { display: block; padding: 12px 14px; }
+.sm-ordine-chiusa { cursor: default; }
+
+/* d) per articolo */
+.sm-articoli { background: var(--surface); border: 1px solid var(--bordo); border-radius: 16px; padding: 2px 14px; margin-bottom: 10px; }
+.sm-art { display: flex; align-items: flex-start; gap: 10px; padding: 11px 0; border-bottom: 1px solid #ece9e2; }
+.sm-art-somma { align-items: center; justify-content: space-between; border-bottom: none; font-size: 15.5px; }
+.sm-art-somma .sm-art-totale { font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; font-size: 16px; font-weight: 800; }
+
+.st-riordina { margin: 0; }
+.st-btn-riordina {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1.5px solid var(--blu);
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--blu);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.st-btn-riordina svg { font-size: 18px; }
+/* Area di tocco di almeno 44px: il pulsante è 40px, il resto lo dà questa estensione invisibile. */
+.st-btn-riordina::after { content: ""; position: absolute; inset: -2px; }
+.st-btn-riordina:hover { background: var(--blu-chiaro); }
+.st-btn-riordina:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+

@@ -1,4 +1,4 @@
-// Chiamate all'API JSON del server (src/api_v1.js nel progetto principale).
+// Chiamate all'API JSON del server (src/routes/api_v1/ nel progetto principale).
 import Constants from 'expo-constants';
 
 // In sviluppo il telefono raggiunge il server sul PC attraverso la rete locale: l'indirizzo

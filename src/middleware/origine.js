@@ -29,4 +29,4 @@ function controlloOrigine(req, res, next) {
   next();
 }
 
-module.exports = { stessaOrigine, controlloOrigine };
+module.exports = { controlloOrigine };

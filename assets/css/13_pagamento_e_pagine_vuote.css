@@ -1,0 +1,311 @@
+/* ---------- Pagamento (views/cliente/pagamento.ejs, public/pagamento.js; classi pag-*) ---------- */
+
+/* Pagina senza barra in basso: niente spazio per la navbar. */
+.app-pagamento { padding-bottom: 32px; }
+@media (min-width: 720px) {
+  .app > .contenuto.pag { max-width: 560px; }
+}
+.pag-scheda {
+  padding: 18px 16px 16px;
+  border: 1px solid var(--bordo);
+  border-radius: 16px;
+  background: var(--surface);
+}
+.pag-testa { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.pag-totale { display: flex; flex-direction: column; }
+.pag-label { color: var(--grigio); font-size: 12px; }
+.pag-importo {
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.pag-riepilogo { color: var(--grigio); font-size: 14px; }
+/* Il form di Stripe ha già la sua altezza: lo spazio riservato evita che la pagina salti quando arriva. */
+.pag-elemento { min-height: 120px; margin-bottom: 14px; }
+.pag-errore { margin: 0 0 12px; }
+.pag-paga { width: 100%; }
+.pag-torna {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin-top: 12px;
+  color: var(--blu);
+  font-weight: 600;
+  text-decoration: none;
+}
+.pag-torna:hover { text-decoration: underline; }
+/* Sul telefono il form di Stripe vuole almeno ~330px (sotto, "scadenza / CVC" e i loghi delle carte vengono tagliati):
+   pagina e scheda un po' più strette, il form esce di 8px da ogni lato del padding della scheda. */
+@media (max-width: 480px) {
+  .contenuto.pag { padding-left: 10px; padding-right: 10px; }
+  .pag-elemento { margin-left: -8px; margin-right: -8px; }
+}
+
+/* ---------- Pagine vuote dell'installatore: Stato ordini (views/cliente/ordini_cliente.ejs) e Carrello (views/cliente/carrello.ejs) ---------- */
+
+/* In fondo solo la navbar sospesa + un margine (circa 96px), come .app-storico: non i ~150px di .app, pensati per le barre fisse. */
+.app-vuoto { padding-bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + 24px); }
+
+.contenuto.vuoto-pagina {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 28px 16px 0;
+}
+.vuoto-pagina > .avviso { margin-bottom: 0; }
+
+/* Figura: cerchio da 112px con l'icona da 46px a tratto sottile e, dentro, un cerchio tratteggiato decorativo. */
+.vuoto-fig {
+  position: relative;
+  flex: none;
+  align-self: center;
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  background: var(--blu-chiaro);
+  color: var(--blu);
+  font-size: 46px; /* le icone di src/comune/icone.js sono 1em */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.vuoto-fig svg { stroke-width: 1.3; vertical-align: 0; }
+.vuoto-fig-tratt {
+  position: absolute;
+  inset: 14px;
+  border: 2px dashed var(--blu);
+  border-radius: 50%;
+  opacity: 0.35;
+}
+
+.vuoto-testa { text-align: center; }
+.vuoto-titolo {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--testo);
+}
+.vuoto-sotto {
+  max-width: 300px;
+  margin: 8px auto 0;
+  color: var(--grigio);
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+/* "Come funziona" */
+.cf-scheda {
+  background: var(--surface);
+  border: 1px solid var(--bordo);
+  border-radius: 16px;
+  padding: 16px;
+}
+.cf-occhiello {
+  margin: 0 0 14px;
+  color: var(--grigio);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+.cf-passi { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.cf-passo { display: flex; align-items: center; gap: 12px; }
+.cf-ico {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+.cf-blu { background: var(--blu-chiaro); color: var(--blu); }
+.cf-arancio { background: var(--arancio-chiaro); color: var(--arancio); }
+.cf-verde { background: var(--verde-chiaro); color: var(--verde); }
+.cf-testi { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.cf-testi strong { font-size: 15px; font-weight: 700; line-height: 1.3; }
+.cf-testi span { color: var(--grigio); font-size: 13.5px; line-height: 1.35; }
+
+/* Pulsanti a tutta larghezza: pieno (Stato ordini) e a contorno (Carrello). Alti più di 44px. */
+.btn-vuoto-pieno, .btn-vuoto-bordo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn-vuoto-pieno svg, .btn-vuoto-bordo svg { font-size: 22px; flex: none; }
+.btn-vuoto-pieno {
+  min-height: 54px;
+  border-radius: 27px;
+  background: var(--blu);
+  color: var(--su-blu);
+  font-size: 17px;
+}
+.btn-vuoto-pieno:hover { background: var(--blu-scuro); }
+.btn-vuoto-bordo {
+  min-height: 50px;
+  border: 1.5px solid var(--blu);
+  border-radius: 25px;
+  background: var(--surface);
+  color: var(--blu);
+  font-size: 16px;
+}
+.btn-vuoto-bordo:hover { background: var(--blu-chiaro); }
+.btn-vuoto-pieno:focus-visible, .btn-vuoto-bordo:focus-visible { outline: 3px solid var(--blu); outline-offset: 2px; }
+
+/* Riga "Storico ordini" */
+.riga-storico {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--bordo);
+  border-radius: 16px;
+  color: inherit;
+  text-decoration: none;
+}
+.riga-storico:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+.riga-storico-ico {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #f1efea;
+  color: var(--testo);
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.riga-storico-testi { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.riga-storico-testi strong { font-size: 15px; font-weight: 700; line-height: 1.3; }
+.riga-storico-testi span { color: var(--grigio); font-size: 13px; line-height: 1.35; }
+.riga-storico-freccia { flex: none; color: #a8a69b; font-size: 24px; line-height: 1; }
+
+/* Barra di ricerca del carrello vuoto: quella della home (.barra-home) ma alta 52px, senza il pulsante foto. */
+.barra-ricerca.barra-vuoto {
+  height: 52px;
+  padding: 0 3px 0 14px;
+  border-radius: 26px;
+}
+
+/* "Il tuo ultimo ordine" */
+.uo-scheda {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--bordo);
+  border-radius: 16px;
+}
+.uo-testa { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.uo-occhiello {
+  margin: 0;
+  color: var(--grigio);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+.uo-data { flex: none; color: var(--grigio); font-size: 13px; }
+.uo-righe { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.uo-riga { display: flex; align-items: center; gap: 10px; }
+.uo-qta {
+  flex: none;
+  min-width: 34px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: var(--blu-chiaro);
+  color: #1a4468;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.3;
+  text-align: center;
+}
+.uo-nome {
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.uo-altri { margin: -4px 0 0; color: var(--grigio); font-size: 13.5px; font-weight: 600; }
+.uo-form { margin: 0; }
+.uo-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1.5px solid var(--blu);
+  border-radius: 22px;
+  background: var(--surface);
+  color: var(--blu);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.uo-btn svg { font-size: 18px; flex: none; }
+.uo-btn:hover { background: var(--blu-chiaro); }
+.uo-btn:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+
+/* ---------- Ordine consegnato (views/cliente/ordine_dettaglio.ejs, ramo "consegnato"): stessa struttura di "Ordine in consegna", in verde e fermo ---------- */
+
+/* In fondo solo la navbar sospesa + un margine (circa 96px), non i ~150px di .app. */
+.app-consegnato { padding-bottom: calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + 24px); }
+
+/* Scheda di stato: ordine chiuso, quindi niente anello che si svuota ma un cerchio pieno con la spunta. */
+.att-timer.att-consegnato { padding: 22px 16px 18px; }
+.att-esito {
+  width: 120px; height: 120px; margin: 0 auto 16px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; background: var(--verde-chiaro);
+}
+.att-esito > span {
+  width: 76px; height: 76px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: var(--verde); color: #fff;
+}
+.att-esito svg { display: block; }
+
+/* L'orario sotto ogni passo ("19:23", o "14 ott · 19:23" se è in un altro giorno) e la pillola "Arrivato in 47 min dall'invio" sotto la data. Le tre colonne
+   restano uguali (griglia 1fr) anche con l'orario lungo: va a capo invece di allargarsi. */
+.att-ora {
+  display: block; margin-top: 2px; text-align: center; font-size: 13px; line-height: 1.25; font-weight: 700; color: #1c1917;
+  font-variant-numeric: tabular-nums; text-wrap: balance;
+}
+.att-sotto.att-sotto-pillola { margin-bottom: 10px; }
+.att-arrivato-riga { margin: 0 0 18px; text-align: center; }
+.att-arrivato {
+  display: inline-block; padding: 3px 10px; border-radius: 10px; background: #e3f3e6; color: #1f5f2e;
+  font-size: 13px; line-height: 1.3; font-weight: 700;
+}
+
+/* "Riordina gli stessi pezzi": il pulsante blu di "Rinvia richiesta" (.att-rinvia), con l'icona a sinistra */
+.att-riordina { margin: 0 0 12px; }
+.att-riordina .att-rinvia { margin-top: 0; }
+.att-riordina .att-rinvia svg { flex: none; font-size: 20px; }
+
+/* Banco, materiale e costi in una scheda sola: intestazione col banco e "Ordine #N", poi righe e riepilogo */
+.att-ordine-testa { display: flex; align-items: center; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid #ece9e2; }
+.att-ordine-testa .att-occhiello { margin-bottom: 1px; }
+.att-ordine-id { flex: none; color: var(--grigio); font-size: 13px; line-height: 1.2; white-space: nowrap; }
+.att-ordine .att-righe { margin-top: 6px; }
+

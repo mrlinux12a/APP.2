@@ -1,0 +1,412 @@
+/* ---------- Pagina di un cliente approvato, vista dal banco (views/banco/cliente.ejs, partials/banco/materiale_cliente.ejs) ----------
+   22/10/2026, per dare spazio agli ordini (mockup docs/mockup/banco-cliente-spazio.png). Tre pezzi:
+   · la BARRA del cliente (`.cli-barra`): una riga bianca a tutta larghezza sotto l'intestazione del banco con freccia, iniziali, nome e "cod. cliente · P.IVA" a sinistra,
+     telefono ed email come pillole e il pulsante "Dati cliente ▾" a destra. Il pulsante è il <summary> di un <details> che sta DOPO la riga: da 900px in su è posizionato in
+     assoluto in fondo a destra della riga, e il pannello (tutto ciò che stava nella colonna di sinistra) si apre sotto e spinge giù la pagina, senza JS. Sotto i 900px la barra va
+     su due righe (nome sopra, pillole sotto che scorrono di lato) e il pulsante è a tutta larghezza.
+   · il MATERIALE a tutta larghezza (`.mc-*`): niente max-height né scorrimento interno, scorre la PAGINA. La testata `.mc-fisso` (riga dei filtri + striscia del riepilogo) da 900px
+     in su è sticky sotto l'intestazione del banco (64px, `.banco-testa`); l'ombra `.staccato` la mette assets/js ("Pagina di un cliente approvato"). La scheda ha `overflow: clip`
+     e NON `hidden`: hidden ne farebbe un contenitore di scorrimento e lo sticky non funzionerebbe più.
+   · righe degli ordini da 50px, righe delle tabelle da 44px. */
+.cli-barra {
+  --cli-gutter: max(32px, calc((100% - 1536px) / 2)); /* i bordi del contenuto di `.cli-pagina-larga` (max 1600px con 32px di margine) */
+  position: relative;
+  padding: 10px var(--cli-gutter);
+  border-bottom: 1px solid #E2DED3;
+  background: var(--surface);
+}
+.cli-barra-riga { display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 40px; }
+.cli-barra .avatar { flex: none; }
+.cli-indietro-tondo {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px;
+  border: 1px solid #E2DED3; border-radius: 50%; background: #fff; color: var(--testo); font-size: 20px; text-decoration: none;
+}
+.cli-indietro-tondo:hover { background: #FAF9F6; }
+.cli-indietro-tondo:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+.cli-barra-testi { flex: 1 1 0; min-width: 0; }
+.cli-barra .cli-intesta-riga { flex-wrap: nowrap; gap: 8px 10px; min-width: 0; }
+.cli-barra .cli-nome-grande { min-width: 0; overflow: hidden; font-size: 19px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.cli-barra-sotto { margin: 1px 0 0; overflow: hidden; color: var(--grigio); font-size: 13.5px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+/* "● Approvato": pillola con pallino, non l'etichetta maiuscola degli altri stati */
+.cli-barra .cli-etichetta {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px; border-radius: 999px;
+  font-size: 13px; letter-spacing: 0; text-transform: none;
+}
+.cli-barra .cli-etichetta::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+/* Telefono (non cliccabile) ed email (mailto): pillole da 36px; l'email, se lunga, si accorcia con i puntini */
+.cli-barra-pillole { flex: 0 1 auto; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cli-pill {
+  display: inline-flex; align-items: center; gap: 8px; min-width: 0; height: 36px; padding: 0 14px;
+  border: 1px solid #E2DED3; border-radius: 18px; background: var(--surface); color: var(--testo); font-size: 14px; text-decoration: none;
+}
+.cli-pill-ico { flex: none; display: inline-flex; color: var(--grigio); font-size: 16px; }
+.cli-pill-testo { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cli-pill-fissa { flex: none; cursor: default; }
+a.cli-pill { color: var(--blu); }
+a.cli-pill .cli-pill-ico { color: var(--blu); }
+a.cli-pill:hover { background: #FAF9F6; }
+a.cli-pill:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+
+/* "Dati cliente ▾": il <summary>. Chiuso all'arrivo; aperto, il pannello sta sotto la riga. */
+.cli-dati-btn {
+  box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 14px;
+  border: 1.5px solid #245A8F; border-radius: 18px; background: var(--surface); color: #245A8F;
+  font-family: inherit; font-size: 14px; font-weight: 700; list-style: none; cursor: pointer; user-select: none;
+}
+.cli-dati-btn::-webkit-details-marker { display: none; }
+.cli-dati-btn:hover, .cli-dati-det[open] > .cli-dati-btn { background: var(--blu-chiaro); }
+.cli-dati-btn:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+.cli-dati-chev { display: inline-flex; font-size: 16px; transition: transform 0.15s; }
+.cli-dati-det[open] .cli-dati-chev { transform: rotate(180deg); }
+
+/* Pannello: i blocchi in 3-4 colonne (quante ne stanno, almeno 260px l'una), le voci di ogni blocco in due o tre. */
+.cli-pannello {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px 40px;
+  margin-top: 10px; padding: 16px 0 6px; border-top: 1px solid #ECE9E2;
+}
+.cli-blocco { min-width: 0; }
+.cli-blocco-titolo { margin: 0 0 10px; font-family: var(--cli-sora); font-size: 15px; font-weight: 700; line-height: 1.3; }
+.cli-dati-auto { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px 20px; }
+.cli-dato-largo { grid-column: 1 / -1; }
+.cli-blocco .cli-vies { min-height: 36px; margin-top: 4px; }
+.cli-blocco .cli-nota { margin-top: 10px; }
+
+/* Il materiale occupa tutta la larghezza: una colonna sola, sotto la barra. */
+.cli-layout-approvato { grid-template-columns: minmax(0, 1fr); }
+
+@media (min-width: 900px) {
+  .cli-pagina.cli-pagina-larga {
+    max-width: 1600px;
+    padding-top: 16px;
+    padding-right: max(32px, env(safe-area-inset-right, 0px));
+    padding-left: max(32px, env(safe-area-inset-left, 0px));
+  }
+  /* il pulsante sta in fondo a destra della riga (132px + 16px di aria: la riga lascia quel posto alle pillole) */
+  .cli-dati-btn { position: absolute; top: 12px; right: var(--cli-gutter); width: 132px; }
+  .cli-barra-riga { padding-right: 148px; }
+}
+/* Fra 900 e 1100px il posto è poco: l'email si accorcia prima */
+@media (min-width: 900px) and (max-width: 1099.98px) {
+  .cli-pill-testo { max-width: 200px; }
+}
+@media (max-width: 899.98px) {
+  .cli-barra { padding: 10px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px)); }
+  .cli-barra-riga { flex-wrap: wrap; }
+  .cli-barra .cli-intesta-riga { flex-wrap: wrap; }
+  .cli-barra .cli-nome-grande { overflow: visible; font-size: 18px; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+  .cli-barra-sotto { white-space: normal; overflow-wrap: anywhere; }
+  /* pillole sulla seconda riga, che scorre di lato se non ci stanno */
+  .cli-barra-pillole { flex: 1 1 100%; overflow-x: auto; scrollbar-width: none; }
+  .cli-barra-pillole::-webkit-scrollbar { display: none; }
+  .cli-pill { flex: none; height: 44px; }
+  .cli-pill-testo { overflow: visible; }
+  .cli-dati-det { margin-top: 10px; }
+  .cli-dati-btn { display: flex; width: 100%; height: 44px; }
+  .cli-pannello { gap: 18px; }
+}
+
+.mc-card {
+  --mc-pad: 22px;
+  min-width: 0; overflow: clip; scroll-margin-top: 80px;
+  border: 1px solid #E2DED3; border-radius: 18px; background: #fff;
+}
+
+/* Testata: riga dei filtri + striscia del riepilogo. Da 900px è sticky sotto l'intestazione del banco. */
+.mc-fisso { background: #fff; }
+.mc-testa { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 12px var(--mc-pad); border-bottom: 1px solid #ECE9E2; }
+.mc-titolo { margin: 0 4px 0 0; font-family: var(--cli-sora); font-size: 18px; font-weight: 700; line-height: 1.25; white-space: nowrap; }
+.mc-filtri-mesi { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.mc-testa-destra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-left: auto; }
+.mc-esporta {
+  flex: none; display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px;
+  border: 1px solid #d6d1c6; border-radius: 20px; background: #fff; color: var(--testo); font-size: 14px; font-weight: 700; text-decoration: none;
+}
+.mc-esporta svg { font-size: 18px; }
+.mc-esporta:hover { background: #FAF9F6; }
+.mc-esporta:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+
+/* Segmenti (mesi, vista): attivo bianco con ombra leggera su fondo #EFEDE6. */
+.mc-seg { display: inline-flex; gap: 4px; max-width: 100%; padding: 3px; overflow-x: auto; border-radius: 14px; background: #EFEDE6; scrollbar-width: none; }
+.mc-seg::-webkit-scrollbar { display: none; }
+.mc-seg-voce {
+  flex: none; display: inline-flex; align-items: center; min-height: 34px; padding: 0 16px; border-radius: 11px;
+  color: #4f4d44; font-family: var(--cli-sora); font-size: 14px; font-weight: 600; text-decoration: none; white-space: nowrap;
+}
+.mc-seg-voce:hover { color: var(--testo); }
+.mc-seg-voce.attiva { background: #fff; color: var(--testo); font-weight: 700; box-shadow: 0 1px 3px rgba(35, 32, 25, 0.14); }
+.mc-seg-voce:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; }
+.mc-altri { display: flex; margin: 0; } /* flex: un <select> inline lascia sotto di sé lo spazio della riga */
+.mc-altri-select {
+  height: 40px; margin: 0; padding: 0 12px; /* margin: la regola generale dei campi ci mette 12px sotto, che lo facevano finire 6px più in alto dei segmenti */ border: 1px solid #d6d1c6; border-radius: 14px; background: #fff; color: var(--testo);
+  font: inherit; font-size: 14.5px; font-weight: 600;
+}
+.mc-altri-select.attiva { border-color: #1A4468; background: #E3EDF7; color: #1A4468; }
+.mc-altri-select:focus-visible, .mc-altri-vai:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; }
+.mc-altri-vai { height: 40px; margin-left: 6px; padding: 0 14px; border: 1px solid #d6d1c6; border-radius: 14px; background: #fff; font: inherit; font-weight: 700; }
+
+/* Striscia del riepilogo (al posto dei tre riquadri): conteggi, nota e, a destra, il totale in un riquadro azzurro. */
+.mc-striscia { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 22px; min-height: 48px; padding: 7px var(--mc-pad); border-bottom: 1px solid #ECE9E2; background: #F7F6F2; }
+.mc-conta { color: #4f4d44; font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mc-conta strong { color: var(--testo); font-size: 16px; font-weight: 700; }
+.mc-nota { color: var(--grigio); font-size: 13px; }
+.mc-totale { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin-left: auto; padding: 4px 14px; border-radius: 10px; background: #E3EDF7; color: #1A4468; }
+.mc-totale-eti { font-size: 13px; font-weight: 700; }
+.mc-totale-val { font-family: var(--cli-sora); font-size: 20px; font-weight: 800; line-height: 1.3; font-variant-numeric: tabular-nums; }
+.mc-totale-iva { font-size: 12.5px; font-variant-numeric: tabular-nums; }
+
+/* Elenco: scorre la pagina. Riga dell'ordine da 50px: freccia · numero · data e ora · N articoli · stato · totale. */
+.mc-ordine { border-bottom: 1px solid #ece9e2; }
+.mc-ordine:last-child { border-bottom: 0; }
+.mc-ordine[open] { background: #FAF9F6; }
+.mc-sum {
+  display: grid; grid-template-columns: 18px 124px 230px minmax(0, 1fr) 132px 120px; align-items: center; column-gap: 14px;
+  height: 50px; padding: 0 var(--mc-pad); list-style: none; cursor: pointer;
+}
+.mc-sum::-webkit-details-marker { display: none; }
+.mc-sum:hover { background: #F4F2EC; }
+.mc-sum:focus-visible { outline: 2px solid var(--blu); outline-offset: -2px; }
+.mc-freccia { color: var(--grigio); font-size: 12px; transition: transform 0.15s; }
+.mc-ordine[open] .mc-freccia { transform: rotate(90deg); }
+.mc-num { font-size: 16px; font-weight: 700; white-space: nowrap; }
+.mc-meta { display: contents; }
+.mc-data, .mc-narticoli { min-width: 0; color: #4f4d44; font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mc-stato { justify-self: start; }
+.mc-tot { justify-self: end; font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mc-dettaglio { padding: 8px var(--mc-pad) 14px calc(var(--mc-pad) + 32px); }
+
+/* Tabelle (articoli di un ordine; vista per articolo): righe da 44px, nome e "Cod. …" sulla stessa riga. */
+.mc-tab-box { overflow-x: auto; border: 1px solid #E2DED3; border-radius: 12px; background: #fff; }
+.mc-tab-box-solo { margin: 12px var(--mc-pad) 16px; }
+.mc-tab { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.mc-tab th {
+  padding: 9px 14px; border-bottom: 1px solid #ece9e2; color: var(--grigio); font-size: 12px; font-weight: 600;
+  letter-spacing: 0.08em; text-align: left; text-transform: uppercase; white-space: nowrap;
+}
+.mc-tab td { height: 44px; padding: 4px 14px; border-bottom: 1px solid #ece9e2; font-size: 14.5px; vertical-align: middle; }
+.mc-tab tbody tr:last-child td { border-bottom: 0; }
+.mc-tab .mc-c-qta { width: 64px; }
+.mc-tab .mc-c-num { width: 112px; text-align: right; white-space: nowrap; }
+.mc-tab .mc-c-ordini { width: 160px; color: #4f4d44; font-size: 14px; }
+.mc-c-tot { font-weight: 700; }
+.mc-qta {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 40px; height: 28px; padding: 0 6px;
+  border-radius: 8px; background: #E3EDF7; color: #1A4468; font-size: 13px; font-weight: 800;
+}
+.mc-art-riga { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; }
+.mc-art { font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.mc-cod { color: var(--grigio); font-size: 12.5px; }
+.mc-cad-sub, .mc-negli-sub { display: none; } /* il prezzo cad. e gli ordini passano accanto al codice quando la colonna non c'è (telefono) */
+.mc-vuoto { margin: 0; padding: 48px var(--mc-pad); color: var(--grigio); font-size: 16px; text-align: center; }
+
+/* Da 900px: testata sticky sotto l'intestazione del banco (64px). Le colonne della riga dell'ordine si stringono un po' fra 900 e 1180px. */
+@media (min-width: 900px) {
+  .mc-fisso { position: sticky; top: 64px; z-index: 5; transition: box-shadow 0.15s; }
+  .mc-fisso.staccato { box-shadow: 0 6px 14px -8px rgba(35, 32, 25, 0.32); }
+}
+@media (min-width: 900px) and (max-width: 1179.98px) {
+  .mc-sum { grid-template-columns: 18px 112px 180px minmax(0, 1fr) 124px 108px; }
+  /* la testata è sticky anche qui: filtri più stretti, così stanno su una riga più a lungo (a due righe occuperebbe troppo schermo) */
+  .mc-testa { gap: 8px 10px; }
+  .mc-titolo { margin-right: 0; font-size: 16px; }
+  .mc-seg-voce { padding: 0 11px; font-size: 13.5px; }
+  .mc-testa-destra { gap: 8px; }
+  .mc-esporta { padding: 0 12px; }
+}
+/* Tablet e telefono: la testata NON è sticky (occuperebbe troppo schermo), la riga dell'ordine va su due righe, il totale della striscia sotto i conteggi */
+@media (max-width: 899.98px) {
+  .mc-seg { padding: 2px; }
+  .mc-seg-voce { min-height: 44px; }
+  .mc-esporta { min-height: 44px; }
+  .mc-altri-select, .mc-altri-vai { height: 44px; font-size: 16px; } /* 16px: sotto Safari iPhone ingrandisce la pagina al tocco */
+  .mc-totale { flex: 1 1 100%; justify-content: space-between; margin-left: 0; }
+  .mc-sum {
+    grid-template-columns: 18px minmax(0, 1fr) auto; grid-template-areas: "freccia num tot" ". meta stato"; row-gap: 6px;
+    height: auto; min-height: 50px; padding-top: 10px; padding-bottom: 10px;
+  }
+  .mc-freccia { grid-area: freccia; }
+  .mc-num { grid-area: num; }
+  .mc-tot { grid-area: tot; }
+  .mc-meta { display: block; grid-area: meta; }
+  .mc-narticoli::before { content: " · "; }
+  .mc-stato { grid-area: stato; justify-self: end; }
+  .mc-dettaglio { padding-left: var(--mc-pad); }
+}
+/* Telefono stretto: i mesi vanno a capo invece di scorrere di lato (un "Tutto" tagliato non si vedrebbe) */
+@media (max-width: 479.98px) {
+  .mc-seg { flex-wrap: wrap; gap: 2px; overflow-x: visible; }
+  .mc-seg-voce { padding: 0 9px; font-size: 13.5px; }
+}
+@media (max-width: 639.98px) {
+  .mc-card { --mc-pad: 14px; }
+  /* testata su tre righe: titolo e "Esporta" / mesi (e "Altri mesi") / "Per ordine | Per articolo" a tutta larghezza */
+  .mc-testa { gap: 10px 12px; }
+  .mc-testa-destra { display: contents; }
+  .mc-esporta { order: 1; margin-left: auto; }
+  .mc-filtri-mesi { order: 2; flex: 1 1 100%; }
+  .mc-seg-vista { order: 3; flex: 1 1 100%; }
+  .mc-seg-vista .mc-seg-voce { flex: 1; justify-content: center; }
+  .mc-sum { column-gap: 10px; grid-template-areas: "freccia num tot" ". meta meta" ". stato stato"; }
+  .mc-stato { justify-self: start; }
+  .mc-tab th, .mc-tab td { padding: 8px 10px; }
+  .mc-tab .mc-c-qta { width: 52px; }
+  .mc-tab .mc-c-num { width: 84px; }
+  .mc-c-cad, .mc-c-ordini { display: none; }
+  .mc-cad-sub, .mc-negli-sub { display: inline; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mc-freccia, .cli-dati-chev, .mc-fisso { transition: none; }
+}
+
+/* Pagine pubbliche: privacy e eliminazione dell'account (views/comune/legale.ejs) */
+.legale { max-width: 680px; margin: 0 auto; padding: 24px 16px 48px; color: var(--testo); font-family: 'Source Sans 3', system-ui, sans-serif; line-height: 1.55; }
+.legale-indietro { display: inline-block; min-height: 44px; line-height: 44px; color: var(--blu); text-decoration: none; font-weight: 600; }
+.legale-titolo { font-family: 'Sora', system-ui, sans-serif; font-size: 26px; font-weight: 800; margin: 8px 0 4px; }
+.legale-data { color: var(--grigio); margin: 0 0 20px; font-size: 14px; }
+.legale-sezione { margin-top: 22px; }
+.legale-sezione h2 { font-family: 'Sora', system-ui, sans-serif; font-size: 18px; font-weight: 700; margin: 0 0 8px; }
+.legale-sezione p { margin: 0 0 10px; }
+.legale-sezione ul { margin: 0 0 10px; padding-left: 20px; }
+.legale-sezione li { margin-bottom: 6px; }
+.legale-link { margin-top: 32px; color: var(--grigio); font-size: 14px; }
+.legale-link a { color: var(--blu); }
+
+/* ---------- Pagina dell'ordine del banco (views/banco/ordine.ejs, src/logica/banco/ordine.js; classi ord-*, più le ric-* del dettaglio della richiesta) ---------- */
+
+/* Testata: freccia da 44px, "Ordine #N" a 26px, stato, cliente; a destra quando è arrivato e da quale richiesta. */
+.pagina-ordine .ric-indietro { width: 44px; height: 44px; }
+.pagina-ordine .ric-titolo { font-size: 26px; }
+.pagina-ordine .ric-corpo { grid-template-columns: minmax(0, 1fr) 420px; }
+.ord-cliente-nome { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.ric-passo-blu { --p-sfondo: var(--blu-chiaro); --p-colore: var(--blu); } /* "Da preparare" nell'Avanzamento dell'ordine */
+/* Gli altri due stati dell'ordine (la pagina si adatta): In consegna azzurro (#E3EDF7 / #1A4468) e Consegnato grigio (#ECE9E2 / #3F3E38). */
+.ric-st-in_consegna { --st: #1a4468; --st-sfondo: #e3edf7; }
+.ric-st-consegnato { --st: #3f3e38; --st-sfondo: #ece9e2; }
+
+/* Dopo la partenza la testata del materiale ha anche "N articoli · M pezzi" e "Stampa". */
+.ord-mat-azioni { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px 12px; }
+.ord-stampa-btn {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border: 1.5px solid #cfcabd; border-radius: 22px;
+  background: var(--surface); color: var(--testo); font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.ord-stampa-btn svg { flex: none; font-size: 18px; }
+.ord-stampa-btn:hover { background: var(--sfondo); }
+.ord-stampa-btn:focus-visible { outline: 3px solid var(--blu); outline-offset: 2px; }
+
+/* Materiale da preparare: tabella con quantità, articolo, prezzo cad. e totale di riga. */
+.ord-tab-testa, .ord-riga {
+  display: grid; grid-template-columns: 64px minmax(0, 1fr) 120px 120px; align-items: center; column-gap: 16px; padding: 0 20px;
+}
+.ord-tab-testa {
+  min-height: 34px; border-top: 1px solid var(--bordo); border-bottom: 1px solid var(--bordo); background: #f7f6f2;
+  color: var(--grigio); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.ord-riga { min-height: 72px; margin: 0; padding-top: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--bordo); font-weight: 400; }
+.ord-riga .ric-nome { font-size: 16.5px; }
+.ord-cad { color: #4f4d44; font-size: 14px; }
+.ord-cad-sub { display: none; }
+.ord-mancano { margin-top: 2px; color: var(--arancio); font-size: 13px; font-weight: 600; }
+.ord-nessuna-riga, .ord-fuori { margin: 0; padding: 14px 20px; color: var(--grigio); font-size: 14px; line-height: 1.4; }
+.ord-fuori { border-bottom: 1px solid var(--bordo); color: var(--arancio); font-weight: 600; }
+
+/* Piede: la nota a sinistra, a destra Merce, IVA e Totale (i soldi del banco: quello che incassa dal cliente con la sua fattura). */
+.ord-piede {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 24px; padding: 14px 20px;
+  border-radius: 0 0 16px 16px; background: #faf9f6;
+}
+.ord-piede-nota { flex: 1 1 260px; margin: 0; color: var(--grigio); font-size: 13.5px; line-height: 1.4; }
+.ord-totali { display: flex; align-items: baseline; justify-content: flex-end; flex-wrap: wrap; gap: 4px 22px; margin: 0; }
+.ord-totali > div { display: flex; align-items: baseline; gap: 8px; }
+.ord-totali dt { margin: 0; color: var(--grigio); font-size: 14px; }
+.ord-totali dd { margin: 0; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ord-totale dd { font-family: var(--ric-sora); font-size: 22px; font-weight: 800; }
+
+/* Consegna e Cliente affiancate. */
+.ord-coppia { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
+.ord-consegna { padding: 18px 20px; }
+.ord-indirizzo, .ord-furgone { display: flex; align-items: flex-start; gap: 10px; }
+.ord-indirizzo + .ord-furgone { margin-top: 14px; }
+.ord-indirizzo strong { display: block; font-size: 16px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.ord-indirizzo small { display: block; color: var(--grigio); font-size: 14px; line-height: 1.4; }
+.ord-furgone { font-size: 14px; line-height: 1.4; }
+.ord-nessun-dato { margin: 0 0 12px; color: var(--grigio); font-size: 14px; }
+
+/* Ritiro del corriere: cerchio verde con i minuti, rosso sotto la soglia della home. I minuti li muove assets/js ([data-ric-arrivo]). */
+.ord-ritiro { padding: 20px; border: 1.5px solid #f1c9b3; }
+.ord-ritiro .ric-arrivo-cerchio { background: #e3f3e6; color: #1f5f2e; }
+.ord-ritiro .ric-arrivo-testa.vicino .ric-arrivo-cerchio { background: #fbe4e2; color: #991b1b; }
+.ord-ritiro .ric-arrivo-titolo { color: var(--testo); }
+
+/* "Preparato": una scheda con il pulsante verde a tutta larghezza, che porta l'ordine "In consegna". */
+.ord-prepara { padding: 18px 20px 20px; }
+.ord-prepara-titolo { margin-bottom: 14px; }
+.ord-prepara-btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 54px; margin: 0; padding: 0 20px; border: 0;
+  border-radius: 28px; background: var(--verde); color: #fff; font-family: inherit; font-size: 16px; font-weight: 700; line-height: 1.2; text-align: center; cursor: pointer;
+}
+.ord-prepara-btn svg { flex: none; font-size: 20px; }
+.ord-prepara-btn:hover { background: #1f6a31; }
+.ord-prepara-btn:focus-visible { outline: 3px solid var(--blu); outline-offset: 2px; }
+.ord-prepara-nota { margin: 10px 0 0; color: var(--grigio); font-size: 13px; line-height: 1.4; text-align: center; }
+
+/* In consegna (azzurra) e Consegnato (verde): la scheda dello stato, con il cerchio a sinistra, il titolo e le righe di dettaglio. */
+.ord-stato { padding: 20px; }
+.ord-stato-consegna { border: 1.5px solid #b9cde2; }
+.ord-stato-consegnato { border: 1.5px solid #cde6d3; }
+.ord-stato-testa { display: flex; align-items: center; gap: 16px; }
+.ord-stato-cerchio { flex: none; display: flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 50%; font-size: 28px; }
+.ord-stato-consegna .ord-stato-cerchio { background: #e3edf7; color: #1a4468; }
+.ord-stato-consegnato .ord-stato-cerchio { background: #e3f3e6; color: var(--verde); font-size: 34px; }
+.ord-stato-consegnato .ord-stato-cerchio svg { stroke-width: 2.4; }
+.ord-stato-testi { min-width: 0; }
+.ord-stato-titolo { margin: 0; font-family: var(--ric-sora); font-size: 19px; font-weight: 700; line-height: 1.25; }
+.ord-stato-consegna .ord-stato-titolo { color: #1a4468; }
+.ord-stato-consegnato .ord-stato-titolo { color: #1f5f2e; }
+.ord-stato-testi p { margin: 4px 0 0; color: var(--grigio); font-size: 13.5px; line-height: 1.4; }
+.ord-stato-testi .ord-stato-corriere { color: var(--testo); font-weight: 600; }
+.ord-stato-mini { display: flex; gap: 10px; margin-top: 16px; }
+.ord-stato-mini > div { display: flex; flex: 1 1 0; flex-direction: column; gap: 2px; min-width: 0; padding: 10px 12px; border-radius: 12px; background: #f7f6f2; }
+.ord-stato-mini span { color: var(--grigio); font-size: 12.5px; }
+.ord-stato-mini strong { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* "Stampa" dalla pagina dell'ordine: solo testata e materiale (niente menu, schede laterali, pulsanti). */
+@media print {
+  body.pagina-ordine { background: #fff; }
+  body.pagina-ordine .banco-testa, body.pagina-ordine .navbar, body.pagina-ordine .ric-indietro, body.pagina-ordine .ric-colonna-destra,
+  body.pagina-ordine .ord-coppia, body.pagina-ordine .ric-passi, body.pagina-ordine .ric-elimina-riga, body.pagina-ordine .ord-stampa-btn,
+  body.pagina-ordine .errore { display: none !important; }
+  body.pagina-ordine .ric-corpo { display: block; }
+  body.pagina-ordine .ric-scheda { border-color: #999; }
+  @page { margin: 14mm; }
+}
+
+/* Fra 900 e 1100px la colonna di sinistra è stretta: Consegna e Cliente una sopra l'altra e la tabella un po' più compatta. */
+@media (min-width: 900px) and (max-width: 1099.98px) {
+  .pagina-ordine .ric-corpo { grid-template-columns: minmax(0, 1fr) 360px; }
+  .ord-coppia { grid-template-columns: minmax(0, 1fr); }
+  .ord-tab-testa, .ord-riga { grid-template-columns: 52px minmax(0, 1fr) 92px 92px; column-gap: 12px; }
+}
+
+/* Sotto i 900px, una colonna: testata, Ritiro (o lo stato: In consegna / Consegnato), Materiale, Preparato, Consegna, Cliente, Avanzamento, Elimina. La tabella diventa
+   una lista: badge, nome e codice (col prezzo cad. in piccolo) e il totale a destra. */
+@media (max-width: 899.98px) {
+  .ord-coppia { display: contents; }
+  .pagina-ordine .ord-ritiro, .pagina-ordine .ord-stato { order: 1; }
+  .pagina-ordine .ord-materiale { order: 2; }
+  .pagina-ordine .ord-prepara { order: 3; }
+  .pagina-ordine .ord-stato { padding-left: 16px; padding-right: 16px; }
+  .pagina-ordine .ord-consegna { order: 4; }
+  .pagina-ordine .ord-cliente { order: 5; }
+  .pagina-ordine .ric-passi { order: 6; }
+  .pagina-ordine .ric-elimina-riga { order: 7; }
+  .pagina-ordine .ord-consegna, .pagina-ordine .ord-ritiro, .pagina-ordine .ord-prepara { padding-left: 16px; padding-right: 16px; }
+  .ord-tab-testa { display: none; }
+  .ord-riga { grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; column-gap: 12px; padding: 12px 16px; }
+  .ord-riga .ric-qta, .ord-riga .ric-articolo, .ord-riga .ric-tot { grid-area: auto; align-self: start; }
+  .ord-cad { display: none; }
+  .ord-cad-sub { display: inline; }
+  .ord-fuori, .ord-nessuna-riga { padding-left: 16px; padding-right: 16px; }
+  .ord-piede { padding: 14px 16px; }
+  .ord-totali { justify-content: flex-start; }
+}
+

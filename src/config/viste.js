@@ -3,7 +3,8 @@
 const fs = require('fs');
 const path = require('path');
 const { cartellaViste, cartellaPublic } = require('./ambiente');
-const { leggiQuery, conRitorno } = require('../http');
+const { leggiQuery, conRitorno } = require('../comune/http');
+const { eComposto, leggiComposto } = require('../comune/asset_composti');
 
 // Per i file statici (css, js) la pagina scrive asset('/style.css') e ottiene '/style.css?v=1759660000000': l'indirizzo del file con la sua versione
 // (data di modifica). La versione serve a far tenere il file al browser per un anno e a fargli scaricare il nuovo appena cambia.
@@ -17,7 +18,9 @@ function creaFunzioneAsset() {
     if (voce && adesso - voce.letta < 5000) return voce.url;
     let url = percorso;
     try {
-      url = percorso + '?v=' + Math.floor(fs.statSync(path.join(cartellaPublic, percorso)).mtimeMs);
+      // app.js e style.css sono composti da pezzi (src/comune/asset_composti.js): la versione è la modifica più recente fra i pezzi.
+      const modificato = eComposto(percorso) ? leggiComposto(percorso).mtimeMs : fs.statSync(path.join(cartellaPublic, percorso)).mtimeMs;
+      url = percorso + '?v=' + Math.floor(modificato);
     } catch (err) { /* file mancante: l'indirizzo resta senza versione */ }
     versioni.set(percorso, { url, letta: adesso });
     return url;
@@ -29,8 +32,8 @@ function creaFunzioneAsset() {
 function configuraApp(app) {
   app.set('view engine', 'ejs');
   app.set('views', cartellaViste);
-  // Dove stanno tutti gli installatori, per ora (vedi src/sede_installatori.js).
-  app.locals.sede = require('../sede_installatori');
+  // Dove stanno tutti gli installatori, per ora (vedi src/logica/account/sede_installatori.js).
+  app.locals.sede = require('../logica/account/sede_installatori');
   // Le viste del banco che portano a un ordine o a una richiesta ci aggiungono `torna` (la pagina da cui si parte): vedi ritornoBanco.
   app.locals.conRitorno = conRitorno;
   app.locals.asset = creaFunzioneAsset();
@@ -38,8 +41,8 @@ function configuraApp(app) {
   // proxy/load balancer: un solo proxy davanti.
   app.set('trust proxy', 1);
   app.disable('x-powered-by');
-  // Ogni parametro della query string è sempre un testo, mai un array (?q=a&q=b): vedi src/http.js.
+  // Ogni parametro della query string è sempre un testo, mai un array (?q=a&q=b): vedi src/comune/http.js.
   app.set('query parser', leggiQuery);
 }
 
-module.exports = { configuraApp, creaFunzioneAsset };
+module.exports = { configuraApp };

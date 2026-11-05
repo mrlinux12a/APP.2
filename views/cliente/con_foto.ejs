@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('../partials/comune/app_head', { titolo }) %>
+</head>
+<body data-loggato="1">
+  <div class="app app-categoria">
+    <%- include('../partials/comune/appbar', { titolo, indietro: '/home' }) %>
+
+    <div class="contenuto" style="padding-top:0;">
+      <p class="sottotitolo"><%= elenco.totale %> articoli con foto caricata.</p>
+
+      <div id="risultati" data-righe-compatte
+           data-carrello="<%= JSON.stringify(carrello || {}) %>"
+           data-pezzi="<%= carrelloPezzi || 0 %>"
+           data-icona-vuota="<%= iconaOrdini %>">
+        <% if (!elenco.righe.length) { %>
+          <div class="vuoto"><span class="emoji"><%- iconaVuotoRicerca %></span>Nessun articolo ha ancora una foto.</div>
+        <% } else { %>
+          <div class="card card-fitta elenco-righe">
+            <% elenco.righe.forEach(function (p) { %>
+              <%- include('../partials/cliente/prodotto_riga', { p, carrello }) %>
+            <% }); %>
+          </div>
+        <% } %>
+      </div>
+
+      <div data-paginazione>
+        <%- include('../partials/comune/paginazione', { elenco, base: '/con-foto?' }) %>
+      </div>
+      <div hidden
+           data-scroll-infinito
+           data-pagina="<%= elenco.pagina %>"
+           data-pagine="<%= elenco.pagine %>"
+           data-url="/api/con-foto/prodotti"></div>
+
+      <p class="nota">
+        Prezzi IVA esclusa. La disponibilità la chiedi al banco dal riepilogo, dopo Procedi.
+      </p>
+    </div>
+
+    <!-- Barra sopra la navbar: pezzi nel carrello e "Vai al carrello"; compare solo con almeno un pezzo -->
+    <div class="barra-vai" data-barra-vai <%= carrelloPezzi ? '' : 'hidden' %>>
+      <a class="barra-vai-link" href="/carrello">
+        <span class="bv-pezzi" data-barra-pezzi><%= carrelloPezzi || 0 %> <%= carrelloPezzi === 1 ? 'pezzo' : 'pezzi' %></span>
+        <span class="bv-pillola">Vai al carrello <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+      </a>
+    </div>
+  </div>
+
+  <%- include('../partials/cliente/nav', { attivo: 'catalogo' }) %>
+  <script src="<%= asset('/app.js') %>" defer></script>
+</body>
+</html>

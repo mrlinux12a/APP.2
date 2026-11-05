@@ -1,16 +1,16 @@
 // Entrare, uscire, registrarsi e recuperare la password: le pagine che si vedono prima di essere "dentro" il sito (e le due pagine pubbliche richieste da
 // Google Play).
 const { creaRouter } = require('./base');
-const db = require('../../db');
-const { requireRole } = require('../auth');
-const { passwordValida } = require('../password');
-const anagrafiche = require('../anagrafiche');
-const recuperoPassword = require('../recupero_password');
-const webPush = require('../web_push');
-const testiLegali = require('../testi_legali');
-const { accessoBloccato, registraAccessoFallito, accessoRiuscito, iscrizioneBloccata, registraIscrizione, recuperoBloccato, registraRecupero } = require('../limite_login');
-const { avviaSessione } = require('../services/sessione_utente');
-const { eLocale, urlPerEmail } = require('../services/url_sito');
+const { requireRole } = require('../middleware/auth');
+const { passwordValida } = require('../logica/account/password');
+const utenti = require('../logica/account/utenti');
+const anagrafiche = require('../logica/account/anagrafiche');
+const recuperoPassword = require('../logica/account/recupero_password');
+const webPush = require('../logica/notifiche/web_push');
+const testiLegali = require('../comune/testi_legali');
+const { accessoBloccato, registraAccessoFallito, accessoRiuscito, iscrizioneBloccata, registraIscrizione, recuperoBloccato, registraRecupero } = require('../logica/account/limite_login');
+const { avviaSessione } = require('../logica/account/sessione_utente');
+const { eLocale, urlPerEmail } = require('../comune/url_sito');
 const limiti = require('../middleware/limiti');
 
 const router = creaRouter();
@@ -35,7 +35,7 @@ const AVVISI_LOGIN = {
 // Mostra la pagina di accesso (nome utente e password). Chi è già collegato va alla sua pagina.
 router.get('/login', async (req, res) => {
   if (req.session.user) return res.redirect('/');
-  res.render('login', { titolo: 'Accedi', errore: null, scheda: 'accedi', avviso: AVVISI_LOGIN[req.query.avviso] || '' });
+  res.render('auth/login', { titolo: 'Accedi', errore: null, scheda: 'accedi', avviso: AVVISI_LOGIN[req.query.avviso] || '' });
 });
 
 // Controlla nome utente e password e, se sono giusti, apre la sessione. Con credenziali sbagliate risponde 401 e conta il tentativo (dopo troppi tentativi
@@ -46,13 +46,13 @@ router.post('/login', limiti.accesso, async (req, res) => {
   const username = String(req.body.username || '').trim().slice(0, 100);
 
   if (accessoBloccato(req, username)) {
-    return res.status(429).render('login', { errore: 'Troppi tentativi non riusciti. Riprova tra qualche minuto.' });
+    return res.status(429).render('auth/login', { errore: 'Troppi tentativi non riusciti. Riprova tra qualche minuto.' });
   }
 
-  const user = await db.prepare('SELECT * FROM users WHERE username = ? AND attivo = 1').get(username);
+  const user = await utenti.utenteAttivoPerUsername(username);
   if (!(await passwordValida(req.body.password, user))) {
     registraAccessoFallito(req, username);
-    return res.status(401).render('login', { errore: 'Credenziali non valide.' });
+    return res.status(401).render('auth/login', { errore: 'Credenziali non valide.' });
   }
   accessoRiuscito(req, username);
   await avviaSessione(req, {
@@ -75,14 +75,14 @@ router.post('/logout', async (req, res) => {
 });
 
 // ---------- Recupero della password (installatore) ----------
-// "Password dimenticata?": nome utente o email -> email con un link valido un'ora (src/recupero_password.js). La risposta è sempre la stessa, che l'account
+// "Password dimenticata?": nome utente o email -> email con un link valido un'ora (src/logica/account/recupero_password.js). La risposta è sempre la stessa, che l'account
 // esista o no, e l'invio non si aspetta. Il link usa APP_URL (mai l'intestazione Host, che la scrive chi chiama: un link verso un sito altrui farebbe
 // rubare il codice); senza APP_URL vale solo in locale.
 
 // Mostra il modulo "Password dimenticata?".
 router.get('/password-dimenticata', (req, res) => {
   if (req.session.user) return res.redirect('/');
-  res.render('password_dimenticata', { stato: 'modulo', identificativo: '' });
+  res.render('auth/password_dimenticata', { stato: 'modulo', identificativo: '' });
 });
 
 // Riceve il nome utente (o l'email) e manda il link per scegliere una nuova password. Risponde sempre allo stesso modo, anche se l'account non esiste.
@@ -90,9 +90,9 @@ router.post('/password-dimenticata', limiti.accesso, async (req, res) => {
   if (req.session.user) return res.redirect('/');
   const identificativo = typeof req.body.identificativo === 'string' ? req.body.identificativo.trim().slice(0, 200) : '';
   if (!identificativo) {
-    return res.status(400).render('password_dimenticata', { stato: 'modulo', errore: 'Scrivi il tuo nome utente o la tua email.', identificativo: '' });
+    return res.status(400).render('auth/password_dimenticata', { stato: 'modulo', errore: 'Scrivi il tuo nome utente o la tua email.', identificativo: '' });
   }
-  if (recuperoBloccato(req, identificativo)) return res.status(429).render('password_dimenticata', { stato: 'troppe' });
+  if (recuperoBloccato(req, identificativo)) return res.status(429).render('auth/password_dimenticata', { stato: 'troppe' });
   registraRecupero(req, identificativo);
   const esito = await recuperoPassword.richiedi(identificativo, { baseUrl: urlPerEmail(req) });
   // Non si aspetta l'invio (nemmeno il tempo di risposta deve dire se l'account c'è). In locale, se l'email non è partita (niente SMTP), il link si scrive
@@ -101,39 +101,39 @@ router.post('/password-dimenticata', limiti.accesso, async (req, res) => {
     if (!eLocale(req)) return;
     for (const c of consegne) if (!c.inviata && c.link) console.log('[recupero password] (solo in locale) link per ' + c.username + ': ' + c.link);
   });
-  res.render('password_dimenticata', { stato: 'inviata', minutiValidita: recuperoPassword.VALIDITA_MIN });
+  res.render('auth/password_dimenticata', { stato: 'inviata', minutiValidita: recuperoPassword.VALIDITA_MIN });
 });
 
 // Il link dell'email: se è ancora buono mostra il modulo per scegliere la nuova password, altrimenti propone di chiederne uno nuovo (410).
 router.get('/reimposta-password/:codice', async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const accountLink = await recuperoPassword.accountDaCodice(req.params.codice);
-  if (!accountLink) return res.status(410).render('password_reimposta', { stato: 'nonvalido' });
-  res.render('password_reimposta', { stato: 'modulo', username: accountLink.username, codice: req.params.codice, errori: {} });
+  if (!accountLink) return res.status(410).render('auth/password_reimposta', { stato: 'nonvalido' });
+  res.render('auth/password_reimposta', { stato: 'modulo', username: accountLink.username, codice: req.params.codice, errori: {} });
 });
 
 // Salva la nuova password scelta dal link dell'email. Se i campi non vanno ripropone il modulo senza bruciare il link; a buon fine porta al login.
 router.post('/reimposta-password/:codice', limiti.accesso, async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const esito = await recuperoPassword.reimposta(req.params.codice, req.body);
-  if (esito.nonValido) return res.status(410).render('password_reimposta', { stato: 'nonvalido' });
+  if (esito.nonValido) return res.status(410).render('auth/password_reimposta', { stato: 'nonvalido' });
   if (!esito.ok) {
     const accountLink = await recuperoPassword.accountDaCodice(req.params.codice);
-    if (!accountLink) return res.status(410).render('password_reimposta', { stato: 'nonvalido' });
-    return res.status(400).render('password_reimposta', { stato: 'modulo', username: accountLink.username, codice: req.params.codice, errori: esito.errori });
+    if (!accountLink) return res.status(410).render('auth/password_reimposta', { stato: 'nonvalido' });
+    return res.status(400).render('auth/password_reimposta', { stato: 'modulo', username: accountLink.username, codice: req.params.codice, errori: esito.errori });
   }
   res.redirect('/login?avviso=password');
 });
 
 // ---------- Pagine pubbliche (Google Play) ----------
 
-// Pagine pubbliche richieste da Google Play per l'app (src/testi_legali.js). Senza accesso.
+// Pagine pubbliche richieste da Google Play per l'app (src/comune/testi_legali.js). Senza accesso.
 
 // Mostra l'informativa sulla privacy.
-router.get('/privacy', (req, res) => res.render('legale', { pagina: testiLegali.privacy() }));
+router.get('/privacy', (req, res) => res.render('comune/legale', { pagina: testiLegali.privacy() }));
 
 // Mostra come eliminare il proprio account.
-router.get('/elimina-account', (req, res) => res.render('legale', { pagina: testiLegali.eliminazione() }));
+router.get('/elimina-account', (req, res) => res.render('comune/legale', { pagina: testiLegali.eliminazione() }));
 
 // ---------- Registrazione cliente ----------
 
@@ -141,7 +141,7 @@ router.get('/elimina-account', (req, res) => res.render('legale', { pagina: test
 // ogni nuovo cliente è collegato a quello predefinito (anagrafiche.distributoriPredefiniti).
 router.get('/registrati', async (req, res) => {
   if (req.session.user) return res.redirect('/');
-  res.render('registrati', {
+  res.render('auth/registrati', {
     titolo: 'Registra la tua impresa',
     tipi: anagrafiche.TIPI_SOGGETTO,
     dati: {},
@@ -155,7 +155,7 @@ router.get('/registrati', async (req, res) => {
 // modulo com'è stato compilato (le password no), aperto sul primo passo che ha un campo sbagliato.
 router.post('/registrati', limiti.accesso, async (req, res) => {
   const mostraErrori = (errori) =>
-    res.status(400).render('registrati', {
+    res.status(400).render('auth/registrati', {
       titolo: 'Registra la tua impresa',
       tipi: anagrafiche.TIPI_SOGGETTO,
       dati: req.body,
@@ -167,7 +167,7 @@ router.post('/registrati', limiti.accesso, async (req, res) => {
   // La registrazione è aperta a tutti e ogni iscrizione costa un hash bcrypt e una riga di anagrafica approvata da sola: senza un limite per indirizzo
   // un ciclo di richieste riempiva il database di clienti finti.
   if (iscrizioneBloccata(req)) {
-    return res.status(429).render('errore', {
+    return res.status(429).render('comune/errore', {
       titolo: 'Troppe registrazioni',
       messaggio: 'Da questo indirizzo sono state fatte troppe registrazioni. Riprova più tardi, o contattaci se sei un nuovo cliente.',
       link: '/login',
@@ -202,7 +202,7 @@ router.post('/registrati', limiti.accesso, async (req, res) => {
 // distributore non ha ancora approvato, lo dice.
 router.get('/benvenuto', requireRole('cliente'), async (req, res) => {
   const legami = await anagrafiche.legamiDelCliente(req.session.user.id);
-  res.render('benvenuto', {
+  res.render('cliente/benvenuto', {
     titolo: 'Benvenuto',
     distributore: anagrafiche.distributoreDiRiferimento(legami),
   });

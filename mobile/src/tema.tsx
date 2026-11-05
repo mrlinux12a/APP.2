@@ -1,4 +1,4 @@
-// Stessi colori della modalità chiara del sito (variabili in cima a public/style.css), con
+// Stessi colori della modalità chiara del sito (variabili in cima a assets/css), con
 // accento blu petrolio. L'app ha solo il tema chiaro, per scelta esplicita: niente modalità
 // scura e niente interruttore.
 const chiaro = {
@@ -8,7 +8,7 @@ const chiaro = {
   suAccento: '#ffffff',
   // Verde, arancio e rosso sono scuriti quel tanto che serve a portare il testo sul proprio
   // badge a 4.5:1 (prima 3.55, 3.04 e 4.34): sono i colori di "Disponibile", "In esaurimento" e
-  // "Non disponibile". Stessi valori del tema chiaro di public/style.css.
+  // "Non disponibile". Stessi valori del tema chiaro di assets/css.
   verde: '#297c3c',
   verdeChiaro: '#e3f3e6',
   arancio: '#ab4d24',

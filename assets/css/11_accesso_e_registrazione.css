@@ -1,0 +1,283 @@
+/* ---------- Accesso, registrazione e benvenuto (views/auth/login.ejs, auth/registrati.ejs, cliente/benvenuto.ejs) ---------- */
+
+/* Pagine a tutta altezza: il pulsante o il link finale stanno in fondo allo schermo (margin-top: auto). */
+.acc {
+  display: flex;
+  flex-direction: column;
+  max-width: 460px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: 28px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Testata dell'accesso */
+.acc-icona {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 14px;
+  border-radius: 16px;
+  background: var(--blu);
+  color: var(--su-blu);
+  font-size: 26px; /* le icone di src/comune/icone.js sono 1em */
+  box-shadow: 0 6px 16px rgba(36, 90, 143, 0.28);
+}
+.acc-occhiello {
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--blu);
+}
+.acc-titolo {
+  margin: 6px 0 10px;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+.acc-sotto { margin: 0 0 24px; color: var(--grigio); font-size: 15px; line-height: 1.45; }
+
+/* Accedi / Registrati: controllo a pillola. Il link è alto 42px; ::after porta l'area di tocco a 48px. */
+.acc-schede {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 22px;
+  padding: 4px;
+  border-radius: 14px;
+  background: #e6e2d9;
+}
+.acc-schede a {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 42px;
+  border-radius: 11px;
+  color: var(--grigio);
+  font-weight: 700;
+  text-decoration: none;
+}
+.acc-schede a::after { content: ""; position: absolute; inset: -3px 0; }
+.acc-schede a.attiva { background: #fff; color: var(--testo); box-shadow: 0 1px 3px rgba(35, 32, 25, 0.16); }
+.acc-schede a:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; }
+
+/* Campi: stessi in tutti i moduli (font a 16px: sotto, Safari su iPhone ingrandisce la pagina al tocco) */
+.acc-campo { margin-bottom: 18px; }
+.acc-campo > label, .acc-etichetta { display: block; margin: 0 0 6px; font-size: 14px; font-weight: 700; }
+.acc-campo input[type="text"], .acc-campo input[type="email"], .acc-campo input[type="tel"], .acc-campo input[type="password"] {
+  display: block;
+  width: 100%;
+  height: 52px;
+  margin: 0;
+  padding: 0 16px;
+  border: 1.5px solid #d6d1c6;
+  border-radius: 14px;
+  background: #fff;
+  color: var(--testo);
+  font-family: inherit;
+  font-size: 16px;
+}
+.acc-campo input::placeholder { color: #8a897e; opacity: 1; }
+.acc-campo input:focus { outline: none; border-color: var(--blu); box-shadow: 0 0 0 3px var(--blu-chiaro); }
+.acc-campo.sbagliato input[type="text"], .acc-campo.sbagliato input[type="email"],
+.acc-campo.sbagliato input[type="tel"], .acc-campo.sbagliato input[type="password"] { border-color: var(--rosso); }
+.acc-hint { margin: 6px 0 0; color: var(--grigio); font-size: 13px; line-height: 1.35; }
+
+/* Password con l'occhio: il pulsante è 44px, dentro il campo a destra */
+.acc-pwd { position: relative; }
+.acc-campo .acc-pwd input { padding-right: 52px; }
+.acc-occhio {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: #5c5b52;
+  font-size: 22px;
+  cursor: pointer;
+}
+.acc-occhio:focus-visible { outline: 2px solid var(--blu); outline-offset: -2px; }
+.acc-occhio-off, .acc-occhio[aria-pressed="true"] .acc-occhio-on { display: none; }
+.acc-occhio[aria-pressed="true"] .acc-occhio-off { display: inline; }
+
+/* Pulsante principale (anche come link, nel benvenuto) */
+.acc-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 54px;
+  margin: 0;
+  border: 0;
+  border-radius: 27px;
+  background: var(--blu);
+  color: var(--su-blu);
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+.acc-btn:hover { background: var(--blu-scuro); }
+.acc-btn:focus-visible { outline: 2px solid var(--blu); outline-offset: 3px; }
+
+/* In fondo allo schermo: la riga con il link all'altro modulo */
+.acc-fondo { margin: auto 0 0; padding-top: 28px; text-align: center; color: var(--grigio); font-size: 15px; }
+.acc-fondo a, .reg-accedi a { display: inline-block; padding: 12px 2px; margin: -12px 0; font-weight: 700; text-decoration: none; }
+.acc .errore { margin-bottom: 18px; }
+.errore-elenco { margin: 6px 0 0; padding-left: 18px; }
+
+/* Registrazione a tre passi. Senza script i tre fieldset si vedono tutti, uno sotto l'altro, e la barra di avanzamento
+   non c'è; con lo script (data-passi) se ne vede uno alla volta. La fascia con "Avanti" è fissa in fondo. */
+.reg { padding-bottom: 150px; }
+.reg-testata { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; margin-bottom: 14px; }
+.reg-indietro {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--blu);
+  font-size: 24px;
+  box-shadow: 0 1px 4px rgba(35, 32, 25, 0.16);
+  text-decoration: none;
+}
+.reg-indietro:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+.reg-titolo-pagina {
+  grid-column: 2;
+  text-align: center;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+}
+.reg-avanzamento { display: none; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 20px; }
+.reg[data-passi] .reg-avanzamento { display: grid; }
+.reg-avanzamento span { height: 5px; border-radius: 3px; background: #d6d1c6; }
+.reg-avanzamento span.fatto { background: var(--blu); }
+
+.reg-passo { min-width: 0; margin: 0 0 28px; padding: 0; border: 0; }
+.reg-passo-testa { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.reg-passo-testa h2 {
+  margin: 0;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 24px;
+  font-weight: 800;
+}
+.reg-passo-testa span { flex: none; color: var(--grigio); font-size: 13px; }
+
+.reg-tipi { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.reg-tipo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+  height: 52px;
+  margin: 0;
+  padding: 0 8px;
+  border: 1.5px solid #d6d1c6;
+  border-radius: 14px;
+  background: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.reg-tipo input { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--blu); }
+.reg-tipo:has(input:checked) { border-color: var(--blu); background: var(--blu-chiaro); color: var(--blu-scuro); }
+.reg-tipo:has(input:focus-visible) { outline: 2px solid var(--blu); outline-offset: 2px; }
+.acc-campo.sbagliato .reg-tipo { border-color: var(--rosso); }
+
+/* CAP, Città e Prov. sulla stessa riga */
+.reg-riga-citta { display: grid; grid-template-columns: 96px minmax(0, 1fr) 72px; gap: 10px; }
+.reg-nota-fiscale { margin: 4px 0 0; color: var(--grigio); font-size: 13px; line-height: 1.4; }
+
+.reg-barra {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  padding: 12px 20px calc(10px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid rgba(35, 32, 25, 0.08);
+  background: var(--sfondo);
+}
+.reg-barra-in { max-width: 420px; margin: 0 auto; }
+.reg-accedi { margin: 12px 0 0; text-align: center; color: var(--grigio); font-size: 14px; }
+/* Schermi bassi (tastiera aperta in orizzontale): la fascia non deve mangiare il modulo */
+@media (max-height: 520px) {
+  .reg { padding-bottom: 24px; }
+  .reg-barra { position: static; padding: 4px 0 0; border: 0; }
+}
+
+/* Benvenuto dopo la registrazione */
+.ben { padding-top: 72px; }
+.ben-alto { text-align: center; }
+.ben-alone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  margin: 0 auto 24px;
+  border-radius: 50%;
+  background: var(--verde-chiaro);
+}
+.ben-cerchio {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--verde);
+  color: #fff;
+  font-size: 34px;
+}
+.ben-cerchio svg { stroke-width: 2.6; }
+.ben-titolo { margin: 0 0 10px; font-size: 26px; font-weight: 800; line-height: 1.15; text-wrap: balance; }
+.ben-sotto { margin: 0; color: var(--grigio); font-size: 16px; line-height: 1.45; }
+.ben-sotto strong { color: var(--testo); }
+.ben-scheda {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 28px;
+  padding: 14px;
+  border: 1px solid var(--bordo);
+  border-radius: 16px;
+  background: var(--surface);
+  text-align: left;
+}
+.ben-icona {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--blu-chiaro);
+  color: var(--blu);
+  font-size: 24px;
+}
+.ben-scheda > div { min-width: 0; }
+.ben-etichetta { color: #5c5b52; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.ben-nome { margin-top: 2px; font-size: 17px; font-weight: 700; overflow-wrap: anywhere; }
+.ben-nota { margin: 12px 4px 0; color: var(--grigio); font-size: 14px; line-height: 1.4; text-align: left; }
+.ben-azioni { margin-top: auto; padding-top: 32px; text-align: center; }
+.ben-link { display: inline-block; margin-top: 4px; padding: 14px 8px; font-size: 15px; font-weight: 700; text-decoration: none; }
+

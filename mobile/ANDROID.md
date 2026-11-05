@@ -9,16 +9,16 @@ Tutto il codice è pronto; mancano le cose che dipendono da te (dominio HTTPS, a
    Nel `.env` della VPS: `APP_URL=https://tuodominio.it`.
 2. **Schema del database** (una volta, sul DB condiviso): il blocco delle notifiche push.
    ```
-   node scripts/applica_blocco_schema.js "-- Notifiche push dell'app Android"            # prova a secco
-   node scripts/applica_blocco_schema.js "-- Notifiche push dell'app Android" --applica  # lo applica
+   node scripts/db/applica_blocco_schema.js "-- Notifiche push dell'app Android"            # prova a secco
+   node scripts/db/applica_blocco_schema.js "-- Notifiche push dell'app Android" --applica  # lo applica
    ```
    Senza, tutto funziona lo stesso ma l'app non riceve notifiche (il server lo scrive una volta nel log).
-3. **Stripe**: nella VPS `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET` (vedi README, "Pagamenti con Stripe"). L'app non porta nessuna chiave Stripe: la chiave pubblicabile le arriva dal server
+3. **Stripe**: nella VPS `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET` (vedi docs/guide/stripe-setup.md). L'app non porta nessuna chiave Stripe: la chiave pubblicabile le arriva dal server
    insieme a ogni pagamento. Con Stripe acceso **dall'app non si ordina più senza pagare** (prima `POST /api/v1/richieste` era sempre simulata). Senza `STRIPE_SECRET_KEY` l'app usa il pagamento di prova (nessun addebito) e lo dice.
 4. `git pull`, `npm ci` e riavvio di pm2 (vedi README, "Produzione (VPS)").
 5. Facoltativo: `EXPO_ACCESS_TOKEN` (se nel progetto Expo attivi la "sicurezza avanzata" delle push) e `PUSH_ATTIVO=0` per spegnere le push (per esempio sul PC, che parla col DB di produzione).
 6. Le pagine che Google Play chiede sono già nel sito: `https://tuodominio.it/privacy` e `https://tuodominio.it/elimina-account`. **Il testo è una bozza** scritta sul comportamento reale del programma
-   (`src/testi_legali.js`, il titolare viene da `AZIENDA_*` nel `.env`): va riletto da chi risponde del trattamento dei dati prima di pubblicare.
+   (`src/comune/testi_legali.js`, il titolare viene da `AZIENDA_*` nel `.env`): va riletto da chi risponde del trattamento dei dati prima di pubblicare.
 
 ## 2. Account e chiavi (una volta)
 
@@ -50,7 +50,7 @@ npx eas-cli submit --platform android --profile production   # invio a Google Pl
 - **Sicurezza dei dati** (modulo): l'app raccoglie dati dell'impresa (nome, email, telefono, indirizzo, partita IVA), cronologia degli ordini, identificativo del dispositivo per le notifiche;
   i pagamenti sono gestiti da Stripe (il numero della carta non passa dai nostri server); dati cifrati in transito (HTTPS); l'utente può chiedere la cancellazione. Nessuna posizione, nessuna pubblicità.
 - **Account di prova per chi controlla l'app**: Google lo chiede. Crea un cliente dedicato (non un'impresa vera) e scrivine le credenziali nella scheda; con `STRIPE_SECRET_KEY` di prova (`sk_test_`) non si addebita niente.
-- Icona 512×512, immagine di presentazione 1024×500 e gli screenshot: l'icona e la schermata di avvio di ora sono un segnaposto (la "M" su blu, `node scripts/genera_icone_android.js`); quando c'è il logo vero si sostituiscono i file in `mobile/assets`.
+- Icona 512×512, immagine di presentazione 1024×500 e gli screenshot: l'icona e la schermata di avvio di ora sono un segnaposto (la "M" su blu, `node scripts/genera/genera_icone_android.js`); quando c'è il logo vero si sostituiscono i file in `mobile/assets`.
 - Classificazione dei contenuti e pubblico di destinazione: app per professionisti, nessun contenuto per minori.
 
 ## 5. Cosa è stato verificato e cosa no

@@ -1,0 +1,32 @@
+# Account dell'installatore
+
+Estratto da [`CLAUDE.md`](../CLAUDE.md) nel riordino della documentazione (31/10/2026): il testo delle sezioni è quello di prima. Indice di tutti i file in `CLAUDE.md`.
+
+## Account dell'installatore: password dimenticata, cambio password, elimina account (20/10/2026)
+
+Richiesta esplicita ("fai 1 e 2" dopo l'elenco di cosa mancava). Solo **clienti** (installatori); il banco ha il suo cambio password nell'Anagrafica del banco, l'agente nessuno.
+- **Password dimenticata** (`src/logica/account/recupero_password.js`, `views/auth/password_dimenticata.ejs`, `views/auth/password_reimposta.ejs`; link "Password dimenticata?" sul login): `GET/POST /password-dimenticata`
+  (nome utente **o** email, anche maiuscolo) → per ogni cliente attivo che corrisponde (al massimo 3) UNA email **all'indirizzo salvato nell'account**, mai a uno scritto da chi chiede, con un link
+  `/reimposta-password/<codice>`. Il codice (32 byte, 43 caratteri base64url) **non sta nel DB**: tabella `recupero_password` con l'hash SHA-256, `scade_il` = un'ora, `usato_il`; un link nuovo annulla i
+  precedenti dello stesso account; `accountDaCodice` non cerca nemmeno nel DB un codice mal formato. **La risposta è sempre la stessa** (account che c'è o no, senza email, eliminato: stessa pagina, stesso stato) e
+  l'**invio non si aspetta** (nemmeno il tempo dice se l'account esiste; provato: `test` "risposta uguale per account che c'è e che non c'è"). Limiti (`limite_login`): 3 richieste/ora per coppia indirizzo+identificativo
+  e 10/ora per indirizzo (429, conta anche per account inesistenti). Reimpostare (`reimposta`): link consumato nella STESSA transazione che cambia la password (due invii insieme non la cambiano due volte); con
+  campi che non vanno il link NON si consuma; poi **si chiudono TUTTE le sessioni** dell'account (`session`, nessuna da tenere) e **si revocano gli accessi dell'app** (`app_tokens`), e si va a `/login?avviso=password`.
+  **Il link nell'email usa `APP_URL`**, MAI l'intestazione Host (la scrive chi chiama: un link verso un sito altrui farebbe rubare il codice); senza `APP_URL` l'email non parte (riga nel log) tranne in locale
+  (host `localhost`/`127.0.0.1`/`::1`), dove, **senza SMTP**, il link si scrive nel log del server (`[recupero password] (solo in locale) link per …`) per poter provare senza posta; mai su un indirizzo pubblico.
+  **Serve l'SMTP configurato** (`SMTP_*` nel `.env`, vedi `src/logica/notifiche/email.js`): oggi non c'è sulla VPS, quindi in produzione **non parte nessuna email e il recupero non funziona finché non lo si configura**. `src/logica/notifiche/email.js`:
+  `inviaRecuperoPassword` (HTML + testo, non lancia mai). Solo il cliente ha il recupero: banco/agente/account senza email o disattivati non ricevono niente.
+- **Cambio password dal profilo** (`POST /profilo/password`, scheda "Accesso" di `views/cliente/profilo.ejs`, `<details>` che con errori resta aperto): stessa logica del banco, **estratta in `src/logica/account/password_account.js`** (`cambiaPassword`,
+  `controllaCambioPassword`, `chiudiAltreSessioni`, `revocaAccessiApp`, `scriviNuovaPassword`; `anagrafica_banco.js` la importa): attuale giusta (`passwordValida`), nuova 8–72 caratteri e DIVERSA, chiude le ALTRE
+  sessioni e **da ora revoca anche gli accessi dell'app** (anche per il banco: `UPDATE app_tokens … revocato_il`), limite tentativi del login (chiave `cambio-password:<utente>`, 8 in 10 minuti → 429).
+- **Elimina account dal sito** (`GET/POST /profilo/elimina`, `views/cliente/profilo_elimina.ejs`, scheda "Elimina account" nel profilo): usa lo STESSO `src/logica/account/account.js` dell'app (anonimizza e disattiva, non cancella: ordini,
+  ricevute e pagamenti restano). La pagina spiega cosa si cancella e cosa resta e chiede la password; **se c'è qualcosa in corso** (richiesta in attesa, ordine non consegnato nelle ultime 24 h, pagamento a metà) lo dice
+  subito e il modulo non c'è (anche un POST a mano riceve 409); a buon fine `tokenApp.dimenticaUtente`, sessione distrutta, `/login?avviso=eliminato`. Le frasi del login (`?avviso=`) sono solo `AVVISI_LOGIN` in `server.js`.
+  `/elimina-account` (pagina pubblica per Google Play, `src/comune/testi_legali.js`) ora ha anche la sezione "Dal sito".
+- **App Expo**: nel login c'è "Password dimenticata?" che apre `SERVER + '/password-dimenticata'` nel browser (come Privacy ed Elimina account); il cambio password dentro l'app non c'è (solo `tsc` provato, non su un telefono).
+- **Schema** (blocco "Recupero della password dell'installatore (20/10/2026)" in fondo a `schema.sql`, DOPO quello dell'anagrafica del banco): tabella `recupero_password` + indice. **Applicato solo al DB locale
+  di prova, NON al condiviso** (`node scripts/db/applica_blocco_schema.js "-- Recupero della password dell'installatore"`). Senza la tabella il recupero dà errore 500; il resto (cambio password, elimina) funziona.
+  Nota: `scripts/db/applica_blocco_schema.js` applica **dal commento indicato fino in fondo**, quindi lanciarlo con "-- Anagrafica del banco: orari" applica entrambi i blocchi.
+- **Prove**: `test/account/recupero_password.test.js` (modulo e email, DB e posta finti), `test/banco/anagrafica_banco.test.js` (la revoca degli accessi dell'app), e in `test/sito/account.test.js` "login: link …", "recupero password: …", "profilo: scheda
+  Accesso…", "elimina account dal sito…". Provato su Postgres locale con il server vero (link con scadenza reale, hash nel DB, sessioni vecchie fuori, account anonimizzato, nuovo recupero per un account eliminato: niente) e a 430px.
+  **Non provato**: l'invio con un SMTP vero, l'app Expo su un telefono.

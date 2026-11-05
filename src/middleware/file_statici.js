@@ -3,6 +3,7 @@
 const express = require('express');
 const path = require('path');
 const { cartellaPublic } = require('../config/ambiente');
+const { leggiComposto } = require('../comune/asset_composti');
 
 // I file con una versione nell'indirizzo (?v=<data di modifica>, scritta nelle pagine da asset()): un indirizzo con la versione non cambia mai
 // contenuto, quindi il browser lo tiene un anno senza richiederlo a ogni pagina (2-3 richieste in meno a ogni apertura, su una rete da cantiere).
@@ -26,6 +27,19 @@ function creaFileStatici() {
   router.use('/vendor', express.static(path.join(cartellaPublic, 'vendor'), { maxAge: '7d' }));
   // Gli indirizzi con ?v=... (CSS e JS versionati) si possono tenere in cache per un anno.
   router.use(cacheAssetVersionati);
+  // app.js e style.css non sono file interi: si compongono dai pezzi di assets/js e assets/css (src/comune/asset_composti.js). Stessa verifica ETag e
+  // data di modifica di un file vero.
+  router.get(['/app.js', '/style.css'], (req, res, next) => {
+    let composto;
+    try {
+      composto = leggiComposto(req.path);
+    } catch (err) {
+      return next(err);
+    }
+    if (!res.get('Cache-Control')) res.set('Cache-Control', 'public, max-age=0');
+    res.set('Last-Modified', new Date(composto.mtimeMs).toUTCString());
+    res.type(composto.tipo).send(composto.testo);
+  });
   // Tutto il resto della cartella public (CSS, JS, icone, manifest).
   router.use(express.static(cartellaPublic));
 
@@ -38,7 +52,7 @@ function creaFileStatici() {
 
   // Verifica del dominio per Apple Pay (Stripe): Apple controlla che questo sito pubblichi il file di Stripe, uguale per tutti i conti, a questo indirizzo
   // esatto, in HTTPS, senza reindirizzamenti. express.static ignora le cartelle che cominciano per punto, per questo c'è una rotta apposta. Il file sta in
-  // public/.well-known/ (scripts/scarica_file_apple_pay.js lo scarica da Stripe); se manca risponde 404 e Apple Pay semplicemente non compare.
+  // public/.well-known/ (scripts/setup/scarica_file_apple_pay.js lo scarica da Stripe); se manca risponde 404 e Apple Pay semplicemente non compare.
   router.get('/.well-known/apple-developer-merchantid-domain-association', (req, res) => {
     const file = path.join(cartellaPublic, '.well-known', 'apple-developer-merchantid-domain-association');
     res.set('Cache-Control', 'public, max-age=300');
@@ -50,4 +64,4 @@ function creaFileStatici() {
   return router;
 }
 
-module.exports = { creaFileStatici, cacheAssetVersionati, ASSET_VERSIONATI };
+module.exports = { creaFileStatici };

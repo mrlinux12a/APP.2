@@ -1,0 +1,999 @@
+const db = require('../../../db');
+const { calcolaOrdine, calcolaDaRigheDb, getFinestraMinuti, getFinestraMinutiTesto, getSpedizioneFissa, round2 } = require('../pagamenti/pricing');
+const whatsapp = require('../whatsapp/whatsapp');
+const pagamenti = require('../pagamenti/pagamenti');
+const orari = require('./orari');
+const format = require('../../comune/format');
+
+// Con il corriere via WhatsApp il banco accetta, ma l'offerta esiste per l'installatore solo quando
+// nel gruppo qualcuno prende la consegna (corriere_stato 'preso'). NULL = nessun corriere richiesto.
+// Da usare nelle query sulle offerte che l'installatore vede (alias rr su request_responses).
+const OFFERTA_VISIBILE = `(rr.corriere_stato IS NULL OR rr.corriere_stato = 'preso')`;
+
+// ---------- Lettura ----------
+
+async function getRichiesta(id) {
+  return db.prepare('SELECT * FROM requests WHERE id = ?').get(id);
+}
+
+// La richiesta nata da un invio dal carrello con questa chiave (vedi schema.sql, "Un invio, una richiesta"), o null.
+async function richiestaConChiave(clienteId, chiaveInvio) {
+  if (!chiaveInvio) return null;
+  return (
+    (await db.prepare('SELECT id, stato FROM requests WHERE cliente_id = ? AND chiave_invio = ?').get(clienteId, chiaveInvio)) || null
+  );
+}
+
+// Gli articoli di una richiesta, con i dati del catalogo (codice, nome, prezzo di listino, sconto base, RAEE).
+async function righeRichiesta(requestId) {
+  return db
+    .prepare(
+      `SELECT ri.*, p.codice, p.nome, p.categoria, p.prezzo_listino, p.sconto_base_pct, p.raee
+         FROM request_items ri
+         JOIN products p ON p.id = ri.product_id
+        WHERE ri.request_id = ?
+        ORDER BY p.categoria, p.nome`
+    )
+    .all(requestId);
+}
+
+// Le righe di più richieste con una sola lettura: Map id richiesta -> righe, nello stesso
+// ordine di righeRichiesta(). Chi elenca molte richieste (storico) non deve fare una query
+// ciascuna: con il DB su un altro server erano oltre 3 secondi per 50 richieste.
+async function righeRichieste(requestIds) {
+  const perRichiesta = new Map(requestIds.map((id) => [Number(id), []]));
+  if (!requestIds.length) return perRichiesta;
+  const righe = await db
+    .prepare(
+      `SELECT ri.*, p.codice, p.nome, p.categoria
+         FROM request_items ri
+         JOIN products p ON p.id = ri.product_id
+        WHERE ri.request_id IN (${requestIds.map(() => '?').join(',')})
+        ORDER BY ri.request_id, p.categoria, p.nome`
+    )
+    .all(...requestIds);
+  for (const r of righe) perRichiesta.get(Number(r.request_id)).push(r);
+  return perRichiesta;
+}
+
+// Le risposte dei banchi a una richiesta, con il nome del banco e della filiale.
+async function risposteRichiesta(requestId) {
+  return db
+    .prepare(
+      `SELECT rr.*, d.nome AS distributore_nome, d.filiale, d.zona, d.costo_consegna, d.ditta_id
+         FROM request_responses rr
+         JOIN distributors d ON d.id = rr.distributor_id
+        WHERE rr.request_id = ?
+        ORDER BY d.nome, d.id`
+    )
+    .all(requestId);
+}
+
+// Per l'installatore una ditta è una voce sola, anche se la richiesta è partita verso più
+// filiali: vale la risposta "migliore" (confermata, poi in attesa, poi non disponibile, poi
+// scaduta) e la filiale non si mostra. Senza ditta (ditta_id vuoto) ogni riga resta a sé.
+const PRIORITA_ESITO = { confermato: 0, in_attesa: 1, non_disponibile: 2, scaduto: 3 };
+
+// Per l'installatore un banco che ha accettato ma non ha ancora un corriere non ha risposto: resta
+// "in attesa", e se il corriere non arriva in tempo è "nessuna risposta".
+function esitoPerInstallatore(r) {
+  if (r.esito === 'confermato' && r.corriere_stato === 'in_attesa') return 'in_attesa';
+  if (r.esito === 'confermato' && r.corriere_stato === 'scaduto') return 'scaduto';
+  return r.esito;
+}
+
+// `bancoConfermato`: il banco (una filiale qualunque della ditta) ha accettato la richiesta, qualunque cosa sia successa dopo.
+// Serve a distinguere, a richiesta chiusa senza ordine, "nessun banco ha confermato" da "il banco ha confermato ma nessun
+// corriere ha preso la consegna" (esito 'scaduto' + bancoConfermato).
+function raggruppaRisposteDitta(risposte) {
+  const gruppi = new Map();
+  for (const r of risposte) {
+    const chiave = r.ditta_id ? 'd' + r.ditta_id : 'f' + r.distributor_id;
+    const esito = esitoPerInstallatore(r);
+    const attuale = gruppi.get(chiave);
+    const bancoConfermato = r.esito === 'confermato' || !!(attuale && attuale.bancoConfermato);
+    if (!attuale || (PRIORITA_ESITO[esito] ?? 9) < (PRIORITA_ESITO[attuale.esito] ?? 9)) {
+      gruppi.set(chiave, { ...r, esito, filiale: '', bancoConfermato });
+    } else {
+      attuale.bancoConfermato = bancoConfermato;
+    }
+  }
+  return [...gruppi.values()];
+}
+
+// La risposta di un banco a una richiesta, se c'è.
+async function getRisposta(requestId, distributorId) {
+  return db
+    .prepare('SELECT * FROM request_responses WHERE request_id = ? AND distributor_id = ?')
+    .get(requestId, distributorId);
+}
+
+// Un'altra filiale della stessa ditta ha già confermato questa richiesta? (Una ditta con più
+// filiali risponde una volta sola: vince la prima che conferma.)
+async function altraFilialeHaConfermato(requestId, distributorId, rispostaId) {
+  const gia = await db
+    .prepare(
+      `SELECT 1 AS x
+         FROM request_responses o
+         JOIN distributors od ON od.id = o.distributor_id
+         JOIN distributors md ON md.id = ?
+        WHERE o.request_id = ? AND o.esito = 'confermato' AND o.id <> ?
+          AND md.ditta_id IS NOT NULL AND od.ditta_id = md.ditta_id
+        LIMIT 1`
+    )
+    .get(distributorId, requestId, rispostaId);
+  return !!gia;
+}
+
+const ERRORE_ALTRA_FILIALE = 'Un’altra filiale della tua ditta ha già confermato questa richiesta.';
+
+// Secondi che mancano alla scadenza della finestra di conferma (0 se gia' scaduta).
+async function secondiRimasti(richiesta) {
+  const row = await db
+    .prepare(`SELECT EXTRACT(EPOCH FROM (?::timestamp - NOW()))::int AS s`)
+    .get(richiesta.scade_il);
+  return Math.max(0, row ? Number(row.s) : 0);
+}
+
+// ---------- Distributori candidati ----------
+
+// Tutti i distributori attivi registrati che stanno ricevendo adesso: ogni richiesta dell'installatore arriva a tutti. Il banco non può più
+// mettere in pausa la ricezione (la colonna distributors.ricezione_attiva esiste ancora ma non si legge più), ma può impostare i suoi ORARI
+// (pagina "Anagrafica del banco", src/logica/ordini/orari.js): fuori orario, ora di Roma, le richieste non arrivano. Senza orari è sempre aperto.
+async function distributoriCandidati(productIds, zona, clienteId = null, quando = new Date()) {
+  if (!productIds.length) return [];
+  return (await distributoriAttivi()).filter((d) => orari.apertoAdesso(d.orari, quando));
+}
+
+// Tutti i banchi attivi, in ordine di nome.
+async function distributoriAttivi() {
+  return db.prepare(`SELECT * FROM distributors WHERE attivo = 1 ORDER BY nome`).all();
+}
+
+// Le filiali attive stanno ricevendo adesso? { aperto, riapre }: se sono tutte chiuse, `riapre` dice quando apre la prima (vedi orari.statoBanchi).
+// Lo usano il carrello (il pulsante "Paga e invia richiesta") e flusso.validaRichiesta: con tutti i banchi chiusi non si paga niente.
+async function statoBanchiAttivi(quando = new Date()) {
+  return orari.statoBanchi(await distributoriAttivi(), quando);
+}
+
+// Il nome della ditta dei banchi attivi come lo vede l'installatore ("BOREA SRL" -> "BOREA", mai la filiale); con più ditte diverse o nessuna: '' (i testi dicono "il banco").
+function nomeDittaDeiBanchi(distributori) {
+  const nomi = [...new Set((distributori || []).map((d) => format.nomeCommerciale(d.nome)).filter(Boolean))];
+  return nomi.length === 1 ? nomi[0] : '';
+}
+
+// Tutto quello che il carrello, la pagina "Orari di BOREA" e l'API dell'app devono sapere dei banchi attivi con UNA lettura: le righe (con gli orari impostati nella loro
+// "Anagrafica del banco"), lo stato adesso ({ aperto, riapre, chiude }) e il nome della ditta.
+async function bancoPerInstallatore(quando = new Date()) {
+  const distributori = await distributoriAttivi();
+  return { distributori, stato: orari.statoBanchi(distributori, quando), nome: nomeDittaDeiBanchi(distributori) };
+}
+
+// ---------- Creazione ----------
+
+// Crea la richiesta di disponibilita' e manda la notifica ai distributori della zona.
+// Da qui parte la finestra di 10 minuti entro cui devono rispondere.
+// `destinazione`, `note` e `importo` (totale IVA inclusa già pagato, vedi pagamenti.js) arrivano dal
+// carrello: da qui l'ordine nasce da solo, senza altre scelte dell'installatore. `totali` (pricing.calcolaOrdine del carrello, quelli
+// che ha già validato nuovaRichiesta) si salvano sulla richiesta: la consegna pagata in app e il materiale da pagare a BOREA
+// (vedi schema.sql, "Importi della richiesta divisi"). Senza, le colonne restano a 0 e le pagine ricalcolano dalle righe.
+async function creaRichiesta(
+  cliente,
+  righeCarrello,
+  { destinazione = null, note = '', importo = null, metodoPagamento = pagamenti.METODO_SIMULATO, chiaveInvio = null, totali = null } = {}
+) {
+  const productIds = righeCarrello.map((r) => r.prodotto.id);
+  let candidati = await distributoriCandidati(productIds, cliente.zona, cliente.id);
+  const minuti = await getFinestraMinuti();
+
+  // Fallback furbo: se per qualsiasi motivo non c'è nessun candidato (DB vuoto,
+  // filtro zona, import incompleto), manda comunque a TUTTI i banchi attivi... ma mai a quelli chiusi: fuori orario la richiesta
+  // non arriva (se sono tutti chiusi la richiesta nasce già chiusa e la carta si rilascia, come senza banchi).
+  if (!candidati.length) {
+    try {
+      candidati = (await distributoriAttivi()).filter((d) => orari.apertoAdesso(d.orari));
+      console.log(`[richieste] fallback broadcast: ${candidati.length} distributori per cliente ${cliente.id} zona=${cliente.zona}`);
+    } catch (e) { console.error('[richieste] fallback fallito', e.message); }
+  }
+
+  // Assicura che ogni prodotto della richiesta abbia un listino per ogni distributore
+  // candidato: così il calcolo prezzo non sparisce anche se l'import non ha popolato
+  // distributor_products. Usa il prezzo del prodotto come base.
+  // Prima era un doppio ciclo con una SELECT + INSERT per ogni coppia (distributore,
+  // prodotto), eseguite una alla volta dentro una transazione: con 5 distributori e 10
+  // articoli in carrello sono 50 andate e ritorno sequenziali verso il DB, e più a lungo
+  // resta aperta la transazione più cresce la finestra in cui un'altra transazione
+  // concorrente può interferire. Un solo INSERT...SELECT sostituisce tutte le coppie
+  // in una query sola.
+  if (candidati.length && productIds.length) {
+    try {
+      await db.prepare(
+        `INSERT INTO distributor_products (distributor_id, product_id, prezzo_listino, sconto_base_pct)
+         SELECT d.id, p.id, p.prezzo_listino, p.sconto_base_pct
+           FROM distributors d
+           CROSS JOIN products p
+          WHERE d.id = ANY(?::int[]) AND p.id = ANY(?::int[])
+         ON CONFLICT (distributor_id, product_id) DO NOTHING`
+      ).run(candidati.map((d) => d.id), productIds);
+    } catch (e) { console.error('[richieste] ensure listino fallito', e.message); }
+  }
+
+  // Senza candidati la richiesta nasce già chiusa e il pagamento già "rimborsato": con Stripe il blocco sulla
+  // carta lo rilascia chi ha creato la richiesta (src/logica/pagamenti/stripe_pagamenti.js), vedendo pagamento_stato.
+  const incasso = importo === null ? null : pagamenti.incasso(importo, metodoPagamento);
+  const crea = db.transaction(async () => {
+    const info = await db
+      .prepare(
+        `INSERT INTO requests (cliente_id, zona, stato, scade_il, destinazione, note,
+                               pagamento_stato, pagamento_metodo, pagamento_importo, pagato_il, rimborsato_il, chiave_invio,
+                               corriere, servizio, iva_app, da_pagare_app, merce_banco, raee_banco, iva_banco, materiale_banco)
+         VALUES (?, ?, ?, NOW() + (? * INTERVAL '1 minute'), ?, ?, ?, ?, ?, ${incasso ? 'NOW()' : 'NULL'}, ${incasso && !candidati.length ? 'NOW()' : 'NULL'}, ?,
+                 ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        cliente.id,
+        cliente.zona,
+        candidati.length ? 'in_attesa' : 'nessuna_offerta',
+        minuti,
+        destinazione,
+        note || '',
+        incasso ? (candidati.length ? incasso.stato : 'rimborsato') : null,
+        incasso ? incasso.metodo : null,
+        incasso ? incasso.importo : null,
+        chiaveInvio,
+        ...colonneImporti(totali)
+      );
+    const requestId = Number(info.lastInsertRowid);
+
+    const insItem = db.prepare(
+      `INSERT INTO request_items (request_id, product_id, quantita) VALUES (?, ?, ?)`
+    );
+    for (const { prodotto, quantita } of righeCarrello) await insItem.run(requestId, prodotto.id, quantita);
+
+    const insRisposta = db.prepare(
+      `INSERT INTO request_responses (request_id, distributor_id, esito) VALUES (?, ?, 'in_attesa')`
+    );
+    for (const d of candidati) await insRisposta.run(requestId, d.id);
+
+    return requestId;
+  });
+
+  const requestId = await crea();
+
+  const nArticoli = righeCarrello.reduce((acc, r) => acc + r.quantita, 0);
+  const { notificaDistributore, notifica } = require('../notifiche/notifiche');
+  const minutiTesto = Math.round(await getFinestraMinutiTesto()); // il numero scritto (10), non quello del timer: vedi pricing.getFinestraMinutiTesto
+  for (const d of candidati) {
+    await notificaDistributore(d.id, {
+      titolo: 'Nuova richiesta di disponibilità',
+      testo: `${cliente.ragione_sociale} — ${nArticoli} pz. Hai ${minutiTesto} minuti per confermare.`,
+      link: `/distributore/richieste/${requestId}`,
+      categoria: 'richieste',
+      sottostato: 'inviata',
+      tipo: 'nuova_richiesta',
+      request_id: requestId,
+    });
+  }
+
+  if (!candidati.length) {
+    await notifica(cliente.id, {
+      titolo: 'Nessun distributore disponibile',
+      testo: `Richiesta #${requestId} — Nessun distributore attivo può ricevere la richiesta in questo momento. Nessun addebito: puoi rinviarla più tardi.`,
+      link: `/richieste/${requestId}`,
+    });
+  }
+
+  return { requestId, candidati };
+}
+
+// I valori da salvare sulla richiesta, nell'ordine delle colonne (corriere, servizio, iva_app, da_pagare_app, merce_banco, raee_banco, iva_banco,
+// materiale_banco), da pricing.calcolaOrdine. Senza `totali` tutto a 0: le pagine ricalcolano.
+function colonneImporti(totali) {
+  if (!totali || !totali.app || !totali.banco) return [0, 0, 0, 0, 0, 0, 0, 0];
+  return [
+    totali.app.corriere, totali.app.servizio, totali.app.iva, totali.app.totale,
+    totali.banco.merce, totali.banco.raee, totali.banco.iva, totali.banco.totale,
+  ];
+}
+
+// Nessuno ha confermato (o preso la consegna) entro la finestra: riapre la STESSA richiesta (stesso id)
+// con una finestra fresca, invece di crearne una nuova — resta un unico riferimento nel tempo, utile
+// per pagamenti o altro. Riparte verso gli stessi distributori già interpellati la prima volta. Il
+// pagamento, rimborsato alla chiusura, si addebita di nuovo (vedi pagamenti.incassaDiNuovo): la consegna è ricalcolata ADESSO con i
+// prezzi di oggi (è la cifra che la pagina "Nessuna risposta" mostra in "Se rinvii la richiesta paghi di nuovo..."), e con lei si
+// riscrivono gli importi salvati sulla richiesta. `importo`: con Stripe quello già autorizzato (src/logica/pagamenti/stripe_pagamenti.js).
+async function reinviaRichiesta(requestId, { metodoPagamento = pagamenti.METODO_SIMULATO, importo = null } = {}) {
+  const richiesta = await getRichiesta(requestId);
+  if (!richiesta || richiesta.stato !== 'nessuna_offerta') return null;
+  const minuti = await getFinestraMinuti();
+  const totali = await calcolaDaRigheDb(await righeRichiesta(requestId), { costoConsegna: await getSpedizioneFissa() });
+
+  const fai = db.transaction(async () => {
+    await db.prepare(
+      `UPDATE requests
+          SET stato = 'in_attesa', scade_il = NOW() + (? * INTERVAL '1 minute'),
+              corriere = ?, servizio = ?, iva_app = ?, da_pagare_app = ?, merce_banco = ?, raee_banco = ?, iva_banco = ?, materiale_banco = ?
+        WHERE id = ?`
+    ).run(minuti, ...colonneImporti(totali), requestId);
+    await pagamenti.incassaDiNuovo(requestId, { metodo: metodoPagamento, importo: importo === null ? totali.da_pagare_app : importo });
+
+    await db.prepare(
+      `UPDATE request_responses
+          SET esito = 'in_attesa', consegna_ore = NULL, totale = NULL, note = NULL,
+              risposto_il = NULL, partenza_ore = NULL, copertura = 'totale',
+              sconto_cliente_pct = NULL, consegna_minuti_stimati = NULL,
+              corriere_stato = NULL, corriere_minuti = NULL, corriere_nome = '', corriere_preso_il = NULL
+        WHERE request_id = ?`
+    ).run(requestId);
+
+    await db.prepare(
+      `DELETE FROM request_response_items WHERE response_id IN
+        (SELECT id FROM request_responses WHERE request_id = ?)`
+    ).run(requestId);
+  });
+  await fai();
+
+  const righe = await righeRichiesta(requestId);
+  const risposte = await risposteRichiesta(requestId);
+  const nArticoli = righe.reduce((acc, r) => acc + r.quantita, 0);
+  const { notificaDistributore } = require('../notifiche/notifiche');
+  const minutiTesto = Math.round(await getFinestraMinutiTesto());
+  for (const r of risposte) {
+    await notificaDistributore(r.distributor_id, {
+      titolo: 'Richiesta rinviata',
+      testo: `${nArticoli} pz. Hai ${minutiTesto} minuti per confermare.`,
+      link: `/distributore/richieste/${requestId}`,
+      categoria: 'richieste',
+      sottostato: 'inviata',
+      tipo: 'nuova_richiesta',
+      request_id: requestId,
+    });
+  }
+
+  return requestId;
+}
+
+// ---------- Scadenza e ordine ----------
+
+// Crea l'ordine a partire da una risposta del banco: lo imposta flusso_cliente.js, che ha la logica
+// degli ordini. Riceve la richiesta e la risposta, restituisce l'id dell'ordine o null (la richiesta
+// non era più aperta).
+let assegnatore = null;
+// Registra la funzione che crea l'ordine quando una risposta diventa valida (la fornisce src/logica/ordini/flusso_cliente.js quando si carica).
+function impostaAssegnatore(fn) {
+  assegnatore = fn;
+}
+
+// La risposta del banco da cui nasce l'ordine: confermata e già "valida" per l'installatore (senza
+// corriere, o con la consegna presa). Con più risposte valide vince chi copre tutto il materiale, poi
+// la consegna più veloce, poi la prima arrivata.
+async function rispostaPerOrdine(requestId) {
+  return db
+    .prepare(
+      `SELECT rr.*
+         FROM request_responses rr
+        WHERE rr.request_id = ? AND rr.esito = 'confermato' AND ${OFFERTA_VISIBILE}
+        ORDER BY CASE WHEN rr.copertura = 'totale' THEN 0 ELSE 1 END,
+                 COALESCE(rr.consegna_minuti_stimati, rr.consegna_ore * 60) ASC, rr.risposto_il ASC
+        LIMIT 1`
+    )
+    .get(requestId);
+}
+
+// Se la richiesta è ancora aperta e ha una risposta valida, ne fa l'ordine: l'installatore non sceglie
+// più, ha già pagato. Si chiama appena un banco accetta (senza corriere) o un corriere prende la
+// consegna, e di nuovo dal timer: se la creazione è fallita (DB irraggiungibile...) si riprova al giro
+// dopo, invece di lasciare la richiesta ferma. `rispostaScelta`: la risposta da cui far nascere l'ordine
+// (quella del corriere che ha appena preso la consegna); senza, vale la migliore fra le valide.
+// Ritorna l'id dell'ordine, o null se non c'era niente da fare.
+async function assegnaOrdine(requestId, rispostaScelta = null) {
+  if (!assegnatore) return null;
+  const richiesta = await getRichiesta(requestId);
+  if (!richiesta || richiesta.stato !== 'in_attesa') return null;
+  const risposta = rispostaScelta || (await rispostaPerOrdine(requestId));
+  if (!risposta) return null;
+  return assegnatore(richiesta, risposta);
+}
+
+// La richiesta non porta a nessun ordine: si chiude e il pagamento torna all'installatore (se c'era).
+// `notificaCliente` { titolo, testo } è facoltativa (il testo comincia da solo con "Richiesta #N — "). false se nel frattempo è cambiata (ordinata, annullata).
+async function chiudiSenzaOrdine(richiesta, notificaCliente = null) {
+  const chiusa = await db
+    .prepare(`UPDATE requests SET stato = 'nessuna_offerta' WHERE id = ? AND stato IN ('in_attesa', 'con_offerte')`)
+    .run(richiesta.id);
+  if (!chiusa.changes) return false;
+  await pagamenti.rimborsa(richiesta.id);
+  if (notificaCliente) {
+    const { notifica } = require('../notifiche/notifiche');
+    await notifica(richiesta.cliente_id, {
+      titolo: notificaCliente.titolo,
+      testo: `Richiesta #${richiesta.id} — ${notificaCliente.testo}`,
+      link: `/richieste/${richiesta.id}`,
+      categoria: 'richieste',
+    });
+  }
+  return true;
+}
+
+// Porta avanti una richiesta aperta: allo scadere della finestra chiude quella rimasta senza ordine.
+// Si chiama a ogni lettura della richiesta, non solo dal timer.
+async function aggiornaScadenza(requestId) {
+  const richiesta = await getRichiesta(requestId);
+  if (!richiesta) return null;
+  if (richiesta.stato === 'con_offerte') {
+    // Lasciata così dal vecchio flusso, in cui l'installatore sceglieva fra le offerte: ora non c'è
+    // più niente da scegliere (e l'ordine nasce da solo), quindi si chiude.
+    return (await chiudiSenzaOrdine(richiesta)) ? getRichiesta(requestId) : richiesta;
+  }
+  if (richiesta.stato !== 'in_attesa') return richiesta;
+  return (await chiudiFinestraRisposte(richiesta)) ? getRichiesta(requestId) : richiesta;
+}
+
+// Il nome della ditta a cui è andata la richiesta, come lo vede l'installatore ("BOREA": senza forma giuridica, mai la filiale); null se le ditte sono più d'una
+// o non si riesce a leggerlo (la notifica ripiega su "Nessun banco"). Non lancia mai: serve solo al testo di un avviso.
+async function nomeDittaRichiesta(requestId) {
+  try {
+    const righe = await db.prepare(
+      `SELECT DISTINCT d.nome FROM request_responses rr JOIN distributors d ON d.id = rr.distributor_id WHERE rr.request_id = ?`
+    ).all(requestId);
+    const nomi = [...new Set((righe || []).map((r) => format.nomeCommerciale(r.nome)).filter(Boolean))];
+    return nomi.length === 1 ? nomi[0] : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+// La non risposta NON e' una disponibilita': allo scadere della finestra le risposte rimaste in
+// attesa diventano 'scaduto'. Se nessun banco ha accettato, o nessun corriere ha preso la consegna,
+// la richiesta si chiude senza ordine e il pagamento torna all'installatore.
+async function chiudiFinestraRisposte(richiesta) {
+  const requestId = richiesta.id;
+  if ((await secondiRimasti(richiesta)) > 0) return false;
+
+  const chiudi = db.transaction(async () => {
+    // Prima la richiesta, in UPDATE atomica come il resto: una risposta già valida (un corriere ha
+    // scritto "preso" un istante prima, o il banco ha accettato senza corriere) sta per diventare un
+    // ordine e vince, quindi la richiesta non si chiude (la creazione si riprova dal timer).
+    const chiusa = await db.prepare(
+      `UPDATE requests SET stato = 'nessuna_offerta'
+        WHERE id = ? AND stato = 'in_attesa'
+          AND NOT EXISTS (SELECT 1 FROM request_responses rr
+                           WHERE rr.request_id = requests.id AND rr.esito = 'confermato' AND ${OFFERTA_VISIBILE})`
+    ).run(requestId);
+    if (!chiusa.changes) return null;
+
+    // Quali banchi non hanno risposto in tempo (RETURNING: l'avviso "Richiesta scaduta" va a loro, vedi sotto).
+    const nonRisposto = await db.prepare(
+      `UPDATE request_responses SET esito = 'scaduto', risposto_il = NOW()
+        WHERE request_id = ? AND esito = 'in_attesa'
+        RETURNING distributor_id`
+    ).all(requestId);
+    // Il timer è finito e nessun corriere ha risposto: per l'installatore è come se il banco non
+    // avesse accettato. Il banco che aveva confermato (e non deve più preparare) riceve l'avviso "Nessun corriere".
+    const senzaCorriere = await db.prepare(
+      `UPDATE request_responses SET corriere_stato = 'scaduto'
+        WHERE request_id = ? AND corriere_stato = 'in_attesa'
+        RETURNING distributor_id`
+    ).all(requestId);
+    const rimborsato = await pagamenti.rimborsa(requestId);
+    return {
+      corrieriScaduti: senzaCorriere.length,
+      rimborsato,
+      bancoNonRisposto: nonRisposto.map((r) => r.distributor_id),
+      bancoSenzaCorriere: senzaCorriere.map((r) => r.distributor_id),
+    };
+  });
+
+  const esito = await chiudi();
+  if (!esito) return false;
+  // Il messaggio nel gruppo sparisce, così nessuno può più rispondere "preso".
+  if (esito.corrieriScaduti) {
+    await whatsapp.ritiraRichiesta(requestId).catch((err) => console.error('[richieste] WhatsApp, ritiro messaggio:', err.message));
+  }
+  const { notifica, notificaDistributore } = require('../notifiche/notifiche');
+  // Un banco che aveva accettato e aspettava il corriere (corriere_stato 'in_attesa', ora 'scaduto') = nessun corriere ha preso la consegna.
+  // I testi (richiesta esplicita del 21/10/2026): "BOREA non ha confermato" / "Richiesta #177 — La richiesta non è stata accettata. Nessun addebito: puoi rinviarla." e
+  // "Nessun corriere disponibile" / "Richiesta #177 — BOREA aveva il materiale, ma nessun corriere ha preso la consegna. Puoi rinviarla." La carta era solo bloccata:
+  // non c'è nessun rimborso, e il testo non lo dice. Con più ditte (oggi una sola) il nome diventa "Nessun banco" / "Il banco".
+  const senzaCorriere = esito.corrieriScaduti > 0;
+  const ditta = await nomeDittaRichiesta(requestId);
+  await notifica(richiesta.cliente_id, {
+    titolo: senzaCorriere ? 'Nessun corriere disponibile' : ditta ? `${ditta} non ha confermato` : 'Nessun banco ha confermato',
+    testo: senzaCorriere
+      ? `Richiesta #${requestId} — ${ditta || 'Il banco'} aveva il materiale, ma nessun corriere ha preso la consegna. Puoi rinviarla.`
+      : `Richiesta #${requestId} — La richiesta non è stata accettata. Nessun addebito: puoi rinviarla.`,
+    link: `/richieste/${requestId}`,
+    categoria: 'richieste',
+  });
+  // Anche il banco lo viene a sapere (avvisi a comparsa, assets/js "Avvisi del banco"): chi non ha risposto in tempo, e chi aveva
+  // confermato ma non ha trovato un corriere (non deve preparare niente). Un guasto qui non deve far fallire una richiesta già chiusa.
+  const avviso = (distributorIds, payload) =>
+    Promise.all(
+      [...new Set(distributorIds)].map((id) =>
+        notificaDistributore(id, payload).catch((err) => console.error(`[richieste] avviso al banco ${id} non inviato:`, err.message))
+      )
+    );
+  await avviso(esito.bancoSenzaCorriere, {
+    titolo: `Nessun corriere · richiesta #${requestId}`,
+    testo: 'Nessuno ha preso la consegna: non preparare. Il cliente è stato avvisato e non paga nulla.',
+    link: `/distributore/richieste/${requestId}`,
+    categoria: 'richieste',
+    tipo: 'nessun_corriere',
+    request_id: requestId,
+  });
+  await avviso(esito.bancoNonRisposto, {
+    titolo: `Richiesta #${requestId} scaduta`,
+    testo: 'Non hai risposto in tempo. Il cliente non paga nulla.',
+    link: `/distributore/richieste/${requestId}`,
+    categoria: 'richieste',
+    tipo: 'richiesta_scaduta',
+    request_id: requestId,
+  });
+  return true;
+}
+
+// Rete di sicurezza del tempo mostrato all'installatore (corriere + tragitto): se alla conferma del banco il tragitto non è stato scritto (calcolo fallito,
+// conferma fatta da un server col codice vecchio, posizione che mancava) la riga ha consegna_minuti_stimati a 0 o vuoto e all'installatore resterebbe
+// solo il tempo del corriere. Qui, un istante prima di sommare i minuti del corriere, lo si ricalcola. Non lancia mai: se non riesce, resta com'era.
+async function assicuraTragitto(responseId) {
+  try {
+    const r = await db
+      .prepare(
+        `SELECT rr.consegna_minuti_stimati AS tragitto, rr.distributor_id, rq.cliente_id
+           FROM request_responses rr JOIN requests rq ON rq.id = rr.request_id
+          WHERE rr.id = ? AND rr.esito = 'confermato' AND rr.corriere_stato = 'in_attesa'`
+      )
+      .get(responseId);
+    if (!r || Number(r.tragitto) > 0) return;
+    const stima = await require('./consegna').minutiStimati(r.distributor_id, r.cliente_id, 0);
+    if (!(stima.minuti > 0)) return;
+    await db
+      .prepare(`UPDATE request_responses SET consegna_minuti_stimati = ? WHERE id = ? AND COALESCE(consegna_minuti_stimati, 0) <= 0`)
+      .run(stima.minuti, responseId);
+    console.log(`[tragitto] risposta ${responseId}: il tragitto mancava, ricalcolato al "preso" (${stima.viaggio} min).`);
+  } catch (err) {
+    console.error(`[tragitto] risposta ${responseId}: ricalcolo al "preso" non riuscito (${err.message}).`);
+  }
+}
+
+// Un corriere ha preso la consegna nel gruppo WhatsApp: la risposta del banco diventa valida e
+// l'ordine nasce subito. I `minuti` scritti dal corriere sono il tempo che ci mette ad arrivare DAL BANCO (src/logica/ordini/corriere.js): sono quelli che vede il banco
+// (corriere_minuti). All'installatore si dice la somma di quei minuti e del tragitto dal banco a lui, già calcolato quando il banco ha confermato e rimasto
+// in consegna_minuti_stimati (rispondi): qui ci si sommano i minuti del corriere, e il totale è il tempo di consegna dell'ordine.
+// Vale solo finché la finestra della richiesta è aperta (la condizione è dentro la UPDATE, atomica come in rispondi).
+// Esiti:
+//   { esito: 'preso' }              l'ordine è partito (o parte al prossimo giro del timer)
+//   { esito: 'gia_preso', nome }    un altro l'aveva già presa
+//   { esito: 'scaduta' }            finestra chiusa, richiesta annullata o messaggio ritirato
+async function corriereHaPreso(responseId, minuti, nome) {
+  await assicuraTragitto(responseId);
+  const preso = await db
+    .prepare(
+      `UPDATE request_responses
+          SET corriere_stato = 'preso', corriere_minuti = ?, corriere_nome = ?, corriere_preso_il = NOW(),
+              consegna_minuti_stimati = COALESCE(consegna_minuti_stimati, 0) + ?
+        WHERE id = ? AND esito = 'confermato' AND corriere_stato = 'in_attesa'
+          AND request_id IN (SELECT id FROM requests WHERE scade_il > NOW() AND stato = 'in_attesa')`
+    )
+    .run(minuti, nome || '', minuti, responseId);
+
+  const risposta = await db.prepare('SELECT * FROM request_responses WHERE id = ?').get(responseId);
+  if (!preso.changes) {
+    if (risposta && risposta.corriere_stato === 'preso') return { esito: 'gia_preso', nome: risposta.corriere_nome };
+    return { esito: 'scaduta' };
+  }
+
+  let ordineId;
+  try {
+    ordineId = await assegnaOrdine(risposta.request_id, risposta);
+  } catch (err) {
+    // Il corriere ha già la sua conferma: l'ordine si ricrea dal timer (aggiornaScadenzeAperte).
+    console.error(`[richieste] ordine non creato per la richiesta ${risposta.request_id}:`, err.message);
+    return { esito: 'preso' };
+  }
+  if (ordineId === null) {
+    // La richiesta si è chiusa (annullata, ordinata altrove) un istante dopo: la consegna non serve più.
+    await db
+      .prepare(`UPDATE request_responses SET corriere_stato = 'scaduto' WHERE id = ? AND corriere_stato = 'preso'`)
+      .run(responseId);
+    return { esito: 'scaduta' };
+  }
+  return { esito: 'preso', ordineId };
+}
+
+// Passata utile all'avvio e a ogni tanto: chiude le finestre scadute e riprova gli ordini rimasti a
+// metà (una risposta valida senza ordine).
+async function aggiornaScadenzeAperte() {
+  const aperte = await db
+    .prepare(
+      `SELECT r.id FROM requests r
+        WHERE r.stato IN ('in_attesa', 'con_offerte')
+          AND (r.scade_il <= NOW() OR r.stato = 'con_offerte'
+               OR EXISTS (SELECT 1 FROM request_responses rr
+                           WHERE rr.request_id = r.id AND rr.esito = 'confermato' AND ${OFFERTA_VISIBILE}))`
+    )
+    .all();
+  for (const r of aperte) {
+    await assegnaOrdine(r.id).catch((err) => console.error(`[richieste] ordine non creato per la richiesta ${r.id}:`, err.message));
+    await aggiornaScadenza(r.id);
+  }
+  return aperte.length;
+}
+
+// ---------- Risposta del distributore ----------
+
+// `righe` è una mappa { product_id: quantita_disponibile } compilata al banco.
+// Da lì si deduce l'esito: tutto coperto = conferma totale, qualcosa in meno = conferma
+// parziale, niente disponibile = rifiuto per indisponibilità merce.
+async function rispondi(
+  requestId,
+  distributorId,
+  {
+    righe = {},
+    sconti = {},
+    partenza_ore,
+    consegna_ore,
+    note,
+    rifiuta = false,
+    // "Accetta al prezzo di richiesta": conferma senza toccare gli sconti, il cliente paga
+    // esattamente il prezzo che ha visto quando ha fatto la richiesta.
+    prezzoRichiesto = false,
+    scontoCliente = null,
+    salvaScontoCliente = false,
+    // Il dipendente che risponde (per sapere chi, dentro la filiale, ha accettato).
+    utenteId = null,
+  }
+) {
+  // Controllo "veloce" solo per uscire prima nel caso comune: non è quello che decide se la
+  // risposta viene accettata. La scadenza vera si controlla dentro la UPDATE più sotto,
+  // nella stessa transazione — altrimenti un invio arrivato proprio sull'ultimo secondo
+  // (il countdown del cliente e quello del server non sono mai perfettamente sincroni, e
+  // il job periodico che chiude le richieste scadute gira ogni 30s) può passare il
+  // controllo qui e poi scontrarsi con la chiusura della richiesta, lasciando la risposta
+  // "confermata" ma la richiesta già segnata come scaduta senza offerte.
+  const richiesta = await getRichiesta(requestId);
+  if (!richiesta) return { ok: false, errore: 'Richiesta non trovata.' };
+  if (richiesta.stato === 'ordinata') {
+    return { ok: false, errore: 'Il cliente ha già chiuso l’ordine con un altro distributore.' };
+  }
+  if (richiesta.stato === 'annullata') {
+    return { ok: false, errore: 'Il cliente ha annullato la richiesta.' };
+  }
+
+  const risposta = await getRisposta(requestId, distributorId);
+  if (!risposta) return { ok: false, errore: 'Richiesta non assegnata a questo distributore.' };
+  if (risposta.esito !== 'in_attesa') {
+    // Chiusa perché un'altra filiale della ditta ha confermato: non è che questa abbia già risposto.
+    if (risposta.esito === 'scaduto' && (await altraFilialeHaConfermato(requestId, distributorId, risposta.id))) {
+      return { ok: false, errore: ERRORE_ALTRA_FILIALE };
+    }
+    return { ok: false, errore: 'Hai già risposto a questa richiesta.' };
+  }
+
+  // Sconto standard del banco su ogni prodotto: è il riferimento sia per il "prezzo di
+  // richiesta" sia per capire se il banco ha applicato una condizione migliore.
+  const righeDist = await righeDistributore(requestId, distributorId);
+  const standard = new Map(righeDist.map((r) => [r.product_id, r.sconto_standard_pct]));
+
+  function scontoApplicato(productId) {
+    if (prezzoRichiesto) return null; // nessuna modifica: resta lo sconto Base del listino
+    const grezzo = sconti[productId];
+    if (grezzo === undefined || grezzo === null || String(grezzo).trim() === '') return null;
+    const n = parseFloat(String(grezzo).replace(',', '.'));
+    if (!Number.isFinite(n)) return null;
+    const pulito = Math.round(Math.min(90, Math.max(0, n)) * 10) / 10;
+    return pulito === standard.get(productId) ? null : pulito;
+  }
+
+  const richieste_ = await righeRichiesta(requestId);
+  const coperture = richieste_.map((r) => {
+    const chiesta = r.quantita;
+    // "Accetta ordine" (prezzoRichiesto) copre sempre tutto il richiesto: non c'è più un
+    // modulo con cui il banco dichiara una disponibilità parziale riga per riga.
+    const disponibile = rifiuta
+      ? 0
+      : prezzoRichiesto
+      ? chiesta
+      : Math.max(0, Math.min(chiesta, parseInt(righe[r.product_id], 10) || 0));
+    return {
+      product_id: r.product_id,
+      nome: r.nome,
+      quantita_richiesta: chiesta,
+      quantita_disponibile: disponibile,
+      sconto_riga_pct: rifiuta ? null : scontoApplicato(r.product_id),
+    };
+  });
+
+  const pezziDisponibili = coperture.reduce((acc, r) => acc + r.quantita_disponibile, 0);
+  const tuttoCoperto = coperture.every((r) => r.quantita_disponibile === r.quantita_richiesta);
+  const esito = pezziDisponibili === 0 ? 'non_disponibile' : 'confermato';
+  const copertura = tuttoCoperto ? 'totale' : 'parziale';
+  // Con il gruppo WhatsApp acceso la conferma aspetta un corriere prima di arrivare all'installatore.
+  const attesaCorriere = esito === 'confermato' && whatsapp.attivo();
+
+  // Il tempo di consegna non può precedere quello di partenza.
+  // Con un tetto (30 giorni): un numero enorme non entra in una colonna intera (errore "out of range", 500).
+  const ORE_MASSIME = 720;
+  const partenza = Math.min(ORE_MASSIME, Math.max(0, parseInt(partenza_ore, 10) || 0));
+  const consegnaOre = Math.min(ORE_MASSIME, Math.max(partenza, parseInt(consegna_ore, 10) || partenza || 24));
+
+  const profilo =
+    scontoCliente === null || String(scontoCliente).trim() === ''
+      ? null
+      : Math.round(Math.min(90, Math.max(0, parseFloat(String(scontoCliente).replace(',', '.')) || 0)) * 10) / 10;
+
+  const salva = db.transaction(async () => {
+    // Le risposte della stessa richiesta si mettono in fila: "vince la prima filiale della
+    // ditta" vale anche se due dipendenti premono nello stesso istante (senza il blocco,
+    // entrambe vedrebbero "nessuno ha ancora confermato" e confermerebbero tutte e due).
+    await db.prepare('SELECT id FROM requests WHERE id = ? FOR UPDATE').get(requestId);
+
+    // Una ditta con più filiali risponde una volta sola: la prima che conferma tiene la
+    // richiesta (e da lì parte l'ordine), le altre filiali della stessa ditta si chiudono.
+    if (esito === 'confermato' && (await altraFilialeHaConfermato(requestId, distributorId, risposta.id))) {
+      return 'altra_filiale';
+    }
+
+    // La condizione di scadenza vive qui, dentro la UPDATE, non in un controllo separato
+    // prima: così l'accettazione o il rifiuto di "la finestra è ancora aperta" è atomico
+    // insieme alla scrittura, e non può più essere scavalcato da aggiornaScadenza() che
+    // gira in parallelo (chiamata da altre pagine, o dal job periodico ogni 30s).
+    const upd = await db.prepare(
+      `UPDATE request_responses
+          SET esito = ?, copertura = ?, partenza_ore = ?, consegna_ore = ?, note = ?,
+              sconto_cliente_pct = ?, risposto_il = NOW(), risposto_da = ?, corriere_stato = ?
+        WHERE id = ? AND esito = 'in_attesa'
+          AND request_id IN (SELECT id FROM requests WHERE scade_il > NOW())`
+    ).run(
+      esito,
+      esito === 'confermato' ? copertura : 'totale',
+      esito === 'confermato' ? partenza : null,
+      esito === 'confermato' ? consegnaOre : null,
+      note || null,
+      esito === 'confermato' && !prezzoRichiesto ? profilo : null,
+      utenteId,
+      attesaCorriere ? 'in_attesa' : null,
+      risposta.id
+    );
+    if (!upd.changes) return false;
+
+    if (esito === 'confermato') {
+      await db.prepare(
+        `UPDATE request_responses
+            SET esito = 'scaduto', risposto_il = NOW()
+          WHERE request_id = ? AND esito = 'in_attesa' AND id <> ?
+            AND distributor_id IN (SELECT id FROM distributors
+                                    WHERE ditta_id IS NOT NULL
+                                      AND ditta_id = (SELECT ditta_id FROM distributors WHERE id = ?))`
+      ).run(requestId, risposta.id, distributorId);
+    }
+
+    await db.prepare('DELETE FROM request_response_items WHERE response_id = ?').run(risposta.id);
+    const ins = db.prepare(
+      `INSERT INTO request_response_items
+         (response_id, product_id, quantita_richiesta, quantita_disponibile, sconto_riga_pct)
+       VALUES (?, ?, ?, ?, ?)`
+    );
+    for (const r of coperture)
+      await ins.run(risposta.id, r.product_id, r.quantita_richiesta, r.quantita_disponibile, r.sconto_riga_pct);
+
+    // Sconto concordato con questo cliente: resta in anagrafica e precompila le prossime
+    // richieste dello stesso cliente a questo banco.
+    if (salvaScontoCliente && profilo !== null && esito === 'confermato') {
+      await db.prepare(
+        `INSERT INTO client_discounts (distributor_id, cliente_id, sconto_pct, aggiornato_il)
+         VALUES (?, ?, ?, NOW())
+         ON CONFLICT(distributor_id, cliente_id) DO UPDATE SET
+           sconto_pct = excluded.sconto_pct, aggiornato_il = NOW()`
+      ).run(distributorId, richiesta.cliente_id, profilo);
+    }
+    return true;
+  });
+  const salvata = await salva();
+  if (salvata === 'altra_filiale') return { ok: false, errore: ERRORE_ALTRA_FILIALE };
+  if (!salvata) {
+    // La UPDATE atomica non ha trovato la riga nelle condizioni attese: capiamo il motivo
+    // esatto solo per dare un messaggio preciso, la decisione è già presa.
+    const fresca = await getRisposta(requestId, distributorId);
+    if (fresca && fresca.esito !== 'in_attesa') {
+      return { ok: false, errore: 'Hai già risposto a questa richiesta.' };
+    }
+    const minuti = await getFinestraMinutiTesto();
+    return { ok: false, errore: `La finestra di ${Math.round(minuti)} minuti è chiusa: non è più possibile rispondere.` };
+  }
+
+  // Il totale dell'offerta si calcola sulle quantità davvero disponibili.
+  if (esito === 'confermato') {
+    const { totali } = await calcolaOfferta(requestId, distributorId);
+    await db.prepare('UPDATE request_responses SET totale = ? WHERE id = ?').run(
+      totali.totale_ivato,
+      risposta.id
+    );
+  }
+
+  const consegna = require('./consegna');
+
+  if (esito === 'confermato') {
+    // Il tempo di consegna vero è partenza dichiarata + tragitto fino al cliente (calcolato sulla mappa dal banco che ha confermato). Con il corriere la
+    // partenza non la dichiara il banco: la scrive il corriere su WhatsApp e corriereHaPreso la somma a questo tragitto, che qui resta da solo.
+    // Se il calcolo si rompe (DB, rete) la conferma resta valida e il tragitto si riprova quando il corriere risponde (assicuraTragitto).
+    let stima;
+    try {
+      stima = await consegna.minutiStimati(distributorId, richiesta.cliente_id, attesaCorriere ? 0 : partenza);
+    } catch (err) {
+      console.error(`[tragitto] richiesta ${requestId}: calcolo non riuscito (${err.message}), si riprova al "preso" del corriere.`);
+      stima = { minuti: attesaCorriere ? 0 : Math.max(0, Math.round((parseFloat(partenza) || 0) * 60)) };
+    }
+    if (stima.viaggio !== undefined && stima.viaggio !== null) {
+      console.log(`[tragitto] richiesta ${requestId}: ${stima.viaggio} min${stima.km !== null && stima.km !== undefined ? ', ' + stima.km + ' km' : ''} (${stima.servizio || stima.fonte})`);
+    }
+    await db.prepare('UPDATE request_responses SET consegna_minuti_stimati = ? WHERE id = ?').run(
+      stima.minuti,
+      risposta.id
+    );
+
+    // Con il corriere l'installatore non sa ancora niente: nessun ordine e nessuna notifica finché
+    // nel gruppo qualcuno non scrive "preso <minuti>" (corriereHaPreso). Se la finestra scade prima,
+    // la risposta si ritira da sola e il pagamento torna all'installatore.
+    if (attesaCorriere) {
+      try {
+        await whatsapp.accodaRitiroConsegna(requestId, risposta.id);
+      } catch (err) {
+        console.error(`[richieste] WhatsApp: messaggio non accodato per la richiesta ${requestId}:`, err.message);
+      }
+      return { ok: true, esito, copertura, attesaCorriere: true };
+    }
+
+    // Senza corriere (modulo spento) la risposta del banco è già valida: l'installatore ha pagato e
+    // non sceglie più, quindi l'ordine nasce subito. Se la creazione fallisce si riprova dal timer.
+    let ordineId = null;
+    try {
+      ordineId = await assegnaOrdine(requestId);
+    } catch (err) {
+      console.error(`[richieste] ordine non creato per la richiesta ${requestId}:`, err.message);
+    }
+    return { ok: true, esito, copertura, ordineId };
+  } else {
+    // Chi ha accettato e aspetta un corriere non ha ancora "risposto" per l'installatore: la
+    // richiesta non si chiude finché non si sa come va a finire.
+    const rowRest = await db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM request_responses
+          WHERE request_id = ? AND (esito = 'in_attesa' OR corriere_stato = 'in_attesa')`
+      )
+      .get(requestId);
+    const restano = rowRest ? Number(rowRest.n) : 0;
+    const rowConf = await db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM request_responses rr
+          WHERE rr.request_id = ? AND rr.esito = 'confermato' AND ${OFFERTA_VISIBILE}`
+      )
+      .get(requestId);
+    const conferme = rowConf ? Number(rowConf.n) : 0;
+    // Hanno risposto tutti e nessuno ha accettato: la richiesta si chiude subito (se c'è una risposta
+    // valida l'ordine è già nato o nasce dal timer, quindi non si chiude).
+    if (restano === 0 && conferme === 0 && richiesta.stato === 'in_attesa') {
+      await chiudiSenzaOrdine(richiesta, {
+        titolo: 'Materiale non disponibile',
+        testo: 'Nessun distributore ha il materiale disponibile. Nessun addebito: puoi rinviarla.',
+      });
+    }
+  }
+
+  return { ok: true, esito, copertura };
+}
+
+// ---------- Offerte ----------
+
+// Righe della richiesta viste con il listino di un distributore. Se il banco ha già
+// risposto, la quantità è quella che ha dichiarato disponibile.
+async function righeDistributore(requestId, distributorId) {
+  const risposta = await getRisposta(requestId, distributorId);
+  const richiesta = await db.prepare('SELECT cliente_id FROM requests WHERE id = ?').get(requestId);
+  // Sconti concordati in anagrafica con questo cliente (generale, marchio, categoria, famiglia).
+  const anagrafiche = require('../account/anagrafiche');
+  const regole = richiesta ? await anagrafiche.regoleSconto(distributorId, richiesta.cliente_id) : [];
+
+  const rows = await db
+    .prepare(
+      `SELECT ri.product_id, ri.quantita AS quantita_richiesta,
+              p.codice, p.nome, p.categoria, p.brand_slug, p.famiglia, p.macro_slug, p.raee,
+              COALESCE(dp.prezzo_listino, p.prezzo_listino) AS prezzo_listino,
+              COALESCE(dp.sconto_base_pct, p.sconto_base_pct) AS sconto_listino_pct,
+              rri.quantita_disponibile, rri.sconto_riga_pct
+         FROM request_items ri
+         JOIN products p ON p.id = ri.product_id
+         LEFT JOIN distributor_products dp
+           ON dp.product_id = ri.product_id AND dp.distributor_id = ?
+         LEFT JOIN request_response_items rri
+           ON rri.product_id = ri.product_id AND rri.response_id = ?
+        WHERE ri.request_id = ?
+        ORDER BY p.categoria, p.nome`
+    )
+    .all(distributorId, risposta ? risposta.id : -1, requestId);
+  return rows.map((r) => {
+      // Ordine di precedenza: sconto deciso ora sulla riga → sconto in anagrafica per
+      // famiglia/marchio/categoria → sconto Base del listino del banco.
+      const daAnagrafica = anagrafiche.scontoPerProdotto(regole, r);
+      const standard = daAnagrafica ? daAnagrafica.pct : r.sconto_listino_pct;
+      const applicato = r.sconto_riga_pct === null ? standard : r.sconto_riga_pct;
+      return {
+        ...r,
+        quantita: r.quantita_disponibile === null ? r.quantita_richiesta : r.quantita_disponibile,
+        sconto_standard_pct: standard,
+        sconto_anagrafica: daAnagrafica ? daAnagrafica.ambito : null,
+        sconto_base_pct: applicato,
+        sconto_personalizzato: r.sconto_riga_pct !== null && r.sconto_riga_pct !== standard,
+      };
+    });
+}
+
+// Righe e totali della richiesta calcolati sul listino del singolo distributore. La consegna c'è
+// sempre (con il corriere): il ritiro al banco non esiste più.
+async function calcolaOfferta(requestId, distributorId) {
+  const distributore = await db.prepare('SELECT * FROM distributors WHERE id = ?').get(distributorId);
+  const righe = await righeDistributore(requestId, distributorId);
+
+  const carrello = righe
+    .filter((r) => r.quantita > 0)
+    .map((r) => ({
+      prodotto: {
+        id: r.product_id,
+        codice: r.codice,
+        nome: r.nome,
+        prezzo_listino: r.prezzo_listino,
+        sconto_base_pct: r.sconto_base_pct,
+        raee: r.raee,
+      },
+      quantita: r.quantita,
+    }));
+
+  const mancanti = righe
+    .filter((r) => r.quantita < r.quantita_richiesta)
+    .map((r) => ({
+      codice: r.codice,
+      nome: r.nome,
+      quantita_richiesta: r.quantita_richiesta,
+      quantita_disponibile: r.quantita,
+      mancano: r.quantita_richiesta - r.quantita,
+    }));
+
+  // La consegna è la spedizione fissa che l'installatore ha già pagato con la richiesta (la stessa cifra del
+  // carrello), non il costo del singolo banco: al momento di pagare non sapeva quale banco avrebbe accettato.
+  // Così il totale dell'ordine coincide con il pagamento (prima, con `distributors.costo_consegna` a 0, l'ordine
+  // diceva "consegna inclusa" e il totale restava di 12,20 € sotto a quanto pagato).
+  const totali = await calcolaOrdine(carrello, { costoConsegna: await getSpedizioneFissa() });
+  return { distributore, righe, carrello, mancanti, totali };
+}
+
+// Sconto concordato tra un banco e un cliente (0 se non ce n'è uno in anagrafica).
+async function scontoCliente(distributorId, clienteId) {
+  const r = await db
+    .prepare('SELECT sconto_pct, aggiornato_il FROM client_discounts WHERE distributor_id = ? AND cliente_id = ?')
+    .get(distributorId, clienteId);
+  return r || null;
+}
+
+module.exports = {
+  getRichiesta,
+  righeRichiesta,
+  righeRichieste,
+  richiestaConChiave,
+  risposteRichiesta,
+  raggruppaRisposteDitta,
+  getRisposta,
+  secondiRimasti,
+  impostaAssegnatore,
+  assegnaOrdine,
+  distributoriCandidati,
+  statoBanchiAttivi,
+  bancoPerInstallatore,
+  creaRichiesta,
+  reinviaRichiesta,
+  aggiornaScadenza,
+  aggiornaScadenzeAperte,
+  rispondi,
+  corriereHaPreso,
+  calcolaOfferta,
+  round2,
+};

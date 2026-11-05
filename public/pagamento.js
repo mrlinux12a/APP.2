@@ -1,4 +1,4 @@
-/* Pagina di pagamento (views/pagamento.ejs): monta il form di Stripe (Payment Element) e conferma il pagamento.
+/* Pagina di pagamento (views/cliente/pagamento.ejs): monta il form di Stripe (Payment Element) e conferma il pagamento.
    La carta la raccoglie Stripe dentro il suo iframe: qui non passa. Con la carta solo "bloccata" (capture_method
    manual) il PaymentIntent arriva a `requires_capture`; poi si va su /pagamento/esito, dove il server verifica con
    Stripe e fa nascere la richiesta. Con il 3-D Secure Stripe porta fuori e riporta da solo allo stesso indirizzo. */

@@ -1,0 +1,227 @@
+<%
+  // Dettaglio di una richiesta al banco, a due colonne: a sinistra il materiale (tabella) e "Cosa succede dopo la conferma",
+  // a destra cosa fare (timer e pulsanti, o lo stato dopo la risposta), il cliente e "Elimina dal banco". Sotto i 900px le
+  // colonne si impilano con l'azione per prima (classi ric-*, blocco "Dettaglio richiesta del banco" di style.css).
+  // I dati li prepara la route con src/logica/banco/richiesta.js: stato, materiale, passi.
+  const RAGGIO = 35;
+  const CIRCONFERENZA = Math.round(2 * Math.PI * RAGGIO * 100) / 100;
+  const urgente = apribile && secondi <= sogliaUrgenteSec;
+  const frazione = Math.min(1, secondi / finestraSecondi);
+  const pl = (n, uno, molti) => n + ' ' + (n === 1 ? uno : molti);
+  const confermata = risposta.esito === 'confermato';
+%>
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('../partials/comune/app_head', { titolo, senzaTelefoni: true }) %>
+</head>
+<body class="pagina-richiesta" data-loggato="1" data-auto-refresh="15000" data-versione="<%= JSON.stringify(contatori) %>">
+
+  <%# Intestazione unica del banco (con "Banco" accesa: la sceglie il percorso). Il titolo con la freccia è qui sotto. %>
+  <%- include('../partials/banco/banco_testa') %>
+
+  <main class="ric-pagina">
+    <div class="ric-testata">
+      <a class="ric-indietro" href="<%= paginaPrecedente %>" aria-label="<%= paginaPrecedente === '/distributore' ? 'Torna alle richieste del banco' : 'Indietro' %>"><%- iconaIndietro %></a>
+      <h1 class="ric-titolo">Richiesta #<%= richiesta.id %></h1>
+      <span class="ric-stato ric-st-<%= stato.chiave %>"><span class="ric-punto<%= stato.chiave === 'attesa_corriere' ? ' pulse' : '' %>" aria-hidden="true"></span><%= stato.etichetta %></span>
+      <span class="ric-ricevuta">Ricevuta <%= ricevuta %><% if (oraConferma) { %> · confermata alle <%= oraConferma %><% } %></span>
+    </div>
+
+    <% if (errore) { %><div class="errore" role="alert"><%= errore %></div><% } %>
+
+    <div class="ric-corpo">
+
+      <%# ---------- Colonna sinistra: materiale e passi ---------- %>
+      <div class="ric-colonna">
+        <section class="ric-scheda ric-materiale" aria-labelledby="ric-mat-titolo">
+          <div class="ric-mat-testa">
+            <h2 class="ric-h2" id="ric-mat-titolo"><%= confermata ? 'Materiale confermato' : 'Materiale richiesto' %></h2>
+            <span class="ric-conta"><%= pl(materiale.nArticoli, 'articolo', 'articoli') %> · <%= pl(materiale.nPezzi, 'pezzo', 'pezzi') %></span>
+          </div>
+
+          <div class="ric-tab-testa" aria-hidden="true">
+            <span>Q.tà</span><span>Articolo</span><span class="ric-num">Listino</span><span class="ric-num">Prezzo cliente</span><span class="ric-num">Totale</span>
+          </div>
+          <% materiale.righe.forEach(function (r) { %>
+            <div class="ric-riga">
+              <span class="ric-qta"><%= r.quantita %>×</span>
+              <span class="ric-articolo">
+                <strong class="ric-nome"><%= r.nome %></strong>
+                <small class="ric-cod">Cod. <%= r.codice %></small>
+                <% if (r.mancano > 0) { %><small class="ric-mancano">richiesti <%= r.richiesta %>, mancano <%= r.mancano %></small><% } %>
+              </span>
+              <span class="ric-num ric-listino">€ <%= euro(r.listino) %></span>
+              <span class="ric-num ric-prezzo"><strong>€ <%= euro(r.unitario) %></strong><small>cad. + IVA</small></span>
+              <span class="ric-num ric-tot">€ <%= euro(r.totale) %></span>
+            </div>
+          <% }); %>
+
+          <div class="ric-totale">
+            <% if (materiale.raee > 0) { %><small class="ric-raee">compreso contributo RAEE € <%= euro(materiale.raee) %></small><% } %>
+            <span class="ric-totale-label">Totale per il cliente</span>
+            <strong class="ric-totale-cifra">€ <%= euro(materiale.totale) %></strong>
+            <small class="ric-iva">+ IVA</small>
+          </div>
+        </section>
+
+        <% if (mostraPassi && stato.chiave === 'attesa_corriere') { %>
+          <%# Avanzamento: a che punto siamo. Fatto = spunta verde, in corso = pallino viola che pulsa, da fare = cerchio tratteggiato.
+              "da N min" lo tiene aggiornato app.js (data-da), come sulla home. %>
+          <section class="ric-scheda ric-passi ric-avanzamento" aria-labelledby="ric-passi-titolo">
+            <h2 class="ric-h2" id="ric-passi-titolo">Avanzamento</h2>
+            <ol class="ric-elenco-passi">
+              <% passi.forEach(function (p) { %>
+                <li class="ric-passo ric-passo-<%= p.tono %> ric-fase-<%= p.fase %>"<%- p.fase === 'corrente' ? ' aria-current="step"' : '' %>>
+                  <span class="ric-passo-punto" aria-hidden="true"><% if (p.fase === 'fatto') { %><%- iconaSpunta %><% } %></span>
+                  <span class="ric-passo-testi">
+                    <strong><%= p.titolo %><% if (p.conTempo) { %> · da <span data-da><%= fmt.daMinuti(trascorsi) %></span><% } %></strong>
+                    <span><%= p.testo %></span>
+                  </span>
+                </li>
+              <% }); %>
+            </ol>
+          </section>
+        <% } else if (mostraPassi) { %>
+          <section class="ric-scheda ric-passi" aria-labelledby="ric-passi-titolo">
+            <h2 class="ric-h2" id="ric-passi-titolo">Cosa succede dopo la conferma</h2>
+            <ol class="ric-elenco-passi">
+              <% passi.forEach(function (p) { %>
+                <li class="ric-passo ric-passo-<%= p.tono %><%= p.corrente ? ' corrente' : '' %>"<%- p.corrente ? ' aria-current="step"' : '' %>>
+                  <span class="ric-passo-punto" aria-hidden="true"></span>
+                  <span class="ric-passo-testi">
+                    <strong><%= p.titolo %></strong>
+                    <span><%= p.testo %></span>
+                  </span>
+                </li>
+              <% }); %>
+            </ol>
+          </section>
+        <% } %>
+      </div>
+
+      <%# ---------- Colonna destra: cosa fare, cliente, elimina ---------- %>
+      <div class="ric-colonna ric-colonna-destra">
+
+        <% if (stato.chiave === 'da_confermare') { %>
+          <%# Da confermare: timer (arancio, rosso negli ultimi 2 minuti: lo muove il blocco "Dettaglio richiesta del banco"
+              di app.js) e i due pulsanti. %>
+          <section class="ric-scheda ric-azione" aria-label="Rispondi alla richiesta">
+            <div class="ric-timer<%= urgente ? ' urgente' : '' %>" data-ric-timer
+                 data-secondi="<%= secondi %>" data-finestra="<%= finestraSecondi %>" data-soglia-urgente="<%= sogliaUrgenteSec %>">
+              <div class="ric-anello">
+                <svg viewBox="0 0 80 80" aria-hidden="true">
+                  <circle class="ric-anello-traccia" cx="40" cy="40" r="<%= RAGGIO %>"/>
+                  <circle class="ric-anello-barra" data-anello cx="40" cy="40" r="<%= RAGGIO %>"
+                          transform="rotate(-90 40 40)" stroke-dasharray="<%= CIRCONFERENZA %>"
+                          style="stroke-dashoffset: <%= (CIRCONFERENZA * (1 - frazione)).toFixed(2) %>"/>
+                </svg>
+                <span class="ric-anello-tempo" data-tempo role="timer" aria-label="Tempo rimasto per rispondere"><%= fmt.mmss(secondi) %></span>
+              </div>
+              <div class="ric-timer-testi">
+                <h2 class="ric-timer-titolo">Rispondi entro le <%= scadenzaOra %></h2>
+                <p>Poi la richiesta scade e il cliente non la vede più.</p>
+              </div>
+            </div>
+
+            <form class="ric-pulsanti" method="POST" action="/distributore/richieste/<%= richiesta.id %>/rispondi">
+              <button class="ric-btn ric-btn-conferma" type="submit" name="azione" value="prezzo_richiesto"><%- iconaSpunta %>Conferma: è disponibile</button>
+              <button class="ric-btn ric-btn-neutro" type="submit" name="azione" value="rifiuta">Non disponibile</button>
+            </form>
+          </section>
+
+        <% } else if (stato.chiave === 'attesa_corriere') { %>
+          <%# Attesa corriere: cerchio col tempo da quando hai confermato (sale ogni secondo: app.js, data-trascorsi) e cosa fare. %>
+          <section class="ric-scheda ric-azione ric-attesa" data-ric-attesa data-trascorsi="<%= trascorsi %>" aria-label="In attesa di un corriere">
+            <div class="ric-attesa-testa">
+              <div class="ric-attesa-cerchio">
+                <span class="ric-attesa-tempo" data-trascorso><%= fmt.tempoTrascorso(trascorsi) %></span>
+                <span class="ric-attesa-sotto">in attesa</span>
+              </div>
+              <div class="ric-attesa-testi">
+                <h2 class="ric-attesa-titolo">Corriere avvisato</h2>
+                <p>Non preparare ancora: ti avvisiamo appena un corriere accetta.</p>
+              </div>
+            </div>
+            <p class="ric-attesa-nota">Il cliente vede la tua conferma quando un corriere prende la consegna.</p>
+            <% if (risposta.copertura === 'parziale') { %><p class="ric-attesa-parziale">Hai confermato <strong>solo una parte</strong> del materiale.<% if (risposta.note) { %> Note: <%= risposta.note %><% } %></p><% } %>
+          </section>
+
+        <% } else if (stato.chiave === 'confermata') { %>
+          <section class="ric-scheda ric-azione ric-esito ric-esito-verde">
+            <span class="ric-esito-icona" aria-hidden="true"><%- iconaSpunta %></span>
+            <div class="ric-esito-testi">
+              <h2 class="ric-esito-titolo">Hai confermato <%= risposta.copertura === 'parziale' ? 'una parte del materiale' : 'tutto il materiale' %></h2>
+              <% if (risposta.corriere_stato === 'preso') { %>
+                <p>Consegna presa<%= risposta.corriere_nome ? ' da ' + risposta.corriere_nome : '' %>: arriva da te in <strong><%= risposta.corriere_minuti %> minuti</strong>.</p>
+              <% } else if (!ordineMio) { %>
+                <p>L'ordine compare in Da preparare appena nasce.</p>
+              <% } %>
+              <% if (risposta.note) { %><p class="ric-esito-nota">Note: <%= risposta.note %></p><% } %>
+            </div>
+          </section>
+
+        <% } else if (stato.chiave === 'senza_corriere') { %>
+          <section class="ric-scheda ric-azione ric-esito ric-esito-rosso">
+            <span class="ric-esito-icona" aria-hidden="true"><%- iconaEsclamativo %></span>
+            <div class="ric-esito-testi">
+              <h2 class="ric-esito-titolo">Nessun corriere</h2>
+              <p>Nessun corriere ha preso la consegna in tempo: per il cliente è come se non avessi accettato.</p>
+            </div>
+          </section>
+
+        <% } else { %>
+          <%# Non disponibile, annullata, chiusa, scaduta: una scheda neutra con il perché. %>
+          <section class="ric-scheda ric-azione ric-esito ric-esito-grigio">
+            <span class="ric-esito-icona" aria-hidden="true"><%- stato.chiave === 'non_disponibile' ? iconaChiudi : iconaEsclamativo %></span>
+            <div class="ric-esito-testi">
+              <h2 class="ric-esito-titolo"><%= stato.etichetta %></h2>
+              <p>
+                <% if (stato.chiave === 'non_disponibile') { %>
+                  Hai rifiutato la richiesta per indisponibilità della merce.
+                <% } else if (stato.chiave === 'annullata') { %>
+                  <%= confermata ? 'Il cliente ha annullato la richiesta: nessun ordine.' : 'Il cliente ha annullato la richiesta prima della tua risposta.' %>
+                <% } else if (stato.chiave === 'chiusa') { %>
+                  Il cliente ha già chiuso l'ordine con un altro distributore.
+                <% } else { %>
+                  Nessuna risposta entro i <%= Math.round(minutiTesto) %> minuti: la richiesta è stata chiusa senza la tua conferma.
+                <% } %>
+              </p>
+            </div>
+          </section>
+        <% } %>
+
+        <%# Cliente: sempre in vista. Il nome porta alla scheda solo se il cliente ha indicato questo banco. %>
+        <section class="ric-scheda ric-cliente" aria-labelledby="ric-cliente-titolo">
+          <h2 class="ric-occhiello" id="ric-cliente-titolo">Cliente</h2>
+          <div class="ric-cliente-testa">
+            <%- include('../partials/comune/iniziali', { nome: cliente.ragione_sociale, persona: cliente.referente, misura: 48 }) %>
+            <div class="ric-cliente-nome">
+              <strong><%= cliente.ragione_sociale %></strong>
+              <small><%= cliente.partita_iva ? 'P. IVA ' + cliente.partita_iva : (cliente.referente || '') %></small>
+            </div>
+          </div>
+          <ul class="ric-cliente-dati">
+            <% if (destinazione) { %>
+              <li><span class="ric-dato-icona" aria-hidden="true"><%- iconaPosizione %></span><span><%= destinazione %></span></li>
+            <% } %>
+            <% if (cliente.telefono) { %>
+              <li><span class="ric-dato-icona" aria-hidden="true"><%- iconaTelefono %></span><span><%= cliente.telefono %></span></li>
+            <% } %>
+          </ul>
+          <% if (schedaClienteAperta) { %>
+            <a class="ric-apri-cliente" href="/distributore/clienti/<%= cliente.id %>">Apri scheda cliente <span aria-hidden="true">›</span></a>
+          <% } %>
+        </section>
+
+        <form class="ric-elimina-riga" method="POST" action="/distributore/richieste/<%= richiesta.id %>/elimina" onsubmit="return confirm('Eliminare questa richiesta dal tuo banco?')">
+          <button class="ric-elimina" type="submit"><%- iconaCestino %>Elimina dal banco</button>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <%- include('../partials/banco/nav_distributore', { attivo: 'richieste' }) %>
+  <script src="<%= asset('/app.js') %>" defer></script>
+</body>
+</html>

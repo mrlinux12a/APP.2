@@ -1,0 +1,312 @@
+/* ---------- Filtri a chip (misura, marchio) ---------- */
+
+.filtro-titolo {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--grigio);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  /* Margine sopra aumentato (10px -> 16px): più aria fra un blocco chip e il successivo
+     (es. Diametro/Materiale), per non farli leggere come un unico gruppo confuso. */
+  margin: 16px 2px 6px;
+}
+.filtro-titolo .secondario { font-weight: 500; text-transform: none; letter-spacing: 0; }
+
+.chip-riga {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 6px;
+  /* Scorrimento orizzontale invariato, solo la barra visibile nascosta (grigia e larga
+     su Chrome desktop, stonava con il resto dell'interfaccia). */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* Edge legacy */
+  /* Da PC, scorrere con un trackpad/mouse a scroll orizzontale su un elemento con
+     overflow-x può essere interpretato dal browser come un gesto di pinch-zoom, "zoomando
+     fuori" tutta la pagina invece di scorrere solo questa riga — capita più spesso su
+     elementi stretti come questo. touch-action lo esclude esplicitamente: qui si scorre
+     solo in orizzontale, mai zoom. */
+  touch-action: pan-x;
+  /* Sfumatura sul bordo destro: segnala che si può scorrere per vedere altri chip, cosa
+     che prima capiva dalla barra di scorrimento grigia ora nascosta. Sfuma la trasparenza
+     dell'elemento stesso (non un colore fisso), quindi funziona identica sia dentro una
+     card (--surface) sia sullo sfondo pagina (--sfondo). */
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 18px), transparent 100%);
+  mask-image: linear-gradient(to right, black calc(100% - 18px), transparent 100%);
+}
+.chip-riga::-webkit-scrollbar { display: none; } /* Chrome, Safari */
+.chip {
+  /* Prima: stesso sfondo (--surface) della card che lo contiene, distinto solo da un
+     bordo sottile — si leggeva come un'etichetta di testo, non un pulsante. Stesso
+     trucco già usato dallo stepper (sfondo --sfondo + ombra leggera) per segnalare "è
+     un controllo, non testo", qui applicato ai chip non selezionati. */
+  flex: 0 0 auto;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--bordo);
+  background: var(--sfondo);
+  color: var(--testo);
+  text-decoration: none;
+  font-size: 0.86rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+.chip.attivo { background: var(--blu); border-color: var(--blu); color: var(--su-blu); box-shadow: none; }
+
+/* ---------- Scelta della misura (partials/cliente/misura.ejs, misuraHtml in app.js) ----------
+   Occhiello "Misura · H × L × P", poi due chip affiancati (2 varianti) o un pulsante che apre il pannello dal
+   basso (3 o più). Tutti i pulsanti sono da 40px con l'area di tocco estesa a 44px da un ::after. */
+.misura { margin: 8px 0 0; }
+.misura-occhiello {
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--grigio);
+}
+.misura-chip { display: flex; flex-wrap: wrap; gap: 6px; }
+.misura-opz, .misura-apri {
+  position: relative;
+  min-height: 40px;
+  max-width: 100%;
+  border-radius: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.misura-opz::after, .misura-apri::after { content: ""; position: absolute; inset: -2px 0; }
+.misura-opz:focus-visible, .misura-apri:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+.misura-opz {
+  padding: 0 12px;
+  border: 1.5px solid #d6d1c6;
+  background: #fff;
+  color: var(--testo);
+  font-size: 14px;
+}
+.misura-opz.attivo { border-color: var(--blu); background: var(--blu-chiaro); color: #1a4468; }
+.misura-apri {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 0 14px;
+  border: 1.5px solid var(--blu);
+  background: var(--blu-chiaro);
+  color: #1a4468;
+  font-size: 15px;
+  text-align: left;
+}
+.misura-testo { min-width: 0; overflow-wrap: anywhere; }
+.misura-freccia { flex: none; }
+/* Testo solo per gli screen reader ("Misura di NOME: ") davanti alla misura scelta. */
+.misura-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Pannello dal basso: uno solo per pagina, creato da app.js al primo tocco (hidden quando chiuso). */
+.misura-velo {
+  position: fixed;
+  inset: 0;
+  z-index: 50; /* sopra navbar (25), barre fisse (24-29) e menu del profilo (30-31) */
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(28, 25, 23, 0.4);
+  animation: misura-dissolvi 200ms ease-out;
+}
+.misura-velo[hidden] { display: none; }
+html.misura-aperta { overflow: hidden; }
+.misura-pannello {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 520px;
+  max-height: 70vh;
+  max-height: 70dvh;
+  padding: 10px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  border-radius: 22px 22px 0 0;
+  background: #fff;
+  box-shadow: 0 -8px 30px rgba(28, 25, 23, 0.18);
+  animation: misura-sale 200ms ease-out;
+}
+@keyframes misura-sale { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes misura-dissolvi { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .misura-velo, .misura-pannello { animation: none; }
+}
+.misura-maniglia { flex: none; width: 40px; height: 5px; margin: 0 auto 16px; border-radius: 3px; background: #d6d1c6; }
+.misura-titolo {
+  flex: none;
+  margin: 0;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 1.25;
+}
+.misura-sotto {
+  flex: none;
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--grigio);
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+/* L'elenco scorre dentro il pannello se le misure sono tante; il margine negativo lascia posto ai contorni del fuoco. */
+.misura-elenco {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px -4px 0;
+  padding: 3px 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.misura-riga {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 16px;
+  border: 1.5px solid #d6d1c6;
+  border-radius: 14px;
+  background: #fff;
+  color: var(--testo);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.misura-riga.attivo { border-color: var(--blu); background: var(--blu-chiaro); }
+.misura-riga:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+.misura-radio {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 2px solid #b9b4a8;
+  border-radius: 50%;
+  background: #fff;
+}
+.misura-riga.attivo .misura-radio { border-color: var(--blu); background: var(--blu); box-shadow: inset 0 0 0 3px #fff; }
+.misura-riga-testo { flex: 1; min-width: 0; font-size: 16px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.misura-riga-prezzo { flex: none; font-size: 15px; font-weight: 700; color: var(--grigio); font-variant-numeric: tabular-nums; }
+.misura-riga.attivo .misura-riga-prezzo { color: var(--testo); }
+.misura-conferma {
+  flex: none;
+  height: 52px;
+  margin-top: 16px;
+  border: none;
+  border-radius: 26px;
+  background: var(--blu);
+  color: var(--su-blu);
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.misura-conferma:active { background: var(--blu-scuro); }
+.misura-conferma:focus-visible { outline: 2px solid var(--blu); outline-offset: 3px; }
+
+/* ---------- Nuovo carrello: prodotto-azioni, Aggiungi, mini-card ---------- */
+.prodotto-azioni {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.prodotto-azioni .stepper { align-self: center; }
+
+.mini-carrello {
+  font-size: 0.73rem;
+  background: var(--verde-chiaro);
+  color: var(--verde);
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+}
+.mini-carrello[hidden] { display: none !important; }
+
+/* barra che porta al carrello (categoria / ricerca / marchio) */
+
+/* pagina carrello: layout responsive (stili della pagina in fondo al file, sezione "Carrello") */
+.carrello-layout { display: grid; gap: 12px; }
+/* Gli elementi di una griglia hanno min-width: auto: senza questo un contenuto largo allarga la colonna oltre lo schermo. */
+.carrello-layout > * { min-width: 0; }
+
+@media (min-width: 720px) {
+  /* .app occupa tutta la larghezza e lo spazio limitato a 1400px lo tiene il contenuto: così l'appbar è a tutta
+     larghezza senza trucchi. Prima .app era larga 1400px max e l'appbar ne usciva con width: 100vw + margine
+     negativo: 100vw conta anche la barra di scorrimento (15px su desktop), quindi la barra partiva 15px fuori
+     dallo schermo e il pulsante "indietro" veniva tagliato. */
+  .app { max-width: none; padding-bottom: calc(var(--barra-bassa) + 62px + 16px); }
+  .app > .contenuto { max-width: 1400px; margin-left: auto; margin-right: auto; }
+  .navbar .interno { max-width: 520px; }
+  .carrello-layout { grid-template-columns: 1.6fr 0.9fr; align-items: start; }
+  .carrello-riepilogo { position: sticky; top: 64px; }
+  .prodotto { padding: 16px 18px; gap: 16px; }
+  body { background: var(--sfondo); }
+
+  /* Da tablet in su la card entra in una sola riga: foto, poi nome/dettagli, poi lo
+     stepper -/+ in fondo alla riga (spazio permettendo) — invece della colonna foto sopra
+     e stepper sotto usata su mobile, dove lo spazio orizzontale non basta per tutti e tre. */
+  .prodotto { align-items: center; }
+  .prodotto-laterale { display: contents; }
+  .prodotto-foto { order: -1; }
+  .prodotto [data-riga-azioni] { flex: none; }
+  /* Il segnaposto invisibile serve solo su mobile (per tenere lo stepper già in basso in
+     vista delle foto mancanti); da tablet in su, senza foto vera, la card resta compatta
+     come prima invece di riservare uno spazio a sinistra che non useremmo. */
+  .prodotto-foto-vuota { display: none; }
+
+  /* Griglia di categorie: da 2 colonne fisse a tante quante ci stanno (min 220px l'una),
+     invece di restare a 2 anche quando lo schermo è largo il triplo. Le tessere "in
+     evidenza" in home (più grandi) idem, con una soglia più larga. */
+
+  /* Lista prodotti (ricerca/categoria/marchio): da elenco verticale a riga singola a una
+     griglia di card affiancate. Ogni .prodotto diventa una card a sé (bordo/sfondo propri)
+     invece di una riga separata da un bordo inferiore dentro un unico contenitore. */
+  .card.card-fitta.griglia-prodotti {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+    gap: 12px;
+    background: none;
+    border: none;
+    padding: 0;
+    overflow: visible;
+  }
+  .griglia-prodotti .prodotto {
+    border: 1px solid var(--bordo);
+    border-radius: var(--raggio);
+    background: var(--surface);
+  }
+  .griglia-prodotti .prodotto:last-child { border-bottom: 1px solid var(--bordo); }
+}
+
+/* geo mappa nascosta per ora — posizione richiesta all'ingresso ma non mostrata */
+.mappa, [data-mappa-punto], [data-segui-mappa], [data-segui-legenda] { display: none !important; }
+
+/* Stato ordini — card 3 stati */
+

@@ -1,0 +1,411 @@
+/* ---------- Home del banco: bacheca a 3 colonne (views/banco/richieste.ejs) ---------- */
+
+/* Intestazione (views/partials/banco/banco_testa.ejs): è la stessa su TUTTE le pagine del banco, non solo sulla home.
+   Barra bianca da 64px con ditta e filiale, menu a schede (Banco, Clienti, Storico ordini) e cerchio con le iniziali (niente campanella).
+   Da 900px in su il menu sospeso in basso (nav_distributore, .nav-solo-stretta) non si mostra, su nessuna pagina del
+   banco: il menu sta qui. Sotto, il menu in basso resta e le schede qui spariscono. */
+.banco-testa {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-height: 64px;
+  padding: env(safe-area-inset-top, 0px) max(24px, env(safe-area-inset-right, 0px)) 0 max(24px, env(safe-area-inset-left, 0px));
+  background: var(--surface);
+  border-bottom: 1px solid var(--bordo);
+}
+.banco-identita { min-width: 0; }
+.banco-ditta {
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 800;
+  font-size: 18px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.banco-filiale { color: var(--grigio); font-size: 13px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.banco-menu { display: flex; gap: 8px; }
+.banco-voce {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 18px;
+  border-radius: 22px;
+  color: var(--grigio);
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.banco-voce:hover { background: var(--sfondo); }
+.banco-voce.attiva { background: var(--blu-chiaro); color: var(--blu-scuro); }
+.banco-voce-ico { display: inline-flex; font-size: 20px; }
+.banco-voce-pallino {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--rosso);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+
+.banco-azioni { display: flex; align-items: center; gap: 4px; margin-left: auto; flex: none; }
+
+/* Riga col titolo della pagina, sotto l'intestazione, per le pagine interne del banco (clienti, richiesta, ordine,
+   storico, notifiche...): freccia indietro e titolo. La home non l'ha. Allineata al contenuto (.contenuto: 14px). */
+.banco-titolo { display: flex; align-items: center; gap: 4px; padding: 10px 6px 0 6px; }
+.banco-indietro {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: var(--blu);
+  font-size: 24px;
+  text-decoration: none;
+}
+.banco-indietro:hover { background: var(--sfondo); }
+.banco-indietro:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; }
+.banco-titolo-testo {
+  min-width: 0;
+  margin: 0;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+@media (min-width: 720px) {
+  .app > .banco-titolo { max-width: 1400px; margin-left: auto; margin-right: auto; padding-left: 14px; padding-right: 14px; }
+}
+.banco-avatar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+.banco-avatar-btn .avatar { box-shadow: 0 0 0 3px var(--blu-chiaro); }
+.banco-avatar-btn:focus-visible, .banco-voce:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; }
+/* Le voci della tendina già presenti nella barra (o nel menu in basso) si mostrano solo dove la barra non le ha. */
+.menu-account .tendina .voce-solo-stretta { display: none; }
+
+/* Corpo: tre colonne uguali che riempiono l'altezza rimasta; ogni colonna scorre per conto suo e ha la
+   propria testata fissa. */
+.bacheca {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+  gap: 16px;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-width: none; /* è un <main>: senza questo varrebbe il `main { max-width: 900px }` delle viste desktop */
+  margin: 0;
+  padding: 16px 24px 20px;
+}
+
+/* Colori di fase (--fase*): striscia in cima, riquadro icona e pillola del numero. */
+.colonna {
+  --fase: var(--arancio);
+  --fase-chiaro: var(--arancio-chiaro);
+  --fase-scuro: var(--arancio);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: #e9e6df;
+  border-top: 4px solid var(--fase);
+  border-radius: 18px;
+  overflow: hidden;
+}
+.colonna-corriere { --fase: var(--viola); --fase-chiaro: var(--viola-chiaro); --fase-scuro: #4b3480; }
+.colonna-preparare { --fase: var(--verde); --fase-chiaro: var(--verde-chiaro); --fase-scuro: var(--verde); }
+
+.colonna-testa { display: flex; align-items: center; gap: 12px; flex: none; padding: 14px 16px 12px; }
+.colonna-icona {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--fase-chiaro);
+  color: var(--fase);
+  font-size: 18px;
+}
+.colonna-titolo {
+  margin: 0;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.colonna-conta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 32px;
+  margin-left: auto;
+  padding: 0 10px;
+  border-radius: 16px;
+  background: var(--fase-chiaro);
+  color: var(--fase-scuro);
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.colonna-lista {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  gap: 12px;
+  min-height: 0;
+  padding: 4px 12px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.colonna-vuota { margin: 28px 12px; color: var(--grigio); font-size: 15px; text-align: center; }
+
+/* Scheda: bianca, uguale nelle tre colonne; cambiano solo la testa e le azioni. */
+.scheda {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid rgba(35, 32, 25, 0.07);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(35, 32, 25, 0.06);
+}
+.scheda-testa { display: flex; align-items: center; gap: 14px; }
+.scheda-testa-alto { align-items: flex-start; }
+.scheda-testi { flex: 1 1 auto; min-width: 0; }
+.scheda-nome-riga { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.scheda-nome {
+  margin: 0;
+  min-width: 0;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.scheda-nome a { color: inherit; text-decoration: none; }
+.scheda-nome a:hover { text-decoration: underline; }
+.scheda-sotto { margin-top: 2px; color: var(--grigio); font-size: 13px; line-height: 1.3; }
+
+/* Da confermare: bordo e ombra color fase; negli ultimi minuti tutto passa al rosso e la scheda pulsa piano. */
+.scheda-richiesta { border: 1.5px solid #f1c4ac; box-shadow: 0 2px 10px rgba(171, 77, 36, 0.12); }
+.scheda-richiesta.urgente { border-color: #e29a96; box-shadow: 0 2px 10px rgba(189, 58, 58, 0.14); animation: bacheca-pulsa 1.8s ease-out infinite; }
+.scheda-richiesta.scaduta { opacity: 0.55; pointer-events: none; }
+
+/* Anello da 56px: la barra è il tempo rimasto e si svuota in senso orario; dentro, mm:ss. */
+.anello { position: relative; flex: none; width: 56px; height: 56px; }
+.anello svg { display: block; width: 56px; height: 56px; }
+.anello circle { fill: none; stroke-width: 5; }
+.anello-traccia { stroke: var(--arancio-chiaro); transition: stroke 0.3s; }
+.anello-barra { stroke: var(--arancio); stroke-linecap: round; transition: stroke-dashoffset 1s linear, stroke 0.3s; }
+.anello-tempo {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--arancio);
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 13.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.3s;
+}
+.scheda-richiesta.urgente .anello-traccia { stroke: var(--rosso-chiaro); }
+.scheda-richiesta.urgente .anello-barra { stroke: var(--rosso); }
+.scheda-richiesta.urgente .anello-tempo { color: var(--rosso); }
+.etichetta-nuova {
+  flex: none;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--arancio);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+/* Articoli: "2×" in un riquadro, nome e codice sotto. */
+.articoli { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.articolo { display: flex; align-items: flex-start; gap: 10px; }
+.articolo-qta {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 7px;
+  background: var(--blu-chiaro);
+  color: var(--blu-scuro);
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+}
+.articolo-testo { display: flex; flex-direction: column; min-width: 0; }
+.articolo-nome { font-size: 15px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.articolo-cod { color: var(--grigio); font-size: 12.5px; line-height: 1.35; }
+.articolo-altre { padding-left: 44px; color: var(--grigio); font-size: 13px; }
+
+/* Pulsanti a pillola da 50px. */
+.btn-banco {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 50px;
+  padding: 0 18px;
+  border: 1.5px solid transparent;
+  border-radius: 25px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.btn-banco svg { width: 20px; height: 20px; }
+.btn-banco:focus-visible { outline: 3px solid var(--blu); outline-offset: 2px; }
+.btn-banco-conferma { background: var(--arancio); color: #fff; }
+.btn-banco-conferma:hover { background: #963f1b; }
+.btn-banco-secondario { background: var(--surface); border-color: #d6d1c6; color: var(--testo); }
+.btn-banco-secondario:hover { background: var(--sfondo); }
+.btn-banco-prepara { width: 100%; background: var(--blu); color: #fff; }
+.btn-banco-prepara:hover { background: var(--blu-scuro); }
+/* Da confermare: "Conferma" a tutta larghezza (conferma subito, senza aprire il dettaglio), sotto "Ispeziona" e "Non disponibile"
+   affiancati e larghi metà ciascuno. */
+.scheda-azioni { display: flex; flex-direction: column; gap: 8px; }
+.scheda-azioni form { margin: 0; }
+.scheda-azione-conferma .btn-banco { width: 100%; }
+.scheda-azioni-secondarie { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.scheda-azioni-secondarie > a, .scheda-azioni-secondarie > form { min-width: 0; }
+.scheda-azioni-secondarie .btn-banco { width: 100%; }
+/* Da preparare: "Ispeziona" e "Preparato" affiancati e uguali; senza Ispeziona (ordine senza richiesta) "Preparato" occupa tutta la riga. */
+.scheda-azioni-ordine { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+.scheda-azioni-ordine .btn-banco { width: 100%; }
+.btn-banco-medio { min-height: 46px; }
+.btn-banco-piccolo { min-height: 42px; gap: 6px; padding: 0 8px; font-size: 14.5px; }
+.btn-banco-piccolo svg { width: 18px; height: 18px; stroke-width: 1.9; }
+.scheda { container-type: inline-size; }
+
+/* Attesa corriere: icona viola, riga di stato e una nota grigia. */
+.scheda-icona {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--viola-chiaro);
+  color: var(--viola);
+  font-size: 20px;
+}
+/* "Ispeziona": pillola secondaria da 38px in cima a destra della scheda (apre il dettaglio). Se il nome non ci sta, va a capo sotto. */
+.scheda-testa-corriere { flex-wrap: wrap; row-gap: 10px; }
+.scheda-testa-corriere .scheda-testi { flex: 1 1 150px; }
+.btn-ispeziona {
+  position: relative; flex: none; align-self: flex-start; margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+  height: 38px; padding: 0 14px 0 12px; border: 1.5px solid #d6d1c6; border-radius: 19px; background: var(--surface);
+  color: var(--testo); font-family: inherit; font-size: 14px; font-weight: 600; line-height: 1; text-decoration: none; white-space: nowrap;
+}
+.btn-ispeziona::after { content: ""; position: absolute; inset: -3px; } /* area di tocco da 44px */
+.btn-ispeziona svg { width: 18px; height: 18px; stroke-width: 1.9; }
+.btn-ispeziona:hover { background: var(--sfondo); }
+.btn-ispeziona:focus-visible { outline: 3px solid var(--blu); outline-offset: 2px; }
+.stato-corriere { margin-top: 2px; color: #4b3480; font-size: 13px; font-weight: 600; line-height: 1.35; }
+.stato-corriere::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--viola);
+  vertical-align: 0.05em;
+}
+.scheda-nota { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--sfondo); color: var(--grigio); font-size: 14px; line-height: 1.4; }
+
+/* Da preparare: a destra i minuti che mancano al ritiro del corriere, sempre in verde (21/10/2026: niente orario né rosso negli ultimi minuti). */
+.pillola-arrivo {
+  flex: none;
+  padding: 6px 10px 5px;
+  border-radius: 12px;
+  background: var(--verde-chiaro);
+  color: var(--verde);
+  text-align: center;
+  line-height: 1.15;
+  transition: background-color 0.3s, color 0.3s;
+}
+.pillola-min {
+  display: block;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 17px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@keyframes bacheca-entra {
+  from { opacity: 0; transform: translateY(-8px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes bacheca-pulsa {
+  0%, 100% { box-shadow: 0 2px 10px rgba(189, 58, 58, 0.14), 0 0 0 0 rgba(189, 58, 58, 0.3); }
+  60% { box-shadow: 0 2px 10px rgba(189, 58, 58, 0.14), 0 0 0 7px rgba(189, 58, 58, 0); }
+}
+.scheda.entra { animation: bacheca-entra 0.35s ease-out; }
+.scheda-richiesta.urgente.entra { animation: bacheca-entra 0.35s ease-out, bacheca-pulsa 1.8s ease-out 0.35s infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .scheda.entra, .scheda-richiesta.urgente, .scheda-richiesta.urgente.entra { animation: none; }
+  .anello-barra, .anello-traccia, .anello-tempo, .pillola-arrivo { transition: none; }
+}
+
+/* Da schermo largo la pagina è una sola schermata (le colonne scorrono dentro). Il menu in basso non serve. */
+@media (min-width: 900px) {
+  .pagina-banco { display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
+  .banco-testa { flex: none; }
+  .navbar.nav-solo-stretta { display: none !important; }
+}
+
+/* Sotto i 900px resta il menu in basso: le schede della barra spariscono e le colonne si impilano. */
+@media (max-width: 899.98px) {
+  .banco-testa { gap: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .banco-menu { display: none; }
+  .menu-account .tendina .voce-solo-stretta { display: block; }
+  .bacheca { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; padding: 12px 12px calc(var(--barra-bassa) + 24px); }
+  .colonna-lista { overflow: visible; }
+}

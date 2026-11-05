@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('../partials/comune/app_head', { titolo }) %>
+</head>
+<body data-loggato="1">
+  <div class="app<%= righe.length ? ' app-carrello' + (avvisoChiusura ? ' app-carrello-chiusura' : '') : ' app-vuoto' %>">
+    <%- include('../partials/comune/appbar', { titolo, intestazione: 'Carrello' }) %>
+
+    <% if (!righe.length) { %>
+      <%# Carrello vuoto: figura, titolo, ricerca (la stessa della home), catalogo e, se c'è, l'ultimo ordine consegnato
+          con "Rimetti nel carrello" (stesso POST di "Riordina" nello storico). Classi vuoto-*, uo-* (blocco "Pagine vuote"). %>
+      <div class="contenuto vuoto-pagina">
+        <% if (avviso) { %><div class="avviso avviso-attenzione" role="status"><%= avviso %></div><% } %>
+
+        <div class="vuoto-fig" aria-hidden="true">
+          <span class="vuoto-fig-tratt"></span>
+          <%- iconaCarrello %>
+        </div>
+
+        <div class="vuoto-testa">
+          <h1 class="vuoto-titolo">Il carrello è vuoto</h1>
+          <p class="vuoto-sotto">Cerca il pezzo che ti manca o sfoglia le categorie.</p>
+        </div>
+
+        <form class="barra-ricerca barra-home barra-vuoto" method="GET" action="/cerca" role="search">
+          <span class="lente" aria-hidden="true"><%- iconaLente %></span>
+          <input type="search" name="q" enterkeyhint="search"
+                 placeholder="Nome o misura: valv 3/4"
+                 aria-label="Cerca un pezzo"
+                 autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+          <button type="submit" class="btn-cerca">Cerca</button>
+        </form>
+
+        <a class="btn-vuoto-bordo" href="/home"><%- iconaCatalogo %><span>Sfoglia il catalogo</span></a>
+
+        <% if (ultimoOrdine) { %>
+          <section class="uo-scheda" aria-labelledby="uo-occhiello">
+            <div class="uo-testa">
+              <h2 class="uo-occhiello" id="uo-occhiello">Il tuo ultimo ordine</h2>
+              <span class="uo-data"><%= ultimoOrdine.data %></span>
+            </div>
+            <ul class="uo-righe">
+              <% ultimoOrdine.righe.forEach(function (r) { %>
+                <li class="uo-riga">
+                  <span class="uo-qta"><%= r.quantita %>×</span>
+                  <span class="uo-nome"><%= r.nome %></span>
+                </li>
+              <% }); %>
+            </ul>
+            <% if (ultimoOrdine.altri) { %>
+              <p class="uo-altri">+ <%= ultimoOrdine.altri %> <%= ultimoOrdine.altri === 1 ? 'altro' : 'altri' %></p>
+            <% } %>
+            <form class="uo-form" method="POST" action="/storico/<%= ultimoOrdine.id %>/riordina">
+              <button type="submit" class="uo-btn"><%- iconaRiprova %><span>Rimetti nel carrello</span></button>
+            </form>
+          </section>
+        <% } %>
+      </div>
+    <% } else { %>
+      <%
+        // L'indirizzo è una riga sola ("Via Puggia 22/3, 16131 Genova (GE)"): la via in evidenza, il resto sotto. Parte VUOTO: l'installatore lo scrive oppure
+        // tocca il pulsante accanto al campo, che lo ricava dalla posizione del dispositivo (assets/js, "Carrello: indirizzo di consegna"). La posizione
+        // NON si chiede all'ingresso, solo a quel clic. Non si paga senza un indirizzo.
+        const indirizzo = '';
+        const taglio = indirizzo.indexOf(',');
+        const via = taglio === -1 ? indirizzo : indirizzo.slice(0, taglio).trim();
+        const capCitta = taglio === -1 ? '' : indirizzo.slice(taglio + 1).trim();
+      %>
+      <div class="contenuto">
+        <% if (avviso) { %><div class="avviso avviso-attenzione" role="status"><%= avviso %></div><% } %>
+        <%# Fuori dagli orari del banco (impostati nella sua "Anagrafica", src/logica/ordini/orari.js): il carrello si riempie e resta salvato, ma non si invia (richiesta esplicita del
+            22/10/2026, mockup docs/mockup/carrello-chiuso.png). L'avviso c'è SOLO qui, mai nel catalogo. Testi: orari.testiChiuso. %>
+        <%# Il contenitore c'è sempre (anche vuoto): se il banco cambia gli orari mentre la pagina è aperta, assets/js ("Orari del banco in tempo reale") rilegge la pagina
+            e sostituisce questo contenitore e la barra di pagamento ([data-orari-sync]) senza toccare il resto, cioè indirizzo e nota già scritti. %>
+        <div data-orari-sync="banner"<%- cambiaSec ? ' data-cambia-sec=' + JSON.stringify(String(cambiaSec)) : '' %>>
+        <% if (bancoChiuso && testiChiuso) { %>
+          <section class="cc-chiuso" role="status" aria-labelledby="cc-titolo">
+            <div class="cc-testa">
+              <span class="cc-luna" aria-hidden="true"><%- iconaLuna %></span>
+              <div class="cc-testi">
+                <h2 class="cc-titolo" id="cc-titolo"><%= testiChiuso.titolo %></h2>
+                <p class="cc-sotto"><%= testiChiuso.sottoPrefisso %><% if (testiChiuso.quando) { %><strong><%= testiChiuso.quando %></strong><% } %></p>
+              </div>
+            </div>
+            <p class="cc-testo">Puoi continuare ad aggiungere materiale: il carrello resta salvato e lo invii appena riapre.</p>
+            <a class="cc-orari" href="/orari"><%- iconaOrario %><span>Vedi orari</span><%- iconaAvanti %></a>
+          </section>
+        <% } %>
+        </div>
+        <div class="carrello-layout">
+          <div class="carrello-articoli">
+            <div class="carrello-testata">
+              <a class="link-aggiungi" href="/home" data-torna-catalogo>+ Aggiungi pezzi</a>
+              <%# Richiesta esplicita del 22/10/2026: "Svuota" è in alto a destra, pillola con il cestino (prima era un link in fondo alla pagina). Chiede conferma, punta a #form-svuota. %>
+              <button class="btn-svuota" type="submit" form="form-svuota" aria-label="Svuota carrello"><%- iconaCestino %>Svuota</button>
+            </div>
+
+            <form method="POST" action="/carrello" id="form-carrello">
+              <input type="hidden" name="modo" value="imposta">
+              <input type="hidden" name="ritorno" value="/carrello">
+              <% righe.forEach(function (r) { %>
+                <%# Il prezzo della riga è quello del BANCO (il 10% sta solo nella voce "Servizio" del riepilogo): la somma delle righe è la "Merce". %>
+                <% const unitario = prezzoBanco(r.prodotto); %>
+                <div class="card carrello-articolo" data-riga="<%= r.prodotto.id %>">
+                  <div class="art-nome">
+                    <% if (r.prodotto.brand_slug) { %><span class="marchio-tag" style="--marchio:#1d4e89"><%= r.prodotto.brand_slug.toUpperCase() %></span><% } %>
+                    <%= r.prodotto.nome %>
+                  </div>
+                  <div class="art-prezzo">€ <%= euro(unitario) %> cad. · IVA esclusa · prezzo del banco</div>
+                  <div class="art-azioni">
+                    <button type="button" class="btn-cestino" data-rimuovi="<%= r.prodotto.id %>" aria-label="Rimuovi dal carrello"><%- iconaCestino %></button>
+                    <div class="stepper" data-stepper-carrello="<%= r.prodotto.id %>">
+                      <button type="button" data-passo-carrello="-1" aria-label="Togli" <%= r.quantita <= 1 ? 'disabled' : '' %>>−</button>
+                      <input type="number" min="1" max="9999" step="1" inputmode="numeric"
+                             name="quantita_<%= r.prodotto.id %>" value="<%= r.quantita %>"
+                             data-qta-carrello-input="<%= r.prodotto.id %>"
+                             aria-label="Quantità <%= r.prodotto.nome %>">
+                      <button type="button" data-passo-carrello="1" aria-label="Aggiungi">+</button>
+                    </div>
+                    <span class="art-totale" data-totale-riga="<%= r.prodotto.id %>">€ <%= euro(totaleRigaBanco(r.prodotto, r.quantita)) %></span>
+                  </div>
+                </div>
+              <% }); %>
+            </form>
+            <%# Svuotare chiede conferma: il pulsante "Svuota" è in cima alla pagina e punta a questo form (form="form-svuota"). %>
+            <form method="POST" action="/carrello/svuota" id="form-svuota" onsubmit="return confirm('Svuotare il carrello?')"></form>
+          </div>
+
+          <div class="carrello-riepilogo">
+            <%# Ordine minimo sulla merce a prezzo del banco (IVA, servizio e consegna esclusi). Il blocco c'è sempre: il ricalcolo dal vivo lo mostra o lo nasconde. %>
+            <div class="avviso avviso-attenzione" data-minimo-avviso<%= raggiunto ? ' hidden' : '' %>>
+              <strong>Ordine minimo € <%= euro(minimo) %></strong> di merce, IVA e spedizione escluse.
+              Ti mancano <strong>€ <span data-riep="manca"><%= vista.manca %></span></strong>.
+            </div>
+
+            <form method="POST" action="/richieste" id="form-invia" data-invia-carrello>
+              <input type="hidden" name="modo" value="imposta">
+              <input type="hidden" name="chiave_invio" value="<%= chiaveInvio %>">
+
+              <%# Consegna: il campo "destinazione" è lo stesso di prima, si apre con "Cambia" (o subito, se l'indirizzo è vuoto). %>
+              <div class="card consegna-card" data-consegna>
+                <div class="consegna-riga">
+                  <span class="consegna-ico"><%- iconaPosizione %></span>
+                  <div class="consegna-testo">
+                    <span class="consegna-occhiello">Consegna in cantiere</span>
+                    <span class="consegna-via" data-consegna-via><%= via %></span>
+                    <span class="consegna-citta" data-consegna-citta><%= capCitta %></span>
+                  </div>
+                  <button type="button" class="btn-cambia" data-consegna-cambia><%= indirizzo ? 'Cambia' : 'Fatto' %></button>
+                </div>
+                <div class="consegna-campo" data-consegna-campo <%= indirizzo ? 'hidden' : '' %>>
+                  <%# Due modi per dare l'indirizzo: scriverlo, o toccare il mirino accanto al campo (usa la posizione di questo dispositivo). %>
+                  <div class="consegna-input-riga">
+                    <input type="text" id="destinazione" name="destinazione" value="" required
+                           placeholder="Via, numero, CAP, città" aria-label="Indirizzo di consegna" autocomplete="street-address">
+                    <button type="button" class="consegna-pos-btn" data-consegna-pos-usa
+                            aria-label="Usa la mia posizione" title="Usa la mia posizione"><%- iconaMirino %></button>
+                  </div>
+                  <%# Coordinate del dispositivo, scritte dallo script quando l'indirizzo viene dal mirino (e tolte appena lo si modifica). %>
+                  <input type="hidden" name="dest_lat" value="" data-dest-lat>
+                  <input type="hidden" name="dest_lng" value="" data-dest-lng>
+                </div>
+                <%# Dice com'è andata: cerco, permesso negato, posizione non disponibile, indirizzo non trovato. Sta fuori dal campo perché resta visibile a scheda chiusa. %>
+                <div class="consegna-pos" data-consegna-pos role="status" hidden>
+                  <span data-consegna-pos-testo></span>
+                </div>
+              </div>
+
+              <%# Nota facoltativa: la textarea è quella di prima (name="note"), si apre toccando il riquadro. %>
+              <details class="nota-dett" data-nota>
+                <summary>
+                  <span class="nota-piu" aria-hidden="true">+</span>
+                  <span class="nota-testi">
+                    <span class="nota-titolo">Aggiungi una nota per il banco</span>
+                    <span class="nota-sotto">Facoltativa: orario, riferimento cantiere…</span>
+                  </span>
+                </summary>
+                <textarea name="note" rows="2" maxlength="500" aria-label="Nota per il banco"
+                          placeholder="Es. orario preferito, riferimento cantiere..."></textarea>
+              </details>
+
+              <%# COSA PAGHI E A CHI: due riquadri. "Consegna in cantiere" si paga ORA in app (corriere fisso + servizio con l'IVA dentro); "Materiale" si paga
+                  DOPO a BOREA (merce a prezzo del banco + RAEE + IVA). Ogni importo è già calcolato (pricing.dividiTotale) e scritto come testo
+                  in `vista`: i `[data-riep]` li riscrive assets/js quando cambia una quantità, con le stesse chiavi. %>
+              <%
+                // Il nome del distributore di riferimento (già letto per il menu del profilo): "BOREA SRL" -> "BOREA". Senza nome: "al banco".
+                const nomeDitta = fmt.nomeCommerciale((typeof profiloCliente !== 'undefined' && profiloCliente && profiloCliente.distributore) || '');
+                const dopoA = nomeDitta ? 'a ' + nomeDitta : 'al banco';
+                const tiFattura = nomeDitta || 'il banco';
+              %>
+              <div class="card cp-card" data-cosa-paghi>
+                <h2 class="cp-titolo">Cosa paghi e a chi</h2>
+
+                <section class="cp-riquadro cp-ora" aria-labelledby="cp-ora-titolo">
+                  <div class="cp-testa">
+                    <span class="cp-ico" aria-hidden="true"><%- iconaFurgone %></span>
+                    <strong class="cp-nome" id="cp-ora-titolo">Consegna in cantiere</strong>
+                    <span class="cp-badge cp-badge-ora">Paghi ora</span>
+                  </div>
+                  <p class="cp-sotto">Il nostro servizio: lo addebitiamo quando premi "Paga e invia richiesta".</p>
+                  <dl class="cp-righe">
+                    <div class="cp-riga"><dt><span class="cp-et">Corriere</span> <span class="cp-sp">· costo fisso</span></dt><dd>€ <span data-riep="app_corriere"><%= vista.app_corriere %></span></dd></div>
+                    <%# Il servizio si paga con l'IVA già dentro (23/10/2026, richiesta esplicita): niente riga IVA sotto. %>
+                    <div class="cp-riga"><dt><span class="cp-et">Servizio</span> <span class="cp-sp">· <span data-riep="servizio_pct"><%= vista.servizio_pct %></span>% della merce (€ <span data-riep="banco_merce"><%= vista.banco_merce %></span>) + IVA</span></dt><dd>€ <span data-riep="app_servizio"><%= vista.app_servizio %></span></dd></div>
+                  </dl>
+                  <div class="cp-totale"><span>Totale da pagare ora<span class="cp-sp cp-nota-iva">IVA inclusa</span></span><strong>€ <span data-riep="app_totale"><%= vista.app_totale %></span></strong></div>
+                </section>
+
+                <section class="cp-riquadro cp-dopo" aria-labelledby="cp-dopo-titolo">
+                  <div class="cp-testa">
+                    <span class="cp-ico" aria-hidden="true"><%- iconaNegozio %></span>
+                    <strong class="cp-nome" id="cp-dopo-titolo">Materiale</strong>
+                    <span class="cp-badge cp-badge-dopo">Paghi dopo <%= dopoA %></span>
+                  </div>
+                  <p class="cp-sotto">Non lo paghi ora: te lo fattura <%= tiFattura %>.</p>
+                  <dl class="cp-righe">
+                    <div class="cp-riga"><dt><span class="cp-et">Merce</span> <span class="cp-sp">· prezzo del banco, <span data-riep="articoli"><%= vista.articoli %></span></span></dt><dd>€ <span data-riep="banco_merce"><%= vista.banco_merce %></span></dd></div>
+                    <div class="cp-riga" data-riga-raee<%= vista.con_raee ? '' : ' hidden' %>><dt><span class="cp-et">Contributo RAEE</span></dt><dd>€ <span data-riep="banco_raee"><%= vista.banco_raee %></span></dd></div>
+                    <div class="cp-riga"><dt><span class="cp-et">IVA <span data-riep="iva_pct"><%= vista.iva_pct %></span>%</span> <span class="cp-sp">· su € <span data-riep="banco_imponibile"><%= vista.banco_imponibile %></span></span></dt><dd>€ <span data-riep="banco_iva"><%= vista.banco_iva %></span></dd></div>
+                  </dl>
+                  <div class="cp-totale"><span>Totale materiale</span><strong>€ <span data-riep="banco_totale"><%= vista.banco_totale %></span></strong></div>
+                </section>
+
+                <div class="cp-spesa"><span>Spesa complessiva</span><span>€ <span data-riep="spesa"><%= vista.spesa %></span></span></div>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <%# Barra di pagamento fissa, sopra la navbar. Il pulsante invia il form "form-invia" (come il vecchio
+          "Paga … e invia la richiesta"); l'importo (come ogni voce del riepilogo) si riscrive da solo quando cambia una quantità
+          (assets/js, blocco "Carrello"). %>
+      <div class="barra-paga<%= avvisoChiusura ? ' barra-paga-chiusura' : '' %>" data-orari-sync="barra">
+        <%# Poco prima della chiusura (orari.IN_CHIUSURA_MIN): striscia sopra la barra, "Ancora 9 min per inviare: alle 17:00 chiudiamo". I minuti li aggiorna
+            assets/js (data-chiusura-sec = secondi che mancano adesso); a zero la pagina si ricarica e mostra "Ordini chiusi". %>
+        <% if (avvisoChiusura) { %>
+          <div class="bp-chiusura" role="status" data-chiusura-sec="<%= avvisoChiusura.secondi %>" data-chiusura-ora="<%= avvisoChiusura.ora %>">
+            <span class="bp-chiusura-ico" aria-hidden="true"><%- iconaOrario %></span>
+            <span>Ancora <strong data-chiusura-min><%= avvisoChiusura.mancanoMin %> min</strong> per inviare: alle <%= avvisoChiusura.ora %> chiudiamo</span>
+          </div>
+        <% } %>
+        <div class="barra-paga-interno">
+          <div class="barra-paga-riga">
+            <div class="bp-totale">
+              <span class="bp-label">Paghi ora · consegna</span>
+              <span class="bp-importo">€ <span data-riep="app_totale"><%= vista.app_totale %></span></span>
+            </div>
+            <%# Banco chiuso (fuori dagli orari impostati nell'"Anagrafica del banco"): il pulsante resta spento anche se si cambia una quantità (assets/js guarda
+                data-banco-chiuso) e sotto c'è la nota con quando riapre. Il server rifiuta comunque (flusso.validaRichiesta, 'banco_chiuso'). %>
+            <% if (bancoChiuso) { %>
+              <button class="btn-paga btn-paga-chiuso" type="submit" form="form-invia" data-btn-paga data-banco-chiuso disabled>Paga e invia richiesta</button>
+            <% } else { %>
+              <button class="btn-paga" type="submit" form="form-invia" data-btn-paga <%= raggiunto ? '' : 'disabled' %>>Paga e invia richiesta</button>
+            <% } %>
+          </div>
+          <% if (bancoChiuso && testiChiuso) { %>
+            <p class="barra-paga-nota barra-paga-chiusa">
+              <span class="nota-luna" aria-hidden="true"><%- iconaLuna %></span>
+              <span><%= testiChiuso.notaPrefisso %><% if (testiChiuso.quando) { %><strong><%= testiChiuso.quando %></strong><% } %></span>
+            </p>
+          <% } else if (!bancoChiuso) { %>
+            <p class="barra-paga-nota">
+              <span class="scudo"><%- iconaScudo %></span>
+              <span>Se nessun banco accetta, ti rimborsiamo</span>
+            </p>
+          <% } %>
+        </div>
+      </div>
+    <% } %>
+  </div>
+
+  <%- include('../partials/cliente/nav', { attivo: 'carrello' }) %>
+  <script src="<%= asset('/app.js') %>" defer></script>
+</body>
+</html>

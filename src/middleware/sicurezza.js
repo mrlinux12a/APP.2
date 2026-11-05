@@ -49,4 +49,4 @@ function intestazioniSicurezza() {
   return [creaHelmet(), permessiEHsts];
 }
 
-module.exports = { intestazioniSicurezza, creaHelmet, permessiEHsts };
+module.exports = { intestazioniSicurezza };

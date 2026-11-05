@@ -1,9 +1,9 @@
-// Le notifiche: l'elenco per banco e agente, quelle da mostrare nel browser e le notifiche ad app chiusa (Web Push, src/web_push.js).
+// Le notifiche: l'elenco per banco e agente, quelle da mostrare nel browser e le notifiche ad app chiusa (Web Push, src/logica/notifiche/web_push.js).
 const { creaRouter } = require('./base');
-const { requireLogin } = require('../auth');
-const notifiche = require('../notifiche');
-const webPush = require('../web_push');
-const bancoAvvisi = require('../banco_avvisi');
+const { requireLogin } = require('../middleware/auth');
+const notifiche = require('../logica/notifiche/notifiche');
+const webPush = require('../logica/notifiche/web_push');
+const bancoAvvisi = require('../logica/banco/avvisi');
 
 const router = creaRouter();
 
@@ -21,7 +21,7 @@ router.get('/notifiche', requireLogin, async (req, res) => {
 
   await notifiche.segnaLette(req.session.user.id);
   res.locals.notificheNonLette = 0; // appena lette: la campanella non deve restare accesa
-  res.render('notifiche', {
+  res.render('comune/notifiche', {
     titolo: 'Notifiche',
     elenco,
     categorie: notifiche.CATEGORIE,
@@ -35,7 +35,7 @@ router.get('/notifiche', requireLogin, async (req, res) => {
 // ---------- Notifiche nel browser ----------
 
 // Dà le notifiche non ancora mostrate: app.js le trasforma in notifica push del browser e, per il banco, in avvisi a comparsa. Al banco ogni notifica
-// porta anche `tipo`, `request_id`, `order_id` e i dati del suo avviso (src/banco_avvisi.js: la richiesta con i secondi che mancano, il corriere...).
+// porta anche `tipo`, `request_id`, `order_id` e i dati del suo avviso (src/logica/banco/avvisi.js: la richiesta con i secondi che mancano, il corriere...).
 router.get('/api/notifiche/push', requireLogin, async (req, res) => {
   const utente = req.session.user;
   const alBanco = utente.ruolo === 'distributore' && utente.distributor_id;
@@ -50,14 +50,14 @@ router.post('/api/notifiche/attiva', requireLogin, async (req, res) => {
   res.json({ ok: true });
 });
 
-// Un avviso a comparsa del banco, aperto o chiuso, risulta letto (public/app.js, "Avvisi del banco"): il browser manda gli id delle notifiche e, perché un
+// Un avviso a comparsa del banco, aperto o chiuso, risulta letto (assets/js, "Avvisi del banco"): il browser manda gli id delle notifiche e, perché un
 // avviso sopravvive alle ricariche della pagina (che ne perdono gli id), le richieste e gli ordini a cui si riferisce.
 router.post('/api/notifiche/lette', requireLogin, async (req, res) => {
   await notifiche.segnaLettePerId(req.session.user.id, req.body.ids, { richieste: req.body.richieste, ordini: req.body.ordini });
   res.json({ ok: true });
 });
 
-// ---------- Notifiche ad app chiusa (Web Push, src/web_push.js) ----------
+// ---------- Notifiche ad app chiusa (Web Push, src/logica/notifiche/web_push.js) ----------
 
 // Le frasi che si possono mostrare quando l'iscrizione alle notifiche non riesce (scelte da noi, mai il testo di un errore tecnico).
 const ERRORI_PUSH = {
@@ -66,7 +66,7 @@ const ERRORI_PUSH = {
   tabella: 'Le notifiche ad app chiusa non sono ancora pronte su questo server.',
 };
 
-// Registra questo browser per le notifiche ad app chiusa (public/app.js, "Notifiche anche ad app chiusa"): si salva e si ricorda in sessione, così la
+// Registra questo browser per le notifiche ad app chiusa (assets/js, "Notifiche anche ad app chiusa"): si salva e si ricorda in sessione, così la
 // pagina sa che il server ha già questo browser (meta push-endpoint) e il logout sa quale iscrizione togliere.
 router.post('/api/push/iscrivi', requireLogin, async (req, res) => {
   const esito = await webPush.registra(req.session.user.id, req.body && req.body.subscription, { userAgent: req.get('user-agent') });

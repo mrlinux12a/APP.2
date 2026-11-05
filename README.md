@@ -44,7 +44,7 @@ APP_URL=https://tuodominio.it        # indirizzo pubblico del sito, per il ritor
 PUSH_ATTIVO=0         # facoltativa: spegne le notifiche push (app Android e notifiche ad app chiusa del sito); di default accese
 EXPO_ACCESS_TOKEN=... # facoltativa: solo se nel progetto Expo è attiva la "sicurezza avanzata" delle push
 VAPID_PUBLIC_KEY=...  # notifiche ad app chiusa del sito/web app (Android e iPhone): una coppia di chiavi per ogni ambiente, la genera
-VAPID_PRIVATE_KEY=... #   `node scripts/genera_chiavi_vapid.js` (la privata è un segreto: solo nel .env, mai in git né in chat)
+VAPID_PRIVATE_KEY=... #   `node scripts/setup/genera_chiavi_vapid.js` (la privata è un segreto: solo nel .env, mai in git né in chat)
 VAPID_SUBJECT=mailto:contatto@tuodominio.it  # contatto per i servizi push (Google, Apple, Mozilla): mailto: o https://; se APP_URL è https si può omettere
 ```
 
@@ -64,7 +64,7 @@ pm2 restart minuteria
 `npm ci` non si può saltare: le dipendenze cambiano (es. `compression`, `baileys`) e senza il
 server non parte. Node non rilegge il codice da solo: dopo ogni `git pull` serve il riavvio. Se il
 commit tocca lo schema (`db/schema.sql`), il blocco nuovo si applica una volta sola (vedi
-`CLAUDE.md`). Resta da fare l'HTTPS con un dominio davanti al sito (vedi `SCOPE.md`): serve anche
+`CLAUDE.md`). Resta da fare l'HTTPS con un dominio davanti al sito (vedi `docs/SCOPE.md`): serve anche
 perché funzionino il service worker (`public/sw.js`), le notifiche su Chrome Android e l'installazione
 sulla schermata Home (`public/manifest.webmanifest`); in HTTP semplice il sito va, ma senza queste tre cose.
 
@@ -96,7 +96,7 @@ Il seed (`npm run seed`) li ricrea e riattiva: non lanciarlo sul DB condiviso.
 **27.676 prodotti attivi** in 13 macro categorie (`macro_categorie`), ognuna con le sue
 sottocategorie. La relazione prodotto ↔ sottocategoria è molti-a-molti
 (`product_sottocategorie`: un articolo può stare in più sottocategorie) e si ricalcola con
-`node scripts/assegna_sottocategorie.js`. Prodotti con lo stesso nome e misure diverse sono
+`node scripts/db/assegna_sottocategorie.js`. Prodotti con lo stesso nome e misure diverse sono
 raggruppati in una sola card con la scelta della misura (`product_groups`).
 
 Il cliente arriva a un pezzo per categoria → sottocategoria → elenco paginato, oppure con la
@@ -116,7 +116,7 @@ paga in app **con l'IVA dentro**: con merce 64,50 € sono 5,00 + 7,87 = **12,87
 La pagina di ingresso ha due schede: **Accedi** e **Registrati**.
 
 Chi si registra compila l'anagrafica completa della propria impresa o ditta individuale in **tre
-passi** (un solo modulo, mostrato un passo alla volta da `public/app.js`; senza JavaScript i tre
+passi** (un solo modulo, mostrato un passo alla volta da `assets/js`; senza JavaScript i tre
 blocchi si vedono insieme): *La tua impresa* (forma giuridica, ragione sociale, referente, contatti),
 *Dati di fatturazione* (**partita IVA, codice fiscale, sede legale, CAP, città, provincia, codice SDI
 o PEC**) e *Accesso* (nome utente e password). Non sceglie il distributore: ogni nuovo cliente è
@@ -152,169 +152,9 @@ non si impostano più da lì (vedi "Sconti al banco").
 
 ## Pagamenti con Stripe
 
-Solo sul **sito** (l'app nativa resta sul pagamento simulato). Senza `STRIPE_SECRET_KEY` nel `.env` non cambia
-niente: tutto resta simulato, anche in locale e nelle prove.
+Senza `STRIPE_SECRET_KEY` nel `.env` non cambia niente: tutto resta simulato, anche in locale e nelle prove.
 
-**Come funziona.** "Paga e invia richiesta" non crea più la richiesta: porta alla **pagina di pagamento del sito**
-(`/pagamento/<id>`), con riepilogo e il form di Stripe (Payment Element) dentro la pagina: la carta la raccoglie Stripe
-nel suo iframe e non passa dal nostro server. La carta viene solo **autorizzata**: Stripe blocca l'importo ma non lo
-incassa (`capture_method: manual`). Con la carta autorizzata la richiesta nasce e parte verso i banchi, come prima.
-- **Nasce l'ordine** → la carta si **incassa**, per il totale dell'ordine (se il banco ha applicato uno sconto è più
-  basso dell'autorizzato; mai più alto). Da lì esiste la **ricevuta** (vedi "Ricevute, email e annullamento").
-- **La richiesta si chiude senza ordine** (nessun banco, nessun corriere, annullo in fase 1) → il blocco si **rilascia**:
-  non è passato un euro, nessun addebito, nessun rimborso, nessuna ricevuta. Per "Rinvia richiesta" si paga di nuovo
-  (si blocca di nuovo la carta), e la stessa richiesta si riapre.
-- **Il cliente non annulla mai un ordine**: dopo la conferma del banco niente annullamento (né dal sito né dall'app); per un
-  problema si contatta l'assistenza, che può rimborsare dal Dashboard di Stripe (caso raro: la scheda Pagamenti dice
-  "Rimborsata il … su Visa •••• 4242" e compare la "Ricevuta rimborso").
-
-**Quali metodi di pagamento compaiono** lo decide Stripe (scelta dinamica): quelli attivi in Dashboard > Impostazioni >
-Metodi di pagamento che supportano il blocco senza incasso, adatti a paese e dispositivo. Nella sandbox di prova oggi:
-carta, Link, Satispay, Klarna, Amazon Pay. Si accendono e spengono dal Dashboard, senza toccare il codice (per un
-cliente B2B probabilmente Klarna e simili non servono). **Apple Pay e Google Pay** compaiono da soli, ma solo in HTTPS e
-su un dispositivo che li ha configurati (Apple Pay vuole anche il dominio registrato nel Dashboard): in locale
-(`http://localhost`) di norma non si vedono.
-
-I soldi arrivano sul **conto Stripe di chi ha le chiavi** (un conto solo: nessuno split verso Borea; il regolamento con
-il banco resta fuori dall'app). La fattura non la fa Stripe.
-
-**Configurazione** (`.env`, poi riavvio). Le chiavi si copiano **intere, prefisso compreso**:
-
-```
-STRIPE_SECRET_KEY=sk_test_...         # Dashboard Stripe > Sviluppatori > Chiavi API. Di prova (sk_test_) o vera (sk_live_)
-STRIPE_PUBLISHABLE_KEY=pk_test_...    # la chiave pubblicabile, dello stesso ambiente (vale anche il nome STRIPE_PUBLIC_KEY)
-STRIPE_WEBHOOK_SECRET=whsec_...       # del webhook (sotto)
-APP_URL=https://tuodominio.it         # senza barra finale; se manca si usa l'indirizzo con cui il cliente apre il sito
-```
-
-Le chiavi **non vanno mai in git** (il `.env` non c'è nel repository). Con una chiave `sk_test_` nessun addebito è
-vero. Se la chiave pubblicabile è senza prefisso (succede copiandola) il sito la completa da solo con quello della chiave
-segreta e lo scrive nel log all'avvio (`[stripe] ...`): meglio correggere il `.env`. Se manca del tutto, o non ha la
-forma di una chiave, al cliente mostra "Il pagamento online non è ancora configurato" invece di un form rotto. Prima di
-tutto va applicato lo schema una volta (tabella `stripe_pagamenti`, vedi `CLAUDE.md`): se il database è già quello di
-produzione è già stato fatto il 14/10/2026.
-
-**Pagamento REALE e SANDBOX: due serie di chiavi e un interruttore** (dal 20/10/2026, `src/stripe_config.js`). Nel `.env` si tengono le chiavi di **tutti e due** i modi e una riga sceglie quale vale:
-
-```
-STRIPE_MODO=live                      # live = pagamenti veri · test = sandbox di Stripe (carta 4242…) · (riga assente = come prima, vedi sotto)
-
-STRIPE_LIVE_SECRET_KEY=sk_live_...        # Dashboard in modalità REALE > Sviluppatori > Chiavi API
-STRIPE_LIVE_PUBLISHABLE_KEY=pk_live_...
-STRIPE_LIVE_WEBHOOK_SECRET=whsec_...      # il "segreto di firma" del webhook creato in modalità REALE
-
-STRIPE_TEST_SECRET_KEY=sk_test_...        # Dashboard in modalità PROVA / sandbox
-STRIPE_TEST_PUBLISHABLE_KEY=pk_test_...
-STRIPE_TEST_WEBHOOK_SECRET=whsec_...      # il segreto del webhook creato nella sandbox
-
-APP_URL=https://tuodominio.it             # senza barra finale; con il modo reale DEVE essere https://
-```
-
-- **Si cambia modo con una riga** (`STRIPE_MODO=test` ↔ `live`) e `pm2 restart minuteria`; all'avvio il log dice in che modo è (`[stripe] modalità REALE…` o `PROVA…`). In sandbox la pagina di pagamento mostra "Modalità prova: nessun
-  addebito reale" e le ricevute portano "Pagamento di prova (sandbox)".
-- **Una chiave nel posto sbagliato non si usa mai** (per esempio `sk_test_` in `STRIPE_LIVE_SECRET_KEY`, o la vecchia `STRIPE_SECRET_KEY` reale con `STRIPE_MODO=test`): il log all'avvio lo dice. E con `STRIPE_MODO`
-  scritto, se manca la chiave i pagamenti danno **errore** invece di ricadere sul pagamento simulato (che farebbe ordinare gratis). Il segreto del webhook (`whsec_`) non dice di che modo è: ogni modo vuole il suo.
-- **Il vecchio `.env` con UNA serie** (`STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`, senza `STRIPE_MODO`) continua a funzionare: il modo lo dice la chiave (`sk_live_` = reale). Senza chiavi
-  e senza `STRIPE_MODO` il pagamento resta **simulato** (sviluppo sul PC).
-- **Cosa succede ai pagamenti quando si cambia modo**: ogni pagamento ricorda il modo in cui è nato e un'istanza lavora solo i suoi. Un pagamento reale autorizzato e non ancora incassato, se passi a prova, **resta fermo**
-  finché non torni a `live` (le autorizzazioni delle carte scadono dopo circa 7 giorni). Quindi: cambia modo quando **non ci sono richieste in attesa**.
-- **Verificare senza pagare**: `node scripts/verifica_stripe.js` (o `--modo=live` / `--modo=test` per guardare l'altra serie) mostra le chiavi mascherate, segnala quelle nel posto sbagliato, chiede a Stripe di che conto sono
-  (carte e bonifici abilitati) e se esiste il webhook verso `APP_URL` con gli eventi giusti. Solo lettura: non crea e non incassa niente.
-- **Webhook**: se in Stripe hai un webhook per modo verso lo stesso indirizzo `https://tuodominio.it/webhooks/stripe`, va bene: il server controlla la firma col segreto del modo in uso e poi con quello dell'altro, e gli
-  eventi dell'altro modo li riconosce e li scarta (niente errori che si accumulano nel Dashboard). Eventi da abilitare: `payment_intent.amount_capturable_updated` e `payment_intent.canceled`.
-- **Il pagamento simulato** (`PAGAMENTO_SIMULATO=1`) è una scorciatoia **solo per il PC**, senza rete né chiavi. **Sulla VPS non deve esserci**: controlla che nel suo `.env` NON ci siano `PAGAMENTO_SIMULATO` e
-  `PAGAMENTO_SIMULATO_FORZA` (con la seconda i clienti ordinano senza pagare, anche con la chiave reale). Per provare end-to-end si usa la **sandbox** (`STRIPE_MODO=test`), non il simulato.
-- **Consiglio**: le chiavi **reali solo sulla VPS**. Il `.env` del PC punta al database di produzione: con `STRIPE_MODO=test` e solo le chiavi di prova non può toccare i pagamenti veri.
-
-**Provare in locale** (modo di prova, carta `4242 4242 4242 4242`, data futura, CVC qualsiasi):
-1. Account Stripe (gratuito), sandbox o modalità di prova: chiave segreta e pubblicabile **dello stesso ambiente** nel
-   `.env`.
-2. Facoltativo: la [Stripe CLI](https://docs.stripe.com/stripe-cli) con
-   `stripe listen --forward-to localhost:3000/webhooks/stripe` stampa un `whsec_...` da mettere in
-   `STRIPE_WEBHOOK_SECRET`. Senza webhook funziona lo stesso: la richiesta nasce al ritorno del cliente
-   (`/pagamento/esito`) o, se ha chiuso la scheda subito dopo aver pagato, dal timer entro un minuto circa.
-3. Riavviare il server, mettere materiale nel carrello, "Paga e invia richiesta": si apre la pagina di pagamento, si
-   paga, si arriva alla schermata di attesa. Nel Dashboard il pagamento compare come autorizzato ma **non acquisito**
-   (*uncaptured*) finché non nasce l'ordine. Altre carte: `4000 0027 6000 3184` (3-D Secure), `4000 0000 0000 9995`
-   (rifiutata: si può riprovare con un'altra).
-   Attenzione: il `.env` locale punta al **database di produzione**, quindi la richiesta di prova arriva ai banchi
-   veri come ogni prova in locale (vedi `CLAUDE.md`).
-
-**Messa in produzione.**
-1. **HTTPS con un dominio davanti al sito è obbligatorio**: Stripe.js in modalità reale funziona solo in HTTPS, e il
-   webhook in modalità reale accetta solo indirizzi `https://`. Vedi `SCOPE.md`.
-2. Attivare l'account Stripe (dati dell'azienda e IBAN) e prendere le chiavi `sk_live_...` e `pk_live_...`.
-3. Dashboard > Sviluppatori > Webhook > aggiungere `https://tuodominio.it/webhooks/stripe` con gli eventi
-   `payment_intent.amount_capturable_updated` e `payment_intent.canceled`, e copiare il segreto `whsec_...`.
-4. Nel `.env` della VPS: `STRIPE_MODO=live`, le chiavi `STRIPE_LIVE_*` (e, se vuoi poter tornare in sandbox, anche `STRIPE_TEST_*`), `APP_URL`; **togli** `PAGAMENTO_SIMULATO` e `PAGAMENTO_SIMULATO_FORZA` se ci sono; poi `node scripts/verifica_stripe.js --modo=live`; `npm ci`
-   (c'è la dipendenza `stripe`) e `pm2 restart minuteria`. **Un solo processo** per chiave: due istanze con la stessa
-   chiave lavorano gli stessi incassi (le chiamate a Stripe sono idempotenti, ma meglio non provarci).
-5. Dashboard > Impostazioni > Metodi di pagamento: scegliere i metodi da offrire (la **carta** deve esserci). Per
-   Apple Pay registrare il dominio.
-
-**Cosa guardare se qualcosa non torna.** Ogni tentativo di pagamento è una riga di `stripe_pagamenti` (`stato`,
-`motivo`, `errore`, `tentativi`, `payment_intent_id`): le righe `da_verificare` sono incassi, rilasci o rimborsi che
-non sono riusciti 30 volte e vanno guardati a mano nel Dashboard. Il log del server riporta `[stripe] ...`.
-
-### Ricevute, email e annullamento
-
-**Cosa vede l'installatore** (scheda "Pagamenti", `partials/pagamenti.ejs`; lo stato lo calcola `pagamenti.statoPagamento`):
-- **Richiesta in attesa** — consegna azzurra "Bloccati sulla carta · addebitati solo se {ditta} conferma", materiale tratteggiato
-  "Lo paghi a {ditta} solo se conferma". Nessuna ricevuta. Resta solo "Annulla la richiesta".
-- **Ordine nato** — la carta è incassata: consegna verde "Pagata il 15/10 · Visa •••• 4242" con il link **Ricevuta**; materiale
-  "Lo paghi a {ditta} con la sua fattura".
-- **Nessuna risposta, o annullata da lui** — UNA riga grigia "Nessun addebito · € 0,00": niente furgone, niente verde, niente
-  ricevuta, pillola "Nessun addebito sulla carta".
-
-**Annullamento solo in fase 1**: richiesta in attesa **e** nessun banco ha ancora accettato (anche se il corriere non ha risposto).
-Il controllo sta dentro la `UPDATE` (e la riga si blocca prima), così una conferma e un annullamento insieme non si incrociano;
-il link sparisce da solo appena un banco conferma. Un ordine non si annulla mai: il sito rifiuta con "Il banco ha già confermato:
-l'ordine non si può più annullare. Per problemi contatta l'assistenza.", e l'API dell'app dice sempre `annullabile: false`.
-
-**Ricevuta.** Al momento dell'incasso si salvano su `stripe_pagamenti` l'indirizzo della ricevuta di Stripe, marca e ultime 4
-cifre della carta e l'istante dell'incasso, e si assegna il numero della **ricevuta nostra** (`R-AAAA-NNNNNN`, progressivo per anno
-e per tipo, tabella `ricevute`). Il PDF (`pdfkit`, A4) si apre da `GET /ordini/:id/ricevuta.pdf` (e `…/ricevuta-rimborso.pdf`),
-solo per il cliente proprietario e solo per un pagamento **incassato**: nessuna ricevuta per un blocco annullato o per una
-richiesta in attesa. C'è anche per i pagamenti **non reali** (simulato dell'app e del PC, Stripe con la chiave di prova), con scritto
-"Pagamento di prova (sandbox): nessun addebito reale."; il numero è lo stesso progressivo dei veri. Nello Storico: "Ricevute del mese" (`GET /storico/ricevute.pdf?mese=AAAA-MM`: un
-solo PDF con una pagina per ricevuta) e il link "Ricevuta" in ogni ordine incassato. Stripe manda per conto suo la propria
-ricevuta via email all'incasso (`receipt_email` sul PaymentIntent), ma **solo in modalità reale**.
-
-**Dati dell'azienda** (nel `.env`, mai nel codice; tutto facoltativo, quello che manca non si stampa):
-
-```
-AZIENDA_NOME=Minuteria                 # logo e intestazione dell'email (default "Minuteria")
-AZIENDA_SOTTOTITOLO=Consegna materiale in cantiere
-AZIENDA_RAGIONE_SOCIALE=...            # "EMESSA DA" nella ricevuta
-AZIENDA_INDIRIZZO=Via ..., 16100 Genova (GE)
-AZIENDA_PIVA=...
-AZIENDA_EMAIL=assistenza@...           # in fondo alla ricevuta
-RICEVUTA_NOTA_FISCALE=...              # riga di nota fiscale, DA FAR CONFERMARE AL COMMERCIALISTA; se manca non si stampa
-```
-
-**Email "Pagamento ricevuto"** (`src/email.js`, nodemailer). Parte dopo l'incasso, **senza mai bloccarlo** (se fallisce si scrive
-nel log e basta). Senza `SMTP_HOST` non parte niente:
-
-```
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587                          # con TLS diretto (465) anche SMTP_SECURE=1
-SMTP_USER=...
-SMTP_PASS=...
-EMAIL_DA=Minuteria <ordini@tuodominio.it>   # facoltativa: se manca "Nome" <SMTP_USER>
-```
-
-I pulsanti della mail ("Scarica la ricevuta", "Segui l'ordine") usano `APP_URL`; senza non compaiono.
-
-**Messa in produzione di questa parte**: lo schema (blocco "Ricevute di pagamento e dati della carta" in fondo a
-`db/schema.sql`: 4 colonne nuove su `stripe_pagamenti` e la tabella `ricevute`) è **già applicato al database condiviso**
-(19/10/2026, e la VPS usa lo stesso); in un altro database va applicato **prima** del riavvio di pm2. Sulla VPS: `npm ci`
-(nuove dipendenze `pdfkit` e `nodemailer`) e le righe del `.env` qui sopra. Anche se lo schema mancasse, l'incasso non
-si ferma: ricevuta e dati della carta sono "best effort" (errore nel log, nessun effetto sui soldi).
-
-> **L'app nativa paga con Stripe dal 19/10/2026** (foglio di pagamento, PaymentSheet): con Stripe acceso `POST /api/v1/richieste` e
-> `/richieste/:id/reinvia` non creano più la richiesta ma il pagamento, e la richiesta nasce a carta autorizzata (`GET /api/v1/pagamenti/:id`,
-> webhook o timer: la stessa logica del sito). Prima chi ordinava dall'app non pagava niente. Il foglio su un telefono vero non è stato provato
-> (vedi `mobile/ANDROID.md`).
+La guida completa (come funziona, chiavi e modalità reale/prova, webhook, messa in produzione) è in [`docs/guide/stripe-setup.md`](docs/guide/stripe-setup.md); le scelte di progetto e i dettagli del codice sono in [`docs/pagamenti.md`](docs/pagamenti.md).
 
 ## Punti vendita sulla mappa
 
@@ -329,7 +169,7 @@ disattivati) non hanno più un punto vendita nel database: lo script che li cari
 ## Il flusso, passo per passo
 
 **Cliente** (sito da telefono, oppure app nativa: stesse regole, condivise in
-`src/flusso_cliente.js`)
+`src/logica/ordini/flusso_cliente.js`)
 
 1. **Home** — barra di ricerca e macro categorie.
 2. **Ricerca parziale** — basta un frammento di parola: scrivendo `valv` escono tutte le valvole.
@@ -344,7 +184,7 @@ disattivati) non hanno più un punto vendita nel database: lo script che li cari
    e, in fondo, il riepilogo (merce, RAEE, spedizione, imponibile, IVA, **totale da pagare**) e
    **Paga e invia la richiesta**, attivo solo con l'ordine minimo raggiunto. Il pagamento è
    **Stripe** sul sito se nel `.env` c'è `STRIPE_SECRET_KEY` (vedi "Pagamenti con Stripe"), altrimenti
-   **simulato** (nessun provider né addebito; è anche quello dell'app senza Stripe): `src/pagamenti.js`, colonne
+   **simulato** (nessun provider né addebito; è anche quello dell'app senza Stripe): `src/logica/pagamenti/pagamenti.js`, colonne
    `pagamento_*` su `requests`. Va restituito se la richiesta si chiude senza ordine. Consegna sempre con il
    corriere: il ritiro al banco non esiste più.
 5. **Attesa** — la richiesta parte verso **tutti i distributori attivi** (non filtrata per zona
@@ -390,7 +230,7 @@ I listini dei produttori si caricano da Excel con un importatore generico, idemp
 (rilanciarlo aggiorna, non duplica):
 
 ```
-node db/importa_listino.js --marchio toshiba --file "listino.xlsx" --sconto 30
+node scripts/db/importa_listino.js --marchio toshiba --file "listino.xlsx" --sconto 30
 ```
 
 Per ogni prodotto importa codice, descrizione, famiglia, EAN, contributo RAEE, refrigerante,
@@ -431,7 +271,7 @@ tutto). Erano anche **a scalare** su 5 colonne (40+10+5 = 48,7%):
 
 Vale sempre la regola più precisa; dove non c'è nessuna regola resta lo sconto Base del listino
 del banco. Svuotando un campo la regola sparisce. Oggi sono solo un riferimento di lettura quando
-il banco risponde (`righeDistributore` in `src/richieste.js`): il codice per applicarli riga per
+il banco risponde (`righeDistributore` in `src/logica/ordini/richieste.js`): il codice per applicarli riga per
 riga esiste ancora (`rispondi()` accetta `sconti`/`scontoCliente`) ma nessuna route lo richiama.
 
 ## Anagrafica del banco e orari
@@ -447,17 +287,17 @@ con tutti i permessi.
 - **Posizione**: è **fissa**, quella scritta nel DB (`distributors.geo_*` e `store_locations.geo_*`). Cambiare l'indirizzo di ritiro dalla pagina non la ricalcola e non c'è nessun modo di spostarla da lì.
 - **Schema**: servono le colonne `distributors.orari` ed `email_nuove_richieste` (`geo_manuale` c'è ma non si usa più; blocco "Anagrafica del banco" in fondo a
   `db/schema.sql`): sulla VPS applicarlo **prima** di riavviare, con
-  `node scripts/applica_blocco_schema.js "-- Anagrafica del banco: orari"` (a secco) e poi con `--applica`.
+  `node scripts/db/applica_blocco_schema.js "-- Anagrafica del banco: orari"` (a secco) e poi con `--applica`.
 
 ## Password dimenticata, cambio password ed eliminazione dell'account (installatore)
 
 - **Password dimenticata?** (sul login): l'installatore scrive nome utente o email e riceve un link, valido un'ora e una volta sola, per scegliere una nuova password. Dopo il cambio escono tutte le sessioni
-  e l'app deve rifare l'accesso. **Serve l'invio email**: nel `.env` della VPS `SMTP_HOST` (e `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_DA`, vedi `src/email.js`) e `APP_URL=https://tuodominio.it` (il link
+  e l'app deve rifare l'accesso. **Serve l'invio email**: nel `.env` della VPS `SMTP_HOST` (e `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_DA`, vedi `src/logica/notifiche/email.js`) e `APP_URL=https://tuodominio.it` (il link
   si costruisce da lì, mai dall'indirizzo con cui arriva la richiesta). Senza, in produzione non parte niente. In locale, senza SMTP, il link compare nel log del server.
 - **La mia anagrafica → Accesso**: cambio della password da dentro (con quella attuale). **Elimina account**: pagina di conferma con la password; si disattiva e si anonimizzano i dati personali, restano
   ordini e ricevute. Con una richiesta o un ordine in corso non si può.
 - **Schema**: tabella `recupero_password` (blocco "Recupero della password dell'installatore" in fondo a `db/schema.sql`): applicarla sul DB condiviso **prima** di riavviare, con
-  `node scripts/applica_blocco_schema.js "-- Recupero della password dell'installatore"` (a secco) e poi con `--applica`.
+  `node scripts/db/applica_blocco_schema.js "-- Recupero della password dell'installatore"` (a secco) e poi con `--applica`.
 
 ## Contributo RAEE
 
@@ -476,14 +316,14 @@ quando il banco accetta, si calcola il tragitto banco → installatore che si so
 la manda ancora.**
 
 Finché un account non ne ha una, vale la sede provvisoria: tutti gli installatori in **Via Puggia 22/3,
-Genova** (`src/sede_installatori.js`), usata anche come indirizzo di consegna. I banchi usano il punto vendita
-(`store_locations`). Chi è già iscritto si allinea con `node scripts/imposta_installatori_puggia.js`
+Genova** (`src/logica/account/sede_installatori.js`), usata anche come indirizzo di consegna. I banchi usano il punto vendita
+(`store_locations`). Chi è già iscritto si allinea con `node scripts/una_tantum/imposta_installatori_puggia.js`
 (prova a secco, `--applica` per confermare); chi si iscrive da ora la riceve da solo. Il tragitto lo calcola un servizio di
-mappe, con la distanza in linea d'aria come ripiego (`src/consegna.js`, `src/percorso.js`).
+mappe, con la distanza in linea d'aria come ripiego (`src/logica/ordini/consegna.js`, `src/logica/ordini/percorso.js`).
 
 Le mappe usano Leaflet servito dal progetto (`public/vendor/leaflet`) con tasselli
 OpenStreetMap, ma **oggi le mappe sono nascoste** via CSS (ultima regola di
-`public/style.css`): schema e flussi restano attivi, non si vedono.
+`assets/css`): schema e flussi restano attivi, non si vedono.
 
 ## Prezzi
 
@@ -503,142 +343,33 @@ permesso al browser. **Anche con l'app chiusa** (Web Push, dal 21/10/2026): sito
 su Android, iPhone/iPad (solo la web app installata sulla schermata Home, iOS 16.4 o successivo),
 computer. L'installatore le attiva da Profilo › Sul telefono › Attiva, il banco dall'Anagrafica del
 banco › Notifiche del computer. Il browser si iscrive al servizio push (Google, Apple, Mozilla) e il
-server (`src/web_push.js`) gli manda ogni notifica nuova; la mostra il service worker (`public/sw.js`).
+server (`src/logica/notifiche/web_push.js`) gli manda ogni notifica nuova; la mostra il service worker (`public/sw.js`).
 
 **Per accenderle sul server** (una volta):
 
 1. applicare il blocco di schema (crea la tabella `iscrizioni_push`; **prima** del riavvio):
-   `node scripts/applica_blocco_schema.js "-- Notifiche push del sito e della web app"` (a secco), poi con `--applica`;
+   `node scripts/db/applica_blocco_schema.js "-- Notifiche push del sito e della web app"` (a secco), poi con `--applica`;
 2. `git pull` e `npm ci` (dipendenza nuova: `web-push`);
-3. generare le chiavi con `node scripts/genera_chiavi_vapid.js` e scrivere nel `.env` della VPS `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` e `VAPID_SUBJECT`
+3. generare le chiavi con `node scripts/setup/genera_chiavi_vapid.js` e scrivere nel `.env` della VPS `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` e `VAPID_SUBJECT`
    (il PC ha le sue, diverse: ogni server usa solo le iscrizioni nate con la propria chiave);
 4. `pm2 restart minuteria`: nel log compare `[web push] accese`. Serve HTTPS.
 
 Le notifiche sono **solo di sistema, col suono del telefono, con l'app in secondo piano o chiusa**: con l'app aperta davanti non arriva nessuna notifica e il sito non fa nessun suono
 (il banco ha ancora i suoi avvisi dentro la pagina). Per provarle: dal telefono Profilo › Sul telefono › Attiva (dopo 10 secondi arriva una notifica di prova dal server: esci dall'app per vederla),
-poi **Prova** per rifarla. Dal server: `node scripts/prova_push.js <nome-utente>` manda una prova ai suoi telefoni e scrive l'esito di ognuno.
-Senza chiavi, senza tabella o con `PUSH_ATTIVO=0` il sito funziona come prima: avvisi solo con l'app aperta. L'app Android nativa ha le sue push (`src/push.js`, Expo).
+poi **Prova** per rifarla. Dal server: `node scripts/verifica/prova_push.js <nome-utente>` manda una prova ai suoi telefoni e scrive l'esito di ognuno.
+Senza chiavi, senza tabella o con `PUSH_ATTIVO=0` il sito funziona come prima: avvisi solo con l'app aperta. L'app Android nativa ha le sue push (`src/logica/notifiche/push.js`, Expo).
 
 **Banco** (richieste da confermare e "corriere trovato"): il suono arriva da ogni pagina del banco, anche con la scheda nascosta (il server avvisa la pagina in tempo reale, `GET /api/eventi`), e
 con la pagina chiusa o in secondo piano arriva la notifica di sistema, **ma solo se il banco le ha accese**: sotto l'intestazione compare l'avviso azzurro "Attiva le notifiche" (si rimanda di
 7 giorni con "Non ora"; l'interruttore sta anche in Anagrafica del banco › Notifiche). Se il browser tiene fermo l'audio compare "Attiva il suono": basta un tocco sulla pagina. La **home non si ricarica**:
 le schede si aggiornano sul posto e il suono parte nello stesso istante della scheda (così l'audio resta sbloccato). Il suono
-(`public/suoni/avviso.mp3`, "din-don" morbido) si rigenera con `node scripts/genera_suono_avviso.js` (serve `ffmpeg` nel PATH); "Ascolta il suono" in Anagrafica lo fa sentire.
+(`public/suoni/avviso.mp3`, "din-don" morbido) si rigenera con `node scripts/genera/genera_suono_avviso.js` (serve `ffmpeg` nel PATH); "Ascolta il suono" in Anagrafica lo fa sentire.
 
 ## Gruppo WhatsApp dei corrieri
 
-L'installatore ha già pagato quando manda la richiesta. Quando un banco **accetta**, nel gruppo
-WhatsApp parte un messaggio con le due tappe: **prelievo merci** (nome, indirizzo e link alla mappa
-della filiale che ha accettato) e **consegna** (indirizzo e mappa dell'installatore). Chi la prende
-risponde **al messaggio** con la parola chiave e i minuti che ci mette **ad arrivare dal venditore** (la tappa 1,
-prelievo merci), per esempio `preso 30` (anche `preso 1 ora e 15`, `preso 1h30`, `preso mezz'ora`).
+Quando un banco **accetta**, nel gruppo WhatsApp dei corrieri parte un messaggio con le due tappe (prelievo merci e consegna); chi prende la consegna risponde con la parola chiave e i minuti che ci mette ad arrivare dal venditore.
 
-**Due orari, ognuno per chi deve vederlo:** il **banco** vede esattamente il tempo scritto dal corriere ("Il corriere ritira alle HH:MM" =
-momento della risposta + quei minuti: `orders.corriere_risposto_il` + `orders.corriere_minuti`, vedi `src/corriere.js`); l'**installatore** vede
-quando arriva la merce da lui = quei minuti **+ il tragitto dal banco che ha accettato alla sua posizione**, che il server calcola sulla mappa
-quando il banco conferma (`src/percorso.js`) e sta in `orders.corriere_arrivo_il`. Il tragitto viene, in quest'ordine, da **Google Maps** (col traffico del momento: è il
-numero che si vede su Maps) se nel `.env` c'è `GOOGLE_MAPS_API_KEY`; da un OSRM proprio se c'è `ROUTING_URL`; da **Valhalla** (OpenStreetMap, senza chiave; `VALHALLA_URL`
-per uno proprio); se nessuno risponde, dalla stima in linea d'aria. `ROUTING_ATTIVO=0` spegne tutto. Il server pubblico di OSRM non si usa più: in città dava tempi
-un terzo più brevi di Maps. **Per avere esattamente il tempo di Maps serve la chiave Google** (Google Cloud → abilitare "Routes API" → chiave API, limitata alla Routes API
-e all'IP della VPS → `GOOGLE_MAPS_API_KEY` nel `.env` della VPS e riavvio di pm2). Per confrontare i numeri: `node scripts/prova_tragitto.js "Via Dodecaneso, Genova" --corriere 10`.
-
-- **Finché nessuno risponde** l'installatore non sa niente: la richiesta resta "in attesa" con il
-  timer che scorre, come se nessun banco avesse accettato (`request_responses.corriere_stato =
-  'in_attesa'`: la risposta del banco non vale come offerta in nessuna query dell'installatore).
-- **Se qualcuno risponde entro il timer** l'**ordine nasce subito**, da solo, con i minuti del corriere
-  (`corriere_minuti`) e l'arrivo dall'installatore (`corriere_arrivo_il` = risposta + minuti + tragitto), e
-  all'installatore arriva "Ordine confermato". Vale la **prima** risposta, chi arriva dopo trova
-  scritto che è già presa. **Dopo il "preso" il bot non scrive più nel gruppo**: solo la risposta al
-  "preso" ("✅ Preso! ... arrivi dal venditore in N minuti, ritiro entro le HH:MM"). L'unico altro messaggio possibile è l'avviso di
-  annullo, se l'installatore annulla un ordine che aveva già un corriere (annullo lasciato per la
-  fase di prova).
-- **Se il timer scade senza risposta** la richiesta si chiude senza ordine, il pagamento torna
-  all'installatore, il messaggio viene **eliminato dal gruppo** e nessuno può più rispondere (la
-  risposta tardiva è rifiutata anche prima che l'eliminazione arrivi). Lo stesso se il cliente annulla.
-- Senza la parola chiave un messaggio è una chiacchiera e viene ignorato. Se il bot è il numero di
-  chi risponde, quello che scrive dal proprio telefono vale come risposta; non valgono i messaggi che
-  il bot stesso manda nel gruppo.
-- **Modulo spento** (`WHATSAPP_ATTIVO=0` o non impostato): i banchi accettano e
-  l'ordine nasce subito, senza corriere (con i tempi di consegna stimati dal banco).
-
-Usa Baileys, una libreria **non ufficiale**: il server si comporta come un dispositivo collegato a
-un numero WhatsApp. Serve un **numero dedicato** (con il proprio, il ban blocca anche il telefono)
-che faccia parte del gruppo; WhatsApp può bloccare il numero in qualsiasi momento. Si accende e si spegne dal
-`.env` con `WHATSAPP_ATTIVO=1` / `0` (riavviando il server). Nel `.env` della VPS:
-
-```
-WHATSAPP_ATTIVO=1
-WHATSAPP_GRUPPO=...           # nome esatto del gruppo oppure il suo id (xxx@g.us)
-WHATSAPP_PAROLA_CHIAVE=preso  # facoltativa
-WHATSAPP_SONDAGGIO=1          # facoltativa: accompagna ogni "nuova consegna" con un sondaggio da votare (vedi sotto)
-WHATSAPP_SONDAGGIO_MINUTI=5,10,15,20,30,45,60,90  # facoltativa: le opzioni del sondaggio, in minuti (da 2 a 12)
-WHATSAPP_NUMERO=39333...      # facoltativa: collega con un codice invece del QR
-```
-
-Primo avvio: `npm start` stampa nel terminale un QR (o, con `WHATSAPP_NUMERO`, un codice da 8
-caratteri). Sul telefono del numero dedicato: *Dispositivi collegati → Collega un dispositivo*
-(col codice: *Collega con numero di telefono*). Il QR è grande, serve un terminale alto e largo, e si
-rinnova ogni 20 secondi: se non si legge, il codice è più comodo. Se si passa da un metodo all'altro
-dopo un tentativo fallito, cancellare prima `whatsapp_auth/`.
-Senza `WHATSAPP_GRUPPO` il server, una volta collegato, stampa nome e id dei gruppi del numero.
-
-**Dopo il "preso" (stesso interruttore, `WHATSAPP_SONDAGGIO=1`)**: il sondaggio dei minuti sparisce dal gruppo (resta il messaggio "nuova consegna"), il bot scrive "✅ Preso da Marco! Richiesta #N: arrivi dal venditore in 10 minuti, ritiro entro le …" e subito dopo manda un secondo sondaggio, "Ordine #N: consegna", con "🚀 Segna come Consegnato" (la seconda opzione, "⏳ Ancora in viaggio", c'è solo perché un sondaggio ne vuole due e non fa niente). Il primo voto su "Consegnato" segna l'ordine consegnato (come il pulsante dell'installatore: l'ordine passa a "Consegnato" e il banco riceve l'avviso "Il corriere ha segnato la consegna…"), il sondaggio sparisce e il bot scrive "📦 Ordine #N consegnato alle HH:MM — indirizzo di consegna". Non serve altro schema.
-
-**Sondaggio per prendere la consegna** (`WHATSAPP_SONDAGGIO=1`, spento di default): nel gruppo i pulsanti veri non si possono avere (l'API ufficiale di WhatsApp non li ha nei gruppi e quelli
-"interattivi" di Baileys sono un trucco non ufficiale). Si usa un **sondaggio WhatsApp**: subito dopo il messaggio "nuova consegna" il bot ne manda uno a scelta singola con i minuti per arrivare
-dal venditore ("5 minuti", "10 minuti"... "1 ora", "1 ora e mezza"), e **il primo che vota prende la consegna**, come chi scrive "preso 30" (che continua a funzionare). Il bot risponde nel gruppo
-("✅ Preso da Marco! ...") e a chi vota dopo ("già presa da Marco"). Alla scadenza o all'annullo il sondaggio sparisce dal gruppo come il messaggio. Serve il blocco di schema
-"WhatsApp: sondaggio per prendere la consegna" (una colonna: **applicato al DB il 21/10/2026**; senza, il sondaggio non parte e il server lo scrive nel log). Sulla VPS: `git pull`, le righe
-sopra nel `.env`, `pm2 restart minuteria` (il log dice "sondaggio per prendere la consegna ACCESO"). Nessuna libreria nuova.
-La sessione sta in `whatsapp_auth/` (non in git: sono le credenziali del numero; se si cancella
-bisogna ricollegare). I messaggi passano da una coda (`whatsapp_messaggi`): se il collegamento è
-giù partono appena torna. Prima del primo avvio vanno applicati i due blocchi WhatsApp in fondo a
-`db/schema.sql` (già applicati al DB di produzione il 30/09 e il 02/10/2026):
-`node scripts/applica_blocco_schema.js "-- WhatsApp: il corriere prende la consegna PRIMA" --applica`
-(senza `--applica` prova a secco; il primo blocco comincia con "-- Gruppo WhatsApp dei corrieri: coda
-dei messaggi").
-
-**In locale** (stesso DB e stesso gruppo della VPS) si può accendere con lo stesso interruttore, ma con due regole, già scritte nel `.env` locale:
-
-```
-WHATSAPP_ATTIVO=0                       # 1 = acceso
-WHATSAPP_ISTANZA=locale                 # il nome di questo server
-WHATSAPP_AUTH_DIR=whatsapp_auth_locale  # una sessione SUA, non quella della VPS
-WHATSAPP_GRUPPO=...                     # nome esatto o id (xxx@g.us); se è vuoto, al collegamento stampa i gruppi del numero
-```
-
-- **Sessione propria**: la prima volta il server stampa un QR (o, con `WHATSAPP_NUMERO`, un codice) da collegare da *Dispositivi collegati*: è un secondo
-  dispositivo sullo stesso numero. Le stesse credenziali usate da due macchine insieme si scollegano a vicenda (errore 440) e rovinano le chiavi: la VPS
-  perderebbe il collegamento. La cartella è fuori da git (`whatsapp_auth*/`).
-- **Un nome per istanza**: ogni messaggio in coda porta il nome del server che l'ha creato (`whatsapp_messaggi.istanza`) e lo invia, lo elimina e ne legge
-  le risposte solo lui, così VPS e locale accesi insieme nello stesso gruppo non mandano messaggi doppi né rispondono due volte al corriere. La VPS, senza
-  `WHATSAPP_ISTANZA`, usa il nome del computer e tratta anche i messaggi senza nome (di prima): **aggiornarla (`git pull` + riavvio) prima di accendere il locale**,
-  altrimenti la versione vecchia manda anche i messaggi del locale. Blocco di schema "WhatsApp: istanza proprietaria dei messaggi" (già applicato al DB condiviso il 19/10/2026).
-- Acceso, l'ordine nasce quando un corriere risponde `preso <minuti>` nel gruppo (i minuti per arrivare dal banco); **ogni ordine di prova fatto in locale scrive nel gruppo vero**.
-  Con `FINESTRA_CONFERMA_SEC` nel `.env` il corriere ha solo quei secondi per rispondere (all'avvio il server lo scrive): togliere la riga.
-
-**Prova con una richiesta finta**, senza toccare banchi e clienti veri: crea un gruppo di prova (il
-numero del bot + un altro telefono che risponde, o il telefono stesso del bot) e lancia, dal PC
-(si accende da solo, qualunque cosa dica `WHATSAPP_ATTIVO`):
-
-```
-node scripts/prova_whatsapp.js --gruppo="Nome del gruppo di prova"
-```
-
-Manda nel gruppo il messaggio delle due tappe, aspetta la risposta `preso 30` (citando il messaggio)
-e stampa cosa ha letto. Se non rispondi entro `--finestra` minuti (default 3) verifica che il messaggio
-venga eliminato dal gruppo (e il pagamento finto rimborsato). Dopo il "preso" l'ordine nasce da solo e lo
-script lo stampa: nel gruppo deve arrivare solo la risposta del bot. Alla fine cancella i dati di prova.
-Senza `--gruppo` elenca i gruppi del numero.
-
-**Tenerlo sempre acceso senza rifare il QR**: la sessione è la cartella `whatsapp_auth/`, e un
-riavvio o un reboot non chiedono di ricollegare nulla. Per passare dal PC alla VPS si copia quella
-cartella (`scp -r whatsapp_auth utente@vps:/percorso/APP.2/`, poi `chmod 700` sul server) e si
-**cancella quella sul PC**: le stesse credenziali in due posti si scollegano a vicenda. Sulla VPS
-il processo è tenuto vivo da pm2. Serve rifare il
-collegamento solo se il telefono resta offline per circa 14 giorni, se il dispositivo viene
-rimosso da *Dispositivi collegati* o se si cancella la cartella: il log dice "sessione chiusa dal
-telefono".
+Il flusso completo, le variabili del `.env`, il collegamento del numero (QR) e come si prova stanno in [`docs/guide/whatsapp-setup.md`](docs/guide/whatsapp-setup.md); le scelte di progetto e i dettagli del codice sono in [`docs/whatsapp.md`](docs/whatsapp.md).
 
 ## App nativa (Android)
 
@@ -647,7 +378,7 @@ categorie, elementi con foto, carrello con **pagamento con carta** (foglio di St
 il pagamento di prova, nessun addebito), richiesta in attesa, ordine, **Stato ordini con più attività insieme**, Storico (il materiale per mese, con la ricevuta in PDF e "Riordina"),
 profilo con l'anagrafica ed **Elimina account**, **notifiche push**. Banco e agente restano sul sito. Come costruirla, firmarla e pubblicarla su Google Play: **`mobile/ANDROID.md`**.
 
-L'app parla con il server tramite l'API JSON `/api/v1/...` (`src/api_v1.js`), con accesso a
+L'app parla con il server tramite l'API JSON `/api/v1/...` (`src/routes/api_v1/`), con accesso a
 **token** (`Authorization: Bearer`, tabella `app_tokens`) invece del cookie di sessione. Con Stripe acceso `POST /api/v1/richieste` **non** crea la richiesta: crea il pagamento e
 l'app apre il foglio di pagamento (`GET /api/v1/pagamenti/:id` dice com'è andata): dall'app non si ordina più senza pagare.
 
@@ -671,9 +402,9 @@ EXPO_PUBLIC_API_URL=http://indirizzo-del-server:3000
 Expo legge i `.env` solo da `mobile/` (quello alla radice è del server). Un indirizzo `http://`
 va bene in sviluppo; in un'app installata Android blocca il traffico non cifrato (e l'app, senza un indirizzo HTTPS vero, mostra "App non configurata"),
 quindi per la build serve HTTPS (`mobile/eas.json`). L'aspetto è solo chiaro (niente modalità scura). Le icone delle
-categorie si generano da `src/icone.js` con `node scripts/genera_icone_app.js`; icona e schermata di avvio (la "M" su blu, segnaposto) con `node scripts/genera_icone_android.js`.
+categorie si generano da `src/comune/icone.js` con `node scripts/genera/genera_icone_app.js`; icona e schermata di avvio (la "M" su blu, segnaposto) con `node scripts/genera/genera_icone_android.js`.
 
-Le pagine che Google Play chiede sono nel sito: `/privacy` e `/elimina-account` (`src/testi_legali.js`: **bozza da far rileggere**; il titolare viene da `AZIENDA_*` nel `.env`).
+Le pagine che Google Play chiede sono nel sito: `/privacy` e `/elimina-account` (`src/comune/testi_legali.js`: **bozza da far rileggere**; il titolare viene da `AZIENDA_*` nel `.env`).
 
 ## Struttura
 
@@ -681,46 +412,46 @@ Le pagine che Google Play chiede sono nel sito: `/privacy` e `/elimina-account` 
 server.js              avvio: ambiente, database, app, cicli di vita (scadenze, WhatsApp, chiusura pulita)
 src/app.js             compone l'app Express: middleware nell'ordine giusto, route, gestori d'errore
 src/config/            ambiente (.env), impostazioni delle viste, soglie dei limiti di richieste, soglie della bacheca del banco
-src/middleware/        sicurezza (helmet), limiti (express-rate-limit), origine, sessione, corpo, compressione, file statici, contesto delle viste
-src/routes/            le rotte del sito divise per argomento (autenticazione, catalogo, carrello, richieste, pagamenti, ordini, banco...)
-src/services/          pezzi condivisi dalle rotte (banco, carrello in sessione, ciclo di vita, database, striscia ordini)
-src/api_v1.js          API JSON dell'app nativa
-src/flusso_cliente.js  richiesta pagata → ordine → stato ordini, condiviso fra sito e app
-src/token_app.js       token di accesso dell'app (solo hash nel DB)
-src/pricing.js         prezzi, servizio, IVA, finestre temporali configurabili
-src/catalogo.js        ricerca parziale, categorie, varianti
-src/richieste.js       ciclo di vita della richiesta: risposte dei banchi, scadenza, ordine automatico
-src/pagamenti.js       pagamento dell'installatore: simulato o Stripe, punti di aggancio del flusso (rimborso, incasso)
-src/stripe_pagamenti.js  Stripe: PaymentIntent, pagina di pagamento, webhook, incassi/rilasci/rimborsi (carta autorizzata e poi incassata)
-src/whatsapp.js        gruppo WhatsApp dei corrieri (Baileys): messaggi, "preso", coda
-src/anagrafiche.js     registrazione cliente, approvazione banco, legami cliente-banco
-src/consegna.js        tragitto dal banco all'installatore (mappa, con ripiego sulla stima in linea d'aria)
-src/percorso.js        tempo di guida fra due punti da un servizio di mappe (Google Maps se c'è la chiave, poi OSRM proprio, poi Valhalla)
-src/corriere.js        orari del corriere: il ritiro che vede il banco (risposta su WhatsApp + minuti scritti)
-src/geo.js             lettura della posizione e distanze
-src/notifiche.js       notifiche in-app
-src/prodotto_json.js   formato JSON dei prodotti (ricerca live, scroll infinito, app)
-src/limite_login.js    limiti ai tentativi di login (per utente e per indirizzo, web e app) e alle registrazioni
-src/push.js            notifiche push dell'app (Expo Push Service), registrazione dei telefoni
-src/web_push.js        notifiche push del sito e della web app (Web Push, chiavi VAPID), iscrizioni dei browser
-src/account.js         eliminazione (anonimizzazione) dell'account dell'installatore
-src/testi_legali.js    informativa sulla privacy e "come eliminare l'account" (/privacy, /elimina-account)
-src/icone.js           icone SVG (sorgente anche per l'app)
-src/sessioni.js        archivio sessioni su database
-src/memo.js            cache a scadenza (60 s) per letture che il server non scrive mai
-src/format.js          date, tempi di consegna, countdown
-src/auth.js            middleware di autenticazione/ruolo
-src/sede_installatori.js  indirizzo e coordinate fissi degli installatori (provvisorio)
+src/middleware/        un file per ogni passo dell'app: sicurezza (helmet), limiti (express-rate-limit), origine, sessione, corpo, compressione, file statici, contesto delle viste, auth (login e ruolo), errori (pagina e JSON), percorso (%00 e :id)
+src/routes/            solo la parte HTTP: una cartella per interfaccia (cliente/, banco/, api_v1/) e, fuori, i file usati da più ruoli (autenticazione, notifiche, eventi, webhook_stripe) e agente; index.js li monta nell'ordine giusto
+src/routes/cliente/    le pagine e le API dell'installatore (ruolo `cliente`): profilo, catalogo, carrello, richieste, pagamenti, ordini (index.js le monta)
+src/routes/banco/      le pagine del banco: avvisi, home, storico, richieste, ordini, anagrafica, clienti (index.js le monta)
+src/routes/api_v1/     API JSON dell'app nativa (`/api/v1`): accesso, profilo, catalogo, richieste, ordini, ricevute, storico; ausiliari.js = pezzi condivisi
+src/logica/            la logica di business, una cartella per area (le rotte fanno solo HTTP e chiamano queste):
+  account/             utenti (letture degli utenti: accesso, anagrafica), anagrafiche (registrazione, approvazione banco, legami cliente-banco), account (eliminazione = anonimizzazione), token_app (token dell'app, solo hash nel DB),
+                       password, password_account (cambio), recupero_password, limite_login (tentativi per utente e per indirizzo, web e app), sessioni (archivio su database),
+                       sessione_utente, sede_installatori (indirizzo e coordinate fissi degli installatori, provvisorio)
+  catalogo/            catalogo (ricerca parziale, categorie, varianti), prodotto_json (formato JSON dei prodotti: ricerca live, scroll infinito, app)
+  ordini/              flusso_cliente (richiesta pagata → ordine → stato ordini, condiviso fra sito e app), richieste (ciclo di vita: risposte dei banchi, scadenza, ordine automatico),
+                       consegna (tragitto dal banco all'installatore, con ripiego sulla stima in linea d'aria), percorso (tempo di guida da un servizio di mappe: Google Maps, poi OSRM, poi Valhalla),
+                       corriere (orari del corriere: il ritiro che vede il banco), geo (posizione e distanze), orari (fasce di ricezione del banco), materiale (materiale ordinato e quanto si deve),
+                       ordini (letture degli ordini), striscia_ordini, carrello_sessione, risposte_flusso
+  pagamenti/           pricing (prezzi, servizio, IVA, finestre temporali), pagamenti (simulato o Stripe, punti di aggancio: rimborso, incasso), stripe_config, stripe_pagamenti (PaymentIntent, pagina di pagamento, webhook,
+                       incassi/rilasci/rimborsi), ricevute (PDF), azienda (dati dell'azienda dal .env)
+  banco/               tutto ciò che serve alle pagine del banco: banco (intestazione, numeri della barra, "Preparato", eliminazioni), bacheca (le tre colonne della home), anagrafica, avvisi, ordine, richiesta, storico, storico_dettaglio
+  notifiche/           notifiche (in-app), push (app, Expo Push Service), web_push (sito e web app, chiavi VAPID), eventi (aggiornamento in tempo reale, Server-Sent Events), email
+  whatsapp/            whatsapp.js: gruppo WhatsApp dei corrieri (Baileys): messaggi, "preso", coda. Non richiede richieste.js né flusso_cliente.js: le sue due azioni gliele registra src/avvio/servizi.js (impostaAzioni)
+src/comune/            pezzi senza database usati ovunque: format (date, tempi di consegna, countdown), http (query, ritorni sicuri), input (id, quantità, escape LIKE), memo (cache a scadenza 60 s),
+                       icone (SVG, sorgente anche per l'app), testi_legali (/privacy, /elimina-account), url_sito
+src/avvio/             ciò che parte con il server: processo (errori, porta, chiusura pulita), servizi (controllo delle scadenze, Stripe, WhatsApp), database (preparazione all'avvio)
 db/index.js            l'unico accesso al database (Postgres): db.prepare, db.transaction, db.exec; poi resilienza.js (rete che cade)
 db/schema.sql          lo schema (l'unico file) e le funzioni SQL della ricerca
-db/seed.js             dati demo (utenti, distributori, legami cliente-banco); db/importa_listino.js importa i listini Excel
-scripts/               schema (apply_schema_pg.js, applica_blocco_schema.js), sottocategorie, icone app,
-                       export, prova_whatsapp.js, migrazioni una tantum (filiali Borea, Via Puggia)
-views/                 pagine EJS (cliente e distributore mobile-first)
-public/                style.css, app.js (quantità, ricerca live, countdown), img/prodotti
+db/seed.js             dati demo (utenti, distributori, legami cliente-banco)
+scripts/db/            schema (apply_schema_pg.js, applica_blocco_schema.js), configurazione, sottocategorie, importa_listino.js (listini Excel), diagnosi della rete
+scripts/una_tantum/    migrazioni sul DB condiviso (filiali Borea, Via Puggia, ritiro provvisorio): prova a secco di default, --applica conferma
+scripts/genera/        icone (app Android, app nativa, PWA) e suono degli avvisi del banco
+scripts/setup/         chiavi VAPID per le push, file di verifica di Apple Pay
+scripts/verifica/      prove e controlli (Stripe, push, tragitto, orari, WhatsApp): `verifica_stripe`, `stato_orari` e `prova_tragitto` leggono soltanto; `prova_push` e `prova_whatsapp` mandano messaggi veri, leggi l'intestazione prima di lanciarli
+views/                 pagine EJS per area: auth/ (accesso, registrazione, password), cliente/ (installatore), banco/ (distributore), agente/, comune/ (errore, legale, notifiche); partials/ = parti riusate, per area (comune/, cliente/, banco/, agente/). Gli `include` sono relativi al file che li chiama
+assets/js/            i pezzi di app.js (uno per argomento: quantità e ricerca live, countdown, banco, avvisi...), numerati: il server li riunisce in un solo /app.js
+assets/css/           i pezzi di style.css, numerati come sopra: il server li riunisce in un solo /style.css (src/comune/asset_composti.js)
+public/               il resto dei file serviti così come sono: sw.js, manifest, icone, mappa.js, pagamento.js, img/prodotti, vendor/
+test/                  prove automatiche (`npm test`), una cartella per area come src/logica (account, banco, catalogo, notifiche, ordini, pagamenti, whatsapp) più middleware/, db/, comune/ e sito/ (un file per argomento che avvia il vero server con un DB finto, preparato in sito/_aiuti/server_finto.js; sw.test.js prova il service worker)
 mobile/                app React Native / Expo (vedi "App nativa")
+docs/                  documentazione per argomento (indice in CLAUDE.md), guide di messa in funzione in docs/guide/, mockup
+backup/                copie di sicurezza degli script una tantum (fuori da git)
 ```
 
 Il database di produzione è **Postgres sul server** (`DATABASE_URL` in `.env`).
 
-Vedi anche `SCOPE.md` per cosa c'è oggi e cosa è volutamente fuori.
+Vedi anche `docs/SCOPE.md` per cosa c'è oggi e cosa è volutamente fuori.

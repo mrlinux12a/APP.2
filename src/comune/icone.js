@@ -1,0 +1,347 @@
+// Icone delle categorie merceologiche: line-icon 24x24, un solo colore (currentColor),
+// dimensionate a 1em così ereditano il font-size già impostato nel CSS per ogni contesto
+// (riga di lista, tessera in evidenza, riga sconti) senza bisogno di regole nuove.
+// Sostituiscono le emoji: leggibili anche molto piccole, coerenti con un tono professionale.
+
+function svg(path) {
+  return (
+    '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" ' +
+    'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" ' +
+    'style="vertical-align:-0.15em" aria-hidden="true">' + path + '</svg>'
+  );
+}
+
+const ICONE = {
+  // Riscaldamento e Caldaie — radiatore
+  'riscaldamento-e-caldaie': svg(
+    '<rect x="4" y="6" width="16" height="13" rx="1"/>' +
+    '<path d="M8 6V4M12 6V4M16 6V4"/><path d="M8 19v1M12 19v1M16 19v1"/>'
+  ),
+  // Condizionamento e Climatizzazione — unità split a parete
+  'condizionamento-e-climatizzazione': svg(
+    '<rect x="3" y="6" width="18" height="7" rx="2"/>' +
+    '<path d="M6 13v2M10 13v3M14 13v2M18 13v3"/>' +
+    '<path d="M7 9h6"/>'
+  ),
+  // Ricambi e Accessori — ingranaggio
+  'ricambi-e-accessori': svg(
+    '<circle cx="12" cy="12" r="3"/>' +
+    '<path d="M12 3v2.5M12 18.5V21M21 12h-2.5M5.5 12H3' +
+    'M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8M18.4 18.4l-1.8-1.8M7.4 7.4 5.6 5.6"/>'
+  ),
+  // Acqua Calda Sanitaria — scaldabagno (cilindro) con goccia
+  'acqua-calda-sanitaria': svg(
+    '<rect x="6" y="3" width="9" height="16" rx="4"/>' +
+    '<path d="M18.5 13c1.4 1.7 1.4 3.3 0 5-1.4-1.7-1.4-3.3 0-5Z"/>'
+  ),
+  // Generico — scatola
+  generico: svg(
+    '<path d="M3 8.5 12 4l9 4.5-9 4.5-9-4.5Z"/>' +
+    '<path d="M3 8.5V16l9 4.5 9-4.5V8.5"/><path d="M12 13v7.5"/>'
+  ),
+  // Raccorderia e Valvole — valvola a saracinesca
+  'raccorderia-e-valvole': svg(
+    '<circle cx="12" cy="15" r="3.2"/>' +
+    '<path d="M12 3v3.2M9.5 12.8 7 10.3M14.5 12.8 17 10.3"/>' +
+    '<path d="M6 8h3M15 8h3"/>'
+  ),
+  // Ventilazione e Trattamento Aria — ventola
+  'ventilazione-e-trattamento-aria': svg(
+    '<circle cx="12" cy="12" r="1.6"/>' +
+    '<path d="M12 10.4c0-3 1.6-5.4 4-5.4 1.7 0 2.6 1.4 1.6 3.1-1 1.7-3.3 2.3-5.6 2.3Z"/>' +
+    '<path d="M13.4 12.9c2.7 1.3 4.2 3.5 3.3 5.6-.7 1.6-2.6 1.6-3.5-.1-.9-1.6-.9-3.9.2-5.5Z"/>' +
+    '<path d="M10.6 13.1c-2.7 1.2-4.3 3.4-3.4 5.5.7 1.6 2.6 1.6 3.5-.1.9-1.6.9-3.8-.1-5.4Z"/>'
+  ),
+  // Bagno e Sanitari — vasca
+  'bagno-e-sanitari': svg(
+    '<path d="M4 12h16v2a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4v-2Z"/>' +
+    '<path d="M4 12V9a2 2 0 0 1 2-2c1 0 1.6.6 1.8 1.4"/>' +
+    '<path d="M3 18v1M19 18v1"/>'
+  ),
+  // Fissaggi e Utensili — chiave inglese
+  'fissaggi-e-utensili': svg(
+    '<path d="M14.7 6.3a3.5 3.5 0 0 0-4.6 4.6L4 17l3 3 6.1-6.1a3.5 3.5 0 0 0 4.6-4.6l-2.3 2.3-2-2Z"/>'
+  ),
+  // Tubazioni e Sistemi di Distribuzione — gomito di tubo
+  'tubazioni-e-sistemi-di-distribuzione': svg(
+    '<path d="M5 4h5a6 6 0 0 1 6 6v9"/>' +
+    '<path d="M5 4v5M10 4v5" /><path d="M13 19h5M13 15h5"/>'
+  ),
+  // Elettrico e Fotovoltaico — pannello solare
+  'elettrico-e-fotovoltaico': svg(
+    '<path d="M3 9 12 4l9 5-2 11H5L3 9Z"/>' +
+    '<path d="M6.5 9h11M7.5 14h9M9 9l-1 11M15 9l1 11M12 9v11"/>'
+  ),
+  // Trattamento Acqua — goccia con filtro
+  'trattamento-acqua': svg(
+    '<path d="M12 3.5c3 4 5.5 7.6 5.5 10.7a5.5 5.5 0 1 1-11 0C6.5 11.1 9 7.5 12 3.5Z"/>' +
+    '<path d="M9.2 14.2h5.6"/>'
+  ),
+  // Scarico e Fognatura — chiusino di scarico
+  'scarico-e-fognatura': svg(
+    '<circle cx="12" cy="12" r="8.5"/>' +
+    '<path d="M12 6v3M12 15v3M6 12h3M15 12h3M8 8l2 2M14 14l2 2M16 8l-2 2M10 14l-2 2"/>'
+  ),
+};
+
+const FALLBACK = ICONE.generico;
+
+// L'icona di una categoria dal suo nome breve; se non c'è ne usa una generica.
+function iconaCategoria(slug) {
+  return ICONE[slug] || FALLBACK;
+}
+
+// Icone di ricerca e barra di navigazione: stesso stile, colore fisso per tema
+// (ambra in scuro, nera in chiaro) gestito in CSS via --icona-nav.
+const iconaLente = (
+  '<svg viewBox="0 0 24 24" width="1.22em" height="1.22em" fill="none" stroke="currentColor" ' +
+  'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
+  'style="vertical-align:-0.2em" aria-hidden="true">' +
+  '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.2 15.2l5 5"/>' +
+  '</svg>'
+);
+
+const iconaCatalogo = svg(
+  '<path d="M4 5.5c2-1 4.5-1 8 0v13c-3.5-1-6-1-8 0V5.5Z"/>' +
+  '<path d="M20 5.5c-2-1-4.5-1-8 0v13c3.5-1 6-1 8 0V5.5Z"/>'
+);
+
+const iconaCarrello = svg(
+  '<circle cx="9" cy="20" r="1.3"/><circle cx="17" cy="20" r="1.3"/>' +
+  '<path d="M3 4h2l2.2 11.2a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.6L20.5 8H6"/>'
+);
+
+const iconaOrdini = svg(
+  '<path d="M3 8.5 12 4l9 4.5-9 4.5-9-4.5Z"/>' +
+  '<path d="M3 8.5V16l9 4.5 9-4.5V8.5"/><path d="M12 13v7.5"/>'
+);
+
+// "Stato ordini" quando l'ordine è in consegna (vedi partials/cliente/nav_ordini.ejs).
+const iconaFurgone = svg(
+  '<path d="M2.5 6.5h11v9.5h-11z"/><path d="M13.5 9.5h4l3.5 3.5v3h-7.5"/>' +
+  '<circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>'
+);
+
+// Aeroplanino di carta: "Mandi la richiesta" nella pagina Stato ordini vuota.
+const iconaInvio = svg(
+  '<path d="M21.5 2.5 10.8 13.2"/><path d="M21.5 2.5 14.8 21.5l-4-8.3-8.3-4 19-6.7Z"/>'
+);
+
+// Inquadratura (quattro angoli + cerchio): "cerca con una foto o il codice a barre" nella home.
+const iconaInquadra = svg(
+  '<path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/>' +
+  '<circle cx="12" cy="12" r="3.2"/>'
+);
+
+// Icone di navigazione del venditore: stesso trattamento (stroke, 1em, currentColor) delle
+// tre sopra, così ereditano dal CSS gli stessi colori del menu installatore (--icona-nav a
+// riposo, colore attivo del tema) invece di restare fisse come le emoji 🏠/👥 di prima.
+const iconaHome = svg(
+  '<path d="M4 11.5 12 4l8 7.5"/>' +
+  '<path d="M6 10.5V20a1 1 0 0 0 1 1h3v-5.5h4V21h3a1 1 0 0 0 1-1v-9.5"/>'
+);
+
+const iconaClienti = svg(
+  '<circle cx="8.5" cy="8.2" r="3"/><path d="M2.8 19.8c.7-3.5 3-5.3 5.7-5.3s5 1.8 5.7 5.3"/>' +
+  '<circle cx="17" cy="8.8" r="2.3"/><path d="M15.2 14.7c2.3.3 3.9 2 4.5 5"/>'
+);
+
+// Campanella notifiche: sostituisce 🔔 nell'appbar, comune a installatore e venditore.
+const iconaNotifiche = svg(
+  '<path d="M6 10.5a6 6 0 0 1 12 0c0 3.8 1.4 5.3 1.4 5.3H4.6S6 14.3 6 10.5Z"/>' +
+  '<path d="M10 19.3a2 2 0 0 0 4 0"/>'
+);
+
+// Icone delle righe di anagrafica/contatto, riusate nel profilo installatore e nella scheda cliente del venditore.
+const iconaPosizione = svg(
+  '<path d="M12 21s-6.5-6.1-6.5-11A6.5 6.5 0 0 1 18.5 10c0 4.9-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.2"/>'
+);
+
+// Mirino ("usa la mia posizione"): cerchio con quattro tacche e punto al centro, come nelle mappe.
+const iconaMirino = svg(
+  '<circle cx="12" cy="12" r="6.2"/><circle cx="12" cy="12" r="1.6"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3"/>'
+);
+
+const iconaAzienda = svg(
+  '<rect x="4.5" y="3" width="11" height="18" rx="1"/>' +
+  '<path d="M8 7.2h1M8 11h1M8 14.8h1M12.5 7.2h1M12.5 11h1M12.5 14.8h1"/>' +
+  '<path d="M15.5 21v-4.5h4V21"/>'
+);
+
+const iconaFiscale = svg(
+  '<path d="M6.5 3h11v18l-2.3-1.4L13 21l-2.3-1.4L8.5 21l-2-1.4Z"/><path d="M9 8h6M9 11.5h6M9 15h3.5"/>'
+);
+
+const iconaDestinazione = svg('<path d="M6 3v18"/><path d="M6 4.2h11l-2.4 3.3L17 10.8H6"/>');
+
+const iconaTelefono = svg(
+  '<path d="M6.2 3.2h3l1.4 3.8-2 1.5a12 12 0 0 0 5.9 5.9l1.5-2 3.8 1.4v3a2 2 0 0 1-2 2C10.9 18.8 5.2 13.1 4.2 5.2a2 2 0 0 1 2-2Z"/>'
+);
+
+const iconaEmail = svg('<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3.5 7.2 12 13l8.5-5.8"/>');
+
+// Cerchio con la "i": nota informativa (es. in fondo a "La mia anagrafica").
+const iconaInfo = svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5"/><path d="M12 8h.01"/>');
+
+// Freccia che esce da una porta: "Esci" nel menu del profilo.
+const iconaEsci = svg('<path d="M10 4H6.5A1.5 1.5 0 0 0 5 5.5v13A1.5 1.5 0 0 0 6.5 20H10"/><path d="M15 8l4 4-4 4"/><path d="M19 12H9.5"/>');
+
+const iconaOrario = svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3.2 2"/>');
+// Luna: "ordini chiusi" (carrello fuori orario, pagina degli orari).
+const iconaLuna = svg('<path d="M20 14.2A8 8 0 0 1 9.8 4a8 8 0 1 0 10.2 10.2Z"/>');
+
+// Cronometro (colonna "Da confermare" della home del banco) e fumetto (colonna "Attesa corriere").
+const iconaTimer = svg(
+  '<circle cx="12" cy="13.5" r="7"/><path d="M12 10v3.8l2.4 1.4"/><path d="M9.8 3.5h4.4"/><path d="M12 3.5v3"/>'
+);
+const iconaMessaggio = svg(
+  '<path d="M5 5h14a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 19 16h-7l-4.5 3.5V16H5a1.5 1.5 0 0 1-1.5-1.5v-8A1.5 1.5 0 0 1 5 5Z"/>'
+);
+
+const iconaPersona = svg(
+  '<circle cx="12" cy="8" r="3.4"/><path d="M5 19c1.2-3.6 4-5.4 7-5.4s5.8 1.8 7 5.4"/>'
+);
+
+const iconaNegozio = svg(
+  '<path d="M4 4h16l1.4 4.8a2.4 2.4 0 0 1-4.4 1.4 2.4 2.4 0 0 1-4.5 0 2.4 2.4 0 0 1-4.5 0A2.4 2.4 0 0 1 3.5 9L4 4Z"/>' +
+  '<path d="M5 10.6V20h14v-9.4"/><path d="M9.8 20v-5h4.4v5"/>'
+);
+
+// Ordine e consegna.
+const iconaConsegna = svg(
+  '<rect x="2.5" y="8" width="10.5" height="8" rx="1"/><path d="M13 11h3.2l3.3 3v2H19"/>' +
+  '<circle cx="7" cy="18" r="1.6"/><circle cx="16.5" cy="18" r="1.6"/>'
+);
+
+const iconaNota = svg(
+  '<path d="M4.2 19.8 5 16l10.5-10.5a1.6 1.6 0 0 1 2.2 0l.8.8a1.6 1.6 0 0 1 0 2.2L8 19l-3.8.8Z"/>' +
+  '<path d="M13.6 7l3.4 3.4"/>'
+);
+
+const iconaPagamento = svg('<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/>');
+
+// Catalogo e marchi.
+const iconaMarchio = svg(
+  '<path d="M12.3 3.5H20v7.7L11 20.5a1.5 1.5 0 0 1-2.1 0l-6.4-6.4a1.5 1.5 0 0 1 0-2.1L12.3 3.5Z"/>' +
+  '<circle cx="16.2" cy="7.4" r="1.4"/>'
+);
+
+const iconaFamiglia = svg(
+  '<path d="M3.5 7a1 1 0 0 1 1-1h4.6l2 2.1h8.4a1 1 0 0 1 1 1v9.4a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1Z"/>'
+);
+
+const iconaListino = svg(
+  '<path d="M12 6.3c-1.8-1.3-4-1.9-6.5-1.9v13c2.5 0 4.7.6 6.5 1.9 1.8-1.3 4-1.9 6.5-1.9v-13c-2.5 0-4.7.6-6.5 1.9Z"/>' +
+  '<path d="M12 6.3v13"/>'
+);
+
+const iconaVuotoRicerca = svg(
+  '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.2 15.2l5 5"/><path d="M8 10.5h5"/>'
+);
+
+const iconaVuotoScatola = svg(
+  '<path d="M3 8.5 12 4l9 4.5-9 4.5-9-4.5Z"/><path d="M3 8.5V14.5M21 8.5V14.5"/>' +
+  '<path d="M7 12.3v3.4M17 12.3v3.4"/>'
+);
+
+const iconaVuotoNotifiche = svg(
+  '<path d="M6.2 10.3a6 6 0 0 1 9.3-5"/><path d="M18 10.5c0 3.8 1.4 5.3 1.4 5.3H8"/>' +
+  '<path d="M10 19.3a2 2 0 0 0 4 0"/><path d="M3.5 3.5l17 17"/>'
+);
+
+// Avviso: sostituisce ⚠️ nel confronto offerte del cliente.
+const iconaAvviso = svg(
+  '<path d="M12 3.5 21.5 20h-19L12 3.5Z"/><path d="M12 9.5v4.2"/><path d="M12 17h.01"/>'
+);
+
+// Chiudi/rimuovi: X semplice per i pulsanti di dismissione (es. togliere una card dalla home).
+const iconaChiudi = svg('<path d="M6 6l12 12M18 6 6 18"/>');
+
+// Cestino (rimuovi un articolo dal carrello) e scudo con spunta (rimborso garantito, barra di pagamento).
+const iconaCestino = svg(
+  '<path d="M4 7h16"/><path d="M9.5 7V4.5h5V7"/>' +
+  '<path d="M6.5 7l.8 12a1.5 1.5 0 0 0 1.5 1.4h6.4a1.5 1.5 0 0 0 1.5-1.4l.8-12"/><path d="M10 11v6M14 11v6"/>'
+);
+const iconaScudo = svg('<path d="M12 3l7.5 3v5.5c0 4.6-3.1 8.2-7.5 9.5-4.4-1.3-7.5-4.9-7.5-9.5V6L12 3Z"/><path d="M9 12l2.2 2.2L15.2 10"/>');
+
+// Pagina Storico: spunta (consegnato), punto esclamativo (nessuna risposta) e freccia circolare ("Riordina").
+const iconaSpunta = svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>');
+const iconaEsclamativo = svg('<path d="M12 6.5v7.2"/><path d="M12 17.6h.01"/>');
+const iconaRiprova = svg('<path d="M20 12a8 8 0 1 1-2.7-6"/><path d="M20 4.5V9h-4.5"/>');
+
+// Accesso e registrazione: occhio (mostra la password), occhio barrato (nascondila), freccia indietro.
+const iconaOcchio = svg('<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.8"/>');
+const iconaOcchioBarrato = svg(
+  '<path d="M9.9 5.8A9.6 9.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.9 3.7M6.3 7.4A16 16 0 0 0 2.5 12S6 18.5 12 18.5a9.4 9.4 0 0 0 4.1-.9"/>' +
+  '<path d="M9.9 9.9a2.8 2.8 0 0 0 4.2 3.7"/><path d="M3.5 3.5l17 17"/>'
+);
+const iconaDownload = svg('<path d="M12 4v10"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/>');
+const iconaIndietro = svg('<path d="M14.5 5.5 8 12l6.5 6.5"/>');
+
+// Pagine clienti del banco: freccetta "avanti" (›) e link che apre un altro sito (↗).
+const iconaAvanti = svg('<path d="M9.5 5.5 16 12l-6.5 6.5"/>');
+const iconaEsterno = svg('<path d="M9 5.5H6.5A1.5 1.5 0 0 0 5 7v10.5A1.5 1.5 0 0 0 6.5 19H17a1.5 1.5 0 0 0 1.5-1.5V15"/><path d="M13 5h6v6"/><path d="M19 5l-8 8"/>');
+
+// Pagamenti: scontrino (link "Ricevuta") e lucchetto (importo bloccato sulla carta). La carta di credito è iconaPagamento.
+const iconaScontrino = svg('<path d="M6.5 3.5h11V20l-2.75-1.7L12 20l-2.75-1.7L6.5 20Z"/><path d="M9.5 8.5h5M9.5 12h5"/>');
+const iconaLucchetto = svg('<rect x="5.5" y="10.5" width="13" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>');
+
+// Storico e pagina dell'ordine del banco: chevron verso il basso (riga che si apre) e stampante (pulsante "Stampa").
+const iconaGiu = svg('<path d="M5.5 9.5 12 16l6.5-6.5"/>');
+const iconaStampante = svg('<path d="M7.5 9V4h9v5"/><rect x="4" y="9" width="16" height="8" rx="2"/><path d="M7.5 14h9v6h-9Z"/><path d="M16.5 12h.01"/>');
+
+module.exports = {
+  ICONE_CATEGORIA: ICONE, // letto da scripts/genera/genera_icone_app.js per l'app nativa
+  iconaCategoria,
+  iconaDownload,
+  iconaLente,
+  iconaCatalogo,
+  iconaCarrello,
+  iconaOrdini,
+  iconaFurgone,
+  iconaInvio,
+  iconaInquadra,
+  iconaHome,
+  iconaClienti,
+  iconaNotifiche,
+  iconaPosizione,
+  iconaMirino,
+  iconaAzienda,
+  iconaFiscale,
+  iconaDestinazione,
+  iconaTelefono,
+  iconaEmail,
+  iconaInfo,
+  iconaEsci,
+  iconaOrario,
+  iconaLuna,
+  iconaTimer,
+  iconaMessaggio,
+  iconaPersona,
+  iconaNegozio,
+  iconaConsegna,
+  iconaNota,
+  iconaPagamento,
+  iconaMarchio,
+  iconaFamiglia,
+  iconaListino,
+  iconaVuotoRicerca,
+  iconaVuotoScatola,
+  iconaVuotoNotifiche,
+  iconaAvviso,
+  iconaChiudi,
+  iconaCestino,
+  iconaScudo,
+  iconaSpunta,
+  iconaEsclamativo,
+  iconaRiprova,
+  iconaOcchio,
+  iconaOcchioBarrato,
+  iconaIndietro,
+  iconaAvanti,
+  iconaEsterno,
+  iconaScontrino,
+  iconaLucchetto,
+  iconaGiu,
+  iconaStampante,
+};

@@ -1,6 +1,6 @@
-// La scheda "PAGAMENTI" come sul sito (views/partials/pagamenti.ejs): la consegna in cantiere, che si paga in app, e il materiale, che si paga al banco
+// La scheda "PAGAMENTI" come sul sito (views/partials/cliente/pagamenti.ejs): la consegna in cantiere, che si paga in app, e il materiale, che si paga al banco
 // (a BOREA). MAI un "Totale" unico che li somma. Cambiano colori e testi secondo lo stato della carta (`stato_pagamento.chiave`, le regole stanno in
-// src/pagamenti.js del server):
+// src/logica/pagamenti/pagamenti.js del server):
 //   bloccato   richiesta in attesa: la carta è solo AUTORIZZATA, l'importo è bloccato; il materiale si paga solo se il banco conferma
 //   pagato     è nato l'ordine, la carta è stata incassata ("Pagata il 15/10 · Visa •••• 4242", con il link "Ricevuta")
 //   annullato  nessuna risposta o annullata da te: UNA riga grigia "Nessun addebito"

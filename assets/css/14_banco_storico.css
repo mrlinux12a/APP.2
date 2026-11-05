@@ -1,0 +1,255 @@
+/* ---------- Storico ordini del banco (views/banco/storico.ejs, src/logica/banco/storico.js; classi sto-*) ---------- */
+
+/* Contenuto largo 1240px (1288px con i 24px di margine per lato), come nel disegno. Sotto i 900px: schede che scorrono,
+   righe come card (vedi in fondo al blocco). */
+.pagina-storico { --sto-sora: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+.sto-pagina {
+  max-width: 1288px;
+  margin: 0 auto;
+  padding: 24px max(24px, env(safe-area-inset-right, 0px)) 56px max(24px, env(safe-area-inset-left, 0px));
+}
+
+/* Titolo, ricerca e periodo sulla stessa riga */
+.sto-testata { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+.sto-titolo { margin: 0 auto 0 0; font-family: var(--sto-sora); font-size: 28px; font-weight: 800; line-height: 1.2; }
+
+.sto-cerca { position: relative; flex: 0 1 393px; min-width: 0; margin: 0; }
+.sto-cerca-ico {
+  position: absolute; top: 50%; left: 16px; display: inline-flex; transform: translateY(-50%);
+  color: var(--testo); font-size: 20px; pointer-events: none;
+}
+.sto-cerca input[type="search"] {
+  display: block; width: 100%; height: 44px; margin: 0; padding: 0 44px 0 46px;
+  border: 1px solid var(--bordo); border-radius: 22px; background: var(--surface); color: var(--testo);
+  font-size: 16px; /* sotto i 16px Safari su iPhone ingrandisce la pagina al tocco */
+  -webkit-appearance: none; appearance: none;
+}
+/* La "×" è la nostra (sto-cerca-x): quella del browser non si vede, così non ce ne sono due. */
+.sto-cerca input[type="search"]::-webkit-search-cancel-button,
+.sto-cerca input[type="search"]::-webkit-search-decoration { -webkit-appearance: none; display: none; }
+.sto-cerca input[type="search"]::placeholder { color: var(--grigio); opacity: 1; }
+.sto-cerca input[type="search"]:focus { border-color: var(--blu); outline: 2px solid var(--blu); outline-offset: 1px; }
+.sto-cerca-x {
+  position: absolute; top: 0; right: 0; display: flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border-radius: 50%; color: var(--grigio); font-size: 18px; text-decoration: none;
+}
+.sto-cerca-x:hover { color: var(--testo); }
+.sto-cerca-x:focus-visible { outline: 2px solid var(--blu); outline-offset: -2px; }
+
+/* Selettore a segmenti: Oggi | 7 giorni | 30 giorni | Tutti */
+.sto-periodo { display: flex; flex: none; gap: 2px; padding: 4px; border-radius: 14px; background: #efede6; }
+.sto-periodo a {
+  position: relative; display: flex; align-items: center; justify-content: center; min-height: 38px; padding: 0 14px;
+  border-radius: 10px; color: var(--grigio); font-size: 14px; font-weight: 600; text-decoration: none; white-space: nowrap;
+}
+.sto-periodo a::after { content: ""; position: absolute; inset: -4px -1px; } /* area di tocco da 46px */
+.sto-periodo a:hover { color: var(--testo); }
+.sto-periodo a.attivo { background: var(--surface); color: var(--testo); font-weight: 700; box-shadow: 0 1px 3px rgba(35, 32, 25, 0.14); }
+.sto-periodo a:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; }
+
+/* Schede di stato, a pillola: "Tutti 24 | ● Da preparare 3 | ..." */
+.sto-schede { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+.sto-scheda {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px 0 16px;
+  border: 1px solid var(--bordo); border-radius: 22px; background: var(--surface); color: var(--testo);
+  font-size: 15px; font-weight: 700; text-decoration: none; white-space: nowrap;
+}
+.sto-scheda:hover { border-color: #cfcabd; }
+.sto-scheda:focus-visible { outline: 2px solid var(--blu); outline-offset: 2px; }
+.sto-scheda-num {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; padding: 0 7px;
+  border-radius: 13px; background: #f1f0ec; color: #5c5b52; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.sto-scheda.vuota .sto-scheda-num { color: #a8a69b; } /* zero risultati: resta cliccabile, ma il numero è grigio */
+.sto-scheda.attiva { border-color: #1d1b16; background: #1d1b16; color: #fff; }
+.sto-scheda.attiva .sto-scheda-num { background: rgba(255, 255, 255, 0.18); color: #fff; }
+.sto-scheda.attiva.vuota .sto-scheda-num { color: rgba(255, 255, 255, 0.6); }
+
+/* Colori di stato: pallino delle schede e pillola delle righe (da preparare blu, in consegna verde, consegnato grigio; dal 19/10/2026 non
+   esistono più "in preparazione" e "partito"). Una sola regola per i due usi: --st è il colore, --st-sfondo lo sfondo della pillola. */
+.sto-st-da_preparare { --st: var(--blu); --st-sfondo: var(--blu-chiaro); }
+.sto-st-in_consegna { --st: var(--verde); --st-sfondo: var(--verde-chiaro); }
+.sto-st-consegnato { --st: var(--grigio); --st-sfondo: #f1f0ec; }
+.sto-punto { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--st); }
+.sto-pillola {
+  display: inline-flex; align-items: center; gap: 7px; padding: 4px 12px 4px 10px; border-radius: 999px;
+  background: var(--st-sfondo); color: var(--st); font-size: 13px; font-weight: 700; line-height: 1.3; white-space: nowrap;
+}
+.sto-pillola .sto-punto { width: 7px; height: 7px; }
+
+/* Tabella: una scheda con intestazione, righe raggruppate per giorno e, per ogni ordine, una voce (.sto-voce) = la riga (un <button> che la apre) + il suo pannello */
+.sto-tabella { overflow: hidden; border: 1px solid var(--bordo); border-radius: 16px; background: var(--surface); }
+.sto-testa, .sto-riga {
+  display: grid;
+  grid-template-columns: 96px 70px minmax(0, 1.3fr) minmax(0, 2fr) 120px 150px 32px;
+  align-items: center; column-gap: 14px; padding-right: 20px; padding-left: 20px;
+}
+.sto-testa {
+  min-height: 44px; border-bottom: 1px solid var(--bordo);
+  color: var(--grigio); font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.sto-giorno {
+  display: flex; align-items: baseline; gap: 8px; padding: 10px 20px;
+  border-bottom: 1px solid var(--bordo); background: #f7f6f2;
+}
+.sto-giorno strong { font-family: var(--sto-sora); font-size: 15px; font-weight: 700; }
+.sto-giorno span { color: var(--grigio); font-size: 13px; }
+.sto-voce { border-bottom: 1px solid var(--bordo); }
+/* La riga è un <button> (Invio e Spazio la aprono e la chiudono, il fuoco resta lì): si toglie l'aspetto del browser. */
+.sto-riga {
+  width: 100%; min-height: 56px; margin: 0; padding-top: 8px; padding-bottom: 8px; border: 0; border-radius: 0; background: none;
+  color: var(--testo); font: inherit; font-size: 15px; text-align: left; cursor: pointer; -webkit-appearance: none; appearance: none;
+}
+.sto-riga:hover { background: #faf9f6; }
+.sto-riga:focus-visible { outline: 2px solid var(--blu); outline-offset: -2px; }
+.sto-tabella > :last-child { border-bottom: none; }
+
+/* Riga aperta: sfondo azzurrissimo, il chevron gira di 180° e sotto c'è il pannello (stesso sfondo, barra blu a sinistra). */
+.sto-voce.aperta, .sto-voce.aperta .sto-riga { background: #f7fafd; }
+.sto-c-freccia svg { transition: transform 0.15s; }
+.sto-voce.aperta .sto-c-freccia svg { transform: rotate(180deg); }
+.sto-dettaglio { border-left: 3px solid var(--blu); background: #f7fafd; }
+.sto-dettaglio[hidden] { display: none; }
+.sto-d-attesa, .sto-d-errore { margin: 0; padding: 16px 20px 20px; color: var(--grigio); font-size: 14px; }
+.sto-d-errore button { margin-left: 8px; padding: 0; border: 0; background: none; color: var(--blu); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+
+.sto-c-ordine { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.sto-c-ora { color: var(--grigio); font-size: 14px; font-variant-numeric: tabular-nums; }
+.sto-c-cliente { display: flex; flex-direction: column; min-width: 0; }
+.sto-cliente-nome { overflow: hidden; font-size: 15px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.sto-cliente-citta { overflow: hidden; color: var(--grigio); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.sto-c-materiale { display: flex; min-width: 0; color: #3f3e37; font-size: 14px; }
+.sto-mat-nome { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sto-mat-altri { flex: none; padding-left: 6px; color: var(--grigio); white-space: nowrap; } /* resta visibile quando il nome è tagliato */
+.sto-c-totale { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.sto-nessuno { color: var(--grigio); }
+.sto-c-freccia { display: flex; justify-content: flex-end; color: #8f8d82; font-size: 18px; }
+
+/* Il dettaglio di una riga (views/partials/banco/storico_dettaglio.ejs): Materiale | Come è andata | pulsanti. */
+.sto-d-griglia { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr) 260px; gap: 16px; align-items: start; padding: 4px 20px 20px; }
+.sto-d-scheda { border: 1px solid var(--bordo); border-radius: 14px; background: var(--surface); }
+.sto-d-occhiello { margin: 0; color: var(--grigio); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+
+.sto-d-testa { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px 12px; }
+.sto-d-conta { color: var(--grigio); font-size: 13px; white-space: nowrap; }
+.sto-d-riga {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr) 84px 92px; align-items: center; column-gap: 12px; padding: 11px 16px; border-top: 1px solid var(--bordo);
+}
+.sto-d-qta {
+  display: inline-flex; align-items: center; justify-self: start; min-width: 40px; height: 30px; padding: 0 9px; border-radius: 8px;
+  background: var(--blu-chiaro); color: var(--blu-scuro); font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; font-size: 13px; font-weight: 700;
+}
+.sto-d-articolo { display: flex; flex-direction: column; min-width: 0; }
+.sto-d-nome { font-size: 14.5px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.sto-d-cod { margin-top: 2px; color: var(--grigio); font-size: 12.5px; }
+.sto-d-cad-sub { display: none; }
+.sto-d-mancano { margin-top: 2px; color: var(--arancio); font-size: 12.5px; font-weight: 600; }
+.sto-d-cad { color: #4f4d44; font-size: 13.5px; text-align: right; font-variant-numeric: tabular-nums; }
+.sto-d-tot { font-size: 14.5px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.sto-d-vuoto, .sto-d-fuori { margin: 0; padding: 12px 16px; border-top: 1px solid var(--bordo); color: var(--grigio); font-size: 13.5px; line-height: 1.4; }
+.sto-d-fuori { color: var(--arancio); font-weight: 600; }
+.sto-d-piede {
+  display: flex; align-items: baseline; justify-content: flex-end; flex-wrap: wrap; gap: 4px 22px; padding: 12px 16px;
+  border-top: 1px solid var(--bordo); border-radius: 0 0 14px 14px; background: #faf9f6; color: var(--grigio); font-size: 13px;
+}
+.sto-d-piede strong { margin-left: 4px; color: var(--testo); font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sto-d-incasso strong { font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; font-size: 17px; font-weight: 800; }
+
+/* Come è andata: pallino, ora (cifre tutte uguali, così si allineano) e testo. Fatto = pallino verde pieno; in corso = bianco con bordo verde e testo verde
+   in grassetto; da fare = pallino tratteggiato e testo grigio. */
+.sto-d-tempi { padding: 14px 16px 16px; }
+.sto-d-passi { margin: 10px 0 0; padding: 0; list-style: none; }
+.sto-d-passo { display: grid; grid-template-columns: 10px 52px minmax(0, 1fr); align-items: start; column-gap: 10px; padding: 5px 0; font-size: 14px; line-height: 1.4; }
+.sto-d-pallino { box-sizing: border-box; width: 10px; height: 10px; margin-top: 6px; border-radius: 50%; }
+.sto-d-ora { font-weight: 700; font-variant-numeric: tabular-nums; }
+.sto-d-ora small { display: block; color: var(--grigio); font-size: 11px; font-weight: 400; line-height: 1.2; }
+.sto-d-fatto .sto-d-pallino { background: var(--verde); }
+.sto-d-corrente .sto-d-pallino { border: 2px solid var(--verde); background: #fff; }
+.sto-d-corrente .sto-d-testo { color: #1f5f2e; font-weight: 700; }
+.sto-d-futuro .sto-d-pallino { border: 2px dashed #cfc8b8; }
+.sto-d-futuro .sto-d-ora, .sto-d-futuro .sto-d-testo { color: #8a887e; }
+.sto-d-futuro .sto-d-ora { font-weight: 400; }
+.sto-d-dove { margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--bordo); }
+.sto-d-dove p { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 13.5px; line-height: 1.4; overflow-wrap: anywhere; }
+.sto-d-dove p + p { margin-top: 8px; }
+.sto-d-icona { flex: none; display: inline-flex; margin-top: 1px; color: var(--grigio); font-size: 17px; }
+
+/* I due pulsanti */
+.sto-d-destra { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.sto-d-vai, .sto-d-sec {
+  display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 48px; padding: 0 16px; border-radius: 24px;
+  font-size: 15px; font-weight: 700; text-decoration: none; text-align: center;
+}
+.sto-d-vai { background: var(--blu); color: #fff; }
+.sto-d-vai:hover { background: var(--blu-scuro); }
+.sto-d-sec { border: 1.5px solid #cfcabd; background: var(--surface); color: var(--testo); }
+.sto-d-sec:hover { background: var(--sfondo); }
+.sto-d-vai:focus-visible, .sto-d-sec:focus-visible { outline: 3px solid var(--blu); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .sto-c-freccia svg { transition: none; }
+}
+
+/* Fra 900 e 1100px il pannello è stretto: la colonna dei pulsanti scende a 220px e la tabella del materiale perde un po' di respiro. */
+@media (min-width: 900px) and (max-width: 1099.98px) {
+  .sto-d-griglia { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 220px; gap: 12px; padding-left: 14px; padding-right: 14px; }
+  .sto-d-riga { grid-template-columns: 40px minmax(0, 1fr) 70px 80px; column-gap: 10px; padding-left: 12px; padding-right: 12px; }
+}
+
+/* Stati vuoti */
+.sto-vuoto {
+  padding: 48px 16px; border: 1px solid var(--bordo); border-radius: 16px; background: var(--surface);
+  color: var(--grigio); font-size: 16px; text-align: center;
+}
+.sto-vuoto p { margin: 0 0 16px; }
+.sto-vuoto-ico { display: block; margin-bottom: 8px; font-size: 2.2rem; }
+.sto-vuoto .btn { display: inline-flex; align-items: center; min-height: 44px; }
+.sto-pagina .paginazione { margin-top: 20px; }
+
+/* Sotto i 900px: titolo, ricerca e periodo uno sotto l'altro; le schede scorrono di lato senza barra; la tabella diventa
+   una lista di card (niente intestazione): "#91 · 22:29" e stato, cliente, materiale e totale. */
+@media (max-width: 899.98px) {
+  .sto-pagina { padding: 16px max(16px, env(safe-area-inset-right, 0px)) calc(var(--barra-bassa) + env(safe-area-inset-bottom, 0px) + 24px) max(16px, env(safe-area-inset-left, 0px)); }
+  .sto-testata { flex-direction: column; align-items: stretch; gap: 12px; margin-bottom: 16px; }
+  .sto-titolo { margin: 0; font-size: 24px; }
+  .sto-cerca { flex: none; width: 100%; }
+  .sto-periodo a { flex: 1; padding: 0 8px; }
+
+  .sto-schede {
+    flex-wrap: nowrap; overflow-x: auto; margin: 0 calc(-1 * max(16px, env(safe-area-inset-right, 0px))) 12px;
+    padding: 2px max(16px, env(safe-area-inset-right, 0px)) 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .sto-schede::-webkit-scrollbar { display: none; }
+  .sto-scheda { flex: none; }
+
+  .sto-tabella { overflow: visible; border: none; border-radius: 0; background: none; }
+  .sto-testa { display: none; }
+  .sto-giorno { padding: 14px 4px 8px; border-bottom: none; background: none; }
+  /* La card è la voce (riga + pannello): così, aperta, il dettaglio sta dentro la stessa card. */
+  .sto-voce { overflow: hidden; margin-bottom: 10px; border: 1px solid var(--bordo); border-radius: 14px; background: var(--surface); }
+  .sto-tabella > :last-child { border-bottom: 1px solid var(--bordo); }
+  .sto-riga {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-areas: "ordine ora stato freccia" "cliente cliente cliente cliente" "materiale materiale materiale materiale" "totale totale totale totale";
+    column-gap: 6px; row-gap: 6px; padding: 12px 10px 12px 14px;
+  }
+  .sto-c-freccia { grid-area: freccia; align-self: center; width: 24px; }
+  .sto-dettaglio { border-left-width: 3px; }
+  .sto-c-totale::before { content: "Da incassare "; color: var(--grigio); font-size: 13px; font-weight: 400; }
+  .sto-c-ordine { grid-area: ordine; }
+  .sto-c-ora { grid-area: ora; }
+  .sto-c-ora::before { content: "·"; margin-right: 6px; }
+  .sto-c-stato { grid-area: stato; justify-self: end; }
+  .sto-c-cliente { grid-area: cliente; }
+  .sto-cliente-citta { display: none; } /* la scheda ha quattro righe: la città si vede da schermo largo */
+  .sto-c-materiale { grid-area: materiale; }
+  .sto-c-totale { grid-area: totale; text-align: left; font-size: 16px; }
+
+  /* Il pannello a una colonna: Materiale, Come è andata, poi i pulsanti a tutta larghezza. */
+  .sto-d-griglia { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 4px 12px 14px; }
+  .sto-d-riga { grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; column-gap: 10px; padding: 11px 14px; }
+  .sto-d-cad { display: none; }
+  .sto-d-cad-sub { display: inline; }
+  .sto-d-testa, .sto-d-tempi, .sto-d-piede { padding-left: 14px; padding-right: 14px; }
+  .sto-d-piede { justify-content: flex-start; }
+}
+

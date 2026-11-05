@@ -1,0 +1,161 @@
+<% const str = (typeof striscia !== 'undefined' && striscia) ? striscia : null; %>
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('../partials/comune/app_head', { titolo }) %>
+</head>
+<body data-loggato="1"<%- str ? ' class="con-striscia"' : '' %>>
+  <div class="app">
+    <%- include('../partials/comune/appbar', { titolo, intestazione: str ? 'Stato ordini' : 'Richiesta', indietro: str ? null : '/home' }) %>
+    <% if (str) { %><%- include('../partials/cliente/striscia_ordini', { striscia: str }) %><% } %>
+
+    <%# Una richiesta senza ordine: annullata dall'installatore o chiusa perché nessun banco (o nessun
+        corriere) ha confermato in tempo. Se è andata a buon fine si apre direttamente l'ordine.
+        Scaduta (nessuna_offerta) ha il layout nuovo, in rosso, come "Verifica disponibilità" e "Ordine in
+        consegna" (classi att-*); annullata resta com'era. %>
+    <div class="contenuto">
+      <% if (richiesta.stato === 'nessuna_offerta') { %>
+        <%
+          // Il banco ha accettato ma nessun corriere ha preso la consegna in tempo: la causa è il corriere, non il banco.
+          const senzaCorriere = risposte.some(function (r) { return r.bancoConfermato && r.esito === 'scaduto'; });
+          const spunta = '<span class="att-spunta" aria-hidden="true"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>';
+        %>
+
+        <%# 1. Stato: anello vuoto, rimborso, passaggi %>
+        <div class="card att-card att-timer att-rosso">
+          <div class="att-anello">
+            <svg viewBox="0 0 148 148" aria-hidden="true">
+              <circle class="traccia" cx="74" cy="74" r="64"/>
+            </svg>
+            <span class="att-tempo att-tempo-spento">00:00</span>
+            <span class="att-allarme" aria-hidden="true">!</span>
+          </div>
+          <h2 class="att-titolo"><%= senzaCorriere ? 'Nessun corriere ha confermato' : 'Nessun banco ha confermato' %></h2>
+          <p class="att-sotto">Il tempo per rispondere è scaduto.</p>
+          <%# La carta era solo bloccata: il blocco si annulla, non c'è nessun rimborso da aspettare. %>
+          <% if (statoPag && statoPag.chiave === 'annullato') { %>
+            <div class="att-rimborso-riga"><span class="att-rimborso"><%- spunta %>Nessun addebito sulla carta</span></div>
+          <% } %>
+          <ol class="att-passi">
+            <li class="att-passo att-fatto">
+              <span class="att-barretta"></span>
+              <span class="att-etichetta"><%- spunta %>Inviata</span>
+            </li>
+            <li class="att-passo att-corrente" aria-current="step">
+              <span class="att-barretta"></span>
+              <span class="att-etichetta"><span class="att-croce" aria-hidden="true"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"><path d="M7 7l10 10M17 7L7 17"/></svg></span>Nessuna risposta</span>
+            </li>
+            <li class="att-passo">
+              <span class="att-barretta"></span>
+              <span class="att-etichetta">In consegna</span>
+            </li>
+          </ol>
+        </div>
+
+        <%# 2. Banchi interpellati (uno per ditta, con il suo stato) %>
+        <% risposte.forEach(function (r) { %>
+          <div class="card att-card att-banco">
+            <span class="att-icona" aria-hidden="true"><%- iconaNegozio %></span>
+            <div class="att-banco-testo">
+              <div class="att-occhiello">Banco interpellato</div>
+              <div class="att-banco-nome"><%= r.distributore_nome %></div>
+            </div>
+            <% if (r.esito === 'confermato' || (r.bancoConfermato && r.esito === 'scaduto')) { %>
+              <span class="att-chip-ok"><%- spunta %>Disponibile</span>
+            <% } else { %>
+              <span class="att-chip-no"><%= r.esito === 'non_disponibile' ? 'Non disponibile' : 'Nessuna risposta' %></span>
+            <% } %>
+          </div>
+        <% }); %>
+
+        <%# 3. Materiale richiesto: righe a prezzo del banco, IVA esclusa, e "Merce · IVA esclusa · prezzi del banco". La data della richiesta non si mostra più. %>
+        <%- include('../partials/cliente/richiesta_materiale', { righePrezzi, importi }) %>
+
+        <%# 4. Pagamenti: la consegna rimborsata (o il rimborso in corso) e il materiale "niente da pagare"; in fondo cosa succederebbe rinviando, con i prezzi di
+            OGGI (`rinvio`, da flusso.dettaglioRichiesta). Una richiesta del vecchio flusso (mai pagata) non l'ha. %>
+        <% if (importi.app.conPagamento) { %>
+          <%- include('../partials/cliente/pagamenti', { importi, stato: 'chiusa', ditta, statoPag, motivoChiusura: senzaCorriere ? 'corriere' : 'banco', rinvio }) %>
+        <% } %>
+
+        <%# 5. Rinvia: stessa azione di prima. Il testo non dice più "paghi di nuovo": l'importo lo ha già visto nella scheda. %>
+        <form method="POST" action="/richieste/<%= richiesta.id %>/reinvia">
+          <button class="att-rinvia" type="submit">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4.5V9h-4.5"/></svg>
+            Rinvia richiesta
+          </button>
+        </form>
+
+        <%# 6. Elimina: stessa azione e stessa conferma di prima %>
+        <form method="POST" action="/richieste/<%= richiesta.id %>/elimina" onsubmit="return confirm('Eliminare definitivamente questa richiesta?')">
+          <button class="att-elimina" type="submit">Elimina richiesta</button>
+        </form>
+
+        <%# Una richiesta senza risposta resta in "Stato ordini" 10 minuti dalla scadenza (flusso.secondiAllaScomparsa): se la si sta guardando quando
+            finiscono, la pagina passa da sola a /ordini, che porta alla prossima attività (un'altra richiesta senza risposta ancora nei suoi 10
+            minuti, una richiesta o un ordine in corso) o alla pagina vuota. +1 s di margine, così il server ha già smesso di mandarla. L'icona in basso
+            (partials/cliente/nav_ordini.ejs) legge window.minuteriaLasciaIl: negli ultimi secondi non ricarica la pagina, per non vincere la corsa col passaggio. %>
+        <% if (typeof lasciaFra !== 'undefined' && lasciaFra > 0) { %>
+          <script>
+            (function () {
+              var fine = Date.now() + <%= lasciaFra %> * 1000 + 1000;
+              window.minuteriaLasciaIl = fine;
+              function controlla() { if (Date.now() >= fine) location.replace('/ordini'); }
+              setTimeout(function () { location.replace('/ordini'); }, <%= lasciaFra %> * 1000 + 1000);
+              window.addEventListener('pageshow', controlla);
+              document.addEventListener('visibilitychange', function () { if (!document.hidden) controlla(); });
+            })();
+          </script>
+        <% } %>
+
+      <% } else { %>
+      <% if (richiesta.stato === 'annullata') { %>
+        <div class="avviso avviso-attenzione">
+          Hai annullato questa richiesta.
+          <% if (statoPag && statoPag.chiave === 'annullato') { %>Nessun addebito sulla carta.<% } %>
+        </div>
+      <% } else { %>
+        <div class="avviso avviso-attenzione">
+          Nessun distributore ha confermato la consegna entro i <%= Math.round(minutiTesto) %> minuti.
+          La mancata risposta non vale come disponibilità: il materiale potrebbe esserci
+          ma non essere reperibile al banco.
+          <% if (statoPag && statoPag.chiave === 'annullato') { %>
+            <strong>Nessun addebito sulla carta.</strong>
+          <% } %>
+        </div>
+      <% } %>
+
+      <% if (risposte.length) { %>
+        <div class="sezione-titolo">Distributori interpellati</div>
+        <div class="card card-fitta">
+          <% risposte.forEach(function (r) { %>
+            <div class="pill-distributore">
+              <div>
+                <div class="nome"><%= r.distributore_nome %></div>
+                <div class="filiale"><%= r.filiale %></div>
+              </div>
+              <span class="stato-badge stato-<%= r.esito %>">
+                <%= r.esito === 'non_disponibile' ? 'Non disponibile' : (r.esito === 'in_attesa' ? 'In attesa' : (r.esito === 'confermato' ? 'Disponibile' : 'Nessuna risposta')) %>
+              </span>
+            </div>
+          <% }); %>
+        </div>
+      <% } %>
+
+      <%# Materiale a prezzo del banco e Pagamenti: la stessa scheda di "Nessuna risposta" (qui la consegna è "Rimborsata" e il materiale "Niente da pagare"). %>
+      <%- include('../partials/cliente/richiesta_materiale', { righePrezzi, importi }) %>
+      <% if (importi.app.conPagamento) { %>
+        <%- include('../partials/cliente/pagamenti', { importi, stato: 'chiusa', ditta, statoPag, motivoChiusura: richiesta.stato === 'annullata' ? 'annullata' : 'banco', rinvio: null }) %>
+      <% } %>
+
+      <a class="btn btn-primary btn-blocco" href="/home">Torna alla home</a>
+      <form method="POST" action="/richieste/<%= richiesta.id %>/elimina" onsubmit="return confirm('Eliminare definitivamente questa richiesta?')">
+        <button class="btn btn-rosso btn-blocco" type="submit" style="margin-top:8px;">Elimina richiesta</button>
+      </form>
+      <% } %>
+    </div>
+  </div>
+
+  <%- include('../partials/cliente/nav', { attivo: 'ordini' }) %>
+  <script src="<%= asset('/app.js') %>" defer></script>
+</body>
+</html>

@@ -1,0 +1,177 @@
+/* ---------- Geolocalizzazione ---------- */
+/* Mappa Leaflet: alta zero finché non c'è niente da mostrare, così non lascia buchi. */
+.mappa {
+  width: 100%;
+  height: 0;
+  margin: 10px 0 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #eef2f6;
+  border: 1px solid var(--bordo);
+}
+.mappa.mappa-attiva { height: 220px; }
+.mappa .leaflet-container { height: 100%; width: 100%; font: inherit; }
+.mappa-grande.mappa-attiva { height: 300px; }
+
+.mappa-vuota {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 12px;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--grigio);
+}
+
+.segno-mappa span {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+.geo-legenda {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: var(--grigio);
+  margin-top: 8px;
+}
+.geo-legenda span::before {
+  content: '';
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: baseline;
+}
+
+/* ---------- Marchi ---------- */
+
+.logo-marchio {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 10px;
+  background: var(--marchio, var(--blu));
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
+}
+.logo-marchio.grande { width: 56px; height: 56px; font-size: 1.15rem; border-radius: 14px; }
+
+.marchio-tag {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: #fff;
+  background: var(--marchio, var(--blu));
+  vertical-align: 2px;
+  margin-right: 4px;
+}
+
+.testata-marchio { display: flex; align-items: center; gap: 14px; }
+.testata-marchio .nome-marchio { font-weight: 800; font-size: 1.2rem; }
+.testata-marchio .dettaglio { color: var(--grigio); font-size: 0.85rem; margin-top: 2px; }
+
+/* ---------- Paginazione ---------- */
+
+.paginazione {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 14px 0;
+}
+.paginazione .btn { padding: 10px 14px; font-size: 0.85rem; }
+.paginazione .conta-pagina {
+  font-size: 0.78rem;
+  color: var(--grigio);
+  text-align: center;
+  flex: 1;
+}
+.paginazione [aria-disabled="true"] { opacity: 0.4; }
+
+/* ---------- Sconti al banco ---------- */
+
+/* Legenda con un colore per insegna sulla mappa dei punti vendita */
+.legenda-insegne span::before { background: var(--colore-insegna, var(--blu)); }
+
+/* ---------- Menu account a tendina ---------- */
+
+.azioni-appbar { display: flex; align-items: center; justify-content: flex-end; justify-self: end; padding-right: 4px; }
+.menu-account { position: relative; }
+
+.menu-account .tendina {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--bordo);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14);
+  overflow: hidden;
+  z-index: 40;
+}
+
+.menu-account .tendina-testata {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--bordo);
+  background: var(--sfondo);
+}
+.menu-account .tendina-testata .nome { font-weight: 700; font-size: 0.92rem; }
+.menu-account .tendina-testata .ruolo { color: var(--grigio); font-size: 0.78rem; margin-top: 2px; }
+
+.menu-account .tendina a,
+.menu-account .tendina .voce-esci {
+  display: block;
+  width: 100%;
+  padding: 12px 14px;
+  text-align: left;
+  text-decoration: none;
+  color: var(--testo);
+  font-size: 0.92rem;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--bordo);
+  cursor: pointer;
+  font-family: inherit;
+}
+.menu-account .tendina a:first-of-type { border-top: none; }
+.menu-account .tendina a:hover,
+.menu-account .tendina .voce-esci:hover { background: var(--sfondo); }
+.menu-account .tendina form { margin: 0; }
+.menu-account .tendina .voce-esci { color: var(--rosso); font-weight: 700; }
+
+/* ---------- Home orientata alla fretta ---------- */
+
+.domanda { font-size: 1.5rem; font-weight: 800; margin: 6px 2px 12px; }
+.barra-ricerca.grande { padding: 12px 16px; margin-bottom: 6px; }
+.barra-ricerca.grande input[type="search"] { font-size: 1.05rem; }
+
+.altre-categorie { margin: 16px 0; }
+.altre-categorie summary {
+  font-weight: 700;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio);
+  cursor: pointer;
+}
+.altre-categorie[open] summary { border-radius: var(--raggio) var(--raggio) 0 0; margin-bottom: 0; }
+.altre-categorie[open] .card { border-top: none; border-radius: 0 0 var(--raggio) var(--raggio); }
+
+/* riordino rapido */
+

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <%- include('../partials/comune/app_head', { titolo: 'Ordini Minuteria' }) %>
+</head>
+<body data-loggato="0">
+  <main class="acc">
+    <header class="acc-testata">
+      <span class="acc-icona" aria-hidden="true"><%- iconaOrdini %></span>
+      <div class="acc-occhiello">Ordini Minuteria</div>
+      <h1 class="acc-titolo">Il pezzo che ti manca, in cantiere.</h1>
+      <p class="acc-sotto">Chiedi la disponibilità al banco e ricevi il materiale dove lavori.</p>
+    </header>
+
+    <nav class="acc-schede" aria-label="Accesso o registrazione">
+      <a href="/login" class="attiva" aria-current="page">Accedi</a>
+      <a href="/registrati">Registrati</a>
+    </nav>
+
+    <% if (errore) { %><div class="errore" role="alert"><%= errore %></div><% } %>
+    <%# Dopo aver cambiato la password dal link dell'email, o dopo aver eliminato l'account (?avviso=... di GET /login). %>
+    <% if (typeof avviso !== 'undefined' && avviso) { %><div class="acc-avviso" role="status"><%= avviso %></div><% } %>
+
+    <form method="POST" action="/login">
+      <%- include('../partials/comune/acc_campo', {
+        id: 'username', etichetta: 'Nome utente',
+        attributi: { placeholder: 'es. rossimpianti', autocomplete: 'username', autocapitalize: 'none', autocorrect: 'off', spellcheck: 'false', required: true },
+      }) %>
+      <%- include('../partials/comune/acc_campo', {
+        id: 'password', etichetta: 'Password', tipo: 'password',
+        attributi: { autocomplete: 'current-password', required: true },
+      }) %>
+      <p class="acc-dimenticata"><a href="/password-dimenticata">Password dimenticata?</a></p>
+      <button class="acc-btn" type="submit">Accedi</button>
+    </form>
+
+    <p class="acc-fondo">Non hai un account? <a href="/registrati">Registra la tua impresa</a></p>
+    <p class="acc-fondo"><a href="/privacy">Privacy</a> · <a href="/elimina-account">Elimina il tuo account</a></p>
+  </main>
+  <script src="<%= asset('/app.js') %>" defer></script>
+</body>
+</html>

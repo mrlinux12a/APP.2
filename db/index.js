@@ -97,7 +97,7 @@ async function exec(sql) {
 
 let inited = false;
 // Controlla una volta sola che lo schema del database esista (una SELECT leggera) e, se manca, lo scrive nel log. Non lo crea MAI da sé: lo schema si applica
-// una volta, a mano, con `node scripts/apply_schema_pg.js` (un lucchetto automatico all'avvio non è affidabile se più istanze partono insieme o c'è un
+// una volta, a mano, con `node scripts/db/apply_schema_pg.js` (un lucchetto automatico all'avvio non è affidabile se più istanze partono insieme o c'è un
 // pooler di mezzo). Se la rete è giù non segna il controllo come fatto.
 async function ensureInit() {
   if (inited) return;
@@ -107,7 +107,7 @@ async function ensureInit() {
     // Rete giù: non c'entra lo schema. Non si segna come controllato: si rifà alla prossima chiamata.
     if (eErroreDiRete(e)) throw e;
     console.error(
-      'Schema Postgres non trovato o incompleto. Applicalo una volta con: node scripts/apply_schema_pg.js',
+      'Schema Postgres non trovato o incompleto. Applicalo una volta con: node scripts/db/apply_schema_pg.js',
       e.message
     );
   }
@@ -168,7 +168,7 @@ function mantieniCalde() {
             '[db] database NON raggiungibile da questa rete (' + (err.cause ? err.cause.message : err.message) + ').\n' +
               '     Su una rete universitaria o aziendale (eduroam) il traffico Postgres verso il database (o verso il tunnel SSH) può essere bloccato:\n' +
               '     il TCP si apre ma il server non risponde. Non è un errore dell\'app: usa l\'hotspot del telefono o una VPN.\n' +
-              '     Per vedere a che punto si ferma: node scripts/diagnosi_rete_db.js'
+              '     Per vedere a che punto si ferma: node scripts/db/diagnosi_rete_db.js'
           );
         }
         raggiungibile = false;

@@ -1,11 +1,11 @@
 // Sessione dell'utente (il cookie di accesso): dove si salva, quanto dura e come si protegge.
 const session = require('express-session');
 const { segretoSessione } = require('../config/ambiente');
-const { ArchivioSessioni } = require('../sessioni');
-const { salvaSessionePrimaDelRedirect } = require('../http');
+const { ArchivioSessioni } = require('../logica/account/sessioni');
+const { salvaSessionePrimaDelRedirect } = require('./salva_sessione');
 
 // Crea i due pezzi della sessione, da montare uno dopo l'altro: la sessione vera (salvata nel database, così un riavvio non scollega nessuno) e il
-// salvataggio forzato prima dei redirect (src/http.js).
+// salvataggio forzato prima dei redirect (src/middleware/salva_sessione.js).
 function creaSessione() {
   return [
     session({

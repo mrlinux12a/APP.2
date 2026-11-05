@@ -395,7 +395,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_request_unico ON orders(request_id)
 -- automaticamente LIKE/ILIKE con jolly su entrambi i lati una volta creato l'indice GIN
 -- sull'espressione — nessuna modifica alla query in catalogo.js, che già usa esattamente
 -- LOWER(nome)/LOWER(codice).
--- NOTA operativa: node scripts/apply_schema_pg.js manda tutto questo file in una sola
+-- NOTA operativa: node scripts/db/apply_schema_pg.js manda tutto questo file in una sola
 -- query multi-istruzione, che Postgres esegue come un'unica transazione implicita — se
 -- CREATE EXTENSION fallisse per mancanza di privilegi, andrebbe in rollback anche tutto
 -- il resto del file. Va quindi applicata con una passata separata (aggiungendo queste
@@ -407,7 +407,7 @@ CREATE INDEX IF NOT EXISTS idx_products_codice_trgm ON products USING GIN (LOWER
 -- sottocategoria era una singola colonna testo: non può rappresentare un prodotto a
 -- cavallo di due sottocategorie (caso reale, gestito assegnando entrambe). Sostituita da
 -- questa relazione molti-a-molti — la colonna non era mai stata popolata, nessun dato
--- perso nel passaggio. Vedi scripts/assegna_sottocategorie.js per il popolamento.
+-- perso nel passaggio. Vedi scripts/db/assegna_sottocategorie.js per il popolamento.
 ALTER TABLE products DROP COLUMN IF EXISTS sottocategoria;
 
 CREATE TABLE IF NOT EXISTS product_sottocategorie (
@@ -418,7 +418,7 @@ CREATE TABLE IF NOT EXISTS product_sottocategorie (
 );
 CREATE INDEX IF NOT EXISTS idx_product_sottocat_lookup ON product_sottocategorie(macro_slug, sottocategoria_slug);
 
--- Accessi dell'app nativa (src/token_app.js): il telefono conserva il token, qui ne resta
+-- Accessi dell'app nativa (src/logica/account/token_app.js): il telefono conserva il token, qui ne resta
 -- solo l'hash. revocato_il si imposta al logout dall'app; un token non usato da 60 giorni
 -- smette comunque di valere (controllo sulla data di usato_il, nessuna pulizia necessaria).
 CREATE TABLE IF NOT EXISTS app_tokens (
@@ -553,7 +553,7 @@ ALTER TABLE requests ADD COLUMN IF NOT EXISTS pagamento_metodo TEXT;
 ALTER TABLE requests ADD COLUMN IF NOT EXISTS pagamento_importo DOUBLE PRECISION;
 ALTER TABLE requests ADD COLUMN IF NOT EXISTS pagato_il TIMESTAMP;
 
--- Pagamenti con Stripe (src/stripe_pagamenti.js): ogni tentativo di pagamento fatto dal carrello, o da "Rinvia
+-- Pagamenti con Stripe (src/logica/pagamenti/stripe_pagamenti.js): ogni tentativo di pagamento fatto dal carrello, o da "Rinvia
 -- richiesta", è una riga e un PaymentIntent (il form di pagamento sta nel sito, pagina /pagamento/<id>). La carta viene solo AUTORIZZATA (manual capture) all'invio; si incassa quando nasce
 -- l'ordine e si rilascia il blocco se la richiesta si chiude senza ordine. La tabella sopravvive alla richiesta
 -- (nessuna FK su request_id): un'eliminazione non deve perdere il PaymentIntent da rilasciare.
@@ -634,9 +634,9 @@ ALTER TABLE requests ADD COLUMN IF NOT EXISTS materiale_banco DOUBLE PRECISION N
 ALTER TABLE requests ADD COLUMN IF NOT EXISTS rimborsato_il TIMESTAMP;
 
 -- Ricevute di pagamento e dati della carta (18/10/2026)
--- All'invio la carta è solo AUTORIZZATA; si incassa quando nasce l'ordine, e da lì esiste la ricevuta. Al momento dell'incasso (src/stripe_pagamenti.js)
+-- All'invio la carta è solo AUTORIZZATA; si incassa quando nasce l'ordine, e da lì esiste la ricevuta. Al momento dell'incasso (src/logica/pagamenti/stripe_pagamenti.js)
 -- si salvano sulla riga di stripe_pagamenti l'indirizzo della ricevuta di Stripe, la marca e le ultime 4 cifre della carta e l'istante dell'incasso
--- (per "Pagata il 15/10 · Visa •••• 4242"). La ricevuta nostra (PDF, src/ricevute.js) ha un numero progressivo PER ANNO e PER TIPO ('pagamento' o
+-- (per "Pagata il 15/10 · Visa •••• 4242"). La ricevuta nostra (PDF, src/logica/pagamenti/ricevute.js) ha un numero progressivo PER ANNO e PER TIPO ('pagamento' o
 -- 'rimborso'): R-AAAA-NNNNNN. Un ordine ha una sola ricevuta per tipo (indice unico su ordine_id + tipo), così rigenerare il PDF non cambia il
 -- numero. Nessuna FK su ordine_id: una ricevuta già emessa non deve sparire con l'ordine. Il blocco si può rilanciare.
 ALTER TABLE stripe_pagamenti ADD COLUMN IF NOT EXISTS receipt_url TEXT;
@@ -655,7 +655,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_ricevute_numero ON ricevute(anno, numero, 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_ricevute_ordine ON ricevute(ordine_id, tipo);
 
 -- Notifiche push dell'app Android (19/10/2026)
--- Un telefono che entra nell'app registra il suo token Expo (ExpoPushToken[...]): src/push.js lo usa per mandare, oltre alla notifica
+-- Un telefono che entra nell'app registra il suo token Expo (ExpoPushToken[...]): src/logica/notifiche/push.js lo usa per mandare, oltre alla notifica
 -- in-app, una notifica di sistema (ordine confermato, nessuna conferma, ordine annullato...). Un token e' di UN solo telefono: se lo stesso telefono
 -- entra con un altro utente il token passa a lui (ON CONFLICT sul token). Si cancella con l'uscita dall'app, con l'eliminazione dell'account e
 -- quando Expo dice che il telefono non lo riconosce piu' (DeviceNotRegistered). Nessuna FK su user_id: non deve bloccare mai l'anonimizzazione.
@@ -682,7 +682,7 @@ ALTER TABLE order_items ADD COLUMN IF NOT EXISTS preso_il TIMESTAMP;
 ALTER TABLE whatsapp_messaggi ADD COLUMN IF NOT EXISTS istanza TEXT;
 
 -- Notifiche del banco: tipo e richiesta (20/10/2026)
--- Le notifiche al banco compaiono anche come avvisi a comparsa in basso a destra (public/app.js, "Avvisi del banco"): il browser deve sapere di che
+-- Le notifiche al banco compaiono anche come avvisi a comparsa in basso a destra (assets/js, "Avvisi del banco"): il browser deve sapere di che
 -- genere e' ognuna (nuova_richiesta, corriere_trovato, nessun_corriere, richiesta_scaduta, ordine_consegnato) e a quale richiesta si riferisce.
 -- `tipo` NULL = notifica di prima o di un genere senza avviso a comparsa. `request_id` senza chiave esterna: non deve bloccare la cancellazione di una
 -- richiesta. Il blocco si puo' rilanciare.
@@ -713,7 +713,7 @@ CREATE INDEX IF NOT EXISTS idx_recupero_password_user ON recupero_password(user_
 
 -- Notifiche push del sito e della web app (21/10/2026)
 -- Un browser (o la web app installata sul telefono) che accetta le notifiche si iscrive al servizio push del suo produttore (Google, Apple, Mozilla...) e
--- ci manda il suo indirizzo (`endpoint`) con le chiavi per cifrare il messaggio: src/web_push.js li usa per consegnare la notifica anche con l'app CHIUSA
+-- ci manda il suo indirizzo (`endpoint`) con le chiavi per cifrare il messaggio: src/logica/notifiche/web_push.js li usa per consegnare la notifica anche con l'app CHIUSA
 -- (Web Push, chiavi VAPID nel .env). `endpoint` e' unico: se lo stesso browser entra con un altro utente la riga passa a lui (ON CONFLICT sull'endpoint).
 -- `chiave` e' la chiave pubblica VAPID con cui e' nata l'iscrizione: un server con un'altra coppia di chiavi (il PC di sviluppo, che parla col DB di
 -- produzione) la lascia stare invece di provare a usarla. Si cancella con l'uscita (logout), con l'eliminazione dell'account e quando il servizio push dice

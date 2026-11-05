@@ -1,0 +1,214 @@
+/* ---------- Verifica disponibilità (views/cliente/richiesta_attesa.ejs) ---------- */
+
+.att-card { border-radius: 16px; }
+.att-occhiello {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--grigio);
+}
+
+/* Scheda timer: anello che si svuota in 10 minuti. Lo muove lo stesso timer della navbar
+   (partials/cliente/nav_ordini.ejs: [data-countdown] e [data-arco] con data-circ), con la stessa formula. */
+.att-timer { padding: 24px 16px 18px; text-align: center; }
+.att-anello { position: relative; width: 148px; height: 148px; margin: 0 auto 18px; }
+.att-anello > svg { display: block; width: 148px; height: 148px; }
+.att-anello .traccia { fill: none; stroke: var(--arancio-chiaro); stroke-width: 10; }
+.att-anello .avanzamento {
+  fill: none; stroke: var(--arancio); stroke-width: 10; stroke-linecap: round;
+  stroke-dasharray: 402.12; transform: rotate(-90deg); transform-origin: 74px 74px;
+  transition: stroke-dashoffset 1s linear;
+}
+.att-tempo {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 800; font-size: 31px; line-height: 1; color: var(--testo);
+  font-variant-numeric: tabular-nums;
+}
+.att-titolo {
+  display: flex; align-items: center; justify-content: center; gap: 9px; margin: 0 0 18px;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 700; font-size: 19px; line-height: 1.25;
+}
+.att-punto {
+  flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--arancio);
+  animation: nav-ordini-pulsa 1.6s ease-in-out infinite;
+}
+
+/* I tre passaggi: Inviata (fatto) > Conferma banco (corrente) > In consegna */
+.att-passi { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.att-passo { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.att-barretta { display: block; height: 5px; border-radius: 3px; background: var(--bordo); }
+.att-fatto .att-barretta { background: var(--verde); }
+.att-corrente .att-barretta { background: var(--arancio); }
+.att-etichetta {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 12.5px; line-height: 1.2; font-weight: 600; color: var(--grigio);
+}
+.att-fatto .att-etichetta { color: var(--verde); font-weight: 700; }
+.att-corrente .att-etichetta { color: var(--arancio); font-weight: 700; }
+.att-spunta {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 50%; background: var(--verde); color: #fff;
+}
+
+/* Banco interpellato: una scheda per banco. L'etichetta di stato è un .stato-badge (lo script della pagina
+   ne riscrive testo e classe a ogni aggiornamento): il puntino davanti è un ::before, così resta. */
+.att-banco { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 10px 14px; }
+.att-icona {
+  flex: none; display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 10px; background: #f1efea; color: var(--grigio); font-size: 20px;
+}
+.att-banco-testo { flex: 1; min-width: 0; }
+.att-banco-nome { font-weight: 700; font-size: 16px; line-height: 1.25; overflow-wrap: anywhere; }
+#stato-distributori .stato-badge {
+  flex: none; display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; font-size: 13px; line-height: 1.2; white-space: nowrap;
+}
+#stato-distributori .stato-badge::before {
+  content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--punto, currentColor);
+}
+#stato-distributori .stato-in_attesa { background: var(--arancio-chiaro); color: #8a3a14; --punto: var(--arancio); }
+#stato-distributori .stato-in_attesa::before { animation: nav-ordini-pulsa 1.6s ease-in-out infinite; }
+#stato-distributori .stato-confermato { --punto: var(--verde); }
+#stato-distributori .stato-non_disponibile,
+#stato-distributori .stato-scaduto { --punto: var(--rosso); }
+
+/* Materiale richiesto e importo pagato */
+.att-materiale { padding: 14px 16px; }
+.att-righe { list-style: none; margin: 8px 0 0; padding: 0; }
+.att-riga { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0; }
+.att-qta {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  min-width: 36px; height: 28px; padding: 0 6px; border-radius: 8px;
+  background: var(--blu-chiaro); color: #1a4468; font-weight: 700; font-size: 14px;
+}
+.att-desc { flex: 1; min-width: 0; }
+.att-nome { font-size: 15px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.att-cod { margin-top: 3px; font-size: 13px; color: var(--grigio); overflow-wrap: anywhere; }
+
+/* "Annulla la richiesta": link centrato, rosso scuro, sottolineato */
+.att-annulla {
+  display: block; margin: 4px auto 0; min-height: 44px; padding: 0 16px; background: none; border: none;
+  color: #8a3a3a; font-family: inherit; font-size: 15px; text-decoration: underline; cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .att-punto, #stato-distributori .stato-in_attesa::before { animation: none; }
+  .att-anello .avanzamento { transition: none; }
+}
+
+/* ---------- Ordine in consegna (views/cliente/ordine_dettaglio.ejs): stessa struttura della verifica disponibilità, in verde ---------- */
+
+.att-verde .att-anello .traccia { stroke: var(--verde-chiaro); }
+.att-verde .att-anello .avanzamento { stroke: var(--verde); }
+.att-furgone {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 58px; color: var(--testo);
+}
+.att-furgone > span { display: flex; animation: att-oscilla 1.1s ease-in-out infinite; }
+.att-furgone svg { stroke-width: 1.4; }
+@keyframes att-oscilla { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+
+.att-verde .att-titolo { margin-bottom: 6px; font-size: 22px; font-weight: 800; }
+.att-verde .att-titolo.att-titolo-solo { margin-bottom: 18px; }
+.att-verde .att-punto { background: var(--verde); }
+.att-sotto { margin: 0 0 18px; font-size: 14px; color: var(--grigio); }
+.att-sotto strong { color: var(--testo); }
+/* "Mancano 18 min" sotto il titolo di un ordine in consegna: scende da solo (assets/js, "Consegna in arrivo"), sparisce a 3 minuti o meno. */
+.att-minuti { margin: 0 0 6px; font-size: 15px; font-weight: 700; line-height: 1.3; color: #1f5f2e; font-variant-numeric: tabular-nums; }
+.att-minuti.att-minuti-solo { margin-bottom: 18px; }
+
+/* "In consegna": la barretta si riempie col tempo trascorso (all'inverso dell'anello) */
+.att-verde .att-corrente .att-barretta { overflow: hidden; background: var(--verde-chiaro); }
+.att-riempimento { display: block; height: 100%; border-radius: 3px; background: var(--verde); transition: width 1s linear; }
+.att-verde .att-corrente .att-etichetta { color: #1f5f2e; }
+
+/* Etichetta "Confermato" della scheda del banco */
+.att-chip-ok {
+  flex: none; display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px 5px 6px; border-radius: 999px; background: var(--verde-chiaro); color: #1f5f2e;
+  font-weight: 600; font-size: 13px; line-height: 1.2; white-space: nowrap;
+}
+
+/* Materiale: prezzo di riga a destra e riepilogo dei costi */
+.att-prezzo-riga { flex: none; font-weight: 700; font-size: 15px; line-height: 1.3; white-space: nowrap; }
+.att-riepilogo { margin: 10px 0 0; padding-top: 10px; border-top: 1px solid var(--bordo); }
+.att-voce { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 5px 0; font-size: 14.5px; }
+.att-voce dt { margin: 0; color: var(--grigio); }
+.att-voce dd { margin: 0; }
+
+/* Dettagli consegna e pagamento: <details> chiuso, una riga per voce */
+
+@media (prefers-reduced-motion: reduce) {
+  .att-furgone > span { animation: none; }
+  .att-riempimento { transition: none; }
+}
+
+/* ---------- Richiesta scaduta (views/cliente/richiesta_chiusa.ejs): stessa struttura delle altre pagine att-*, in rosso ---------- */
+
+.att-rosso .att-anello .traccia { stroke: var(--rosso-chiaro); }
+.att-tempo-spento { color: #b8b4aa; }
+/* Pallino d'allarme sul bordo dell'anello, a 45° in alto a destra (centro 119,29 su 148) */
+.att-allarme {
+  position: absolute; left: 102px; top: 12px; box-sizing: border-box; width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center; border-radius: 50%;
+  background: var(--rosso); border: 3px solid var(--surface); color: #fff;
+  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 700; font-size: 17px; line-height: 1;
+}
+.att-rosso .att-titolo { margin-bottom: 6px; }
+.att-rosso .att-sotto { margin-bottom: 14px; }
+
+/* Rimborso: pillola verde (o neutra se il rimborso non è ancora avvenuto) */
+.att-rimborso-riga { margin: 0 0 18px; }
+.att-rimborso {
+  display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px 8px 10px; border-radius: 999px;
+  background: var(--verde-chiaro); color: #1f5f2e; font-weight: 700; font-size: 15px; line-height: 1.2;
+}
+
+/* Passaggio corrente "Nessuna risposta": barretta rossa, etichetta rosso scuro con la croce */
+.att-rosso .att-corrente .att-barretta { background: var(--rosso); }
+.att-rosso .att-corrente .att-etichetta { color: #991b1b; font-weight: 700; }
+.att-croce {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 50%; background: var(--rosso); color: #fff;
+}
+
+/* Stato del banco: "Nessuna risposta" / "Non disponibile" */
+.att-chip-no {
+  flex: none; padding: 6px 12px; border-radius: 999px; background: var(--rosso-chiaro); color: #991b1b;
+  font-weight: 700; font-size: 13px; line-height: 1.2; white-space: nowrap;
+}
+
+/* Riga in fondo alla scheda del materiale */
+
+/* "Rinvia richiesta": pulsante blu a tutta larghezza; "Elimina richiesta": link rosso scuro sottolineato */
+.att-rinvia {
+  display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; height: 54px;
+  margin-top: 4px; border: none; border-radius: 27px; background: var(--blu); color: var(--su-blu);
+  font-family: inherit; font-size: 17px; font-weight: 700; cursor: pointer;
+}
+.att-rinvia:active:not(:disabled) { background: var(--blu-scuro); }
+.att-rinvia:disabled { background: #c9d0d8; cursor: default; }
+.att-elimina {
+  display: block; margin: 8px auto 0; min-height: 44px; padding: 0 16px; background: none; border: none;
+  color: #8a3a3a; font-family: inherit; font-size: 15px; font-weight: 600; text-decoration: underline; cursor: pointer;
+}
+
+/* ---------- Area di tocco minima 44 x 44 px (audit del 05/10/2026) ---------- */
+
+/* Controlli che prima erano fra i 34 e i 42 px di altezza: il cantiere è fatto di guanti e dita sporche. Il
+   centraggio del testo è esplicito perché alcuni sono link o inline-block. */
+.btn-logout,
+.paginazione .btn,
+.chip {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.menu-account .tendina a,
+.menu-account .tendina .voce-esci { min-height: 44px; }
+
