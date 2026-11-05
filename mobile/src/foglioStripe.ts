@@ -1,13 +1,15 @@
 // Il foglio di pagamento di Stripe (PaymentSheet) sul telefono. Il pagamento lo crea il server: la carta viene solo AUTORIZZATA (l'importo resta
 // bloccato) e si incassa quando un banco conferma. Vedi pagamento.ts per il flusso intero.
 import Constants, { ExecutionEnvironment } from 'expo-constants';
+import { Platform } from 'react-native';
 import { initPaymentSheet, initStripe, presentPaymentSheet } from '@stripe/stripe-react-native';
 
 import { ErroreApi, type PagamentoDaFare } from './api';
 
 export type EsitoFoglio = 'pagato' | 'annullato';
 
-// In Expo Go il foglio funziona ma Google Pay non esiste: serve una build vera.
+// In Expo Go il foglio funziona ma Google Pay non esiste: serve una build vera. Google Pay è solo di Android; su iPhone il foglio paga con la carta
+// (Apple Pay non è acceso: servirebbe un Merchant ID dell'account Apple Developer, vedi IOS.md).
 const inExpoGo = () => Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
 export async function apriFoglioStripe(p: PagamentoDaFare, nomeCliente?: string): Promise<EsitoFoglio> {
@@ -23,7 +25,7 @@ export async function apriFoglioStripe(p: PagamentoDaFare, nomeCliente?: string)
     style: 'alwaysLight',
     defaultBillingDetails: nomeCliente ? { name: nomeCliente } : undefined,
     appearance: { colors: { primary: '#245a8f' } },
-    googlePay: inExpoGo() ? undefined : { merchantCountryCode: 'IT', currencyCode: 'EUR', testEnv: p.modo !== 'live' },
+    googlePay: Platform.OS !== 'android' || inExpoGo() ? undefined : { merchantCountryCode: 'IT', currencyCode: 'EUR', testEnv: p.modo !== 'live' },
   });
   if (errorePreparazione) {
     throw new ErroreApi('Il pagamento non è disponibile in questo momento. Non è stato addebitato nulla. Riprova tra poco.', 0);

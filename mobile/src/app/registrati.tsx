@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View, type ScrollViewInstance } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ErroreApi, SERVER } from '@/api';
@@ -30,7 +30,8 @@ export default function Registrati() {
   const [dati, setDati] = useState<Record<string, string>>({ tipo_soggetto: 'impresa', provincia: 'GE' });
   const [errori, setErrori] = useState<ErroreCampo[]>([]);
   const [invio, setInvio] = useState(false);
-  const scorri = useRef<ScrollView>(null);
+  // Da React Native 0.87 il riferimento a uno ScrollView è di tipo `ScrollViewInstance` (non più `ScrollView`).
+  const scorri = useRef<ScrollViewInstance>(null);
 
   const imposta = (k: string) => (v: string) => {
     setDati((d) => ({ ...d, [k]: v }));

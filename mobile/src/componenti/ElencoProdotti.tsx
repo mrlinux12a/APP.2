@@ -48,7 +48,7 @@ export function ElencoProdotti({
             <View style={{ minHeight: 240 }}>
               <Vuoto icona="vuotoRicerca" messaggio={vuoto} />
             </View>
-          ) : null
+          ) : undefined
         }
         ListFooterComponent={
           altriInArrivo ? (
@@ -57,7 +57,7 @@ export function ElencoProdotti({
             <Text style={[stili.nota, { color: c.grigio }]}>
               Prezzi del banco, IVA esclusa. Quando mandi la richiesta paghi solo la consegna: la carta viene bloccata e addebitata solo se il banco conferma.
             </Text>
-          ) : null
+          ) : undefined
         }
         onEndReached={caricaAltri}
         onEndReachedThreshold={0.6}

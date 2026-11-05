@@ -10,7 +10,10 @@
     "backgroundColor": "#f3f1ec",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "it.minuteria.ordini"
+      "bundleIdentifier": "it.minuteria.ordini",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "it.minuteria.ordini",

@@ -42,7 +42,7 @@ npx eas-cli submit --platform android --profile production   # invio a Google Pl
 
 - La **prima** build `production` chiede di creare (o caricare) la chiave di firma: lascia che EAS la gestisca e **non perderla** (`eas credentials`).
 - `development` (`--profile development`) è per provare con `npx expo start --dev-client`; serve solo se modifichi codice nativo.
-- Per provare l'interfaccia senza build: `npx expo start` e Expo Go. Lì **non** funzionano Google Pay e le notifiche push (limiti di Expo Go), il resto sì; senza chiavi Stripe il pagamento è quello di prova.
+- Per provare l'interfaccia senza build: `npx expo start` e Expo Go (**dell'SDK 58**: dal 05/11/2026 il progetto è sull'SDK 58; se il Play Store ha ancora un Expo Go più vecchio, scaricalo da `expo.dev/go`). Lì **non** funzionano Google Pay e le notifiche push (limiti di Expo Go), il resto sì; senza chiavi Stripe il pagamento è quello di prova.
 
 ## 4. Scheda su Google Play: cosa preparare
 

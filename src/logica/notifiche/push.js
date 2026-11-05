@@ -1,9 +1,9 @@
-// Notifiche push dell'app Android (Expo Push Service). Ogni notifica in-app di un installatore (src/logica/notifiche/notifiche.js) può diventare anche una
+// Notifiche push dell'app Android e iPhone (Expo Push Service; l'app dice la sua `piattaforma` registrandosi, il resto è uguale). Ogni notifica in-app di un installatore (src/logica/notifiche/notifiche.js) può diventare anche una
 // notifica di sistema sul suo telefono: "Ordine confermato", "Nessuna conferma ricevuta", "Ordine annullato dal banco"...
 //
 // Come funziona:
 //  · il telefono, appena l'utente entra nell'app, ottiene il suo token Expo e lo manda a POST /api/v1/dispositivi (`registra`);
-//  · `inviaAUtente` legge i token dell'utente e li passa al servizio di Expo, che li consegna a Google (FCM);
+//  · `inviaAUtente` legge i token dell'utente e li passa al servizio di Expo, che li consegna a Google (FCM) o ad Apple (APNs);
 //  · se Expo dice che un telefono non esiste più (DeviceNotRegistered) il token si cancella.
 //
 // Regole che non si rompono:

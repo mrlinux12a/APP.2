@@ -1,8 +1,10 @@
 // Notifiche push: il telefono dice al server il suo token (POST /dispositivi) e, quando arriva una notifica, toccarla porta alla richiesta o all'ordine.
 //
-// Come funziona e cosa serve (vedi ANDROID.md): su Android le push passano da Firebase (FCM), quindi la build deve avere il file google-services.json e
-// il progetto EAS le chiavi FCM. Senza, l'app funziona lo stesso: la registrazione fallisce in silenzio e restano le notifiche in-app.
-// In Expo Go le push non esistono (da SDK 53 sono state tolte), e nel browser di sviluppo nemmeno: qui non succede niente.
+// Come funziona e cosa serve (vedi ANDROID.md e IOS.md): su Android le push passano da Firebase (FCM), quindi la build deve avere il file google-services.json e
+// il progetto EAS le chiavi FCM; su iPhone passano da Apple (APNs), con la chiave che EAS crea dall'account Apple Developer. Senza, l'app funziona lo stesso:
+// la registrazione fallisce in silenzio e restano le notifiche in-app.
+// In Expo Go le push non esistono (da SDK 53 sono state tolte), e nel browser di sviluppo nemmeno: qui non succede niente. Sul simulatore iOS e
+// sull'emulatore Android non c'è un token (`Device.isDevice`): serve un telefono vero.
 //
 // Come si comporta (richiesta del 21/10/2026, la stessa del sito): notifiche di sistema col suono del telefono con l'app in SECONDO PIANO o CHIUSA; con l'app
 // aperta IN PRIMO PIANO nessun banner e nessun suono (la schermata si aggiorna da sola, vedi `useNotifichePush`).
@@ -22,7 +24,7 @@ const CHIAVE_TOKEN_PUSH = 'token_push';
 const chiaveAvvisi = (utenteId: number) => 'avvisi_telefono_' + utenteId;
 
 function supportate(): boolean {
-  return Platform.OS === 'android' && Constants.executionEnvironment !== ExecutionEnvironment.StoreClient;
+  return (Platform.OS === 'android' || Platform.OS === 'ios') && Constants.executionEnvironment !== ExecutionEnvironment.StoreClient;
 }
 
 // Il modulo si carica solo se serve (in Expo Go o sul web importarlo darebbe errori).
@@ -68,20 +70,23 @@ async function registra(chiediPermesso: boolean): Promise<EsitoRegistrazione> {
   if (!supportate() || !Device.isDevice) return { ok: false, motivo: 'non_supportato' };
   try {
     const N = modulo();
-    // Il canale va creato prima di chiedere il permesso (Android 13+ lo mostra solo allora).
-    await N.setNotificationChannelAsync('default', {
-      name: 'Richieste e ordini',
-      importance: N.AndroidImportance.HIGH,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#245a8f',
-    });
+    // I canali esistono solo su Android; il canale va creato prima di chiedere il permesso (Android 13+ lo mostra solo allora). Su iPhone il permesso
+    // si chiede una volta sola, la prima volta, e non serve altro.
+    if (Platform.OS === 'android') {
+      await N.setNotificationChannelAsync('default', {
+        name: 'Richieste e ordini',
+        importance: N.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#245a8f',
+      });
+    }
     let { status } = await N.getPermissionsAsync();
     if (status !== 'granted' && chiediPermesso) status = (await N.requestPermissionsAsync()).status;
     if (status !== 'granted') return { ok: false, motivo: 'permesso' };
     const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
     if (!projectId) return { ok: false, motivo: 'senza_progetto' }; // finché non si fa `eas init` non c'è un progetto a cui legare il token
     const { data: token } = await N.getExpoPushTokenAsync({ projectId });
-    await chiamaApi('/dispositivi', { metodo: 'POST', corpo: { token, piattaforma: 'android' } });
+    await chiamaApi('/dispositivi', { metodo: 'POST', corpo: { token, piattaforma: Platform.OS === 'ios' ? 'ios' : 'android' } });
     await SecureStore.setItemAsync(CHIAVE_TOKEN_PUSH, token).catch(() => {});
     return { ok: true, token };
   } catch (e) {
