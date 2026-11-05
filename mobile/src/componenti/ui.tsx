@@ -10,6 +10,16 @@ export function mmss(secondi: number) {
   return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
 }
 
+// "8 min", "1 h 05": una durata in minuti, come la scrive il sito (format.durataMinuti).
+export function durataMinuti(min: number) {
+  return min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`;
+}
+
+// "45′", "1h05": la stessa durata in forma breve, per l'etichetta della scheda "Stato ordini" (format.durataBreve).
+export function durataBreve(min: number) {
+  return min < 60 ? `${min}′` : `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}`;
+}
+
 export function Avviso({ tipo, children }: { tipo: 'ok' | 'attenzione' | 'info' | 'errore'; children: ReactNode }) {
   const { c } = useTema();
   const colori =

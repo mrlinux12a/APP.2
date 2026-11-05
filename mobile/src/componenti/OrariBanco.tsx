@@ -55,14 +55,18 @@ export function RiquadroChiuso({ orari }: { orari: Orari }) {
 }
 
 // Poco prima della chiusura (il server dice quando: `chiude.in_chiusura`, 30 minuti): "Ancora 9 min per inviare: alle 17:00 chiudiamo". I minuti scendono da soli.
-export function StrisciaInChiusura({ orari, lettoIl }: { orari: Orari; lettoIl: number }) {
+// `inBarra`: sta in cima alla barra di pagamento, a tutta larghezza e senza angoli (annulla il padding della barra: .bp-chiusura del sito).
+export function StrisciaInChiusura({ orari, lettoIl, inBarra }: { orari: Orari; lettoIl: number; inBarra?: boolean }) {
   const { c } = useTema();
   const chiude = orari.aperto ? orari.chiude : null;
   const secondi = useContoAllaRovescia(chiude && chiude.in_chiusura ? chiude.secondi : null, lettoIl);
   if (!chiude || !chiude.in_chiusura || secondi === null) return null;
   const minuti = Math.max(1, Math.ceil(secondi / 60));
   return (
-    <View style={[stili.striscia, { backgroundColor: c.arancioChiaro }]} accessibilityRole="alert">
+    <View
+      style={[stili.striscia, { backgroundColor: c.arancioChiaro }, inBarra && { borderRadius: 0, marginTop: -10, marginHorizontal: -14, marginBottom: 10, justifyContent: 'flex-start' }]}
+      accessibilityRole="alert"
+    >
       <Icona nome="timer" colore={c.arancio} dimensione={18} />
       <Text style={[stili.strisciaTesto, { color: c.arancio }]}>
         Ancora <Text style={{ fontFamily: FONT.testoForte }}>{minuti} min</Text> per inviare: alle {chiude.ora} chiudiamo

@@ -11,7 +11,8 @@
 // "Avvisi sul telefono" è un interruttore acceso/spento come sul sito (profilo): spegnerlo toglie il telefono dall'elenco del server.
 import { useQueryClient } from '@tanstack/react-query';
 import * as SecureStore from 'expo-secure-store';
-import Constants, { ExecutionEnvironment } from 'expo-constants';
+import { isRunningInExpoGo } from 'expo';
+import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -23,8 +24,11 @@ const CHIAVE_TOKEN_PUSH = 'token_push';
 // Chi ha spento "Avvisi sul telefono" (uno per utente: su un telefono condiviso l'interruttore di uno non spegne gli avvisi dell'altro).
 const chiaveAvvisi = (utenteId: number) => 'avvisi_telefono_' + utenteId;
 
+// Le push esistono solo su Android e iPhone, e non in Expo Go. Si guarda `isRunningInExpoGo()` (lo stesso controllo di `expo-notifications`) e NON
+// `Constants.executionEnvironment`: con l'SDK 58 quest'ultimo in Expo Go non diceva "Expo Go", l'app provava a registrare le notifiche e Expo Go lanciava un
+// errore che mandava in errore l'intera schermata (05/11/2026). `isRunningInExpoGo()` è falso nelle build di sviluppo e in quelle vere, dove le push funzionano.
 function supportate(): boolean {
-  return (Platform.OS === 'android' || Platform.OS === 'ios') && Constants.executionEnvironment !== ExecutionEnvironment.StoreClient;
+  return (Platform.OS === 'android' || Platform.OS === 'ios') && !isRunningInExpoGo();
 }
 
 // Il modulo si carica solo se serve (in Expo Go o sul web importarlo darebbe errori).
@@ -137,42 +141,54 @@ export function useNotifichePush(utenteId: number | null) {
   const clientDati = useQueryClient();
   useEffect(() => {
     if (utenteId === null || !supportate()) return;
-    const N = modulo();
-    // Con l'app in primo piano nessun banner e nessun suono (richiesta del 21/10/2026): la schermata si aggiorna da sola, qui sotto.
-    N.setNotificationHandler({
-      handleNotification: async () => ({ shouldShowBanner: false, shouldShowList: false, shouldPlaySound: false, shouldSetBadge: false }),
-    });
-    sincronizzaAvvisi(utenteId, { chiedi: true, forza: true });
+    // Le notifiche sono un di più: qualunque cosa vada storta qui dentro (Expo Go, un telefono senza servizi Google...) NON deve far cadere l'app. Prima un errore
+    // lanciato da `addPushTokenListener` in Expo Go arrivava fino alla radice e mostrava la schermata rossa. Quello che si è già avviato viene comunque tolto all'uscita.
+    const daTogliere: (() => void)[] = [];
+    try {
+      const N = modulo();
+      // Con l'app in primo piano nessun banner e nessun suono (richiesta del 21/10/2026): la schermata si aggiorna da sola, qui sotto.
+      N.setNotificationHandler({
+        handleNotification: async () => ({ shouldShowBanner: false, shouldShowList: false, shouldPlaySound: false, shouldSetBadge: false }),
+      });
+      sincronizzaAvvisi(utenteId, { chiedi: true, forza: true });
 
-    const gestisci = (risposta: import('expo-notifications').NotificationResponse | null) => {
-      if (!risposta) return;
-      const id = risposta.notification.request.identifier;
-      if (ultimaGestita === id) return;
-      ultimaGestita = id;
-      const dati = risposta.notification.request.content.data as { link?: unknown } | undefined;
-      apriDaLink(dati?.link);
-    };
-    N.getLastNotificationResponseAsync().then(gestisci).catch(() => {});
-    const tocco = N.addNotificationResponseReceivedListener(gestisci);
-    // Notifica arrivata con l'app aperta: non si mostra niente, ma ciò che c'è a schermo (Stato ordini, la richiesta, l'ordine) si rilegge subito.
-    const arrivata = N.addNotificationReceivedListener(() => {
-      clientDati.invalidateQueries({ queryKey: ['stato-ordini'], refetchType: 'all' });
-      clientDati.invalidateQueries({ queryKey: ['richiesta'] });
-      clientDati.invalidateQueries({ queryKey: ['ordine'] });
-      clientDati.invalidateQueries({ queryKey: ['materiale'] });
-    });
-    // Il servizio di Google può cambiare il token del telefono: il server deve conoscere quello nuovo.
-    const cambioToken = N.addPushTokenListener(() => {
-      sincronizzaAvvisi(utenteId, { forza: true });
-    });
-    const primoPiano = AppState.addEventListener('change', (s) => {
-      if (s === 'active') sincronizzaAvvisi(utenteId);
-    });
+      const gestisci = (risposta: import('expo-notifications').NotificationResponse | null) => {
+        if (!risposta) return;
+        const id = risposta.notification.request.identifier;
+        if (ultimaGestita === id) return;
+        ultimaGestita = id;
+        const dati = risposta.notification.request.content.data as { link?: unknown } | undefined;
+        apriDaLink(dati?.link);
+      };
+      N.getLastNotificationResponseAsync().then(gestisci).catch(() => {});
+      const tocco = N.addNotificationResponseReceivedListener(gestisci);
+      daTogliere.push(() => tocco.remove());
+      // Notifica arrivata con l'app aperta: non si mostra niente, ma ciò che c'è a schermo (Stato ordini, la richiesta, l'ordine) si rilegge subito.
+      const arrivata = N.addNotificationReceivedListener(() => {
+        clientDati.invalidateQueries({ queryKey: ['stato-ordini'], refetchType: 'all' });
+        clientDati.invalidateQueries({ queryKey: ['richiesta'] });
+        clientDati.invalidateQueries({ queryKey: ['ordine'] });
+        clientDati.invalidateQueries({ queryKey: ['materiale'] });
+      });
+      daTogliere.push(() => arrivata.remove());
+      // Il servizio di Google può cambiare il token del telefono: il server deve conoscere quello nuovo.
+      const cambioToken = N.addPushTokenListener(() => {
+        sincronizzaAvvisi(utenteId, { forza: true });
+      });
+      daTogliere.push(() => cambioToken.remove());
+      const primoPiano = AppState.addEventListener('change', (s) => {
+        if (s === 'active') sincronizzaAvvisi(utenteId);
+      });
+      daTogliere.push(() => primoPiano.remove());
+    } catch (e) {
+      console.warn('[notifiche] avvio non riuscito:', e instanceof Error ? e.message : e);
+    }
     return () => {
-      tocco.remove();
-      arrivata.remove();
-      cambioToken.remove();
-      primoPiano.remove();
+      for (const togli of daTogliere) {
+        try {
+          togli();
+        } catch {}
+      }
     };
   }, [utenteId, clientDati]);
 }

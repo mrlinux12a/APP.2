@@ -23,8 +23,8 @@ provvisorie). Variabili CSS in cima a `assets/css`.
   (`<details>`, campo `note`) → riepilogo (dal 17/10/2026 la card "Cosa paghi e a chi": vedi "Pagamento") → (il "Svuota" non è più in fondo: dal 22/10/2026 è la pillola col cestino in alto a destra, sulla stessa riga di "+ Aggiungi pezzi", `.btn-svuota`, con conferma; la scritta "N articoli · M pezzi" resta tolta). L'importo
   "Paghi ora" e **"Paga e invia richiesta"** stanno nella barra fissa `.barra-paga` sopra la navbar (il pulsante
   invia `#form-invia` con l'attributo `form=`); `--altezza-barra-paga` in `style.css` è lo spazio da
-  lasciare in fondo alla pagina: se la barra cambia altezza, aggiornarlo. L'app mobile non ha ancora seguito
-  queste modifiche.
+  lasciare in fondo alla pagina: se la barra cambia altezza, aggiornarlo. Dal 05/11/2026 l'app mobile
+  segue queste modifiche (vedi «Allineamento dell'app al sito» in docs/app-nativa.md).
 - **Righe compatte ovunque (richiesta esplicita del 16/10/2026)**: ricerca (`/cerca` e ricerca live della home), "Elementi con foto" (`/con-foto`), marchio (elenco di una famiglia) e
   categoria usano **tutte** `partials/cliente/prodotto_riga.ejs` (foto 56×56 a sinistra, stepper `− N +` che salva a ogni tocco, niente "Aggiungi", barra `.barra-vai` in basso);
   `.app-categoria` dà lo spazio in fondo. Ogni pagina ha `#risultati[data-righe-compatte]` con `data-carrello`, `data-pezzi`, `data-icona-vuota` (la home li ha sull'elenco

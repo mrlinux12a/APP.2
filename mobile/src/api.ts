@@ -113,6 +113,10 @@ export type Variante = {
   prezzo_valore: number;
 };
 
+// Le parole da scrivere sopra le misure di un prodotto (le decide il server, come sul sito): "Misura · H × L × P", "Variante"... `voce` = "Misura"/"Variante"
+// (per le etichette di accessibilità), `ordine` = l'ordine delle dimensioni ("H × L × P"), `titolo` = titolo del pannello ("Scegli la misura").
+export type VariantiInfo = { voce: string; ordine: string; occhiello: string; titolo: string };
+
 export type Prodotto = {
   id: number;
   codice: string;
@@ -129,6 +133,7 @@ export type Prodotto = {
   prezzo: string;
   prezzo_valore: number;
   varianti: Variante[] | null;
+  varianti_info?: VariantiInfo | null;
 };
 
 export type Pagina = { risultati: Prodotto[]; pagina: number; pagine: number; totale: number };
@@ -225,6 +230,8 @@ export type Richiesta = {
   order_id: number | null;
   creato_il: string;
   secondi: number;
+  // Durata della finestra in secondi (per l'anello): la stessa dell'anello della pagina del sito.
+  durata: number;
   minuti_risposta: number;
   righe: RigaSemplice[];
   righe_prezzi: RigaPrezzo[];
@@ -250,6 +257,8 @@ export type Ordine = {
   corriere: string | null;
   creato_il: string;
   consegnato_il: string | null;
+  // "Martedì 14 ottobre alle 20:10": la data sotto "Consegnato".
+  consegnato_il_esteso: string | null;
   // Le fasi Inviata · Confermata · Consegnata: istanti ISO (null se non si sa) e gli stessi orari già scritti in ora italiana per il passo ("19:23", o
   // "14 ott · 19:23" se è in un altro giorno rispetto alla consegna). `durataMin` = minuti dall'invio alla consegna, `durata_testo` il testo della pillola.
   fasi: { inviata: string | null; confermata: string | null; consegnata: string | null };
@@ -269,6 +278,9 @@ export type Ordine = {
   stato_pagamento: StatoPagamento | null;
   annullabile: boolean;
 };
+
+// "Il tuo ultimo ordine" del carrello vuoto: l'ordine consegnato più recente con le prime righe (`altri` = quante in più).
+export type UltimoOrdine = { id: number; data: string; righe: { quantita: number; nome: string }[]; altri: number };
 
 export type VoceStorico = {
   richiesta_id: number;
@@ -294,8 +306,13 @@ export type VoceAttivita = {
   durata_sec: number | null;
   in_arrivo: boolean;
   minuti: number | null;
+  // Solo per la richiesta in attesa: i minuti da scrivere nei testi ("entro 10 min").
+  minuti_testo: number | null;
   corriere: string;
 };
+
+// La risposta di "Stato ordini": le attività in corso, la prima inviata e i minuti da scrivere nei testi ("Entro 10 minuti, o ti rimborsiamo").
+export type RispostaStatoOrdini = { attivo: Attivita; voci: VoceAttivita[]; minuti_testo: number };
 
 // Il pagamento con carta da fare con il foglio di Stripe (POST /richieste o /richieste/:id/reinvia con Stripe attivo).
 export type PagamentoDaFare = {
@@ -325,6 +342,7 @@ export type VoceMateriale =
       consegnato: boolean;
       totale: string;
       servizio: string;
+      servizio_pct: number;
       primo: string;
       altri: number;
       ditta: string;
@@ -350,7 +368,7 @@ export type Materiale = {
   ditte: string[];
   riepilogo: { totale: string; servizio: string; n_ordini: number };
   elenco: VoceMateriale[];
-  articoli: { codice: string; nome: string; cad: string | null; quantita: number; totale: string; n_ordini: number }[];
+  articoli: { codice: string; nome: string; cad: string | null; quantita: number; totale: string; n_ordini: number; ordini: number[] }[];
   vuoto: boolean;
 };
 
@@ -369,8 +387,10 @@ export type Profilo = {
     email: string;
     telefono: string;
     indirizzo_consegna: string;
+    stato_anagrafica: string;
   };
   distributore: string | null;
+  codice_cliente: string;
   assistenza: string | null;
 };
 

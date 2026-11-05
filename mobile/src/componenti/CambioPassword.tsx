@@ -2,14 +2,14 @@
 // diversa dall'attuale, ripetizione uguale): qui si mostra l'errore sotto il campo che lo ha causato. Cambiata la password il telefono resta dentro (vedi
 // `cambiaPassword` in sessione.tsx); gli altri accessi, sito compreso, vengono chiusi dal server.
 import { useState } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ErroreApi } from '../api';
 import { useSessione } from '../sessione';
 import { FONT, useTema } from '../tema';
 import { Campo } from './Campo';
 import { informa } from './dialoghi';
-import { Avviso, Bottone, Card } from './ui';
+import { Avviso, Bottone } from './ui';
 
 type Errori = { attuale?: string; nuova?: string; ripeti?: string };
 
@@ -54,11 +54,23 @@ export function CambioPassword() {
     }
   };
 
-  if (!aperto) return <Bottone titolo="Cambia password" tipo="chiaro" onPress={() => setAperto(true)} />;
+  // Come il <details> del sito (.an-pw): il pulsante "Cambia password" apre il modulo sotto di sé e lo richiude; sta dentro la scheda "Accesso".
+  const pulsante = (
+    <Pressable
+      onPress={() => (aperto ? chiudi() : setAperto(true))}
+      accessibilityRole="button"
+      accessibilityState={{ expanded: aperto }}
+      style={({ pressed }) => [stili.pulsante, { backgroundColor: pressed ? c.sfondo : c.superficie }]}
+    >
+      <Text style={[stili.pulsanteTesto, { color: c.testo }]}>Cambia password</Text>
+    </Pressable>
+  );
+
+  if (!aperto) return pulsante;
 
   return (
-    <Card stile={{ gap: 12 }}>
-      <Text style={[stili.titolo, { color: c.testo }]}>Cambia password</Text>
+    <View style={{ gap: 12 }}>
+      {pulsante}
       {generale ? <Avviso tipo="errore">{generale}</Avviso> : null}
       <Campo
         etichetta="Password attuale"
@@ -94,11 +106,11 @@ export function CambioPassword() {
         textContentType="newPassword"
       />
       <Bottone titolo="Salva la nuova password" onPress={salva} inCorso={inCorso} />
-      <Bottone titolo="Annulla" tipo="chiaro" onPress={chiudi} disabilitato={inCorso} />
-    </Card>
+    </View>
   );
 }
 
 const stili = StyleSheet.create({
-  titolo: { fontFamily: FONT.titolo, fontSize: 17 },
+  pulsante: { minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18, borderWidth: 1, borderColor: '#d6d1c6', borderRadius: 22 },
+  pulsanteTesto: { fontFamily: FONT.testoForte, fontSize: 15 },
 });

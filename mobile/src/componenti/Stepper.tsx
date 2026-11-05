@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { FONT, useTema } from '../tema';
@@ -24,10 +24,12 @@ export function Stepper({
 }) {
   const { c } = useTema();
   const [testo, setTesto] = useState(String(valore));
-
-  useEffect(() => {
+  // Se la quantità cambia da fuori (un altro tasto, il carrello che si ricarica) il numero scritto la segue: si aggiorna subito, durante il disegno, senza un secondo giro.
+  const [valoreVisto, setValoreVisto] = useState(valore);
+  if (valore !== valoreVisto) {
+    setValoreVisto(valore);
     setTesto(String(valore));
-  }, [valore]);
+  }
 
   const conferma = () => {
     const n = Math.max(minimo, parseInt(testo, 10) || 0);

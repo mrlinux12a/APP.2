@@ -9,6 +9,8 @@ export default function PilaCatalogo() {
   return (
     <Stack
       screenOptions={{
+        // Nessuna animazione tra le schermate (richiesta esplicita).
+        animation: 'none',
         freezeOnBlur: true,
         // Barra uguale a quella del Carrello (vedi BarraTitolo): quella nativa era più alta.
         header: intestazione,

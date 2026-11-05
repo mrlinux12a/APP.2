@@ -4,7 +4,7 @@ import { ElencoProdotti } from '@/componenti/ElencoProdotti';
 import { useElencoPaginato } from '@/dati';
 import { FONT, useTema } from '@/tema';
 
-// Vetrina trasversale alle categorie: tutti i prodotti che hanno già una foto.
+// Vetrina trasversale alle categorie: tutti i prodotti che hanno già una foto (views/cliente/con_foto.ejs).
 export default function ConFoto() {
   const { c } = useTema();
   const elenco = useElencoPaginato('/con-foto');
@@ -15,9 +15,9 @@ export default function ConFoto() {
     <ElencoProdotti
       prodotti={prodotti}
       intestazione={
-        <View style={{ padding: 14 }}>
+        <View style={stili.intestazione}>
           <Text style={[stili.sottotitolo, { color: c.grigio }]}>
-            {totale !== undefined ? `${totale.toLocaleString('it-IT')} articoli con foto, di ogni categoria.` : ' '}
+            {totale !== undefined ? `${totale.toLocaleString('it-IT')} articoli con foto caricata.` : ' '}
           </Text>
         </View>
       }
@@ -26,11 +26,12 @@ export default function ConFoto() {
       caricaAltri={() => {
         if (elenco.hasNextPage && !elenco.isFetchingNextPage) elenco.fetchNextPage();
       }}
-      vuoto={elenco.isError ? elenco.error.message : 'Nessun articolo con foto.'}
+      vuoto={elenco.isError ? elenco.error.message : 'Nessun articolo ha ancora una foto.'}
     />
   );
 }
 
 const stili = StyleSheet.create({
-  sottotitolo: { fontFamily: FONT.testo, fontSize: 15, lineHeight: 20 },
+  intestazione: { paddingHorizontal: 14, paddingTop: 12 },
+  sottotitolo: { fontFamily: FONT.testo, fontSize: 14.4, lineHeight: 20, marginHorizontal: 2, marginBottom: 12 },
 });

@@ -34,8 +34,12 @@ router.get('/profilo', richiedeCliente, async (req, res) => {
       email: u.email || '',
       telefono: u.telefono || '',
       indirizzo_consegna: u.indirizzo_consegna || '',
+      // 'in_attesa' = nessun distributore lo ha ancora approvato: la pagina avvisa che il catalogo si sfoglia ma non si inviano richieste (come sul sito).
+      stato_anagrafica: u.stato_anagrafica || '',
     },
     distributore: riferimento ? format.nomeCommerciale(riferimento.distributore) : null,
+    // Il codice con cui il distributore ti ha registrato, solo se ti ha approvato ("Codice cliente" sotto il suo nome, come sul sito).
+    codice_cliente: riferimento && riferimento.stato === 'approvato' ? String(riferimento.codice_cliente || '') : '',
     assistenza: azienda().email || null,
   });
 });

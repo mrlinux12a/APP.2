@@ -61,8 +61,10 @@ function Navigazione() {
       <Stack
         screenOptions={{
           headerShown: false,
+          // Nessuna animazione tra le schermate (richiesta esplicita): si passa dall'una all'altra di colpo, come sul sito.
+          animation: 'none',
           // Le schermate sotto la prima non si ridisegnano mentre sono coperte: meno lavoro
-          // per il thread JS durante le transizioni.
+          // per il thread JS quando si cambia schermata.
           freezeOnBlur: true,
           contentStyle: { backgroundColor: c.sfondo },
           headerStyle: { backgroundColor: c.superficie },
@@ -72,7 +74,7 @@ function Navigazione() {
       >
         <Stack.Protected guard={!!utente}>
           <Stack.Screen name="(schede)" />
-          <Stack.Screen name="profilo" options={{ presentation: 'modal', headerShown: true, title: 'Il mio account' }} />
+          <Stack.Screen name="profilo" options={{ presentation: 'modal', animation: 'none', headerShown: true, title: 'Il mio account' }} />
           {/* "Orari di BOREA": ci si arriva da "Vedi orari" del carrello. Il titolo arriva dal parametro "titolo" (vedi apriOrari), come per le categorie. */}
           <Stack.Screen
             name="orari"

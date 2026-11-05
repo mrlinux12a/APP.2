@@ -2,18 +2,17 @@ import type { ReactElement } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
 
 import type { Prodotto } from '../api';
+import { usePezziNelCarrello } from '../carrello';
 import { FONT, useTema } from '../tema';
-import { BarraCarrello } from './BarraCarrello';
-import { stileRigaCard } from './rigaCard';
-import { SchedaProdotto } from './SchedaProdotto';
+import { BarraVai, SPAZIO_BARRA_VAI } from './BarraVai';
+import { RigaProdotto } from './RigaProdotto';
+import { stileElencoRighe } from './rigaCard';
 import { Vuoto } from './Stato';
 
-// Elenco di prodotti con scroll infinito. L'intestazione (barra di ricerca, titoli) sta
-// dentro la FlatList, così scorre insieme ai prodotti; va passata come elemento, non come
-// componente, e deve restare lo stesso albero mentre si scrive: se la barra di ricerca
-// venisse ricreata la tastiera si chiuderebbe a ogni lettera.
-// Senza "vuoto" un elenco vuoto non mostra nulla (es. la home prima di cercare).
-// Sotto l'elenco la barra Aggiungi / Vai al carrello, come sul sito.
+// Elenco di prodotti con scroll infinito, a righe compatte (RigaProdotto) come sul sito. L'intestazione (titoli, griglie) sta dentro la FlatList, così scorre insieme
+// ai prodotti; va passata come elemento, non come componente, e non deve contenere campi di testo (la barra di ricerca sta fuori dall'elenco: se venisse ricreata
+// la tastiera si chiuderebbe a ogni lettera). Senza "vuoto" un elenco vuoto non mostra nulla (es. la home prima di cercare).
+// In fondo la barra blu "N pezzi · Vai al carrello →", solo con almeno un pezzo nel carrello (`senzaBarra` la toglie: elenco delle sottocategorie).
 export function ElencoProdotti({
   prodotti,
   intestazione,
@@ -21,6 +20,8 @@ export function ElencoProdotti({
   altriInArrivo,
   caricaAltri,
   vuoto,
+  senzaNota,
+  senzaBarra,
 }: {
   prodotti: Prodotto[];
   intestazione?: ReactElement;
@@ -28,16 +29,20 @@ export function ElencoProdotti({
   altriInArrivo?: boolean;
   caricaAltri?: () => void;
   vuoto?: string;
+  senzaNota?: boolean;
+  senzaBarra?: boolean;
 }) {
   const { c } = useTema();
+  const pezzi = usePezziNelCarrello();
+  const spazioInFondo = !senzaBarra && pezzi > 0 ? SPAZIO_BARRA_VAI : 24;
   return (
     <View style={{ flex: 1, backgroundColor: c.sfondo }}>
       <FlatList
         data={prodotti}
         keyExtractor={(p) => String(p.id)}
         renderItem={({ item, index }) => (
-          <View style={stileRigaCard(c, index, prodotti.length)}>
-            <SchedaProdotto p={item} ultima={index === prodotti.length - 1} />
+          <View style={stileElencoRighe(c, index, prodotti.length)}>
+            <RigaProdotto p={item} ultima={index === prodotti.length - 1} />
           </View>
         )}
         ListHeaderComponent={intestazione}
@@ -53,29 +58,30 @@ export function ElencoProdotti({
         ListFooterComponent={
           altriInArrivo ? (
             <ActivityIndicator color={c.accento} style={{ marginVertical: 20 }} />
-          ) : prodotti.length ? (
-            <Text style={[stili.nota, { color: c.grigio }]}>
-              Prezzi del banco, IVA esclusa. Quando mandi la richiesta paghi solo la consegna: la carta viene bloccata e addebitata solo se il banco conferma.
-            </Text>
+          ) : prodotti.length && !senzaNota ? (
+            <Text style={[stili.nota, { color: c.grigio }]}>{NOTA_PREZZI}</Text>
           ) : undefined
         }
         onEndReached={caricaAltri}
         onEndReachedThreshold={0.6}
-        // Poche righe al primo disegno (le altre arrivano a piccoli gruppi): la schermata
-        // compare subito, senza bloccare il thread JS mentre scorre la transizione.
-        initialNumToRender={6}
-        maxToRenderPerBatch={6}
+        // Poche righe al primo disegno (le altre arrivano a piccoli gruppi): la schermata compare subito.
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
         windowSize={11}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         style={{ backgroundColor: c.sfondo }}
-        contentContainerStyle={{ paddingBottom: 24 }}
+        contentContainerStyle={{ paddingBottom: spazioInFondo }}
       />
-      <BarraCarrello />
+      {senzaBarra ? null : <BarraVai />}
     </View>
   );
 }
 
+// La nota sotto i prezzi, la stessa di tutto il sito (home): prezzi IVA esclusa, e cosa succede al pagamento.
+export const NOTA_PREZZI =
+  'I prezzi in app sono IVA esclusa. Paghi quando mandi la richiesta; il banco conferma la disponibilità e, se nessuno conferma, il pagamento ti viene rimborsato.';
+
 const stili = StyleSheet.create({
-  nota: { fontFamily: FONT.testo, fontSize: 13, lineHeight: 18, padding: 16 },
+  nota: { fontFamily: FONT.testo, fontSize: 13.3, lineHeight: 19, marginHorizontal: 16, marginTop: 8, marginBottom: 16 },
 });

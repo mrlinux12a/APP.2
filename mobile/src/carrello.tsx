@@ -2,8 +2,7 @@
 // server quando si chiede la disponibilità. Si salva per utente, così sopravvive alla
 // chiusura dell'app senza mescolarsi fra due account sullo stesso telefono.
 //
-// Come sul sito, nel catalogo lo stepper non tocca subito il carrello: prepara una
-// "selezione", e il tasto Aggiungi in basso la sposta nel carrello tutta insieme.
+// Come sul sito (righe compatte, richiesta del 16/10/2026), lo stepper `− N +` del catalogo scrive subito nel carrello a ogni tocco: niente "Aggiungi".
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, type ReactNode } from 'react';
 
@@ -28,7 +27,6 @@ export type RigaCarrello = DatiRiga & { quantita: number };
 type Righe = Record<number, RigaCarrello>;
 
 const negozioCarrello = creaNegozio<Righe>({});
-const negozioSelezione = creaNegozio<Righe>({});
 
 function sommaPezzi(righe: Righe) {
   let n = 0;
@@ -85,45 +83,6 @@ export function useRigheCarrello(): RigaCarrello[] {
   return Object.values(stato);
 }
 
-// ---------- Selezione (stepper del catalogo, prima di Aggiungi) ----------
-
-export const selezione = {
-  imposta(riga: DatiRiga, quantita: number) {
-    negozioSelezione.scrivi((prima) => conQuantita(prima, riga, quantita));
-  },
-  // Cambio di misura su una card: la quantità scelta passa alla nuova variante.
-  sposta(daId: number, a: DatiRiga) {
-    negozioSelezione.scrivi((prima) => {
-      const q = prima[daId] ? prima[daId].quantita : 0;
-      if (!q) return prima;
-      const dopo = { ...prima };
-      delete dopo[daId];
-      dopo[a.id] = { ...a, quantita: q };
-      return dopo;
-    });
-  },
-  // Sposta tutta la selezione nel carrello (sommando alle quantità già presenti).
-  aggiungiAlCarrello() {
-    const scelte = Object.values(negozioSelezione.leggi());
-    if (!scelte.length) return 0;
-    negozioCarrello.scrivi((prima) => {
-      const dopo = { ...prima };
-      for (const r of scelte) dopo[r.id] = { ...r, quantita: (prima[r.id] ? prima[r.id].quantita : 0) + r.quantita };
-      return dopo;
-    });
-    negozioSelezione.scrivi(() => ({}));
-    return scelte.reduce((n, r) => n + r.quantita, 0);
-  },
-};
-
-export function useQuantitaSelezionata(id: number) {
-  return useNegozio(negozioSelezione, (s) => (s[id] ? s[id].quantita : 0));
-}
-
-export function usePezziSelezionati() {
-  return useNegozio(negozioSelezione, sommaPezzi);
-}
-
 // ---------- Salvataggio per utente ----------
 
 // Carica il carrello dell'utente che entra e lo salva a ogni modifica (con una breve
@@ -134,7 +93,6 @@ export function CarrelloProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     negozioCarrello.scrivi(() => ({}));
-    negozioSelezione.scrivi(() => ({}));
     if (!chiave) return;
 
     let caricato = false;

@@ -3,6 +3,6 @@ import { useLocalSearchParams } from 'expo-router';
 import { VistaOrdine } from '@/componenti/VistaOrdine';
 
 export default function OrdineSchermata() {
-  const { id, nuovo } = useLocalSearchParams<{ id: string; nuovo?: string }>();
-  return <VistaOrdine id={Number(id)} nuovo={nuovo === '1'} />;
+  const { id } = useLocalSearchParams<{ id: string }>();
+  return <VistaOrdine id={Number(id)} />;
 }

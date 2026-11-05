@@ -45,6 +45,6 @@ Per accenderlo: un Merchant ID creato su developer.apple.com, il suo nome come `
 
 ## 6. Cosa è stato verificato e cosa no
 
-Verificato: controllo dei tipi (`tsc`), pacchetto iOS (`npx expo export --platform ios`, bundle Hermes generato), `expo lint` (gli stessi 6 problemi già presenti, nessuno nel codice toccato per iOS).
+Verificato: controllo dei tipi (`tsc`), pacchetto iOS (`npx expo export --platform ios`, bundle Hermes generato), `expo lint` (ora **0 problemi**: i 6 di prima sono stati sistemati nell'allineamento al sito del 05/11/2026, vedi `docs/app-nativa.md`). Dopo quell'allineamento è stato riprovato anche `npx expo export --platform ios` (riuscito).
 **Non** verificato (niente iPhone, niente Mac, niente account Apple): la build e la firma, l'installazione, il permesso delle notifiche e la loro consegna, il foglio di pagamento, l'aspetto delle schermate (barra del titolo, tacca, tastiera).
 Il progetto nativo iOS non è stato generato (`expo prebuild` per iOS richiede macOS per installare i pacchetti nativi). Prima di pubblicare prova la build `preview` su un iPhone, con la chiave Stripe di prova (carta `4242 4242 4242 4242`).

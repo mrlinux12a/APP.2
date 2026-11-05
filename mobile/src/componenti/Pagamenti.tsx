@@ -25,7 +25,8 @@ type Props = {
   // Dove c'è un ordine: serve al link "Ricevuta".
   ordineId?: number;
   // Solo se chiusa: perché è chiusa e cosa succederebbe rinviandola (prezzi di oggi).
-  motivoChiusura?: 'banco' | 'annullata';
+  // 'corriere' = il banco ha accettato ma nessun corriere ha preso la consegna: il testo è quello di 'banco' (sul sito cambia solo con 'annullata').
+  motivoChiusura?: 'banco' | 'corriere' | 'annullata';
   rinvio?: { consegna: string; materiale: string };
 };
 

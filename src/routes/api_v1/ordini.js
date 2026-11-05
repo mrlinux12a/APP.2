@@ -41,6 +41,12 @@ function arrivoOrdine(ordine) {
   };
 }
 
+// La scheda "Il tuo ultimo ordine" del carrello vuoto (la stessa del sito): l'ordine consegnato più recente, con data e le prime righe (`altri` = quante in più).
+// `ordine` è null se non ce n'è nessuno.
+router.get('/ultimo-ordine', richiedeCliente, async (req, res) => {
+  res.json({ ordine: await flusso.ultimoOrdineConsegnato(req.utente.id) });
+});
+
 // Il dettaglio di un ordine per l'app: stato, tempi di arrivo, righe a prezzo del banco, importi e pagamento. Segna come lette le sue notifiche.
 router.get('/ordini/:id', richiedeCliente, async (req, res) => {
   const ordine = await ordineDelCliente(req, res);
@@ -73,6 +79,8 @@ router.get('/ordini/:id', richiedeCliente, async (req, res) => {
     corriere: String(ordine.corriere_nome || '').trim() || null,
     creato_il: format.dataOraRoma(ordine.creato_il, ', '),
     consegnato_il: ordine.consegnato_il ? format.dataOraRoma(ordine.consegnato_il, ', ') : null,
+    // "Martedì 14 ottobre alle 20:10": la data sotto "Consegnato", come sulla pagina dell'ordine del sito.
+    consegnato_il_esteso: ordine.consegnato_il ? format.dataEstesaRoma(ordine.consegnato_il) : null,
     // Le tre fasi (Inviata · Confermata · Consegnata) come istanti ISO (null se non si sa), e quanto ci ha messo dall'invio alla consegna (minuti, null senza invio).
     // `fasi_testo` sono gli stessi orari già scritti in ora italiana per il passo ("19:23", o "14 ott · 19:23" se è in un altro giorno rispetto alla consegna):
     // l'app li mostra così com'è, senza fare conti coi fusi orari; `durata_testo` è il testo della pillola.

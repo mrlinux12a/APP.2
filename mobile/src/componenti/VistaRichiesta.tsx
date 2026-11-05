@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { router } from 'expo-router';
+import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { chiamaApi, ErroreApi, type Richiesta } from '../api';
@@ -7,21 +8,31 @@ import { useContoAllaRovescia, useRichiesta } from '../dati';
 import { completaInvio, type RispostaInvio } from '../pagamento';
 import { useSessione } from '../sessione';
 import { FONT, useTema } from '../tema';
+import { AnelloAtt, BadgeBanco, CardAtt, ChipNo, ChipOk, LinkRosso, PallinoAllarme, PassiAtt, PillolaOk, PulsanteBlu, SchedaBanco, SchedaMateriale, SottoAtt, stileTimer, TempoAnello, TitoloAtt } from './att';
 import { chiedi, informa } from './dialoghi';
 import { Pagamenti } from './Pagamenti';
 import { Caricamento, Errore } from './Stato';
-import { Avviso, Bottone, Card, mmss, Nota, RigaArticolo, SezioneTitolo, StatoBadge } from './ui';
+import { Avviso, Bottone, Card, mmss, SezioneTitolo, StatoBadge } from './ui';
 import { VistaOrdine } from './VistaOrdine';
 
-function tonoEsito(esito: string) {
-  return esito === 'confermato' ? 'ok' : esito === 'in_attesa' ? 'info' : 'ko';
+// Il testo del badge di un banco mentre la richiesta è in attesa (come #stato-distributori del sito).
+function testoBancoAttesa(esito: string) {
+  return esito === 'in_attesa' ? 'Sta verificando' : esito === 'confermato' ? 'Disponibile' : esito === 'non_disponibile' ? 'Non disponibile' : 'Nessuna risposta';
 }
 
-// Per l'installatore un banco che sta controllando "sta verificando" (non "in attesa").
-function testoEsito(r: Richiesta['risposte'][number]) {
-  return r.esito === 'in_attesa' ? 'Sta verificando' : r.esito_testo;
+// Il materiale richiesto a prezzo del banco (righe + "Merce · IVA esclusa · prezzi del banco"): la scheda "Materiale richiesto" delle pagine della richiesta.
+function Materiale({ r }: { r: Richiesta }) {
+  return (
+    <SchedaMateriale
+      occhiello="Materiale richiesto"
+      righe={r.righe_prezzi}
+      etichettaMerce="Merce · IVA esclusa · prezzi del banco"
+      merce={r.importi.materiale.imponibile}
+    />
+  );
 }
 
+// "Distributori interpellati" della richiesta annullata (l'unica pagina che ha ancora l'elenco in forma di riga, come sul sito).
 function Distributori({ risposte }: { risposte: Richiesta['risposte'] }) {
   const { c } = useTema();
   return (
@@ -33,46 +44,33 @@ function Distributori({ risposte }: { risposte: Richiesta['risposte'] }) {
         >
           <View style={{ flex: 1 }}>
             <Text style={[stili.pillNome, { color: c.testo }]}>{r.distributore}</Text>
-            {r.filiale ? <Text style={[stili.meta, { color: c.grigio }]}>{r.filiale}</Text> : null}
           </View>
-          <StatoBadge testo={testoEsito(r)} tono={tonoEsito(r.esito)} />
+          <StatoBadge
+            testo={r.esito === 'non_disponibile' ? 'Non disponibile' : r.esito === 'in_attesa' ? 'In attesa' : r.esito === 'confermato' ? 'Disponibile' : 'Nessuna risposta'}
+            tono={r.esito === 'confermato' ? 'ok' : r.esito === 'in_attesa' ? 'info' : 'ko'}
+          />
         </View>
       ))}
     </Card>
   );
 }
 
-// Il materiale richiesto, a prezzo del banco (come sul sito): "Cod. … · € cad.", e sotto "Merce · IVA esclusa".
-function Materiale({ r }: { r: Richiesta }) {
-  return (
-    <Card>
-      {r.righe_prezzi.map((x, i) => (
-        <RigaArticolo
-          key={i}
-          quantita={x.quantita}
-          nome={x.nome}
-          meta={`Cod. ${x.codice} · € ${x.cad} cad.`}
-          importo={x.totale}
-          ultima={i === r.righe_prezzi.length - 1}
-        />
-      ))}
-    </Card>
-  );
-}
-
 // Una richiesta, in qualunque stato: verifica della disponibilità (con conto alla rovescia), chiusa senza ordine (nessun addebito) o annullata. Appena
-// nasce l'ordine (corriere trovato) mostra direttamente l'ordine, con il banner di conferma. Si aggiorna da sola ogni pochi secondi finché è aperta.
+// nasce l'ordine (corriere trovato) mostra direttamente l'ordine in consegna. Si aggiorna da sola ogni pochi secondi finché è aperta.
 // dopoEliminazione: dove andare quando la richiesta non esiste più (una pagina aperta dallo storico torna indietro; "Stato ordini" invece si ridisegna da sola).
 // quandoChiusa: chiamata appena il server conferma un annullamento o un'eliminazione, prima di ricaricare i dati ("Stato ordini" ci mostra
 // "Nessun ordine in corso").
+// compatta: la pagina sta sotto la striscia di "Stato ordini" (due o più attività), quindi anello e scheda in alto sono più piccoli.
 export function VistaRichiesta({
   id,
   dopoEliminazione,
   quandoChiusa,
+  compatta,
 }: {
   id: number;
   dopoEliminazione?: () => void;
   quandoChiusa?: () => void;
+  compatta?: boolean;
 }) {
   const { c } = useTema();
   const { utente } = useSessione();
@@ -80,15 +78,13 @@ export function VistaRichiesta({
   const q = useRichiesta(id);
   const [azione, setAzione] = useState<string | null>(null);
   const secondi = useContoAllaRovescia(q.data?.stato === 'in_attesa' ? q.data.secondi : null, q.dataUpdatedAt);
-  // Se questa schermata ha visto la richiesta "in attesa" e poi è nato l'ordine, l'installatore era qui ad aspettare: gli si mostra il banner "Ordine confermato".
-  const vistaInAttesa = useRef(false);
 
   if (q.isPending) return <Caricamento />;
   if (q.isError) return <Errore messaggio={q.error.message} riprova={() => q.refetch()} />;
   const r = q.data;
-  if (r.stato === 'in_attesa') vistaInAttesa.current = true;
+  // Nata l'ordine (corriere trovato) la pagina diventa direttamente quella dell'ordine in consegna, come sul sito.
   if (r.stato === 'ordinata' && r.order_id) {
-    return <VistaOrdine id={r.order_id} nuovo={vistaInAttesa.current} />;
+    return <VistaOrdine id={r.order_id} compatta={compatta} />;
   }
 
   // eliminata: la richiesta non esiste più, quindi non si rilegge (darebbe "non trovata") e si esce dalla schermata solo dopo aver aggiornato "Stato ordini".
@@ -149,84 +145,124 @@ export function VistaRichiesta({
       await completaInvio(risposta, utente?.ragione_sociale);
     });
 
-  const bancoConfermato = r.risposte.some((x) => x.banco_confermato);
+  // Il banco ha accettato ma nessun corriere ha preso la consegna in tempo: la causa è il corriere, non il banco (come richiesta_chiusa.ejs).
+  const senzaCorriere = r.risposte.some((x) => x.banco_confermato && x.esito === 'scaduto');
+  const pagamentoAnnullato = r.stato_pagamento?.chiave === 'annullato';
 
+  // ---- 1. In attesa: anello che si svuota, banchi interpellati, materiale, pagamenti, annulla ----
+  if (r.stato === 'in_attesa') {
+    const restano = secondi ?? r.secondi;
+    const durata = r.durata > 0 ? r.durata : r.minuti_risposta * 60;
+    return (
+      <ScrollView style={{ backgroundColor: c.sfondo }} contentContainerStyle={stili.pagina}>
+        <CardAtt stile={stileTimer(compatta)}>
+          <AnelloAtt frazione={durata > 0 ? restano / durata : 0} tono="arancio" compatto={compatta}>
+            <TempoAnello testo={mmss(restano)} compatto={compatta} />
+          </AnelloAtt>
+          <TitoloAtt testo="Stiamo chiedendo al banco" tono="arancio" />
+          <PassiAtt
+            tono="arancio"
+            passi={[
+              { etichetta: 'Inviata', stato: 'fatto' },
+              { etichetta: 'Conferma banco', stato: 'corrente' },
+              { etichetta: 'In consegna', stato: 'dafare' },
+            ]}
+          />
+        </CardAtt>
+
+        {r.risposte.map((x) => (
+          <SchedaBanco key={x.distributore} occhiello="Banco interpellato" nome={x.distributore} destra={<BadgeBanco testo={testoBancoAttesa(x.esito)} esito={x.esito} />} />
+        ))}
+
+        <Materiale r={r} />
+
+        <Pagamenti importi={r.importi} stato={r.stato_pagamento} fallback="attesa" ditta={r.ditta} />
+
+        {/* Si annulla solo finché nessun banco ha accettato: poi il link sparisce (anche dalla lettura periodica). */}
+        {r.annullabile ? <LinkRosso titolo="Annulla la richiesta" onPress={annulla} disabilitato={azione === 'annulla'} /> : null}
+      </ScrollView>
+    );
+  }
+
+  // ---- 2. Chiusa senza risposta: anello vuoto rosso, banchi, materiale, pagamenti, Rinvia, Elimina ----
+  if (r.stato === 'nessuna_offerta') {
+    return (
+      <ScrollView style={{ backgroundColor: c.sfondo }} contentContainerStyle={stili.pagina}>
+        <CardAtt stile={stileTimer(compatta)}>
+          <AnelloAtt frazione={0} tono="rosso" senzaArco compatto={compatta}>
+            <TempoAnello testo="00:00" spento compatto={compatta} />
+            <PallinoAllarme compatto={compatta} />
+          </AnelloAtt>
+          <TitoloAtt testo={senzaCorriere ? 'Nessun corriere ha confermato' : 'Nessun banco ha confermato'} tono="rosso" />
+          <SottoAtt spazio={14}>Il tempo per rispondere è scaduto.</SottoAtt>
+          {/* La carta era solo bloccata: il blocco si annulla, non c'è nessun rimborso da aspettare. */}
+          {pagamentoAnnullato ? <PillolaOk testo="Nessun addebito sulla carta" /> : null}
+          <PassiAtt
+            tono="rosso"
+            passi={[
+              { etichetta: 'Inviata', stato: 'fatto' },
+              { etichetta: 'Nessuna risposta', stato: 'corrente', croce: true },
+              { etichetta: 'In consegna', stato: 'dafare' },
+            ]}
+          />
+        </CardAtt>
+
+        {r.risposte.map((x) => (
+          <SchedaBanco
+            key={x.distributore}
+            occhiello="Banco interpellato"
+            nome={x.distributore}
+            destra={
+              x.esito === 'confermato' || (x.banco_confermato && x.esito === 'scaduto') ? (
+                <ChipOk testo="Disponibile" />
+              ) : (
+                <ChipNo testo={x.esito === 'non_disponibile' ? 'Non disponibile' : 'Nessuna risposta'} />
+              )
+            }
+          />
+        ))}
+
+        <Materiale r={r} />
+
+        <Pagamenti
+          importi={r.importi}
+          stato={r.stato_pagamento}
+          fallback="chiusa"
+          ditta={r.ditta}
+          motivoChiusura={senzaCorriere ? 'corriere' : 'banco'}
+          rinvio={r.rinvio}
+        />
+
+        <PulsanteBlu titolo="Rinvia richiesta" icona="riprova" onPress={reinvia} disabilitato={azione !== null} />
+        <LinkRosso titolo="Elimina richiesta" forte onPress={elimina} disabilitato={azione !== null} />
+      </ScrollView>
+    );
+  }
+
+  // ---- 3. Annullata dall'installatore ----
   return (
     <ScrollView style={{ backgroundColor: c.sfondo }} contentContainerStyle={stili.pagina}>
-      {r.stato === 'in_attesa' ? (
-        <>
-          <Card stile={stili.attesa}>
-            <View style={[stili.cerchio, { borderColor: c.accentoChiaro, backgroundColor: c.superficie }]}>
-              <Text style={[stili.cerchioTesto, { color: c.accento }]}>{mmss(secondi ?? r.secondi)}</Text>
-            </View>
-            <Text style={[stili.attesaTitolo, { color: c.testo }]}>Verifica disponibilità</Text>
-            <Text style={[stili.attesaTesto, { color: c.grigio }]}>
-              {r.ditta || 'Il banco'} ha {r.minuti_risposta} minuti per confermare il materiale e trovare chi consegna. Appena è tutto pronto ti arriva la
-              conferma dell’ordine con il tempo stimato: questa schermata si aggiorna da sola.
-            </Text>
-          </Card>
-          <SezioneTitolo>Banco interpellato</SezioneTitolo>
-          <Distributori risposte={r.risposte} />
-        </>
-      ) : r.stato === 'annullata' ? (
-        <Avviso tipo="attenzione">Hai annullato questa richiesta.</Avviso>
-      ) : (
-        <Card stile={stili.attesa}>
-          <View style={[stili.cerchio, { borderColor: c.rossoChiaro, backgroundColor: c.superficie }]}>
-            <Text style={[stili.cerchioTesto, { color: c.grigio }]}>00:00</Text>
-          </View>
-          <Text style={[stili.attesaTitolo, { color: c.testo }]}>{bancoConfermato ? 'Nessun corriere ha confermato' : 'Nessun banco ha confermato'}</Text>
-          <Text style={[stili.attesaTesto, { color: c.grigio }]}>Il tempo per rispondere è scaduto.</Text>
-          <View style={{ marginTop: 10 }}>
-            <StatoBadge testo="Nessun addebito sulla carta" tono="ok" />
-          </View>
-        </Card>
-      )}
+      <Avviso tipo="attenzione">Hai annullato questa richiesta.{pagamentoAnnullato ? ' Nessun addebito sulla carta.' : ''}</Avviso>
 
-      {r.stato === 'nessuna_offerta' && r.risposte.length ? (
+      {r.risposte.length ? (
         <>
-          <SezioneTitolo>Banco interpellato</SezioneTitolo>
+          <SezioneTitolo>Distributori interpellati</SezioneTitolo>
           <Distributori risposte={r.risposte} />
         </>
       ) : null}
 
-      <SezioneTitolo>Materiale richiesto</SezioneTitolo>
       <Materiale r={r} />
-      <Nota>Merce · IVA esclusa: € {r.importi.materiale.imponibile}. Prezzi del banco. Richiesta del {r.creato_il}.</Nota>
 
-      <Pagamenti
-        importi={r.importi}
-        stato={r.stato_pagamento}
-        fallback={r.stato === 'in_attesa' ? 'attesa' : 'chiusa'}
-        ditta={r.ditta}
-        motivoChiusura={r.stato === 'annullata' ? 'annullata' : 'banco'}
-        rinvio={r.stato === 'nessuna_offerta' ? r.rinvio : undefined}
-      />
+      <Pagamenti importi={r.importi} stato={r.stato_pagamento} fallback="chiusa" ditta={r.ditta} motivoChiusura="annullata" />
 
-      {r.stato === 'nessuna_offerta' ? <Bottone titolo="Rinvia richiesta" onPress={reinvia} inCorso={azione === 'reinvia'} /> : null}
-      {/* Si annulla solo finché nessun banco ha accettato: poi il pulsante sparisce (anche dalla lettura periodica). */}
-      {r.annullabile ? <Bottone titolo="Annulla la richiesta" tipo="chiaro" onPress={annulla} inCorso={azione === 'annulla'} /> : null}
-      {r.stato !== 'in_attesa' ? <Bottone titolo="Elimina richiesta" tipo="rosso" onPress={elimina} inCorso={azione === 'elimina'} /> : null}
+      <Bottone titolo="Torna alla home" onPress={() => router.navigate('/')} />
+      <Bottone titolo="Elimina richiesta" tipo="rosso" onPress={elimina} inCorso={azione === 'elimina'} />
     </ScrollView>
   );
 }
 
 const stili = StyleSheet.create({
   pagina: { padding: 14, gap: 12, paddingBottom: 32 },
-  meta: { fontFamily: FONT.testo, fontSize: 13, marginTop: 2 },
-  attesa: { alignItems: 'center', paddingVertical: 26, paddingHorizontal: 16 },
-  cerchio: {
-    width: 116,
-    height: 116,
-    borderRadius: 58,
-    borderWidth: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  cerchioTesto: { fontFamily: FONT.titolo, fontSize: 26 },
-  attesaTitolo: { fontFamily: FONT.titolo, fontSize: 17 },
-  attesaTesto: { fontFamily: FONT.testo, fontSize: 15, lineHeight: 21, textAlign: 'center', marginTop: 6 },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, paddingHorizontal: 14 },
   pillNome: { fontFamily: FONT.testoMedio, fontSize: 15 },
 });

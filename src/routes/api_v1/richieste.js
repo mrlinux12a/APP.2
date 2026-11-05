@@ -191,6 +191,8 @@ router.get('/richieste/:id', richiedeCliente, async (req, res) => {
     order_id: richiesta.stato === 'ordinata' ? richiesta.order_id : null,
     creato_il: format.dataOraRoma(richiesta.creato_il, ', '),
     secondi: d.secondi,
+    // Quanto dura la finestra di questa richiesta (secondi): serve all'anello dell'app, che si svuota da `secondi` a 0. Stessa formula della pagina del sito.
+    durata: format.durataFinestraSec(richiesta.creato_il, richiesta.scade_il, d.minutiRisposta),
     minuti_risposta: Math.round(d.minutiTesto), // solo il numero che l'app scrive nel testo
     righe: righeJson(d.righe),
     // Le righe a prezzo del banco (come le mostra il sito) e gli importi divisi: consegna pagata in app / materiale pagato dopo al banco.

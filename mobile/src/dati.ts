@@ -8,7 +8,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   chiamaApi,
   urlFoto,
-  type Attivita,
   type Categoria,
   type Materiale,
   type Ordine,
@@ -18,8 +17,9 @@ import {
   type Prodotto,
   type Richiesta,
   type RiepilogoCarrello,
+  type RispostaStatoOrdini,
   type Sottocategoria,
-  type VoceAttivita,
+  type UltimoOrdine,
   type VoceStorico,
 } from './api';
 
@@ -40,7 +40,7 @@ function opzioniCategoria(slug: string) {
   return queryOptions({
     queryKey: ['categoria', slug],
     queryFn: () =>
-      chiamaApi<{ macro: { slug: string; nome: string; descrizione: string }; sottocategorie: Sottocategoria[] }>(
+      chiamaApi<{ macro: { slug: string; nome: string; descrizione: string; immagine?: string | null }; sottocategorie: Sottocategoria[] }>(
         '/categorie/' + encodeURIComponent(slug)
       ),
     staleTime: FRESCHI,
@@ -247,13 +247,38 @@ export function useStatoOrdini() {
   const inPrimoPiano = useIsFocused();
   return useQuery({
     queryKey: ['stato-ordini'],
-    queryFn: () => chiamaApi<{ attivo: Attivita; voci: VoceAttivita[] }>('/stato-ordini'),
+    queryFn: () => chiamaApi<RispostaStatoOrdini>('/stato-ordini'),
     staleTime: 0,
     refetchInterval: (q) => {
       const voci = q.state.data?.voci || [];
       if (voci.some((v) => v.fase === 'richiesta')) return inPrimoPiano ? 15000 : 60000;
       return voci.length ? 60000 : false;
     },
+  });
+}
+
+// Le attività in corso lette "in silenzio" (`?lette=0`: le notifiche restano da leggere): servono alle schede in cima alla home e all'etichetta della scheda
+// "Stato ordini", che non sono la pagina Stato ordini. Stessa chiave di partenza di useStatoOrdini, così ogni invalidazione di ['stato-ordini'] le rilegge.
+export function useAttivitaInCorso() {
+  return useQuery({
+    queryKey: ['stato-ordini', 'silenzioso'],
+    queryFn: () => chiamaApi<RispostaStatoOrdini>('/stato-ordini?lette=0'),
+    staleTime: 0,
+    refetchInterval: (q) => {
+      const voci = q.state.data?.voci || [];
+      if (voci.some((v) => v.fase === 'richiesta')) return 15000;
+      return voci.length ? 60000 : 120000;
+    },
+  });
+}
+
+// L'ultimo ordine consegnato, per il carrello vuoto ("Rimetti nel carrello").
+export function useUltimoOrdine(attivo: boolean) {
+  return useQuery({
+    queryKey: ['ultimo-ordine'],
+    queryFn: () => chiamaApi<{ ordine: UltimoOrdine | null }>('/ultimo-ordine'),
+    enabled: attivo,
+    staleTime: 0,
   });
 }
 
@@ -307,7 +332,7 @@ export function useOrari(attivo = true) {
 // Conto alla rovescia locale fra una lettura e l'altra dal server: parte dai secondi letti
 // (aggiornati a ogni lettura) e scende di uno al secondo.
 export function useContoAllaRovescia(secondi: number | null | undefined, lettoIl: number) {
-  const [ora, setOra] = useState(Date.now());
+  const [ora, setOra] = useState(() => Date.now());
   useEffect(() => {
     if (secondi === null || secondi === undefined) return;
     const t = setInterval(() => setOra(Date.now()), 1000);

@@ -64,6 +64,10 @@ Verificato (con server e database locali usa-e-getta, e Stripe in modalità prov
 Aggiunto il 05/11/2026 (stesso controllo: `tsc`, pacchetto Android, 604 test del server): carrello con gli orari del banco ("Ordini chiusi", "Ancora N min", pagina "Orari di BOREA"), cambio password dal profilo, interruttore "Avvisi sul telefono", notifiche
 silenziose con l'app aperta e schermate che si aggiornano da sole.
 
+Aggiunto sempre il 05/11/2026 (richiesta "elimina le animazioni… aggiorna tutto al web app"): **nessuna animazione** nell'app e tutte le schermate dell'installatore riallineate al sito (home con categorie e sottocategorie, righe prodotto, carrello, Stato ordini
+con la sua icona nella barra, richiesta e ordine, storico, profilo con anagrafica, orari, accedi e registrati). Controlli: `tsc` pulito, `expo lint` **0 problemi**, `expo-doctor` 20/20, pacchetti Android e iOS, 608 test del server. Quello che non c'è ancora
+nell'app (posizione, filtro per marchio, PDF/CSV dello Storico, riga "installa") e il dettaglio sono in `docs/app-nativa.md`, «Allineamento dell'app al sito». Anche questo **non** è stato guardato su un telefono vero.
+
 **Non** verificato, perché qui non c'è un telefono né l'SDK Android: il foglio di pagamento di Stripe e Google Pay su un dispositivo vero, la ricezione delle notifiche push (servono i punti 2 e 3), la compilazione Gradle (la fa EAS), e le tre schermate nuove su un dispositivo.
 Prima di pubblicare prova su un telefono, con una build `preview` e la chiave Stripe di prova (carta `4242 4242 4242 4242`): paga, annulla la richiesta, fai confermare un ordine al banco, tocca la notifica.
 

@@ -1,6 +1,6 @@
 // Il foglio di pagamento di Stripe (PaymentSheet) sul telefono. Il pagamento lo crea il server: la carta viene solo AUTORIZZATA (l'importo resta
 // bloccato) e si incassa quando un banco conferma. Vedi pagamento.ts per il flusso intero.
-import Constants, { ExecutionEnvironment } from 'expo-constants';
+import { isRunningInExpoGo } from 'expo';
 import { Platform } from 'react-native';
 import { initPaymentSheet, initStripe, presentPaymentSheet } from '@stripe/stripe-react-native';
 
@@ -10,7 +10,7 @@ export type EsitoFoglio = 'pagato' | 'annullato';
 
 // In Expo Go il foglio funziona ma Google Pay non esiste: serve una build vera. Google Pay è solo di Android; su iPhone il foglio paga con la carta
 // (Apple Pay non è acceso: servirebbe un Merchant ID dell'account Apple Developer, vedi IOS.md).
-const inExpoGo = () => Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+const inExpoGo = () => isRunningInExpoGo();
 
 export async function apriFoglioStripe(p: PagamentoDaFare, nomeCliente?: string): Promise<EsitoFoglio> {
   // La chiave pubblicabile arriva dal server insieme al pagamento: così l'app non ne porta una scritta dentro (prova e reale restano quelle del server).

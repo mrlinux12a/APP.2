@@ -3,6 +3,7 @@ const { creaRouter } = require('../base');
 const flusso = require('../../logica/ordini/flusso_cliente');
 const format = require('../../comune/format');
 const materialeModulo = require('../../logica/ordini/materiale');
+const pricing = require('../../logica/pagamenti/pricing');
 const { e2, richiedeCliente } = require('./ausiliari');
 
 const router = creaRouter();
@@ -22,6 +23,8 @@ function voceJson(v) {
     durata_sec: v.durataSec === undefined ? null : v.durataSec,
     in_arrivo: !!v.inArrivo,
     minuti: v.minuti === undefined ? null : v.minuti,
+    // Il numero da SCRIVERE nei testi della richiesta in attesa ("se nessuno accetta entro 10 min"): non la durata dell'anello, che col timer accorciato delle prove sarebbe 1.
+    minuti_testo: v.minutiTesto === undefined ? null : v.minutiTesto,
     corriere: v.corriere || '',
   };
 }
@@ -29,10 +32,16 @@ function voceJson(v) {
 // Tutte le attività in corso (`voci`, nell'ordine del sito) e, per comodità, `attivo`: la prima inviata (la richiesta con l'id più basso), o la
 // scaduta da poco se non c'è altro. Apre "Stato ordini": segna lette le notifiche di richieste e ordini.
 router.get('/stato-ordini', richiedeCliente, async (req, res) => {
-  const voci = await flusso.vociStriscia(req.utente.id, { segnaLette: true, breve: true });
+  // `?lette=0`: lettura "silenziosa" (le schede in cima alla home e l'etichetta della scheda "Stato ordini"), che NON segna lette le notifiche: lo fa solo l'apertura della pagina.
+  const voci = await flusso.vociStriscia(req.utente.id, { segnaLette: req.query.lette !== '0', breve: true });
   const inCorso = voci.filter((v) => v.fase !== 'scaduta');
   const prima = inCorso.length ? inCorso.reduce((a, b) => (b.richiestaId < a.richiestaId ? b : a)) : voci.find((v) => v.fase === 'scaduta');
-  res.json({ attivo: prima ? { tipo: prima.tipo, id: prima.id } : null, voci: voci.map(voceJson) });
+  // `minuti_testo`: i minuti che hanno i banchi per rispondere, da scrivere nella pagina vuota ("Entro 10 minuti, o ti rimborsiamo"): non il timer, che nelle prove può essere più corto.
+  res.json({
+    attivo: prima ? { tipo: prima.tipo, id: prima.id } : null,
+    voci: voci.map(voceJson),
+    minuti_testo: Math.round(await pricing.getFinestraMinutiTesto()),
+  });
 });
 
 // Lo storico dell'app: tutte le richieste e gli ordini del cliente, dal più recente, con il loro stato.
@@ -87,6 +96,8 @@ router.get('/materiale', richiedeCliente, async (req, res) => {
             consegnato: x.ordine.consegnato,
             totale: e2(x.ordine.totale),
             servizio: e2(x.ordine.servizio),
+            // La percentuale del servizio, per la riga "Consegna pagata in app · corriere + 10% + IVA" (come nella scheda del sito).
+            servizio_pct: x.ordine.importi.servizioPct,
             primo: x.ordine.primo,
             altri: x.ordine.altri,
             ditta: x.ordine.ditta,
@@ -107,7 +118,8 @@ router.get('/materiale', richiedeCliente, async (req, res) => {
     ),
     articoli: m.gruppi
       .flatMap((g) => g.articoli)
-      .map((a) => ({ codice: a.codice, nome: a.nome, cad: a.cad === null ? null : e2(a.cad), quantita: a.quantita, totale: e2(a.totale), n_ordini: a.ordini.length })),
+      // `ordini`: i numeri degli ordini in cui compare l'articolo ("ordini #12, #14" sotto il nome, come sul sito).
+      .map((a) => ({ codice: a.codice, nome: a.nome, cad: a.cad === null ? null : e2(a.cad), quantita: a.quantita, totale: e2(a.totale), n_ordini: a.ordini.length, ordini: a.ordini })),
     vuoto: m.vuoto,
   });
 });

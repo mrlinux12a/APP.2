@@ -51,8 +51,8 @@ Panoramica e avvio in README. Qui solo ciò che non si deduce dal codice.
   nativa non è configurata.
 - Marchi assenti dall'app: `/marchi` non è linkato e nessun marchio è attivo.
 - `mobile/src/icone.ts` è **generato** da `src/comune/icone.js` (`node scripts/genera/genera_icone_app.js`).
-- Verifica: `npx tsc --noEmit` in `mobile/` (il lint `expo lint` ha errori già presenti: apostrofi
-  nei testi e un `setState` in un effect). Anteprima nel browser: se la porta 8081 è già occupata
+- Verifica: `npx tsc --noEmit` in `mobile/` e `npx expo lint` (a **0 problemi** dal 05/11/2026: tenerlo così,
+  vedi «Allineamento dell'app al sito»). Anteprima nel browser: se la porta 8081 è già occupata
   dall'Expo dell'utente, `preview_start` rifiuta: aprire direttamente `http://localhost:8081`. Senza
   login: in `localStorage` mettere `token_accesso` e `utente_accesso` (JSON utente), sostituire
   `window.fetch` con risposte finte (`/me`, `/stato-ordini`...) e lanciare
@@ -136,4 +136,26 @@ Richiesta: "rifai tutto per expo sdk 58". Il progetto era sull'SDK 57; ora è su
   `expo-router` ora ha `web.output` di default "server": l'anteprima web si compila lo stesso (`expo export --platform web` riuscito). Il passaggio di Stripe da 0.64 a 0.81 non ha richiesto modifiche (`tsc` pulito), ma **il foglio di pagamento non è stato provato su un telefono**: da riprovare con la carta di prova.
 - **Verifiche**: `tsc` pulito; `expo lint` gli stessi 6 problemi di prima; `expo-doctor` 20/20; `expo export` per Android, iOS e web riuscito; `expo prebuild` Android riuscito (manifest con `POST_NOTIFICATIONS`, Google Pay, icona delle notifiche, schema `minuteria`; poi cancellato `mobile/android`, ripristinati `package.json` e `app.json`);
   per iOS il prebuild non gira su Windows: configurazione controllata con `npx expo config --type introspect` (`ITSAppUsesNonExemptEncryption`, schemi, `aps-environment`); `npm test` alla radice.
+- **Correzioni dopo la prima prova in Expo Go (05/11/2026)**: (1) in Expo Go l'app mostrava una schermata di errore perché `Constants.executionEnvironment` con l'SDK 58 non dice più "Expo Go": `supportate()` (`notifiche.ts`) e `inExpoGo()` (`foglioStripe.ts`) ora usano **`isRunningInExpoGo()` di `expo`**, lo stesso controllo di `expo-notifications`; in più
+  l'avvio delle notifiche in `useNotifichePush` è dentro un `try/catch`, così un errore delle notifiche non può più far cadere l'app. (2) Il login usa `Campo` come la registrazione: la password ha il pulsante **Mostra/Nascondi**, e utente e password non partono con la maiuscola (`autoCapitalize="none"` non basta su alcune tastiere Samsung:
+  l'utente usa la tastiera "email", la password in chiaro quella "password visibile"). Provato solo nell'anteprima web (campi, attributi, Mostra/Nascondi); la tastiera vera è da provare sul telefono.
 - **Expo Go**: con l'SDK 58 serve l'Expo Go dell'SDK 58 (un Expo Go dell'SDK 57 non apre più il progetto). Secondo Expo arriverà negli store entro qualche settimana dal rilascio; nel frattempo si scarica da `expo.dev/go` (propone l'SDK 58). Su iPhone resta valido quanto scritto in `mobile/IOS.md`.
+
+## Allineamento dell'app al sito, senza animazioni (05/11/2026)
+
+Richiesta: "elimina le animazioni, categorie e sottocategorie non sono aggiornate, deve essere aggiornato tutto al web app, neanche carrello e stato ordini, e neanche il resto: aggiorna tutto sia per android che ios". Il sito (`views/`, `assets/css/`) è il modello: quando cambia il sito, l'app va riallineata, non il contrario.
+- **Nessuna animazione, voluta**: transizioni delle schede e delle pile spente (`animation: 'none'`), niente `Animated`/`Reanimated`, niente movimento da codice. Gli anelli del conto alla rovescia e le barre si ridisegnano **ogni secondo** da `useContoAllaRovescia` (`src/dati.ts`) e non scorrono da sé. Non rimettere animazioni
+  (nemmeno «piccole»). Con più attività in corso la scheda "Stato ordini" non alterna i fotogrammi come il sito (ogni 2,5 s): mostra la prima (la più urgente) e un numero con quante sono (`tabBarBadge`).
+- **Schermate rifatte sul sito**: home (`StatoHome`, categorie e sottocategorie come `views/cliente/home.ejs`), righe prodotto (`RigaProdotto`, le «righe compatte» di «Righe compatte ovunque» in `aspetto-grafico.md`), carrello (`(schede)/carrello.tsx`: articoli → «Consegna in cantiere» con "Cambia" → nota → riepilogo «Cosa paghi e a chi» → barra fissa
+  «Paga e invia richiesta»), Stato ordini (`ordini/index.tsx`, striscia per attività, `NavStatoOrdini.tsx` per icona ed etichetta nella barra: anello arancio e mm:ss, furgone verde e «Arriva tra N min» / «In arrivo», scatola rossa «Nessuna risposta»),
+  pagina richiesta e ordine (`VistaRichiesta`, `VistaOrdine`), Storico (`ordini/storico.tsx`: per mese, vista «per ordine» o «per articolo»), profilo con anagrafica (`profilo.tsx`, `Avatar`, `anagrafica.tsx`: `RigaAn`/`SchedaAn`/`CellaFiscale`, `acc.tsx`: `PulsanteAcc`/`ErroriAcc`),
+  orari, accedi e registrati (`Campo`).
+- **Come si passa una ricerca o una voce da un'altra scheda**: con un parametro di percorso più un `n` che cambia a ogni tocco (`q`+`n` per la ricerca della home dal carrello vuoto, `voce`+`n` per aprire una voce di Stato ordini). La schermata li copia nello stato **durante il disegno** (confronto con l'ultimo `n` visto), non in un
+  `useEffect`: la regola di lint `react-hooks/set-state-in-effect` lo vieta e i valori nuovi comparirebbero un disegno dopo. Lo stesso per la destinazione precompilata del carrello (da `riepilogo.indirizzo_consegna`) e per `Stepper` (`valoreVisto`).
+- **Cambi all'API** (`src/routes/api_v1/`, tutti con campi **nuovi**: l'app vecchia non si rompe): `GET /stato-ordini` porta `minuti_testo` (minuti da scrivere nei testi, vedi «Finestra di conferma» in `CLAUDE.md`, mai il timer) e vale `?lette=0` per la lettura silenziosa che non segna lette le notifiche;
+  `GET /ultimo-ordine` (la scheda «ultimo ordine» del carrello vuoto), `consegnato_il_esteso`, `durata`/`durata_testo` negli ordini; `GET /materiale` porta `servizio_pct` per ordine e `ordini: [id]` per articolo; `GET /profilo` porta `utente.stato_anagrafica` (`in_attesa` = nessun banco ha ancora approvato: si sfoglia ma non si invia) e `codice_cliente`
+  (solo se il banco ha approvato). Tipi in `mobile/src/api.ts`. Prova: `test/account/api_profilo.test.js` (il server ricorda per 60 s l'utente di un token: ogni prova usa un token nuovo).
+- **Non portato nell'app** (scelte da confermare o cose che richiedono altro lavoro): il pulsante a mirino «Usa la mia posizione» (servirebbe `expo-location`, e la guida dice che l'app non invia la posizione), i filtri per marchio (l'API non ha i marchi), «Ricevute del mese» ed «Esporta elenco» (PDF/CSV) nello Storico,
+  la riga «installa l'app» di «Sul telefono». La nota sui prezzi nelle pagine di categoria del sito è ancora quella vecchia: l'app usa ovunque quella della home (`NOTA_PREZZI`).
+- **Verifiche**: `tsc --noEmit` pulito, `expo lint` **0 problemi** (erano 6), `expo-doctor` 20/20, `expo export` per Android e iOS riusciti, `npm test` alla radice 608 test verdi (4 nuovi). **Non verificato**: il disegno su un telefono Android o su un iPhone veri (nessuno qui), né nell'anteprima web: i confronti con il sito
+  sono fatti leggendo `views/` e `assets/css/`, non guardando le due schermate fianco a fianco. Da fare con Expo Go (SDK 58) o con una build `preview`, scorrendo catalogo, carrello, Stato ordini, storico e profilo.

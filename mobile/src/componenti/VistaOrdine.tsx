@@ -1,81 +1,79 @@
-import { useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text } from 'react-native';
+import { SvgXml } from 'react-native-svg';
 
 import { ErroreApi, type Ordine } from '../api';
 import { riordina } from '../carrello';
 import { useContoAllaRovescia, useOrdine } from '../dati';
-import { FONT, RAGGIO, useTema } from '../tema';
+import { ICONE } from '../icone';
+import { FONT, useTema } from '../tema';
+import { AnelloAtt, CardAtt, ChipOk, EsitoConsegnato, PassiAtt, PillolaArrivato, PulsanteBlu, SchedaBanco, SchedaMateriale, SottoAtt, stileTimer, TestaOrdineAtt, TitoloAtt, VERDE_SCURO } from './att';
 import { informa } from './dialoghi';
 import { Pagamenti } from './Pagamenti';
 import { Caricamento, Errore } from './Stato';
-import { Avviso, Bottone, Card, Forte, Nota, RigaArticolo, RigaInfo, SezioneTitolo } from './ui';
+import { Card, durataMinuti, Nota, RigaInfo } from './ui';
 
 // Entro questa soglia l'ordine "è in arrivo" e non si scrivono più i minuti (la stessa del sito: format.SOGLIA_IN_ARRIVO_SEC).
 const IN_ARRIVO_SEC = 180;
 
-// I tre passi della pagina "Consegnato", ognuno con il suo orario (fasi_testo, già in ora italiana dal server).
-const PASSI_CONSEGNATO: { chiave: 'inviata' | 'confermata' | 'consegnata'; etichetta: string }[] = [
-  { chiave: 'inviata', etichetta: 'Inviata' },
-  { chiave: 'confermata', etichetta: 'Confermata' },
-  { chiave: 'consegnata', etichetta: 'Consegnata' },
-];
+// Il furgone grande al centro dell'anello (stroke più sottile, come .att-furgone svg del sito). Fermo: sul sito oscilla, qui niente animazioni.
+const FURGONE = ICONE.furgone.replace('stroke-width="1.6"', 'stroke-width="1.4"');
 
-// La parte alta di un ordine in consegna: titolo con l'arrivo (che si aggiorna da solo), barra che si riempie fino all'arrivo, chi lo porta.
-function Consegna({ o, lettoIl }: { o: Ordine; lettoIl: number }) {
-  const { c } = useTema();
+// La parte alta di un ordine in consegna (la scheda verde del sito): anello che si svuota fino all'arrivo (negli ultimi 3 minuti riparte da vuoto e si
+// riempie), "Arriva entro le 18:30", "Mancano 18 min", "Te lo porta …" e i tre passi con la barretta di "In consegna" che si riempie col tempo trascorso.
+// Si ridisegna ogni secondo dal conto alla rovescia locale; niente transizioni.
+function Consegna({ o, lettoIl, compatta }: { o: Ordine; lettoIl: number; compatta?: boolean }) {
   const restano = useContoAllaRovescia(o.eta_sec, lettoIl);
-  const inArrivo = restano !== null && restano <= IN_ARRIVO_SEC;
+  const conArrivo = restano !== null;
+  const inArrivo = conArrivo && restano <= IN_ARRIVO_SEC;
   const durata = o.durata_sec || 0;
-  const frazione = restano !== null && durata > 0 ? Math.min(1, Math.max(0, 1 - restano / durata)) : 0.5;
+  // Quanto manca in proporzione alla durata (1 = appena nato, 0 = arrivato). Senza orario d'arrivo l'anello resta pieno e fermo.
+  const rimasta = conArrivo && durata > 0 ? Math.min(1, Math.max(0, restano / durata)) : 1;
+  const frazioneAnello = conArrivo && inArrivo ? 1 - Math.max(0, restano) / IN_ARRIVO_SEC : rimasta;
+  // La barretta di "In consegna": tempo trascorso; senza durata a metà, come sul sito.
+  const trascorso = durata > 0 && conArrivo ? 1 - rimasta : 0.5;
   const titolo = inArrivo ? 'In arrivo' : o.tempo_testo;
-  const chiPorta = o.corriere || o.ditta || (o.distributore ? o.distributore.nome : '');
-
+  const mancano = conArrivo ? Math.max(1, Math.ceil(restano / 60)) : null;
+  // Chi porta la merce: il corriere se c'è, altrimenti il banco (consegna con il suo mezzo).
+  const chiPorta = (o.corriere || '').trim() || o.ditta || (o.distributore ? o.distributore.nome : '');
+  const { c } = useTema();
   return (
-    <View style={[stili.hero, { backgroundColor: c.verdeChiaro }]}>
-      <Text style={[stili.heroBadge, { backgroundColor: c.superficie, color: c.verde }]}>{o.stato_testo}</Text>
-      <Text style={[stili.heroTempo, { color: c.verde }]}>{titolo}</Text>
-      {chiPorta ? <Text style={[stili.heroSotto, { color: c.verde }]}>Te lo porta {chiPorta}</Text> : null}
-      <View style={[stili.barra, { backgroundColor: c.superficie }]}>
-        <View style={[stili.barraPiena, { backgroundColor: c.verde, width: `${Math.round(frazione * 100)}%` }]} />
-      </View>
-      <View style={stili.barraTesti}>
-        <Text style={[stili.barraTesto, { color: c.verde }]}>Confermato</Text>
-        <Text style={[stili.barraTesto, { color: c.verde }]}>In consegna</Text>
-        <Text style={[stili.barraTesto, { color: c.verde }]}>Consegnato</Text>
-      </View>
-    </View>
+    <CardAtt stile={stileTimer(compatta)}>
+      <AnelloAtt frazione={frazioneAnello} tono="verde" compatto={compatta}>
+        <SvgXml xml={FURGONE} width={compatta ? 44 : 58} height={compatta ? 44 : 58} color={c.testo} />
+      </AnelloAtt>
+      <TitoloAtt testo={titolo} tono="verde" solo={!chiPorta && !conArrivo} />
+      {conArrivo && !inArrivo ? (
+        <Text style={[stili.minuti, { color: VERDE_SCURO, marginBottom: chiPorta ? 6 : 18 }]}>Mancano {durataMinuti(mancano ?? 1)}</Text>
+      ) : null}
+      {chiPorta ? (
+        <SottoAtt>
+          Te lo porta <Text style={{ fontFamily: FONT.testoForte, color: c.testo }}>{chiPorta}</Text>
+        </SottoAtt>
+      ) : null}
+      <PassiAtt
+        tono="verde"
+        passi={[
+          { etichetta: 'Inviata', stato: 'fatto' },
+          { etichetta: 'Confermata', stato: 'fatto' },
+          { etichetta: 'In consegna', stato: 'corrente', riempimento: trascorso },
+        ]}
+      />
+    </CardAtt>
   );
 }
 
-// Un ordine del cliente, come la pagina /ordini/:id del sito (versione installatore): in consegna o consegnato.
-export function VistaOrdine({ id, nuovo = false }: { id: number; nuovo?: boolean }) {
+// Un ordine del cliente, come la pagina /ordini/:id del sito (versione installatore): in consegna (anello verde) o consegnato (spunta, orari, Riordina).
+// compatta: la pagina sta sotto la striscia di "Stato ordini" (due o più attività), quindi l'anello e la scheda in alto sono più piccoli.
+export function VistaOrdine({ id, compatta }: { id: number; compatta?: boolean }) {
   const { c } = useTema();
-  const clientDati = useQueryClient();
   const q = useOrdine(id);
   const [azione, setAzione] = useState<string | null>(null);
 
   if (q.isPending) return <Caricamento />;
   if (q.isError) return <Errore messaggio={q.error.message} riprova={() => q.refetch()} />;
   const o = q.data;
-
-  const esegui = async (quale: string, fn: () => Promise<unknown>) => {
-    setAzione(quale);
-    try {
-      await fn();
-      await Promise.all([
-        clientDati.invalidateQueries({ queryKey: ['ordine', id] }),
-        // 'all': la scheda "Stato ordini" può essere sotto questa schermata, non in primo piano.
-        clientDati.invalidateQueries({ queryKey: ['stato-ordini'], refetchType: 'all' }),
-        clientDati.invalidateQueries({ queryKey: ['materiale'] }),
-      ]);
-    } catch (e) {
-      informa('Operazione non riuscita', e instanceof ErroreApi ? e.message : 'Riprova tra poco.');
-    } finally {
-      setAzione(null);
-    }
-  };
 
   const ripeti = async () => {
     setAzione('riordina');
@@ -99,59 +97,44 @@ export function VistaOrdine({ id, nuovo = false }: { id: number; nuovo?: boolean
     o.note ? { etichetta: 'Note', dettaglio: o.note } : null,
   ].filter(Boolean) as { etichetta: string; dettaglio: string }[];
 
+  const righe = o.righe.map((r) => ({ quantita: r.quantita, nome: r.nome, codice: r.codice, cad: r.cad, totale: r.subtotale }));
+  const nomeBanco = o.ditta || (o.distributore ? o.distributore.nome : '');
+
+  if (o.consegnato) {
+    return (
+      <ScrollView style={{ backgroundColor: c.sfondo }} contentContainerStyle={stili.pagina}>
+        <CardAtt stile={stili.consegnato}>
+          <EsitoConsegnato />
+          <TitoloAtt testo="Consegnato" tono="verde" senzaPunto />
+          {o.consegnato_il_esteso ? <SottoAtt spazio={o.durata_testo ? 10 : 18}>{o.consegnato_il_esteso}</SottoAtt> : null}
+          {o.durata_testo ? <PillolaArrivato testo={o.durata_testo} /> : null}
+          <PassiAtt
+            tono="verde"
+            passi={[
+              // Un orario che manca (ordine vecchio, senza richiesta) non si scrive: resta solo l'etichetta.
+              { etichetta: 'Inviata', stato: 'fatto', ora: o.fasi_testo.inviata },
+              { etichetta: 'Confermata', stato: 'fatto', ora: o.fasi_testo.confermata },
+              { etichetta: 'Consegnata', stato: 'fatto', ora: o.fasi_testo.consegnata },
+            ]}
+          />
+        </CardAtt>
+
+        <PulsanteBlu titolo="Riordina gli stessi pezzi" icona="riprova" onPress={ripeti} disabilitato={azione === 'riordina'} />
+
+        <SchedaMateriale testa={<TestaOrdineAtt nome={nomeBanco} id={o.id} />} righe={righe} etichettaMerce="Merce · IVA esclusa" merce={o.importi.materiale.imponibile} />
+
+        <Pagamenti importi={o.importi} stato={o.stato_pagamento} fallback="ordine" ditta={o.ditta || null} ordineId={o.id} />
+      </ScrollView>
+    );
+  }
+
   return (
     <ScrollView style={{ backgroundColor: c.sfondo }} contentContainerStyle={stili.pagina}>
-      {nuovo ? (
-        <Avviso tipo="ok">
-          <Forte>Ordine confermato.</Forte> {o.ditta ? o.ditta + ' prepara' : 'Il banco prepara'} il materiale. {o.tempo_testo}.
-        </Avviso>
-      ) : null}
+      <Consegna o={o} lettoIl={q.dataUpdatedAt} compatta={compatta} />
 
-      {o.consegnato ? (
-        <View style={[stili.hero, { backgroundColor: c.verdeChiaro }]}>
-          <Text style={[stili.heroBadge, { backgroundColor: c.superficie, color: c.verde }]}>Consegnato</Text>
-          <Text style={[stili.heroTempo, { color: c.verde }]}>{o.tempo_testo}</Text>
-          {o.ditta ? <Text style={[stili.heroSotto, { color: c.verde }]}>{o.ditta}</Text> : null}
-          {o.durata_testo ? (
-            <Text style={[stili.heroPillola, { backgroundColor: c.superficie, color: c.verde }]}>{o.durata_testo}</Text>
-          ) : null}
-          <View style={stili.passi}>
-            {PASSI_CONSEGNATO.map((p) => (
-              <View key={p.chiave} style={stili.passo}>
-                <View style={[stili.passoBarretta, { backgroundColor: c.verde }]} />
-                <Text style={[stili.passoEtichetta, { color: c.verde }]}>✓ {p.etichetta}</Text>
-                {/* Un orario che manca (ordine vecchio) non si scrive: resta solo l'etichetta. */}
-                {o.fasi_testo[p.chiave] ? (
-                  <Text style={[stili.passoOra, { color: c.testo }]}>{o.fasi_testo[p.chiave]}</Text>
-                ) : null}
-              </View>
-            ))}
-          </View>
-        </View>
-      ) : (
-        <Consegna o={o} lettoIl={q.dataUpdatedAt} />
-      )}
+      {nomeBanco ? <SchedaBanco occhiello="Materiale da" nome={nomeBanco} destra={<ChipOk testo="Confermato" />} /> : null}
 
-      {o.consegnato ? <Bottone titolo="Riordina gli stessi pezzi" onPress={ripeti} inCorso={azione === 'riordina'} /> : null}
-
-      <SezioneTitolo>{o.consegnato ? 'Materiale consegnato' : 'Materiale in arrivo'}</SezioneTitolo>
-      <Card>
-        <Text style={[stili.ordineNumero, { color: c.grigio }]}>
-          Ordine #{o.id}
-          {o.ditta ? ' · ' + o.ditta : ''}
-        </Text>
-        {o.righe.map((r, i) => (
-          <RigaArticolo
-            key={i}
-            quantita={r.quantita}
-            nome={r.nome}
-            meta={`Cod. ${r.codice} · € ${r.cad} cad.`}
-            importo={r.subtotale}
-            ultima={i === o.righe.length - 1}
-          />
-        ))}
-      </Card>
-      <Nota>Merce · IVA esclusa: € {o.importi.materiale.imponibile}. I prezzi sono quelli del banco.</Nota>
+      <SchedaMateriale occhiello="Materiale in arrivo" righe={righe} etichettaMerce="Merce · IVA esclusa" merce={o.importi.materiale.imponibile} />
 
       <Pagamenti importi={o.importi} stato={o.stato_pagamento} fallback="ordine" ditta={o.ditta || null} ordineId={o.id} />
 
@@ -170,37 +153,7 @@ export function VistaOrdine({ id, nuovo = false }: { id: number; nuovo?: boolean
 
 const stili = StyleSheet.create({
   pagina: { padding: 14, gap: 12, paddingBottom: 32 },
-  hero: { borderRadius: RAGGIO, paddingVertical: 14, paddingHorizontal: 16 },
-  heroBadge: {
-    alignSelf: 'flex-start',
-    fontFamily: FONT.testoForte,
-    fontSize: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 999,
-    overflow: 'hidden',
-    marginBottom: 8,
-  },
-  heroTempo: { fontFamily: FONT.titolo, fontSize: 20 },
-  heroSotto: { fontFamily: FONT.testo, fontSize: 14, marginTop: 3 },
-  heroPillola: {
-    alignSelf: 'flex-start',
-    fontFamily: FONT.testoForte,
-    fontSize: 13,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 10,
-    overflow: 'hidden',
-    marginTop: 10,
-  },
-  passi: { flexDirection: 'row', gap: 8, marginTop: 14 },
-  passo: { flex: 1, gap: 6 },
-  passoBarretta: { height: 5, borderRadius: 3 },
-  passoEtichetta: { fontFamily: FONT.testoForte, fontSize: 12.5, textAlign: 'center' },
-  passoOra: { fontFamily: FONT.testoForte, fontSize: 13, textAlign: 'center', fontVariant: ['tabular-nums'] },
-  barra: { height: 8, borderRadius: 4, overflow: 'hidden', marginTop: 14 },
-  barraPiena: { height: 8, borderRadius: 4 },
-  barraTesti: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
-  barraTesto: { fontFamily: FONT.testoMedio, fontSize: 12 },
-  ordineNumero: { fontFamily: FONT.testoMedio, fontSize: 13, marginBottom: 4 },
+  // La scheda "Consegnato" ha un filo meno aria sopra (.att-timer.att-consegnato: 22 / 16 / 18).
+  consegnato: { paddingTop: 22, paddingHorizontal: 16, paddingBottom: 18 },
+  minuti: { fontFamily: FONT.testoForte, fontSize: 15, lineHeight: 20, textAlign: 'center', fontVariant: ['tabular-nums'] },
 });
