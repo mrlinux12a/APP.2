@@ -64,7 +64,8 @@ Solo sito/PWA (`mobile/` non toccata, schema DB e logica di business invariati).
   dopo (lo controlla `test/comune/asset_composti.test.js`, che verifica anche che ogni pezzo sia completo da solo: sintassi valida per il JS, graffe chiuse per il CSS).
   Per trovare un blocco basta cercare il suo titolo (es. «Avvisi del banco») dentro `assets/`.
 - **Cache degli asset**: `app.locals.asset('/style.css')` → `/style.css?v=<mtime>` (riletto ogni 5 s); gli URL con
-  `?v=` e solo `style.css`/`app.js`/`mappa.js` escono con `Cache-Control: public, max-age=31536000, immutable`.
+  `?v=` e solo i file dell'elenco `ASSET_VERSIONATI` (`src/middleware/file_statici.js`: `style.css`, `app.js`, `mappa.js`, `pagamento.js`, `landing.css`, `landing.js`) escono con `Cache-Control: public, max-age=31536000, immutable`.
+  Un asset nuovo con `asset(...)` va aggiunto a quell'elenco, altrimenti resta sul solo ETag.
   **Le viste vanno scritte con `asset(...)`**, non con `/app.js` nudo (quello resta sul solo ETag). `/favicon.ico`
   è servito prima della sessione. Header `X-Content-Type-Options`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy`;
   niente CSP (script e stili inline). Chiusura pulita su SIGTERM/SIGINT; il controllo scadenze (30 s) non si
@@ -77,6 +78,7 @@ Solo sito/PWA (`mobile/` non toccata, schema DB e logica di business invariati).
   linea) invece dell'errore del browser. Immagini, script e `/api` non passano da qui e falliscono come prima: l'app non finge di avere dati che non ha.
   **Funziona solo in HTTPS** (o localhost): finché il sito resta su HTTP semplice non succede niente, senza errori. Le icone (lettera "M" su blu) sono
   **segnaposto**, rigenerabili con `node scripts/genera/genera_icone_pwa.js`; manca ancora il logo vero.
+  **`start_url` è `/login`, non `/`** (6/11/2026): `/` per chi non è collegato è la landing pubblica (vedi docs/landing.md), e chi apre l'app installata deve trovare l'accesso; chi ha già una sessione da `/login` viene rimandato alla sua pagina (un rimando in più, invisibile). `id` e `scope` restano `/` (l'identità dell'app installata non cambia).
   **Installare dal telefono (20/10/2026, richiesta "web app per mobile")**: il manifest ha `id`, `orientation: portrait`, `categories`; `partials/comune/installa.ejs`
   (nella home, compatta con la × "Non ora" per 30 giorni in `localStorage`, e nella scheda **"Sul telefono"** del profilo, sempre disponibile) è
   nascosta e il blocco "Installa l'app" di `app.js` la mostra solo con `beforeinstallprompt` (Chrome/Edge/Samsung, HTTPS) o, su iPhone/iPad con Safari,

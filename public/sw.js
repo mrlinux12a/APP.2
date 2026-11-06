@@ -1,4 +1,4 @@
-/* Service worker di Ordini Minuteria.
+/* Service worker di Flash Delivery.
 
    Volutamente minimo: NON mette in cache pagine, CSS, JS o API. Le pagine sono dati di chi è collegato
    (richieste, ordini) e CSS/JS si aggiornano con una verifica ETag: una copia in cache li farebbe vedere
@@ -74,7 +74,7 @@ self.addEventListener('push', function (evento) {
     try { dati = { testo: evento.data.text() }; } catch (err2) { dati = {}; }
   }
   if (!dati || typeof dati !== 'object') dati = {};
-  const titolo = typeof dati.titolo === 'string' && dati.titolo ? dati.titolo : 'Minuteria';
+  const titolo = typeof dati.titolo === 'string' && dati.titolo ? dati.titolo : 'Flash Delivery';
   const tag = typeof dati.tag === 'string' && dati.tag ? dati.tag : '';
   const base = {
     body: typeof dati.testo === 'string' ? dati.testo : '',
@@ -97,7 +97,7 @@ self.addEventListener('push', function (evento) {
       return self.registration.showNotification(titolo, opzioni);
     }).catch(function () {
       // Opzioni rifiutate dal browser: una notifica semplice, ma una notifica.
-      return self.registration.showNotification('Minuteria', { body: base.body || 'Hai una nuova notifica.', data: base.data });
+      return self.registration.showNotification('Flash Delivery', { body: base.body || 'Hai una nuova notifica.', data: base.data });
     });
   };
   // In primo piano: mostrata in silenzio e chiusa subito (vedi sopra). Anche se la chiusura non riesce resta una notifica silenziosa, senza suono.
@@ -106,7 +106,7 @@ self.addEventListener('push', function (evento) {
     return Promise.resolve().then(function () {
       return self.registration.showNotification(titolo, Object.assign({ tag: tagSilenzioso, silent: true }, base));
     }).catch(function () {
-      return self.registration.showNotification('Minuteria', { body: base.body || 'Hai una nuova notifica.', silent: true, data: base.data });
+      return self.registration.showNotification('Flash Delivery', { body: base.body || 'Hai una nuova notifica.', silent: true, data: base.data });
     }).then(function () {
       return self.registration.getNotifications({ tag: tagSilenzioso });
     }).then(function (aperte) {

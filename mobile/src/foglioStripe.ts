@@ -16,7 +16,7 @@ export async function apriFoglioStripe(p: PagamentoDaFare, nomeCliente?: string)
   // La chiave pubblicabile arriva dal server insieme al pagamento: così l'app non ne porta una scritta dentro (prova e reale restano quelle del server).
   await initStripe({ publishableKey: p.chiave_pubblica, urlScheme: 'minuteria' });
   const { error: errorePreparazione } = await initPaymentSheet({
-    merchantDisplayName: 'Ordini Minuteria',
+    merchantDisplayName: 'Flash Delivery',
     paymentIntentClientSecret: p.client_secret,
     // Solo metodi che confermano subito: la richiesta parte a carta autorizzata.
     allowsDelayedPaymentMethods: false,

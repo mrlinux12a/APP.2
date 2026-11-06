@@ -125,7 +125,7 @@ test('numerazione: due ricevute che prendono lo stesso numero insieme (l\'indice
 
 test('datiRicevuta: tutto quello che serve, con la data dell\'incasso e lo stesso numero a ogni apertura', async () => {
   scenario();
-  const d = await conAzienda({ AZIENDA_NOME: 'Minuteria' }, () => ricevute.datiRicevuta(97, { clienteId: 1 }));
+  const d = await conAzienda({ AZIENDA_NOME: 'Flash Delivery' }, () => ricevute.datiRicevuta(97, { clienteId: 1 }));
   assert.equal(d.tipo, 'pagamento');
   assert.equal(d.numero, 'R-2026-000001');
   assert.equal(d.data, incassoUtc, 'la data è quella dell\'incasso');
@@ -134,7 +134,7 @@ test('datiRicevuta: tutto quello che serve, con la data dell\'incasso e lo stess
   assert.deepEqual([d.importi.app.corriere, d.importi.app.servizio, d.importi.app.imponibile, d.importi.app.iva, d.importi.app.totale], [10, 6.45, 16.45, 3.62, 20.07]);
   assert.deepEqual([d.importi.banco.merce, d.importi.banco.totale], [64.5, 78.69]);
   assert.deepEqual([d.carta.testo, d.transazione], ['Visa •••• 4242', 'pi_3QxExample0123456789']);
-  assert.equal(d.azienda.nome, 'Minuteria');
+  assert.equal(d.azienda.nome, 'Flash Delivery');
   assert.equal((await ricevute.datiRicevuta(97, { clienteId: 1 })).numero, 'R-2026-000001');
   assert.equal(tabellaRicevute.length, 1);
 });
@@ -190,13 +190,13 @@ test('datiRicevuta: la ricevuta di rimborso (ordine rimborsato) ha la sua numera
 test('modelloRicevuta: cosa c\'è scritto (titolo, numero, emessa da / intestata a, ordine, voci, totale, pagamento, nota sul materiale)', async () => {
   scenario();
   const d = await conAzienda(
-    { AZIENDA_NOME: 'Minuteria', AZIENDA_RAGIONE_SOCIALE: 'Esempio Servizi S.r.l.', AZIENDA_INDIRIZZO: 'Via dell\'Esempio 1, 16100 Genova (GE)', AZIENDA_PIVA: '01234567890', AZIENDA_EMAIL: 'assistenza@example.com', RICEVUTA_NOTA_FISCALE: 'La fattura elettronica è inviata tramite SDI.' },
+    { AZIENDA_NOME: 'Flash Delivery', AZIENDA_RAGIONE_SOCIALE: 'Esempio Servizi S.r.l.', AZIENDA_INDIRIZZO: 'Via dell\'Esempio 1, 16100 Genova (GE)', AZIENDA_PIVA: '01234567890', AZIENDA_EMAIL: 'assistenza@example.com', RICEVUTA_NOTA_FISCALE: 'La fattura elettronica è inviata tramite SDI.' },
     () => ricevute.datiRicevuta(97, { clienteId: 1 })
   );
   const m = ricevute.modelloRicevuta(d);
   assert.equal(m.titolo, 'Ricevuta di pagamento');
   assert.equal(m.numeroData, 'N. R-2026-000001 · 15/10/2026');
-  assert.deepEqual([m.marchio, m.nomeAzienda, m.sottotitolo], ['M', 'Minuteria', 'Consegna materiale in cantiere']);
+  assert.deepEqual([m.marchio, m.nomeAzienda, m.sottotitolo], ['F', 'Flash Delivery', 'Consegna materiale in cantiere']);
   assert.deepEqual(m.emessaDa, ['Esempio Servizi S.r.l.', 'Via dell\'Esempio 1, 16100 Genova (GE)', 'P. IVA 01234567890']);
   assert.deepEqual(m.intestataA, ['Rossi Impianti S.r.l.', 'Via Roma 1, 16121 Genova (GE)', 'P. IVA 12345678901 · SDI KRRH6B9']);
   assert.equal(m.ordine, 'Ordine #97 (richiesta #177) · materiale da BOREA SRL');
@@ -213,13 +213,13 @@ test('modelloRicevuta: cosa c\'è scritto (titolo, numero, emessa da / intestata
   assert.deepEqual(m.notaMateriale, { prima: 'Il materiale (€ 64,50 + IVA = € 78,69) ', evidenza: 'non è compreso', dopo: ' in questa ricevuta: te lo fattura direttamente BOREA SRL.' });
   assert.doesNotMatch(JSON.stringify(m.voci), /78,69|14,19/, 'né il materiale né la sua IVA tra le voci pagate');
   // piè di pagina: i dati dell'azienda e, se c'è, la nota fiscale
-  assert.deepEqual(m.piede, ['Minuteria · Via dell\'Esempio 1, 16100 Genova (GE) · P. IVA 01234567890 · assistenza@example.com', 'La fattura elettronica è inviata tramite SDI.']);
+  assert.deepEqual(m.piede, ['Flash Delivery · Via dell\'Esempio 1, 16100 Genova (GE) · P. IVA 01234567890 · assistenza@example.com', 'La fattura elettronica è inviata tramite SDI.']);
 });
 
 test('modelloRicevuta con l\'IVA DENTRO il servizio (dal 23/10/2026): corriere e servizio sommano al totale, imponibile e IVA sono "di cui"', async () => {
   scenario();
   const pricing = require('../../src/logica/pagamenti/pricing');
-  const d = await conAzienda({ AZIENDA_NOME: 'Minuteria' }, () => ricevute.datiRicevuta(97, { clienteId: 1 }));
+  const d = await conAzienda({ AZIENDA_NOME: 'Flash Delivery' }, () => ricevute.datiRicevuta(97, { clienteId: 1 }));
   const nuovo = pricing.importiOrdine(
     { totale_netto: 64.5, totale_finale: 70.95, costo_consegna: 5, contributo_raee: 0, iva: 16.51, servizio: 6.45, imponibile_app: 10.55, iva_app: 2.32, da_pagare_app: 12.87, imponibile_banco: 64.5, iva_banco: 14.19, materiale_banco: 78.69 },
     null, 22, 10
@@ -238,9 +238,9 @@ test('modelloRicevuta: i dati dell\'azienda vengono dal .env, mai dal codice; qu
   scenario();
   const d = await conAzienda({}, () => ricevute.datiRicevuta(97, { clienteId: 1 }));
   const m = ricevute.modelloRicevuta(d);
-  assert.equal(m.nomeAzienda, 'Minuteria', 'il nome di default è quello dell\'app');
-  assert.deepEqual(m.emessaDa, ['Minuteria'], 'senza ragione sociale, indirizzo e partita IVA resta il solo nome');
-  assert.deepEqual(m.piede, ['Minuteria'], 'e nessuna riga di nota fiscale');
+  assert.equal(m.nomeAzienda, 'Flash Delivery', 'il nome di default è quello dell\'app');
+  assert.deepEqual(m.emessaDa, ['Flash Delivery'], 'senza ragione sociale, indirizzo e partita IVA resta il solo nome');
+  assert.deepEqual(m.piede, ['Flash Delivery'], 'e nessuna riga di nota fiscale');
   // un'azienda con un altro nome e la sola nota fiscale
   const e = await conAzienda({ AZIENDA_NOME: 'Cantiere Facile', RICEVUTA_NOTA_FISCALE: 'Nota da confermare.' }, () => ricevute.datiRicevuta(97, { clienteId: 1 }));
   const m2 = ricevute.modelloRicevuta(e);

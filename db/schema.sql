@@ -1,4 +1,4 @@
--- Postgres schema per Minuteria (equivalente a schema.sql)
+-- Postgres schema per Flash Delivery (equivalente a schema.sql)
 
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,

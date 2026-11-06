@@ -237,7 +237,7 @@ test('inviaAUtente: testo troppo lungo tagliato, link che non è un percorso del
   assert.equal(inviati[0].tag, null);
   assert.equal(inviati[1].link, null);
   assert.equal(inviati[2].link, null);
-  assert.equal(inviati[3].titolo, 'Minuteria', 'senza titolo ce n\'è uno');
+  assert.equal(inviati[3].titolo, 'Flash Delivery', 'senza titolo ce n\'è uno');
 });
 
 test('inviaAUtente: 404/410 dal servizio push = iscrizione morta, si cancella; altri errori no; una consegna fallita non ferma le altre; non lancia mai', async () => {

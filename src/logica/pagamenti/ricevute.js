@@ -114,7 +114,7 @@ function modelloRicevuta(d) {
   const rigaCarta = d.carta ? `${rimborso ? 'Su carta' : 'Carta'} ${d.carta.testo} · ${quando}` : `${rimborso ? 'Rimborsato' : 'Pagato'} · ${quando}`;
   return {
     rimborso,
-    marchio: (az.nome.charAt(0) || 'M').toUpperCase(),
+    marchio: (az.nome.charAt(0) || 'F').toUpperCase(),
     nomeAzienda: az.nome,
     sottotitolo: az.sottotitolo,
     titolo: rimborso ? 'Ricevuta di rimborso' : 'Ricevuta di pagamento',
@@ -255,7 +255,7 @@ function pdfRicevute(elenco, titolo = 'Ricevuta') {
       size: 'A4',
       margins: { top: MARGINE_Y, bottom: MARGINE_Y, left: MARGINE_X, right: MARGINE_X },
       autoFirstPage: false,
-      info: { Title: titolo, Author: (elenco[0] && elenco[0].azienda.nome) || 'Minuteria' },
+      info: { Title: titolo, Author: (elenco[0] && elenco[0].azienda.nome) || 'Flash Delivery' },
     });
     const pezzi = [];
     doc.on('data', (p) => pezzi.push(p));

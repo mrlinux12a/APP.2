@@ -297,7 +297,7 @@ test('geocodifica: legge lat/lng, ritenta senza CAP, non lancia mai e rifiuta po
   assert.match(visti[0].url, /countrycodes=it/);
   assert.match(visti[0].url, /format=jsonv2/);
   assert.match(visti[0].url, /limit=1/);
-  assert.match(visti[0].ua, /Minuteria/, 'un User-Agent che dice chi siamo: lo vuole Nominatim');
+  assert.match(visti[0].ua, /FlashDelivery/, 'un User-Agent che dice chi siamo: lo vuole Nominatim');
 
   // il primo tentativo non trova niente, il secondo (senza CAP) sì
   visti.length = 0;

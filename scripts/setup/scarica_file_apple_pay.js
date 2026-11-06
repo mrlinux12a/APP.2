@@ -12,7 +12,7 @@ const URL_FILE = 'https://stripe.com/files/apple-pay/apple-developer-merchantid-
 const DESTINAZIONE = path.join(__dirname, '..', '..', 'public', '.well-known', 'apple-developer-merchantid-domain-association');
 
 (async () => {
-  const risposta = await fetch(URL_FILE, { headers: { 'User-Agent': 'Minuteria/1.0 (verifica dominio Apple Pay)' } });
+  const risposta = await fetch(URL_FILE, { headers: { 'User-Agent': 'FlashDelivery/1.0 (verifica dominio Apple Pay)' } });
   if (!risposta.ok) throw new Error('Stripe ha risposto ' + risposta.status);
   const testo = await risposta.text();
   // Il file è una lunga riga esadecimale: se è vuoto o ha altro dentro, qualcosa non va e non si scrive.

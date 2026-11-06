@@ -21,7 +21,7 @@ function installaGestoriProcesso() {
 // Mette il server in ascolto sulla porta e, se è aperto alla rete locale, scrive gli indirizzi con cui lo raggiunge il telefono.
 function ascolta(app) {
   const server = app.listen(PORT, HOST, () => {
-    console.log(`Server minuteria in ascolto su http://localhost:${PORT}`);
+    console.log(`Server Flash Delivery in ascolto su http://localhost:${PORT}`);
     if (HOST === '0.0.0.0' || HOST === '::') {
       // Gli indirizzi con cui lo raggiunge il telefono (IPv4 delle schede di rete, escluse quelle virtuali di loopback).
       for (const schede of Object.values(os.networkInterfaces())) {

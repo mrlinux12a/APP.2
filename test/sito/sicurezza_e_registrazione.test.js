@@ -200,7 +200,7 @@ test('registrati: collegamento automatico a BOREA SRL (tutte le filiali) e scher
     r = await chiedi('/benvenuto');
     assert.equal(r.status, 200);
     let t = await r.text();
-    assert.match(t, /Benvenuto in Ordini Minuteria/);
+    assert.match(t, /Benvenuto in Flash Delivery/);
     assert.match(t, /L’anagrafica di <strong>Prova S\.r\.l\.<\/strong> è pronta\./);
     assert.match(t, /Il tuo distributore<\/div>\s*<div class="ben-nome">BOREA SRL</);
     assert.doesNotMatch(t, /confermerà a breve/); // già approvato
@@ -245,7 +245,7 @@ test('registrati: collegamento automatico a BOREA SRL (tutte le filiali) e scher
     assert.match(erroriServer[prima], /distributore predefinito "999" non trovato/);
     erroriServer.splice(prima, 1); // atteso: non è un errore inatteso per la prova finale
     t = await (await chiedi('/benvenuto')).text();
-    assert.match(t, /Benvenuto in Ordini Minuteria/);
+    assert.match(t, /Benvenuto in Flash Delivery/);
     assert.doesNotMatch(t, /Il tuo distributore/);
   } finally {
     delete process.env.DISTRIBUTORE_PREDEFINITO;

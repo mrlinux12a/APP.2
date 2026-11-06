@@ -17,7 +17,7 @@ router.get('/home', requireRole('cliente'), async (req, res) => {
     catalogo.categorieHome(),
     catalogo.contaProdottiConFoto(),
   ]);
-  res.render('cliente/home', { titolo: 'Ordini Minuteria', inEvidenza, altre, prodottiConFotoConta, carrello: getCarrello(req) });
+  res.render('cliente/home', { titolo: 'Flash Delivery', inEvidenza, altre, prodottiConFotoConta, carrello: getCarrello(req) });
 });
 
 // Una ricerca dentro una categoria o un marchio, nella forma dell'elenco delle pagine ({ righe, ricerca, troncato }).

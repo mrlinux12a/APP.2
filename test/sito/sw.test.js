@@ -336,7 +336,7 @@ test('push: SI MOSTRA SEMPRE una notifica, anche con un messaggio vuoto o rovina
     const sw = caricaSw();
     await spingi(sw, dati, corpo);
     assert.equal(sw.chiamate.notifiche.length, 1, nome);
-    assert.equal(sw.chiamate.notifiche[0].titolo, 'Minuteria', nome);
+    assert.equal(sw.chiamate.notifiche[0].titolo, 'Flash Delivery', nome);
   }
   // il testo semplice (non JSON) diventa il corpo della notifica
   const sw = caricaSw();
@@ -348,7 +348,7 @@ test('push: se il browser rifiuta le opzioni si mostra una notifica semplice (ma
   const sw = caricaSw({ mostraRifiutaLaPrima: true });
   await spingi(sw, { titolo: 'Ordine', testo: 'in arrivo', link: '/ordini/5', tag: 'minuteria-5' });
   assert.equal(sw.chiamate.notifiche.length, 1);
-  assert.equal(sw.chiamate.notifiche[0].titolo, 'Minuteria');
+  assert.equal(sw.chiamate.notifiche[0].titolo, 'Flash Delivery');
   assert.equal(sw.chiamate.notifiche[0].opzioni.body, 'in arrivo');
   assert.equal(sw.chiamate.notifiche[0].opzioni.data.link, '/ordini/5', 'il tocco porta comunque sulla pagina giusta');
 });

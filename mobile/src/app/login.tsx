@@ -43,7 +43,7 @@ export default function Login() {
             <View style={[stili.icona, { backgroundColor: c.accento }]}>
               <Icona nome="ordini" colore={c.suAccento} dimensione={26} />
             </View>
-            <Text style={[stili.occhiello, { color: c.accento }]}>Ordini Minuteria</Text>
+            <Text style={[stili.occhiello, { color: c.accento }]}>Flash Delivery</Text>
             <Text style={[stili.titolo, { color: c.testo }]}>Il pezzo che ti manca, in cantiere.</Text>
             <Text style={[stili.sotto, { color: c.grigio }]}>Chiedi la disponibilità al banco e ricevi il materiale dove lavori.</Text>
           </View>

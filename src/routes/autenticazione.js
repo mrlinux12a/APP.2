@@ -17,10 +17,10 @@ const router = creaRouter();
 
 // ---------- Home / Login ----------
 
-// L'indirizzo "/": manda ognuno alla sua pagina di partenza (chi non è collegato al login, l'installatore al catalogo, il banco alla sua bacheca, l'agente
-// all'elenco ordini).
+// L'indirizzo "/": manda ognuno alla sua pagina di partenza (l'installatore al catalogo, il banco alla sua bacheca, l'agente all'elenco ordini). Chi non è
+// collegato trova la pagina pubblica del servizio (views/auth/landing.ejs, spiegata in docs/landing.md), con i pulsanti per accedere e registrarsi.
 router.get('/', async (req, res) => {
-  if (!req.session.user) return res.redirect('/login');
+  if (!req.session.user) return res.render('auth/landing');
   if (req.session.user.ruolo === 'agente') return res.redirect('/agente/ordini');
   if (req.session.user.ruolo === 'distributore') return res.redirect('/distributore');
   return res.redirect('/home');
@@ -29,7 +29,7 @@ router.get('/', async (req, res) => {
 // Le frasi che il login può mostrare dopo un passaggio altrove (?avviso=...): solo queste, scelte da noi (mai testo preso dall'indirizzo).
 const AVVISI_LOGIN = {
   password: 'Password cambiata. Accedi con quella nuova.',
-  eliminato: 'Account eliminato. Grazie per aver usato Minuteria.',
+  eliminato: 'Account eliminato. Grazie per aver usato Flash Delivery.',
 };
 
 // Mostra la pagina di accesso (nome utente e password). Chi è già collegato va alla sua pagina.

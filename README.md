@@ -1,4 +1,4 @@
-# Ordini Minuteria — MVP
+# Flash Delivery — MVP
 
 App per digitalizzare gli ordini di materiale termoidraulico tra installatori pilota e
 distributori. Due superfici: il **sito** (vista cliente pensata per il telefono, vista banco,
@@ -445,7 +445,7 @@ scripts/verifica/      prove e controlli (Stripe, push, tragitto, orari, WhatsAp
 views/                 pagine EJS per area: auth/ (accesso, registrazione, password), cliente/ (installatore), banco/ (distributore), agente/, comune/ (errore, legale, notifiche); partials/ = parti riusate, per area (comune/, cliente/, banco/, agente/). Gli `include` sono relativi al file che li chiama
 assets/js/            i pezzi di app.js (uno per argomento: quantità e ricerca live, countdown, banco, avvisi...), numerati: il server li riunisce in un solo /app.js
 assets/css/           i pezzi di style.css, numerati come sopra: il server li riunisce in un solo /style.css (src/comune/asset_composti.js)
-public/               il resto dei file serviti così come sono: sw.js, manifest, icone, mappa.js, pagamento.js, img/prodotti, vendor/
+public/               il resto dei file serviti così come sono: sw.js, manifest, icone, mappa.js, pagamento.js, landing.css e landing.js (la landing pubblica, docs/landing.md), img/prodotti, vendor/
 test/                  prove automatiche (`npm test`), una cartella per area come src/logica (account, banco, catalogo, notifiche, ordini, pagamenti, whatsapp) più middleware/, db/, comune/ e sito/ (un file per argomento che avvia il vero server con un DB finto, preparato in sito/_aiuti/server_finto.js; sw.test.js prova il service worker)
 mobile/                app React Native / Expo (vedi "App nativa")
 docs/                  documentazione per argomento (indice in CLAUDE.md), guide di messa in funzione in docs/guide/, mockup

@@ -16,6 +16,7 @@ Leggi il file **prima** di modificare quella parte: ogni file porta le scelte es
 | Richieste, ordini, Stato ordini | [docs/richieste-e-ordini.md](docs/richieste-e-ordini.md) | ciclo richiesta → ordine, pagamento alla richiesta, più ordini insieme, icona e striscia di "Stato ordini" |
 | Pagamenti | [docs/pagamenti.md](docs/pagamenti.md) | Stripe (reale e sandbox), importo di prova, stati, ricevute, email, annullamento |
 | Posizione, tragitto, orari del corriere | [docs/posizione-e-consegna.md](docs/posizione-e-consegna.md) | indirizzo di consegna, sede provvisoria Via Puggia, tragitto sulla mappa, ritiro del corriere |
+| Landing pubblica (`/` senza accesso) | [docs/landing.md](docs/landing.md) | pagina di presentazione con la simulazione dell'ordine, Accedi/Registrati, adattamento al telefono, `start_url` della PWA; **il nome del servizio è "Flash Delivery"** (ex "Ordini Minuteria") e cosa NON va rinominato (sezione «Il nome») |
 | Account dell'installatore | [docs/account-installatore.md](docs/account-installatore.md) | password dimenticata, cambio password, elimina account |
 | Notifiche | [docs/notifiche.md](docs/notifiche.md) | notifiche in-app e Web Push ad app chiusa |
 | Gruppo WhatsApp dei corrieri | [docs/whatsapp.md](docs/whatsapp.md) | `src/logica/whatsapp/whatsapp.js`, sondaggi, "preso", istanza proprietaria |
@@ -47,7 +48,7 @@ db/              index.js (unico accesso a Postgres), resilienza.js, schema.sql,
 scripts/         db/ (schema, config, listini, sottocategorie) · una_tantum/ (migrazioni sul DB condiviso) · genera/ (icone, suono) · setup/ (chiavi VAPID, file Apple Pay) · verifica/ (prove e controlli: `verifica_stripe`, `stato_orari`, `prova_tragitto` solo leggono; `prova_push` e `prova_whatsapp` mandano messaggi veri)
 views/           pagine EJS per area: auth/ · cliente/ · banco/ · agente/ · comune/ · partials/<area>/ (gli `include` sono relativi al file che li chiama, es. `../partials/comune/app_head`)
 assets/          js/ e css/: i pezzi (numerati, uno per argomento) di app.js e style.css, che il server riunisce in un solo file (src/comune/asset_composti.js)
-public/          sw.js, manifest, icone, mappa.js, pagamento.js, img/, vendor/: file serviti così come sono
+public/          sw.js, manifest, icone, mappa.js, pagamento.js, landing.css e landing.js (la landing, vedi docs/landing.md), img/, vendor/: file serviti così come sono
 test/            node:test (`npm test`): una cartella per area (come src/logica, più middleware/, db/, comune/); sito/ ha un file per argomento che avvia il vero server con un DB finto (preparato in sito/_aiuti/server_finto.js)
 mobile/          app React Native / Expo (ha il suo CLAUDE.md)
 docs/            questa documentazione, divisa per argomento

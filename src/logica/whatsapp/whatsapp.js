@@ -811,7 +811,7 @@ async function collega() {
     version,
     auth: state,
     logger,
-    browser: Browsers.ubuntu('Minuteria'),
+    browser: Browsers.ubuntu('Flash Delivery'),
     markOnlineOnConnect: false,
     syncFullHistory: false,
   });

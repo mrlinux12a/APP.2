@@ -1,0 +1,577 @@
+/* ---------- 1. Base della pagina: colori, intestazione, sezioni, telefono dei passaggi, vantaggi, domande, contatti ---------- */
+:root{--ink:#243028;--muted:#687068;--orange:#c74c24;--paper:#f7f6f0;--line:#dcded3}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:90px}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px 'DM Sans',sans-serif}
+a{color:inherit;text-decoration:none}
+button{font:inherit;cursor:pointer}
+nav{height:88px;display:flex;align-items:center;justify-content:space-between;padding:0 5%;border-bottom:1px solid var(--line);background:var(--paper);position:relative;z-index:5}
+.brand{display:flex;align-items:center;gap:10px;font:800 21px Manrope,sans-serif;letter-spacing:-1px}
+.mark{background:var(--orange);color:white;width:33px;height:33px;display:grid;place-items:center;border-radius:50%;font-size:26px}
+.navlinks{display:flex;align-items:center;gap:32px;font-size:13px}
+.navcta{border:1px solid var(--ink);padding:12px 18px;border-radius:4px}
+.eyebrow{text-transform:uppercase;letter-spacing:2px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:10px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--orange);display:inline-block}
+.hero{position:relative;min-height:740px;overflow:hidden;padding:72px 5% 0}
+.hero-copy{position:relative;z-index:2;width:54%;pointer-events:none}
+.hero-copy a{pointer-events:auto}
+h1{font:500 clamp(48px,5.5vw,88px)/1.04 Manrope,sans-serif;letter-spacing:-4px;margin:28px 0}
+h1 em{font-style:normal;color:var(--orange)}
+.lead{font-size:17px;line-height:1.7;color:var(--muted);max-width:390px}
+.actions{display:flex;gap:23px;align-items:center;margin-top:28px;flex-wrap:wrap}
+.button{display:inline-flex;align-items:center;justify-content:space-between;gap:28px;padding:17px 22px;background:var(--orange);color:white;border:0;border-radius:4px;font-weight:600;font-size:14px;transition:background .2s,transform .2s}
+.button:hover{background:#a63d1b;transform:translateY(-2px)}
+.textlink{font-size:13px;border-bottom:1px solid var(--ink);padding-bottom:5px}
+.hero-art{position:absolute;right:-5%;top:65px;width:72%;height:660px;object-fit:cover;object-position:58% center;mask-image:linear-gradient(to right,transparent,black 24%);z-index:0}
+.hero:after{content:'';position:absolute;bottom:0;left:0;right:0;height:140px;background:linear-gradient(transparent,var(--paper));pointer-events:none}
+.caption{position:absolute;right:6%;bottom:65px;z-index:2;background:#fffdf8ed;border:1px solid white;border-radius:5px;padding:17px 22px;box-shadow:0 12px 35px #24302813;font-size:12px}
+.caption strong{display:block;font-size:15px;margin-bottom:5px}
+.micro{font-size:11px;color:var(--muted);margin-top:18px}
+.strip{margin:0 5%;padding:23px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);display:flex;justify-content:space-between;font-size:12px}
+.strip span:before{content:'↗';color:var(--orange);margin-right:12px}
+.section{padding:110px 7%}
+h2{font:500 clamp(33px,3.8vw,58px)/1.15 Manrope,sans-serif;letter-spacing:-2px;margin:20px 0 25px}
+.intro{display:grid;grid-template-columns:1.3fr 1fr;gap:14%;align-items:center}
+.intro p{line-height:1.8;color:var(--muted)}
+.intro strong{color:var(--ink);font-weight:500}
+.note{border-left:2px solid var(--orange);padding-left:22px;margin-top:30px}
+.journey{background:#eaece3;display:grid;grid-template-columns:1fr 1fr;gap:9%;align-items:center}
+.steps{margin-top:35px}
+.step{width:100%;text-align:left;background:none;border:0;border-top:1px solid #ccd1c5;padding:19px 0;display:grid;grid-template-columns:35px 1fr 20px;gap:10px;color:var(--muted)}
+.step:last-child{border-bottom:1px solid #ccd1c5}
+.step .number{font-size:12px;padding-top:5px}
+.step strong{display:block;font-size:18px;font-weight:500}
+.step p{font-size:13px;line-height:1.6;margin:10px 0 0;display:none;max-width:320px}
+.step[aria-selected=true]{color:var(--ink)}
+.step[aria-selected=true] .number{color:var(--orange)}
+.step[aria-selected=true] p{display:block}
+.device-stage{perspective:1400px;position:relative;text-align:center;padding:25px 0}
+.phone{position:relative;text-align:left;margin:auto;width:292px;min-height:510px;background:#fafaf6;border:8px solid #26322c;border-radius:40px;box-shadow:25px 35px 45px #26322c24,3px 3px 0 #869086;transform:rotateY(-10deg) rotateZ(4deg);padding:36px 20px 25px;transition:transform .7s}
+.phone:hover{transform:rotateY(0) rotateZ(0)}
+.phone:before{content:'';position:absolute;top:9px;width:75px;height:17px;background:#26322c;border-radius:20px;left:100px}
+.phone-head{font-size:12px;font-weight:700;display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:19px}
+.phone small{color:var(--muted);font-size:10px}
+.phone h3{font:600 25px/1.25 Manrope;margin:25px 0 10px;letter-spacing:-1px}
+.product{display:flex;align-items:center;gap:15px;background:#eceee5;padding:18px 10px;border-radius:8px;margin:24px 0}
+.pipe{font-size:40px;color:#a3783e;line-height:1}
+.product strong{font-size:12px;display:block}
+.product small{display:block;margin-top:5px}
+.status{padding:15px;background:#e1e9d9;border-radius:6px;font-size:12px;margin:18px 0}
+.status b{display:block;margin-bottom:6px}
+.route{display:flex;align-items:center;gap:10px;margin:25px 0;font-size:10px}
+.route i{flex:1;height:2px;background:linear-gradient(90deg,var(--orange) 60%,#d6dccc 60%)}
+.phone-bottom{background:var(--ink);color:white;border-radius:7px;padding:14px;font-size:11px;text-align:center;margin-top:20px}
+.preview-label{font-size:10px;letter-spacing:1px;text-transform:uppercase;margin-top:35px;color:var(--muted)}
+.benefits{display:grid;grid-template-columns:repeat(3,1fr);margin-top:55px;gap:45px}
+.benefit{border-top:1px solid var(--line);padding-top:25px}
+.benefit .n{color:var(--orange);font-size:12px}
+.benefit h3{font:500 23px Manrope;letter-spacing:-.7px}
+.benefit p{line-height:1.7;color:var(--muted);font-size:14px}
+.partner{margin:0 5% 90px;padding:45px 4%;border:1px solid var(--line);display:flex;justify-content:space-between;gap:40px;align-items:center}
+.partner h3{font:500 27px Manrope;letter-spacing:-1px;margin:12px 0}
+.partner p{font-size:14px;color:var(--muted);max-width:580px;line-height:1.7}
+.faq{padding-top:0;display:grid;grid-template-columns:1fr 1fr;gap:10%}
+details{border-bottom:1px solid var(--line);padding:22px 0}
+summary{cursor:pointer;font-size:15px}
+details p{color:var(--muted);font-size:14px;line-height:1.7}
+.contact{background:var(--ink);color:var(--paper);padding:85px 7%;display:grid;grid-template-columns:1.4fr 1fr;gap:10%;align-items:center}
+.contact h2{margin-bottom:0}
+.contact p{color:#c0c8be;line-height:1.7;font-size:14px}
+.contact .micro{color:#b4beb0}
+.contact .eyebrow{color:#cbd3c4}
+footer{padding:28px 5%;display:flex;justify-content:space-between;gap:20px;font-size:11px;color:var(--muted)}
+:focus-visible{outline:3px solid #df8c40;outline-offset:5px}
+a:hover.textlink{color:var(--orange)}
+@media(min-width:1500px) {
+  .hero{min-height:850px}
+  .hero-art{height:800px}
+  .hero-copy{max-width:800px}
+}
+@media(max-width:900px) {
+  .hero{min-height:900px;padding-top:45px}
+  .hero-copy{width:90%}
+  h1{font-size:62px}
+  .hero-art{top:380px;right:-10%;width:110%;height:520px;mask-image:linear-gradient(to bottom,transparent,black 20%)}
+  .caption{bottom:40px}
+  .intro,.journey,.faq{gap:50px}
+  .section{padding:75px 6%}
+  .navlinks{gap:20px}
+  .benefits{gap:25px}
+}
+@media(max-width:600px) {
+  nav{height:75px}
+  .brand{font-size:18px}
+  .navlinks>a:not(.navcta){display:none}
+  .navcta{font-size:11px;padding:10px}
+  .hero{padding:35px 6% 0;min-height:1040px}
+  .hero-copy{width:100%}
+  h1{font-size:48px;letter-spacing:-2.6px}
+  .lead{font-size:15px}
+  .hero-art{top:620px;height:420px;width:135%;right:-15%}
+  .caption{bottom:30px;right:6%;padding:12px 15px}
+  .strip{font-size:10px;gap:14px;flex-wrap:wrap}
+  .intro,.journey,.faq,.contact{grid-template-columns:1fr}
+  .section{padding:65px 6%}
+  h2{letter-spacing:-1.5px}
+  .intro{gap:15px}
+  .journey{gap:30px}
+  .benefits{grid-template-columns:1fr;gap:25px;margin-top:35px}
+  .benefit h3{margin:15px 0}
+  .partner{display:block;padding:30px 7%;margin-bottom:60px}
+  .partner .textlink{display:inline-block;margin-top:15px}
+  .faq{padding-top:0;gap:5px}
+  .contact{padding:65px 6%;gap:20px}
+  footer{flex-direction:column}
+  .device-stage{padding:0}
+  .phone{transform:rotateZ(3deg)}
+  .eyebrow{font-size:10px}
+}
+@media(prefers-reduced-motion:reduce) {
+  html{scroll-behavior:auto}
+  *,*:before,*:after{transition:none!important;animation:none!important}
+  .phone{transform:none}
+}
+@keyframes arrive {
+  from{opacity:0;transform:translateY(18px)}
+  to{opacity:1;transform:translateY(0)}
+}
+.hero-copy{animation:arrive .9s ease-out both}
+.hero-art{animation:arrive 1.2s ease-out both}
+.phone{will-change:transform}
+
+/* ---------- 2. Ritocchi: titolo grande, telefono 3D, mappa ---------- */
+:root{--ink:#163b46;--muted:#5d7072;--orange:#c4522c;--paper:#f8f7f2;--line:#d9dfda}
+body{font-family:'Plus Jakarta Sans',sans-serif}
+.brand,h1,h2,.benefit h3,.partner h3,.phone h3{font-family:'Plus Jakarta Sans',sans-serif}
+.brand{letter-spacing:-.8px;font-weight:800;gap:9px}
+.mark{background:none;color:var(--orange);border-radius:0;width:36px;height:36px}
+.mark svg{width:100%;height:100%}
+h1{font-size:clamp(45px,5vw,75px);line-height:1.12;letter-spacing:-3.6px;max-width:700px}
+.hero-copy{width:56%}
+.hero-art{mask-image:linear-gradient(to right,transparent,black 34%)}
+.hero .lead{max-width:420px}
+.journey{background:#e9eee9;overflow:hidden}
+.phone{background:linear-gradient(130deg,#fffefa,#eff2ed);border:7px solid #173a43;box-shadow:1px 1px 0 #93a7aa,3px 2px 0 #7d9499,6px 4px 0 #506b73,9px 7px 0 #274650,12px 10px 0 #173a43,30px 45px 50px #15364230;transform:rotateY(-16deg) rotateX(6deg) rotateZ(3deg);min-height:530px;padding:40px 20px 25px;border-radius:42px;transition:transform .65s ease}
+.phone:before{left:calc(50% - 38px);background:#173a43}
+.phone:after{content:'';position:absolute;left:-10px;top:105px;width:3px;height:49px;border-radius:3px;background:#82989c;box-shadow:0 60px 0 #82989c}
+.phone:hover{transform:rotateY(-5deg) rotateX(2deg) rotateZ(0)}
+.phone-head{align-items:center}
+.appbrand{display:flex;align-items:center;gap:6px;font-size:10px}
+.appbrand svg{width:22px;height:22px;color:var(--orange)}
+.phone-head>span:last-child{font-size:8px;color:#7b9a8e}
+.phone h3{font-size:27px;line-height:1.2}
+.product{padding:15px 10px;background:linear-gradient(130deg,#f7f4ec,#e8e9df);box-shadow:inset 0 1px 0 #fff,0 8px 18px #183b4609;border:1px solid #dce1d5}
+.pipe{width:75px;flex-shrink:0;filter:drop-shadow(4px 8px 4px #5b45251c)}
+.pipe svg{display:block;width:100%}
+.product strong{font-size:11px}
+.product small{font-size:9px}
+.status{background:#e3ece5;border:1px solid #d5e1d7;line-height:1.6}
+.phone-bottom{background:var(--ink)}
+.device-stage:before{content:'';position:absolute;inset:12% -15%;background:radial-gradient(ellipse,#fffefa 0,transparent 68%);pointer-events:none}
+.phone.is-changing h3,.phone.is-changing .status{animation:screen-in .35s ease-out}
+.logistics{background:#f1f2eb}
+.map-heading{display:grid;grid-template-columns:1fr 1fr;gap:15%;align-items:center}
+.map-heading p{font-size:14px;line-height:1.8;color:var(--muted);max-width:440px}
+.map-play{border:1px solid var(--ink);color:var(--ink);border-radius:4px;padding:13px 18px;background:transparent;display:flex;gap:35px;font-size:12px;font-weight:600}
+.map-play:hover{background:var(--ink);color:white}
+.map-heading .map-disclaimer{font-size:10px;margin-top:14px}
+.map-stage{margin-top:35px;border:1px solid #d8dfd6;border-radius:14px;background:linear-gradient(140deg,#fbfcf6,#edf0e6);padding:25px 20px 0;box-shadow:0 25px 55px #163b4608;transform:perspective(1500px) rotateX(7deg);transform-origin:50% 0}
+.delivery-map{display:block;width:100%;overflow:visible}
+#route-path{stroke-dasharray:1;stroke-dashoffset:1}
+.route-status{padding:20px 15px;border-top:1px solid #d8dfd6;display:flex;align-items:center;gap:10px;font-size:12px}
+.route-count{margin-left:auto;font-size:10px;color:var(--muted)}
+.reveal{opacity:0;transform:translateY(24px);transition:opacity .75s ease,transform .75s ease}
+.reveal.visible{opacity:1;transform:none}
+@keyframes screen-in {
+  from{opacity:.2;transform:translateY(6px)}
+  to{opacity:1;transform:none}
+}
+@media(max-width:900px) {
+  .hero-copy{width:95%}
+  h1{font-size:60px}
+  .hero-art{mask-image:linear-gradient(to bottom,transparent,black 25%)}
+}
+@media(max-width:600px) {
+  h1{font-size:45px;letter-spacing:-2.2px}
+  .hero{min-height:990px}
+  .hero-art{top:550px;height:440px}
+  .hero-copy{width:100%}
+  .hero .lead{font-size:15px}
+  .phone{transform:rotateY(-12deg) rotateX(4deg) rotateZ(2deg);width:280px}
+  .map-heading{grid-template-columns:1fr;gap:0}
+  .map-stage{padding:20px 5px 0;margin-top:25px;transform:none}
+  .delivery-map{min-height:210px}
+  .route-status{font-size:10px;padding:15px 8px}
+  .route-count{display:none}
+  .logistics{padding-left:4%;padding-right:4%}
+  .map-heading{padding:0 2%}
+  .brand{font-size:17px}
+  .mark{width:30px;height:30px}
+  .journey{padding-bottom:70px}
+}
+@media(prefers-reduced-motion:reduce) {
+  .reveal{opacity:1;transform:none}
+  .phone,.phone:hover,.map-stage{transform:none}
+}
+@media(max-width:600px) {
+  .delivery-map text{font-size:22px}
+  .delivery-map text:nth-of-type(2){display:none}
+}
+footer{border-top:1px solid var(--line)}
+@media(max-width:600px) {
+  .hero{min-height:850px}
+  .hero-art{top:410px;height:440px}
+}
+
+/* ---------- 3. Simulazione dell'ordine e testi grandi ---------- */
+.hero{min-height:0;padding:70px 6% 55px}
+.hero-copy{width:100%;max-width:1100px}
+.hero h1{font-size:clamp(55px,7.9vw,116px);font-weight:800;letter-spacing:-6px;line-height:.98;margin:25px 0}
+.hero .lead{max-width:850px;font-size:19px}
+.hero:after{display:none}
+.hero .actions{display:none}
+.simulation{padding:0 5% 65px;scroll-margin-top:20px}
+.sim-layout{display:grid;grid-template-columns:390px 1fr;min-height:590px;border:2px solid var(--ink);border-radius:16px;overflow:hidden;background:#edf0e8}
+.app-panel{padding:25px;background:#fffdf7;border-right:2px solid var(--ink);display:flex;flex-direction:column}
+.sim-top{display:flex;justify-content:space-between;align-items:center;font-weight:800;font-size:14px}
+.sim-tag{font-size:9px;letter-spacing:1px;border:1px solid #cad4cf;padding:6px;border-radius:4px}
+.app-panel h2{font-weight:800;font-size:29px;letter-spacing:-1.2px;margin:25px 0 7px}
+.sim-help{font-size:12px;color:var(--muted);line-height:1.6;margin:0 0 18px}
+.catalog{display:grid;gap:9px}
+.catalog-item{display:grid;grid-template-columns:48px 1fr auto;gap:10px;align-items:center;padding:12px 9px;border:1px solid #d5ddd5;border-radius:8px;background:#f7f7f0}
+.catalog-item svg{width:42px;height:42px}
+.catalog-item strong{display:block;font-size:13px}
+.catalog-item small{font-size:10px;color:var(--muted)}
+.quantity{display:flex;align-items:center;gap:7px}
+.quantity button{width:27px;height:29px;border:1px solid #c7d0c8;background:white;border-radius:4px;color:var(--ink);font-size:20px;line-height:1}
+.quantity output{min-width:13px;text-align:center;font-size:13px;font-weight:800}
+.catalog-item.selected{border-color:var(--orange);background:#fff4e9}
+.sim-summary{font-size:12px;line-height:1.6;border-top:1px solid var(--line);padding-top:15px;margin:17px 0}
+.sim-primary{width:100%;padding:16px 12px;border:0;border-radius:5px;background:var(--orange);color:white;font-weight:800;font-size:15px;margin-top:auto}
+.sim-primary:disabled{background:#dde2d8;color:#78857d;cursor:not-allowed}
+.sim-reset{border:0;background:none;color:var(--muted);padding:12px;font-size:11px;text-decoration:underline}
+.sim-map-panel{padding:28px;display:flex;flex-direction:column;justify-content:center;position:relative}
+.sim-map-panel h3{font-size:clamp(23px,2.5vw,37px);font-weight:800;letter-spacing:-1px;margin:9px 0 15px}
+.sim-state-label{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)}
+.sim-map{width:100%;display:block;overflow:visible}
+.sim-map text{font-family:'Plus Jakarta Sans',sans-serif;font-weight:800}
+.sim-map-footer{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}
+.sim-phase{font-size:10px;padding:9px 11px;background:#e0e6dd;border-radius:5px;color:#69786e}
+.sim-phase.active{background:var(--ink);color:white}
+.sim-phase.done{background:#d5e3d2;color:#284d33}
+.sim-controls{display:flex;justify-content:space-between;align-items:center;margin-top:16px;gap:20px}
+.sim-controls p{font-size:10px;color:var(--muted);margin:0}
+.sim-pause{font-size:11px;border:1px solid var(--ink);background:transparent;border-radius:4px;padding:9px 14px;color:var(--ink)}
+.sim-pause:disabled{opacity:.35;cursor:default}
+.order-lines{font-size:14px;line-height:2.2;padding:12px 0}
+.order-line{display:flex;justify-content:space-between;border-bottom:1px solid var(--line)}
+.sim-confirm{padding:14px;background:#e4eddc;border-radius:6px;margin:15px 0;font-size:12px;line-height:1.7}
+.sim-caption{display:flex;justify-content:space-between;gap:15px;margin-top:12px;font-size:11px;color:var(--muted)}
+.sim-dot{fill:var(--orange)}
+#sim-progress{stroke-dasharray:1;stroke-dashoffset:1}
+.hero-art,.caption{display:none}
+.intro h2,.benefit h3{font-weight:800}
+.strip{font-weight:700}
+button:focus-visible{outline:3px solid #d76336;outline-offset:3px}
+@media(max-width:1000px) {
+  .sim-layout{grid-template-columns:340px 1fr}
+  .sim-map-panel{padding:22px}
+  .hero h1{letter-spacing:-4px}
+}
+@media(max-width:700px) {
+  .hero{padding:38px 6% 30px}
+  .hero h1{font-size:55px;letter-spacing:-3px}
+  .hero .lead{font-size:14px}
+  .sim-layout{grid-template-columns:1fr;min-height:0}
+  .app-panel{border-right:0;border-bottom:2px solid var(--ink);padding:22px}
+  .sim-map-panel{padding:20px 15px;min-height:350px}
+  .simulation{padding:0 4% 35px}
+  .sim-layout[data-stage=order] .sim-map-panel{display:none}
+  .sim-layout[data-stage=travel] .app-panel{display:none}
+  .sim-layout[data-stage=travel] .sim-map-panel{min-height:480px}
+  .sim-caption{font-size:9px;flex-wrap:wrap}
+  .sim-map-panel h3{font-size:28px}
+  .sim-map-footer{gap:5px}
+  .sim-phase{font-size:9px;padding:8px}
+  .sim-controls{gap:9px}
+  .sim-controls p{max-width:180px}
+  .sim-top{font-size:14px}
+  .app-panel h2{font-size:30px}
+  .catalog-item{padding:10px}
+  .hero .eyebrow{font-size:9px}
+  .hero h1 br{display:block}
+}
+/* Larger, readable typography throughout the landing. */
+body{font-size:20px}
+.eyebrow{font-size:16px;letter-spacing:1px}
+.navlinks{font-size:18px}
+.navcta{font-size:18px}
+.hero .lead{font-size:25px;line-height:1.6}
+.strip{font-size:21px;line-height:1.6;gap:24px;flex-wrap:wrap}
+.intro p,.benefit p{font-size:21px;line-height:1.7}
+.benefit .n{font-size:16px}
+.benefit h3{font-size:29px}
+.note{font-size:21px}
+footer{font-size:17px;line-height:1.6}
+.sim-heading{margin:0 0 24px;font-size:clamp(36px,4vw,58px);font-weight:800;letter-spacing:-2px}
+.sim-notice{font-size:20px;line-height:1.6;padding:22px 25px;background:#e7eddf;border-left:6px solid var(--orange);margin-bottom:30px;border-radius:5px}
+.sim-notice strong{display:block;font-size:23px;margin-bottom:5px}
+.sim-layout{grid-template-columns:440px 1fr;overflow:visible;border:0;border-radius:0;background:transparent;gap:38px;align-items:start;min-height:0}
+.app-panel{border:9px solid #173a43;border-radius:48px;position:relative;padding:60px 22px 22px;background:#fffdf7;min-height:760px;box-shadow:4px 3px 0 #8fa3a6,8px 6px 0 #43636a,20px 25px 45px #163b4620;overflow:hidden}
+.app-panel:before{content:'';position:absolute;width:96px;height:23px;background:#173a43;top:13px;left:calc(50% - 48px);border-radius:20px}
+.device-status{position:absolute;top:19px;left:23px;right:23px;display:flex;justify-content:space-between;font-size:13px;font-weight:800;pointer-events:none}
+.device-status span:last-child{letter-spacing:1px}
+.sim-top{font-size:22px}
+.sim-tag{font-size:14px}
+.app-panel h2{font-size:34px;margin-top:25px}
+.sim-help{font-size:18px;line-height:1.55;margin-bottom:18px}
+.catalog-item{grid-template-columns:52px 1fr;padding:15px 10px;gap:8px}
+.catalog-item svg{width:48px;height:48px}
+.catalog-item strong{font-size:19px;line-height:1.3}
+.catalog-item small{font-size:16px;line-height:1.6}
+.quantity{grid-column:2;gap:14px;margin-top:5px}
+.quantity button{width:44px;height:44px;font-size:27px}
+.quantity output{font-size:22px;min-width:25px}
+.sim-summary{font-size:19px;line-height:1.6}
+.sim-primary{font-size:21px;line-height:1.4;padding:17px 12px}
+.sim-reset{font-size:18px;padding:17px}
+.sim-confirm{font-size:19px}
+.order-lines{font-size:19px;line-height:1.7}
+.order-line{padding:12px 0;gap:15px}
+.sim-map-panel{background:#edf0e8;border:2px solid var(--ink);border-radius:18px;padding:28px;min-height:650px;position:sticky;top:25px}
+.sim-state-label{font-size:16px;line-height:1.5}
+.sim-map-panel h3{font-size:36px;line-height:1.2}
+.sim-phase{font-size:17px;line-height:1.5;padding:10px 12px}
+.sim-controls{align-items:start;flex-wrap:wrap}
+.sim-controls p{font-size:18px;line-height:1.6;max-width:100%}
+.sim-pause{font-size:20px;min-height:48px;padding:10px 20px}
+.sim-caption{font-size:19px;line-height:1.6;margin-top:30px}
+.phone-home{margin:-60px -22px -22px;padding:70px 22px 30px;min-height:760px;background:linear-gradient(145deg,#e0e8dc,#f6e1c8 65%,#d5e4e4);display:flex;flex-direction:column}
+.home-clock{font-size:55px;font-weight:600;letter-spacing:-3px;text-align:center;margin:10px 0 0}
+.home-date{font-size:18px;text-align:center;margin:0 0 30px}
+.home-apps{display:grid;grid-template-columns:repeat(3,1fr);gap:23px 9px;text-align:center}
+.fake-app{display:flex;align-items:center;flex-direction:column;gap:9px;font-size:16px;line-height:1.25}
+.fake-icon{width:65px;height:65px;border-radius:17px;background:#eef3e8;display:grid;place-items:center;font-size:31px;color:#386170;box-shadow:0 3px 8px #163b4610}
+.fake-app:nth-child(2) .fake-icon{background:#e9c7a2}
+.fake-app:nth-child(3) .fake-icon{background:#c4d5da}
+.fake-app:nth-child(4) .fake-icon{background:#e4d9c8}
+.launch-app{grid-column:2;border:0;background:none;color:var(--ink);padding:0;display:flex;align-items:center;flex-direction:column;gap:10px;font-size:17px;font-weight:800;line-height:1.3}
+.launch-icon{width:72px;height:72px;background:#163b46;color:#fffdf7;border-radius:19px;padding:13px;box-shadow:0 6px 15px #163b4630;border:2px solid #ffffff80}
+.launch-icon svg{width:100%;height:100%}
+.home-prompt{text-align:center;margin:20px 0 25px;font-size:23px;font-weight:800;line-height:1.4;color:#163b46}
+.home-prompt span{display:block;font-size:40px;line-height:1.1;color:var(--orange)}
+.home-dock{margin-top:auto;display:flex;justify-content:space-around;padding:15px;background:#ffffff80;border-radius:23px}
+.home-dock span{display:grid;place-items:center;width:52px;height:52px;background:#f7faf2;border-radius:15px;font-size:25px}
+.home-bottom{height:5px;width:100px;background:#173a43;border-radius:4px;margin:20px auto 0}
+.app-panel.is-home>.sim-top{display:none}
+.app-panel.is-home #sim-submit,.app-panel.is-home #sim-reset{display:none}
+[hidden]{display:none!important}
+@media(max-width:1100px) {
+  .sim-layout{grid-template-columns:390px 1fr;gap:25px}
+  .sim-map-panel{padding:22px 16px}
+  .sim-phase{font-size:16px}
+  .sim-map-panel h3{font-size:30px}
+  .hero .lead{font-size:23px}
+}
+@media(max-width:800px) {
+  .sim-layout{grid-template-columns:1fr;gap:25px}
+  .app-panel{width:min(100%,420px);margin:auto}
+  .sim-map-panel{position:static;min-height:0}
+  .sim-layout[data-stage=order] .sim-map-panel{display:none}
+  .sim-layout[data-stage=travel] .app-panel{display:none}
+  .sim-layout[data-stage=travel] .sim-map-panel{display:flex;min-height:500px}
+  .sim-heading{font-size:38px;letter-spacing:-1.5px}
+  .sim-notice{font-size:19px;padding:18px}
+  .sim-notice strong{font-size:22px}
+  .hero .lead{font-size:22px}
+  .hero .eyebrow,.eyebrow{font-size:15px;line-height:1.6}
+  .strip{font-size:20px;gap:15px}
+  .intro p,.benefit p{font-size:20px}
+  .sim-caption{font-size:18px}
+  .sim-controls p{font-size:18px;max-width:100%}
+  .sim-map-panel h3{font-size:31px}
+  .navcta{font-size:16px}
+  .brand{font-size:20px}
+  .app-panel{padding-left:16px;padding-right:16px}
+  .phone-home{margin-left:-16px;margin-right:-16px;padding-left:16px;padding-right:16px}
+  .sim-tag{font-size:13px}
+  .sim-top{font-size:21px}
+  .sim-help{font-size:18px}
+  .catalog-item strong{font-size:18px}
+  .home-apps{gap:22px 6px}
+  .fake-app{font-size:15px}
+  .sim-layout{gap:20px}
+  .hero h1{font-size:clamp(43px,11vw,70px)}
+  footer{font-size:17px}
+  .sim-phase{font-size:16px}
+  .simulation{padding-left:5%;padding-right:5%}
+}
+@media(max-width:360px) {
+  .app-panel{border-width:7px;padding-left:12px;padding-right:12px}
+  .phone-home{margin-left:-12px;margin-right:-12px;padding-left:12px;padding-right:12px}
+  .fake-icon{width:56px;height:56px}
+  .home-apps{gap:20px 4px}
+  .launch-icon{width:65px;height:65px}
+  .sim-top{font-size:19px}
+  .sim-tag{font-size:12px}
+  .sim-heading{font-size:34px}
+}
+.order-notification{background:#edf2e6;border:1px solid #bfd0b7;border-radius:17px;padding:18px;margin:18px 0;box-shadow:0 8px 18px #163b4612;animation:notification-enter .4s ease-out}
+.notification-source{font-size:16px;font-weight:600;margin-bottom:10px;color:#526a5c}
+.order-notification strong{font-size:25px;line-height:1.25;display:block;letter-spacing:-.5px}
+.order-notification p{font-size:19px;line-height:1.5;margin:10px 0 0}
+.notification-history{list-style:none;padding:0;margin:22px 0}
+.notification-history li{display:flex;gap:12px;font-size:18px;line-height:1.5;padding:12px 0;border-bottom:1px solid var(--line);color:#708075}
+.notification-history li.reached{font-weight:700;color:var(--ink)}
+.notification-history span{font-size:23px;color:#52744d}
+.order-delivered{background:#163b46;color:white;border-color:#163b46}
+.order-delivered .notification-source{color:#cfddd4}
+.order-delivered strong{font-size:31px}
+.delivery-impact{position:fixed;inset:0;z-index:100;background:#13333e45;display:grid;place-items:center;padding:20px;backdrop-filter:blur(3px)}
+.impact-card{position:relative;width:min(620px,100%);background:#163b46;color:white;text-align:center;padding:42px 25px 30px;border:3px solid #d9ecba;border-radius:25px;box-shadow:0 25px 90px #102f4870;animation:delivery-pop .6s cubic-bezier(.2,.8,.25,1) both}
+.impact-close{position:absolute;top:9px;right:10px;width:46px;height:46px;background:transparent;border:0;color:white;font-size:34px}
+.impact-tick{display:grid;place-items:center;margin:0 auto 18px;width:90px;height:90px;background:#d9ecba;color:#163b46;border-radius:50%;font-size:66px;font-weight:800}
+.impact-source{display:block;font-size:17px;letter-spacing:2px;margin-bottom:13px}
+.impact-card strong{display:block;font-size:clamp(30px,7vw,65px);font-weight:800;letter-spacing:-1.5px;line-height:1.1}
+.impact-card p{font-size:23px;line-height:1.5;margin:17px 0 25px}
+.impact-ok{font-size:21px;font-weight:700;border:0;border-radius:7px;background:#d9ecba;color:#163b46;padding:14px 32px;min-height:48px}
+@keyframes notification-enter {
+  from{opacity:0;transform:translateY(-12px)}
+  to{opacity:1;transform:none}
+}
+@keyframes delivery-pop {
+  0%{opacity:0;transform:scale(.65) translateY(40px)}
+  65%{opacity:1;transform:scale(1.07) translateY(-7px)}
+  82%{transform:scale(.98)}
+  100%{opacity:1;transform:scale(1)}
+}
+@media(max-width:800px) {
+  .sim-layout[data-stage=travel] .app-panel{display:flex}
+  .sim-layout[data-stage=travel] .sim-map-panel.in-phone{display:flex;min-height:0;margin:20px -5px 0;padding:18px 6px;border-width:1px;border-radius:12px}
+  .in-phone .sim-state-label{display:none}
+  .in-phone h3{font-size:23px}
+  .in-phone .sim-phase{font-size:16px;padding:8px}
+  .in-phone .sim-map-footer{display:none}
+  .in-phone .sim-controls p{font-size:17px}
+  .in-phone .sim-map text{font-size:19px}
+  .in-phone .sim-map{margin:10px 0}
+  .in-phone .sim-reset{display:none}
+  .notification-history{margin:12px 0}
+  .notification-history li{font-size:17px;padding:8px 0}
+  .impact-card{padding:40px 15px 26px}
+  .impact-card p{font-size:21px}
+  .order-notification{padding:16px}
+  .order-notification strong{font-size:24px}
+  .sim-layout[data-stage=travel] #sim-submit{display:none}
+}
+@media(prefers-reduced-motion:reduce) {
+  .impact-card,.order-notification{animation:none!important}
+}
+
+/* ---------- 4. Verso l'app (Accedi, Registrati) e fondo pagina ---------- */
+.navaccedi{background:var(--orange);border:1px solid var(--orange);color:#fff;padding:12px 18px;border-radius:4px;font-weight:700;transition:background .2s,border-color .2s}
+.navaccedi:hover{background:#a63d1b;border-color:#a63d1b}
+.partner h3{font-size:34px;font-weight:800;letter-spacing:-1px;line-height:1.2}
+.partner p{font-size:21px;line-height:1.7}
+.join-actions{display:flex;flex-direction:column;align-items:flex-start;gap:18px;flex-shrink:0}
+.join-actions .button{font-size:20px;padding:18px 24px}
+.join-actions .textlink{font-size:18px}
+.footlinks{display:flex;flex-wrap:wrap;gap:6px 22px}
+.footlinks a{text-decoration:underline;text-underline-offset:3px}
+.footlinks a:hover{color:var(--orange)}
+footer{padding-bottom:calc(28px + env(safe-area-inset-bottom,0px))}
+
+/* ---------- 5. Telefono (fino a 800 px) ----------
+   Su un telefono la simulazione non è un telefono dentro il telefono: niente cornice, tacca, barra di stato, schermata con orologio e finte app, e niente altezza
+   da 760 px. È una schermata dell'APP, alta quanto serve: l'avvio è una scheda con l'icona (si tocca per iniziare), poi catalogo, conferma e consegna con la mappa. */
+@media(max-width:800px) {
+  .app-panel{width:100%;max-width:520px;min-height:0;padding:18px 16px 16px;border:2px solid var(--ink);border-radius:20px;box-shadow:0 10px 26px #163b4618}
+  .app-panel:before,.device-status{display:none}
+  .app-panel.is-home{padding:0}
+  .phone-home{margin:0;min-height:0;padding:30px 18px 26px;border-radius:18px}
+  .home-clock,.home-date,.fake-app,.home-dock,.home-bottom{display:none}
+  .home-apps{display:flex;justify-content:center}
+  .home-prompt{margin:14px 0 0;font-size:20px}
+  .home-prompt span{font-size:32px}
+  .sim-top{font-size:18px}
+  .sim-tag{font-size:12px;padding:5px}
+  .app-panel h2{font-size:28px;margin:18px 0 6px;letter-spacing:-1px}
+  .sim-help{font-size:16px;line-height:1.5;margin-bottom:14px}
+  .catalog{gap:8px}
+  .catalog-item{grid-template-columns:42px 1fr auto;gap:10px;padding:10px;align-items:center}
+  .catalog-item svg{width:42px;height:42px}
+  .catalog-item strong{font-size:17px;line-height:1.25}
+  .catalog-item small{font-size:14px;line-height:1.4}
+  .quantity{grid-column:auto;gap:6px;margin-top:0}
+  .quantity button{width:40px;height:40px;font-size:24px}
+  .quantity output{min-width:18px;font-size:19px}
+  .sim-summary{font-size:16px;margin:14px 0}
+  .sim-primary{margin-top:6px;font-size:18px;padding:16px 10px}
+  .sim-reset{font-size:16px;padding:12px}
+  .order-lines{font-size:17px;line-height:1.6}
+  .order-line{padding:9px 0}
+  .sim-confirm{font-size:16px;margin:12px 0}
+  /* Consegna: lo stato, poi la mappa, poi l'elenco dei passaggi (non l'elenco davanti alla mappa). */
+  #app-content{display:flex;flex-direction:column}
+  .sim-layout[data-stage=travel] #app-content>h2{margin-top:14px}
+  .sim-layout[data-stage=travel] #app-content>.sim-help{display:none}
+  .sim-layout[data-stage=travel] .sim-map-panel.in-phone{order:1;margin:12px -4px 0}
+  #order-history{order:2}
+  .order-notification{padding:14px;margin:12px 0 0}
+  .order-notification strong{font-size:22px}
+  .order-notification p{font-size:16px;margin-top:6px}
+  .notification-source{font-size:14px;margin-bottom:6px}
+  .notification-history li{font-size:16px;padding:8px 0}
+  .in-phone h3{font-size:20px;margin:0 0 6px}
+  .in-phone .sim-map text{font-size:23px}
+  .sim-controls{gap:10px}
+  .in-phone .sim-controls p{font-size:15px}
+  .sim-pause{font-size:18px;min-height:44px;padding:8px 16px}
+  .sim-caption{margin-top:18px;font-size:15px}
+  .impact-card p{font-size:19px}
+}
+
+/* Tablet e telefono: con quattro voci l'intestazione non ci sta (il nome andrebbe a capo): restano i due pulsanti. */
+@media(max-width:900px) {
+  .brand{white-space:nowrap}
+  .navlinks>a:not(.navcta):not(.navaccedi){display:none}
+}
+
+/* ---------- 6. Telefono (fino a 600 px): intestazione, testi e sezioni ---------- */
+@media(max-width:600px) {
+  body{font-size:18px}
+  nav{height:auto;min-height:64px;padding:10px 4%;flex-wrap:wrap;gap:8px 10px}
+  .brand{font-size:16px;gap:6px}
+  .mark{width:30px;height:30px}
+  .navlinks{gap:6px;margin-left:auto}
+  .navlinks>a.navaccedi{display:inline-block}
+  .navcta,.navaccedi{font-size:13px;padding:9px 10px;white-space:nowrap}
+  .eyebrow{font-size:13px}
+  .hero{padding:32px 6% 26px}
+  .hero h1{font-size:clamp(40px,12.6vw,56px);letter-spacing:-2.6px}
+  .hero .lead{font-size:20px}
+  .simulation{padding:0 4% 30px}
+  .sim-heading{font-size:34px;margin-bottom:18px}
+  .sim-notice{font-size:17px;padding:14px 16px;margin-bottom:18px;border-left-width:5px}
+  .sim-notice strong{font-size:19px}
+  .strip{margin:0 6%;font-size:17px;gap:8px 18px}
+  .section{padding:56px 6%}
+  .intro p,.benefit p,.note{font-size:18px}
+  .benefit h3{font-size:24px}
+  .partner{margin:0 4% 50px;padding:28px 6%}
+  .partner h3{font-size:28px}
+  .partner p{font-size:18px}
+  .join-actions{margin-top:20px;width:100%}
+  .join-actions .button{width:100%;font-size:18px;padding:17px 20px}
+  footer{font-size:15px}
+}
+
+@media(max-width:360px) {
+  .navlinks{width:100%;justify-content:flex-end}
+  .app-panel{padding:16px 12px 14px}
+  .catalog-item{grid-template-columns:36px 1fr auto;gap:8px;padding:9px 8px}
+  .catalog-item svg{width:36px;height:36px}
+  .catalog-item strong{font-size:16px}
+  .quantity button{width:36px;height:36px}
+  .quantity output{min-width:14px;font-size:17px}
+}

@@ -115,7 +115,7 @@ async function conServizio(nome, da, a, funzione, attesaMs) {
   const timer = setTimeout(() => controllo.abort(), attesaMs || ATTESA_MS);
   try {
     const chiama = (url, extra) =>
-      funzione(url, { ...extra, signal: controllo.signal, headers: { 'User-Agent': 'Minuteria/1.0 (tempo di consegna)', ...((extra && extra.headers) || {}) } });
+      funzione(url, { ...extra, signal: controllo.signal, headers: { 'User-Agent': 'FlashDelivery/1.0 (tempo di consegna)', ...((extra && extra.headers) || {}) } });
     const tratta = await SERVIZI[nome](da, a, chiama);
     const secondi = tratta ? Number(tratta.secondi) : NaN;
     if (!Number.isFinite(secondi) || secondi < 0) return null;

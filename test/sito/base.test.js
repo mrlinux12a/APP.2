@@ -26,7 +26,7 @@ test('login: pagina con icone, manifest e intestazioni di sicurezza', async () =
 test('accedi: testata, pillola, campi con occhio; senza la vecchia nota sui distributori', async () => {
   const t = await (await chiedi('/login')).text();
   assert.match(t, /Il pezzo che ti manca, in cantiere\./);
-  assert.match(t, /acc-occhiello">Ordini Minuteria</);
+  assert.match(t, /acc-occhiello">Flash Delivery</);
   assert.match(t, /Chiedi la disponibilità al banco e ricevi il materiale dove lavori\./);
   assert.doesNotMatch(t, /confronta tempi|distributori che indichi|i distributori dovranno/);
   assert.match(t, /<nav class="acc-schede"[^>]*>\s*<a href="\/login" class="attiva"[^>]*>Accedi<\/a>\s*<a href="\/registrati">Registrati<\/a>/);
@@ -105,7 +105,8 @@ test('file statici della PWA: favicon, manifest, service worker, icone', async (
   // web app per telefono: identità, orientamento, categorie; la pagina offline del service worker si serve SENZA accesso (serve proprio quando manca la rete)
   assert.equal(m.id, '/');
   assert.equal(m.orientation, 'portrait');
-  assert.equal(m.start_url, '/');
+  // l'app installata si apre sull'accesso (chi è già dentro va alla sua pagina): "/" per chi non è collegato è la landing pubblica
+  assert.equal(m.start_url, '/login');
   assert.ok(m.icons.some((i) => i.purpose === 'maskable'));
   const salvato = biscotti.cookie;
   biscotti.cookie = '';

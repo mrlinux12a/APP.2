@@ -201,7 +201,7 @@ async function inviaAUtente(userId, { titolo, testo, link = null, id = null, tip
     const iscrizioni = await iscrizioniDi(userId);
     if (!iscrizioni.length) return 0;
     const payload = JSON.stringify({
-      titolo: accorcia(titolo, 80) || 'Minuteria',
+      titolo: accorcia(titolo, 80) || 'Flash Delivery',
       testo: accorcia(testo, 220),
       link: percorsoInterno(link),
       tag: tag || (id ? 'minuteria-' + id : null),

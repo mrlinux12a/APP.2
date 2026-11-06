@@ -23,7 +23,7 @@ test('login: link "Password dimenticata?" e avvisi dopo il cambio password o l\'
   t = await (await chiedi('/login?avviso=password')).text();
   assert.match(t, /<div class="acc-avviso" role="status">Password cambiata\. Accedi con quella nuova\.<\/div>/);
   t = await (await chiedi('/login?avviso=eliminato')).text();
-  assert.match(t, /Account eliminato\. Grazie per aver usato Minuteria\./);
+  assert.match(t, /Account eliminato\. Grazie per aver usato Flash Delivery\./);
   t = await (await chiedi('/login?avviso=' + encodeURIComponent('<script>alert(1)</script>'))).text();
   assert.doesNotMatch(t, /acc-avviso|<script>alert/);
   // la pagina del recupero: senza accesso; con l'accesso si va alla home

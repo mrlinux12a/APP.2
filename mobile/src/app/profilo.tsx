@@ -171,7 +171,7 @@ export default function Profilo() {
           {eliminando ? (
             <View style={{ gap: 12 }}>
               <Text style={[stili.testo, { color: c.grigio }]}>
-                L’account si disattiva subito e non si può più usare. Non si torna indietro: per tornare su Minuteria dovrai registrarti di nuovo.
+                L’account si disattiva subito e non si può più usare. Non si torna indietro: per tornare su Flash Delivery dovrai registrarti di nuovo.
               </Text>
               <View>
                 <Text style={[stili.sottotitolo, { color: c.testo }]}>Viene cancellato</Text>
@@ -212,7 +212,7 @@ export default function Profilo() {
           ) : (
             <View style={{ gap: 0 }}>
               <Text style={[stili.testo, { color: c.grigio, marginBottom: 12 }]}>
-                Se non vuoi più usare Minuteria puoi eliminare il tuo account. Ordini e ricevute già emessi restano per obbligo di legge.
+                Se non vuoi più usare Flash Delivery puoi eliminare il tuo account. Ordini e ricevute già emessi restano per obbligo di legge.
               </Text>
               <Pressable
                 onPress={() => {

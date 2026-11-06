@@ -44,7 +44,7 @@ const EVENTI_ATTESI = ['payment_intent.amount_capturable_updated', 'payment_inte
   if (!c.segreta) return fine(problemi);
 
   const Stripe = require('stripe');
-  const stripe = new Stripe(c.segreta, { maxNetworkRetries: 1, timeout: 15000, appInfo: { name: 'Minuteria (verifica)' } });
+  const stripe = new Stripe(c.segreta, { maxNetworkRetries: 1, timeout: 15000, appInfo: { name: 'Flash Delivery (verifica)' } });
 
   // 1) Di chi è la chiave
   try {

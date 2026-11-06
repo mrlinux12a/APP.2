@@ -8,7 +8,7 @@ const { leggiComposto } = require('../comune/asset_composti');
 // I file con una versione nell'indirizzo (?v=<data di modifica>, scritta nelle pagine da asset()): un indirizzo con la versione non cambia mai
 // contenuto, quindi il browser lo tiene un anno senza richiederlo a ogni pagina (2-3 richieste in meno a ogni apertura, su una rete da cantiere).
 // Quando il file cambia cambia anche la versione e il browser lo riscarica da solo. Senza ?v= (collegamenti vecchi) resta la sola verifica ETag.
-const ASSET_VERSIONATI = new Set(['/style.css', '/app.js', '/mappa.js', '/pagamento.js']);
+const ASSET_VERSIONATI = new Set(['/style.css', '/app.js', '/mappa.js', '/pagamento.js', '/landing.css', '/landing.js']);
 
 // Dice al browser di tenere un anno il file con la versione nell'indirizzo.
 function cacheAssetVersionati(req, res, next) {

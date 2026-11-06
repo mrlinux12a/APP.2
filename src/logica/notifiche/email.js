@@ -102,7 +102,7 @@ function htmlPagamentoRicevuto(d) {
   <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="width:100%;max-width:520px;background:#ffffff;border-radius:18px;overflow:hidden">
     <tr><td style="background:#245A8F;padding:18px 24px">
       <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-        <td style="width:30px;height:30px;background:#ffffff;border-radius:8px;text-align:center;font-size:16px;font-weight:800;color:#245A8F;line-height:30px">${esc((az.nome || 'M').charAt(0).toUpperCase())}</td>
+        <td style="width:30px;height:30px;background:#ffffff;border-radius:8px;text-align:center;font-size:16px;font-weight:800;color:#245A8F;line-height:30px">${esc((az.nome || 'F').charAt(0).toUpperCase())}</td>
         <td style="padding-left:12px;font-size:18px;font-weight:800;color:#ffffff">${esc(az.nome)}</td>
       </tr></table>
     </td></tr>

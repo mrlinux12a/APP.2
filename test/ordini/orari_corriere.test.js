@@ -116,7 +116,7 @@ test('minutiInAuto: senza chiave né ROUTING_URL si usa Valhalla (POST, lat/lon,
   assert.equal(viste[0].opzioni.method, 'POST');
   assert.deepEqual(JSON.parse(viste[0].opzioni.body), { locations: [{ lat: 44.4577, lon: 8.8877 }, { lat: 44.4284, lon: 8.9438 }], costing: 'auto', directions_type: 'none' });
   assert.ok(viste[0].opzioni.signal, 'con un limite di attesa');
-  assert.match(viste[0].opzioni.headers['User-Agent'], /Minuteria/);
+  assert.match(viste[0].opzioni.headers['User-Agent'], /FlashDelivery/);
   assert.equal(viste[0].opzioni.headers['Content-Type'], 'application/json');
   assert.deepEqual(percorso.elencoServizi(), ['valhalla']);
 }));

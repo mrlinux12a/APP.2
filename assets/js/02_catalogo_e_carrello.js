@@ -1280,8 +1280,8 @@
   let bloccatoPrima = false; // l'ultima volta che si è guardato il permesso era "negato"?
   // I passi per riattivare le notifiche dal telefono (solo il telefono può cambiare un permesso negato).
   function passiPerSbloccare() {
-    if (eIos()) return "Esci dall'app, apri Impostazioni › Notifiche › Minuteria e attiva «Consenti notifiche». Poi torna qui: lo attiviamo da soli.";
-    if (eInstallata()) return "Esci dall'app, tieni premuta l'icona di Minuteria › Info app › Notifiche e attiva «Tutte le notifiche di Minuteria». Poi torna qui: lo attiviamo da soli.";
+    if (eIos()) return "Esci dall'app, apri Impostazioni › Notifiche › Flash Delivery e attiva «Consenti notifiche». Poi torna qui: lo attiviamo da soli.";
+    if (eInstallata()) return "Esci dall'app, tieni premuta l'icona di Flash Delivery › Info app › Notifiche e attiva «Tutte le notifiche di Flash Delivery». Poi torna qui: lo attiviamo da soli.";
     return "Tocca il lucchetto (o i tre puntini) accanto all'indirizzo › Impostazioni sito › Notifiche › Consenti. Poi torna su questa pagina: lo attiviamo da soli.";
   }
   function mostraStatoNotifiche() {

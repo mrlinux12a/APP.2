@@ -75,7 +75,7 @@ async function geocodifica(dati, opzioni = {}) {
       const url = NOMINATIM_URL + '?' + new URLSearchParams({ q: ricerche[i], format: 'jsonv2', limit: '1', countrycodes: 'it' }).toString();
       const risposta = await chiama(url, {
         signal: controllo.signal,
-        headers: { 'User-Agent': 'Minuteria/1.0 (anagrafica del banco)', 'Accept-Language': 'it' },
+        headers: { 'User-Agent': 'FlashDelivery/1.0 (anagrafica del banco)', 'Accept-Language': 'it' },
       });
       if (!risposta || !risposta.ok) continue;
       const trovati = await risposta.json();
@@ -118,7 +118,7 @@ async function indirizzoDaPosizioneDettaglio(lat, lng, opzioni = {}) {
   const timer = setTimeout(() => controllo.abort(), opzioni.attesaMs || ATTESA_GEOCODIFICA_MS);
   try {
     const url = NOMINATIM_INVERSA_URL + '?' + new URLSearchParams({ lat: String(lat), lon: String(lng), format: 'jsonv2', zoom: precisa ? '18' : '17', addressdetails: '1' }).toString();
-    const risposta = await chiama(url, { signal: controllo.signal, headers: { 'User-Agent': 'Minuteria/1.0 (indirizzo di consegna)', 'Accept-Language': 'it' } });
+    const risposta = await chiama(url, { signal: controllo.signal, headers: { 'User-Agent': 'FlashDelivery/1.0 (indirizzo di consegna)', 'Accept-Language': 'it' } });
     if (!risposta || !risposta.ok) return null;
     const a = (await risposta.json()).address;
     if (!a || a.country_code !== 'it') return null;

@@ -227,7 +227,7 @@
    minuti) anello e tempo passano dall'arancio al rosso; a zero la pagina si ricarica per mostrare che la richiesta è scaduta.
    - "Attesa corriere": il tempo da quando il banco ha confermato SALE (cerchio mm:ss, "1 h 05" oltre l'ora, e "da N min" nel passo
      in corso). Parte dai secondi trascorsi (data-trascorsi, calcolati dal server in SQL come per la home) e li trasforma in un istante
-     col Date.now() del browser; i testi sono quelli di Minuteria (gli stessi di "Corriere avvisato · da N min" sulla home). */
+     col Date.now() del browser; i testi sono quelli di Flash Delivery (gli stessi di "Corriere avvisato · da N min" sulla home). */
 (function () {
   'use strict';
   const attesa = document.querySelector('[data-ric-attesa]');

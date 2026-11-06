@@ -111,7 +111,7 @@ function stripe() {
   clienteStripe = new Stripe(chiave, {
     maxNetworkRetries: 2,
     timeout: 20000,
-    appInfo: { name: 'Minuteria' },
+    appInfo: { name: 'Flash Delivery' },
   });
   return clienteStripe;
 }
@@ -150,7 +150,7 @@ async function creaIntento({ cliente, tipo, importoCent, voci, destinazione, not
         capture_method: 'manual',
         automatic_payment_methods: { enabled: true },
         receipt_email: email,
-        description: `Minuteria · ${cliente.ragione_sociale}`,
+        description: `Flash Delivery · ${cliente.ragione_sociale}`,
         metadata: { pagamento_id: String(id), cliente_id: String(cliente.id) },
       },
       { idempotencyKey: `pi-${modo}-${id}` }

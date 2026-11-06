@@ -88,7 +88,7 @@ test('HTML: senza l\'indirizzo del sito (APP_URL) i pulsanti non ci sono (un lin
   const html = conAmbiente({}, () => email.htmlPagamentoRicevuto(dati({ carta: null, azienda: azienda() })));
   assert.doesNotMatch(html, /Scarica la ricevuta|Segui l/);
   assert.match(html, /sulla tua carta\./);
-  assert.match(html, />M<\/td>\s*<td style="padding-left:12px[^"]*">Minuteria<\/td>/, 'nome di default');
+  assert.match(html, />F<\/td>\s*<td style="padding-left:12px[^"]*">Flash Delivery<\/td>/, 'nome di default');
 });
 
 test('HTML: tutto quello che arriva da fuori è escapato (nome, ditta, indirizzo)', () => {
@@ -114,12 +114,12 @@ test('invia: senza SMTP_HOST non parte niente (e lo dice nel log una volta sola)
   assert.equal(righeLog.filter((r) => /SMTP_HOST non impostato/.test(r)).length, 1, 'avviso una volta sola');
 
   const inviate = [];
-  await conAmbiente({ SMTP_HOST: 'smtp.example.com', SMTP_USER: 'ordini@example.com', AZIENDA_NOME: 'Minuteria' }, async () => {
+  await conAmbiente({ SMTP_HOST: 'smtp.example.com', SMTP_USER: 'ordini@example.com', AZIENDA_NOME: 'Flash Delivery' }, async () => {
     assert.equal(email.configurato(), true);
     email.impostaTrasporto({ sendMail: async (o) => { inviate.push(o); } });
     assert.deepEqual(await email.invia({ a: 'x@y.it', oggetto: 'Oggetto', html: '<p>h</p>', testo: 't' }), { inviata: true });
   });
-  assert.deepEqual(inviate, [{ from: '"Minuteria" <ordini@example.com>', to: 'x@y.it', subject: 'Oggetto', html: '<p>h</p>', text: 't' }]);
+  assert.deepEqual(inviate, [{ from: '"Flash Delivery" <ordini@example.com>', to: 'x@y.it', subject: 'Oggetto', html: '<p>h</p>', text: 't' }]);
   // il mittente può essere scritto a mano
   await conAmbiente({ SMTP_HOST: 'smtp.example.com', EMAIL_DA: 'Assistenza <assistenza@example.com>' }, async () => {
     email.impostaTrasporto({ sendMail: async (o) => { inviate.push(o); } });

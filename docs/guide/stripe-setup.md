@@ -133,7 +133,7 @@ ricevuta via email all'incasso (`receipt_email` sul PaymentIntent), ma **solo in
 **Dati dell'azienda** (nel `.env`, mai nel codice; tutto facoltativo, quello che manca non si stampa):
 
 ```
-AZIENDA_NOME=Minuteria                 # logo e intestazione dell'email (default "Minuteria")
+AZIENDA_NOME=Flash Delivery            # logo e intestazione dell'email (default "Flash Delivery")
 AZIENDA_SOTTOTITOLO=Consegna materiale in cantiere
 AZIENDA_RAGIONE_SOCIALE=...            # "EMESSA DA" nella ricevuta
 AZIENDA_INDIRIZZO=Via ..., 16100 Genova (GE)
@@ -150,7 +150,7 @@ SMTP_HOST=smtp.example.com
 SMTP_PORT=587                          # con TLS diretto (465) anche SMTP_SECURE=1
 SMTP_USER=...
 SMTP_PASS=...
-EMAIL_DA=Minuteria <ordini@tuodominio.it>   # facoltativa: se manca "Nome" <SMTP_USER>
+EMAIL_DA=Flash Delivery <ordini@tuodominio.it>   # facoltativa: se manca "Nome" <SMTP_USER>
 ```
 
 I pulsanti della mail ("Scarica la ricevuta", "Segui l'ordine") usano `APP_URL`; senza non compaiono.
