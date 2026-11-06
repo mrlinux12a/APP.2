@@ -23,6 +23,11 @@ const utente = {
   id: 1, ruolo: 'cliente', username: 'prova', ragione_sociale: 'Prova S.r.l.', zona: 'Genova', distributor_id: null, attivo: 1,
   password_hash: bcrypt.hashSync('password-di-prova', 4), indirizzo_consegna: 'Via Puggia 22/3, Genova',
 };
+// Un corriere (account dell'app dei corrieri, docs/app-corrieri.md): il suo nome utente è l'email, e il sito non lo fa entrare.
+const utenteCorriere = {
+  id: 3, ruolo: 'corriere', username: 'corriere@example.com', email: 'corriere@example.com', nome: 'Marco', cognome: 'Bianchi', ragione_sociale: 'Marco Bianchi',
+  zona: 'Genova', distributor_id: null, attivo: 1, password_hash: bcrypt.hashSync('password-corriere', 4),
+};
 const config = { servizio_pct: '10', iva_pct: '22', finestra_conferma_min: '10', ordine_minimo: '33', spedizione_fissa: '5' };
 const registro = []; // le query viste, per controllare cosa NON è stato eseguito
 // Storico del cliente 1: richieste, righe e ordini. Si accende solo nelle prove che lo usano (storico.attivo), così
@@ -525,8 +530,9 @@ function esegui(sql, p, modo) {
   if (/DELETE FROM session WHERE expire/.test(s)) return { changes: 0 };
   if (/COUNT\(\*\) n FROM products/.test(s)) return { n: 1 }; // catalogo "non vuoto": niente seed automatico
   // Recupero password, cambio password ed eliminazione dell'account (src/logica/account/recupero_password.js, src/logica/account/password_account.js, src/logica/account/account.js)
-  if (/^SELECT id, username, email, referente, ragione_sociale FROM users WHERE ruolo = 'cliente'/.test(s)) {
-    return accountProva.clienti.filter((u) => u.attivo === 1 && (u.username.toLowerCase() === String(p[0]).toLowerCase() || (u.email !== '' && u.email.toLowerCase() === String(p[1]).toLowerCase())));
+  if (/^SELECT id, username, email, referente, ragione_sociale FROM users WHERE ruolo = \? AND attivo = 1/.test(s)) {
+    // p[0] = il ruolo cercato: il sito cerca solo fra i clienti.
+    return accountProva.clienti.filter((u) => p[0] === 'cliente' && u.attivo === 1 && (u.username.toLowerCase() === String(p[1]).toLowerCase() || (u.email !== '' && u.email.toLowerCase() === String(p[2]).toLowerCase())));
   }
   if (/^UPDATE recupero_password SET usato_il = NOW\(\) WHERE user_id = \? AND usato_il IS NULL/.test(s)) {
     for (const l of accountProva.link) if (l.user_id === p[0]) l.usato = true;
@@ -555,7 +561,7 @@ function esegui(sql, p, modo) {
   }
   if (/FROM config WHERE chiave/.test(s)) return config[p[0]] !== undefined ? { valore: config[p[0]] } : null;
   if (/^SELECT \* FROM distributors WHERE attivo = 1 ORDER BY nome/.test(s)) return modo === 'all' ? banchiAttiviProva.righe : banchiAttiviProva.righe[0] || null;
-  if (/FROM users WHERE username/.test(s)) return p[0] === 'prova' ? utente : null;
+  if (/FROM users WHERE username/.test(s)) return p[0] === 'prova' ? utente : p[0] === utenteCorriere.username ? utenteCorriere : null;
   if (/FROM users WHERE id/.test(s)) return modo === 'get' ? utente : [];
   if (/FROM products WHERE attivo = 1 AND id IN/.test(s)) return p.map((id) => catalogo[id]).filter(Boolean);
   if (/FROM products WHERE attivo = 1 AND id = ANY/.test(s)) return (p[0] || []).filter((id) => catalogo[id]).map((id) => ({ id }));
@@ -710,5 +716,5 @@ module.exports = {
   notificheCliente, oraRoma, ordine1295, ordiniBanco, ordiniDelBanco, ordiniProva, pagatoIlProva, pagina, posizioniProva, preparaRichiesta, radice,
   registrazione, registro, ricevuteFinte, richiestaProva, richiesteBanco, richiesteTempiProva, rigaRichiestaProva, righeOrdineBanco,
   righeOrdineNuovo, righeOrdineProva, righeRichiesteBanco, ritiroTra, scrittureAnagrafica, scrittureOrdini, sessioni, storico,
-  storicoBanco, stripeRighe, ultimiOrdini, ultimoOrdineRighe, utc, utente, utenteBanco, utentiClienti,
+  storicoBanco, stripeRighe, ultimiOrdini, ultimoOrdineRighe, utc, utente, utenteBanco, utenteCorriere, utentiClienti,
 };

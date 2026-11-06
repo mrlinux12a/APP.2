@@ -1,5 +1,5 @@
 import * as Linking from 'expo-linking';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,14 +8,19 @@ import { ErroreApi, SERVER } from '@/api';
 import { ErroriAcc, PulsanteAcc } from '@/componenti/acc';
 import { Campo } from '@/componenti/Campo';
 import { Icona } from '@/componenti/Icona';
+import { SelettoreProfilo } from '@/componenti/SelettoreProfilo';
+import { useProfiloAccesso } from '@/profiloAccesso';
 import { useSessione } from '@/sessione';
 import { FONT, useTema } from '@/tema';
 
 // L'accesso (views/auth/login.ejs): la testata con l'icona e "Il pezzo che ti manca, in cantiere.", l'interruttore Accedi / Registrati, nome utente e password, il
 // link per la password dimenticata, il pulsante e in fondo i link alla registrazione, alla privacy e all'eliminazione dell'account.
+// In cima c'è il selettore "Installatore | Corriere" (solo nell'app, mai sul sito): chi ha scelto l'accesso dei corrieri l'ultima volta (o è uscito da un account
+// corriere) trova quello, senza passare da questa schermata.
 export default function Login() {
   const { c } = useTema();
   const { entra } = useSessione();
+  const profilo = useProfiloAccesso();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [errore, setErrore] = useState<string | null>(null);
@@ -35,10 +40,13 @@ export default function Login() {
     }
   };
 
+  if (profilo === 'corriere') return <Redirect href="/accesso-corriere" />;
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.sfondo }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={stili.pagina} keyboardShouldPersistTaps="handled">
+          <SelettoreProfilo attivo="installatore" dove="accesso" />
           <View>
             <View style={[stili.icona, { backgroundColor: c.accento }]}>
               <Icona nome="ordini" colore={c.suAccento} dimensione={26} />

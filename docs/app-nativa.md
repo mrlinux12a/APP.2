@@ -11,7 +11,7 @@ Panoramica e avvio in README. Qui solo ciò che non si deduce dal codice.
   cambiano a ogni SDK: guida e regole in `mobile/AGENTS.md`, doc versionata prima di scrivere.
 - `src/routes/api_v1/` è montata in `src/app.js` **prima** di controllo origine, sessione e middleware
   `res.locals`: solo token Bearer (`src/logica/account/token_app.js`), CORS aperto (nessun cookie in gioco).
-  `/api/v1/login` rifiuta i ruoli diversi da `cliente`.
+  `/api/v1/login` rifiuta i ruoli diversi da `cliente` («Questo account non è un account installatore»): i corrieri hanno un accesso e una registrazione a parte, solo nell'app (`/api/v1/corrieri/*`, schermate `accesso-corriere`, `registrati-corriere`, `corriere`, selettore «Installatore | Corriere»): [app-corrieri.md](app-corrieri.md).
 - Logica condivisa col sito, non duplicata: tutto il flusso richiesta pagata → ordine →
   stato ordini in **`src/logica/ordini/flusso_cliente.js`** (le route di `server.js` fanno solo render/redirect:
   non rimetterci logica), più `src/logica/catalogo/prodotto_json.js` e `src/logica/account/limite_login.js`.

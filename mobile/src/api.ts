@@ -90,7 +90,8 @@ export async function chiamaApi<T>(percorso: string, opzioni: { metodo?: string;
 
 // ---------- Tipi delle risposte ----------
 
-export type Utente = { id: number; username: string; ragione_sociale: string; ruolo: string };
+// `nome`, `cognome` ed `email` ci sono solo per i corrieri (che entrano con l'email, vedi docs/app-corrieri.md).
+export type Utente = { id: number; username: string; ragione_sociale: string; ruolo: string; nome?: string; cognome?: string; email?: string };
 
 // `immagine`: indirizzo assoluto dell'immagine della categoria (SVG), oppure null/assente se non c'è: allora resta l'icona.
 export type Categoria = { slug: string; nome: string; descrizione: string; n_prodotti: number; immagine?: string | null };

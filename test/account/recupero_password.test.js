@@ -16,10 +16,11 @@ const dbFinto = {
   prepare: (sql) => {
     const s = sql.replace(/\s+/g, ' ').trim();
     const esegui = (modo, p) => {
-      if (/^SELECT id, username, email, referente, ragione_sociale FROM users WHERE ruolo = 'cliente' AND attivo = 1/.test(s)) {
-        const cerca = String(p[0]).toLowerCase();
+      if (/^SELECT id, username, email, referente, ragione_sociale FROM users WHERE ruolo = \? AND attivo = 1/.test(s)) {
+        // p[0] = il ruolo cercato ('cliente' per il sito, 'corriere' per l'app dei corrieri), poi il testo scritto due volte.
+        const cerca = String(p[1]).toLowerCase();
         return utenti
-          .filter((u) => u.ruolo === 'cliente' && u.attivo === 1 && (u.username.toLowerCase() === cerca || (u.email !== '' && u.email.toLowerCase() === String(p[1]).toLowerCase())))
+          .filter((u) => u.ruolo === p[0] && u.attivo === 1 && (u.username.toLowerCase() === cerca || (u.email !== '' && u.email.toLowerCase() === String(p[2]).toLowerCase())))
           .sort((a, b) => a.id - b.id)
           .slice(0, Number((/LIMIT (\d+)/.exec(s) || [])[1] || 99));
       }
@@ -34,7 +35,7 @@ const dbFinto = {
       }
       if (/^SELECT r\.id AS recupero_id, u\.id, u\.username FROM recupero_password r JOIN users u/.test(s)) {
         const l = link.find((x) => x.token_hash === p[0] && !x.usato && !x.scaduto);
-        const u = l && utenti.find((x) => x.id === l.user_id && x.attivo === 1 && x.ruolo === 'cliente');
+        const u = l && utenti.find((x) => x.id === l.user_id && x.attivo === 1 && ['cliente', 'corriere'].includes(x.ruolo));
         return u ? { recupero_id: l.id, id: u.id, username: u.username } : null;
       }
       if (/^UPDATE recupero_password SET usato_il = NOW\(\) WHERE id = \? AND usato_il IS NULL AND scade_il > NOW\(\)/.test(s)) {
@@ -260,4 +261,44 @@ test('email di recupero: link, nome utente e validità nelle due versioni; nient
   } finally {
     email.impostaTrasporto(null);
   }
+});
+
+// ---------------- corrieri (app dei corrieri, 06/11/2026) ----------------
+
+test('richiedi per i corrieri: trova solo account corriere (anche per email), e il sito (ruolo predefinito) non trova i corrieri', async () => {
+  const corriere = utente(5, { ruolo: 'corriere', username: 'marco@example.com', email: 'marco@example.com', referente: '', ragione_sociale: 'Marco Bianchi' });
+  // un cliente con la STESSA email del corriere: non deve ricevere la mail dell'app dei corrieri
+  prepara([corriere, utente(6, { email: 'marco@example.com' })]);
+  inviate.length = 0;
+
+  const dalSito = await recupero.richiedi('marco@example.com', { baseUrl: BASE, invia });
+  assert.deepEqual((await dalSito.consegne).map((c) => c.username), ['utente6'], 'il sito recupera solo i clienti');
+
+  inviate.length = 0;
+  link.length = 0;
+  const dallApp = await recupero.richiedi('MARCO@example.com', { baseUrl: BASE, invia, ruolo: 'corriere' });
+  assert.equal(dallApp.trovati, 1);
+  assert.deepEqual((await dallApp.consegne).map((c) => c.username), ['marco@example.com']);
+  assert.equal(inviate.length, 1);
+  assert.equal(inviate[0].a, 'marco@example.com');
+  assert.equal(inviate[0].nome, 'Marco Bianchi', 'senza referente si usa il nome del corriere');
+  assert.equal(link.length, 1);
+});
+
+test('reimposta: il link di un corriere vale (nuova password scelta, link consumato); un ruolo senza recupero non ha link validi', async () => {
+  prepara([utente(5, { ruolo: 'corriere', username: 'marco@example.com', email: 'marco@example.com' })]);
+  inviate.length = 0;
+  await (await recupero.richiedi('marco@example.com', { baseUrl: BASE, invia, ruolo: 'corriere' })).consegne;
+  const codice = codiceDi(inviate[0]);
+  assert.deepEqual(await recupero.accountDaCodice(codice), { recupero_id: 1, id: 5, username: 'marco@example.com' });
+  const esito = await recupero.reimposta(codice, { nuova: 'password-nuova-1', ripeti: 'password-nuova-1' });
+  assert.deepEqual(esito, { ok: true, username: 'marco@example.com' });
+  assert.deepEqual(await recupero.accountDaCodice(codice), null, 'il link si usa una volta sola');
+  assert.ok(scritture.some((x) => /^UPDATE users SET password_hash/.test(x.s)), 'la password è stata scritta');
+  assert.ok(scritture.some((x) => /^UPDATE app_tokens/.test(x.s)), 'gli accessi dell\'app sono stati revocati');
+
+  // un distributore non ha mai un link valido, nemmeno se una riga ci fosse
+  prepara([utente(7, { ruolo: 'distributore' })]);
+  link.push({ id: 99, user_id: 7, token_hash: recupero.hashCodice('x'.repeat(43)), usato: false, scaduto: false });
+  assert.equal(await recupero.accountDaCodice('x'.repeat(43)), null);
 });

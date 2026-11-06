@@ -4,6 +4,7 @@ const { creaRouter } = require('./base');
 const { requireRole } = require('../middleware/auth');
 const { passwordValida } = require('../logica/account/password');
 const utenti = require('../logica/account/utenti');
+const corrieri = require('../logica/account/corrieri');
 const anagrafiche = require('../logica/account/anagrafiche');
 const recuperoPassword = require('../logica/account/recupero_password');
 const webPush = require('../logica/notifiche/web_push');
@@ -55,6 +56,10 @@ router.post('/login', limiti.accesso, async (req, res) => {
     return res.status(401).render('auth/login', { errore: 'Credenziali non valide.' });
   }
   accessoRiuscito(req, username);
+  // I corrieri (e il loro supervisore) usano solo l'app: il sito non apre loro nessuna sessione. Il messaggio si dà dopo aver controllato la password.
+  if (corrieri.eSoloApp(user.ruolo)) {
+    return res.status(403).render('auth/login', { errore: 'Gli account corriere si usano dall’app.' });
+  }
   await avviaSessione(req, {
     id: user.id,
     ruolo: user.ruolo,

@@ -5,8 +5,9 @@ import * as SecureStore from 'expo-secure-store';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Platform } from 'react-native';
 
-import { chiamaApi, impostaToken, suAccessoScaduto, type Utente } from './api';
+import { chiamaApi, ErroreApi, impostaToken, suAccessoScaduto, type Utente } from './api';
 import { dimenticaTokenPush, tokenPushSalvato } from './notifiche';
+import { caricaProfiloAccesso, impostaProfiloAccesso } from './profiloAccesso';
 
 const CHIAVE_TOKEN = 'token_accesso';
 // Nome e ragione sociale dell'ultimo accesso: servono solo a mostrare l'app senza aspettare la
@@ -32,12 +33,28 @@ function utenteSalvato(json: string | null): Utente | null {
   }
 }
 
+// Chi sono, secondo il tipo di account: gli installatori hanno `/me`, i corrieri `/corrieri/me` (le due API sono separate, l'una rifiuta l'altro con un 403).
+// Senza un utente salvato non si sa quale: si prova `/me` e, se risponde 403 (è l'account di un corriere), l'altra.
+async function leggiMe(ruolo?: string): Promise<{ utente: Utente }> {
+  if (ruolo === 'corriere') return chiamaApi<{ utente: Utente }>('/corrieri/me');
+  try {
+    return await chiamaApi<{ utente: Utente }>('/me');
+  } catch (e) {
+    if (!ruolo && e instanceof ErroreApi && e.stato === 403) return chiamaApi<{ utente: Utente }>('/corrieri/me');
+    throw e;
+  }
+}
+
 type ValoreSessione = {
   pronta: boolean; // false finché non si sa se c'è un token salvato
   utente: Utente | null;
   entra: (username: string, password: string) => Promise<void>;
   // Registra una nuova impresa (stessi campi del sito) ed entra subito. Con dei campi sbagliati lancia ErroreApi con `dati.errori`.
   registra: (dati: Record<string, string>) => Promise<void>;
+  // Accesso del corriere (con l'email) e sua registrazione (nome, cognome, email, password): come i due sopra, ma sull'API `/corrieri/...`. Una password o un'email
+  // sbagliate, o l'account di un altro tipo ("Questo account non è un account corriere"), lanciano ErroreApi con il messaggio del server.
+  entraCorriere: (email: string, password: string) => Promise<void>;
+  registraCorriere: (dati: Record<string, string>) => Promise<void>;
   esci: () => Promise<void>;
   // Cambia la password (stessi controlli del sito). Con dei campi sbagliati lancia ErroreApi con `dati.errori` (chiavi attuale / nuova / ripeti). Il server chiude
   // le altre sessioni e revoca anche il token di questo telefono: ne manda uno nuovo, che qui si salva al posto del vecchio, così chi cambia password resta dentro.
@@ -68,16 +85,17 @@ export function SessioneProvider({ children }: { children: ReactNode }) {
     });
     (async () => {
       try {
-        const [token, salvato] = await Promise.all([archivio.leggi(CHIAVE_TOKEN), archivio.leggi(CHIAVE_UTENTE)]);
+        // Insieme al token si legge la schermata di accesso scelta l'ultima volta (installatore o corriere): serve prima di mostrare l'accesso.
+        const [token, salvato] = await Promise.all([archivio.leggi(CHIAVE_TOKEN), archivio.leggi(CHIAVE_UTENTE), caricaProfiloAccesso()]);
         if (token) {
           impostaToken(token);
           const mia = generazione.current;
-          const conferma = chiamaApi<{ utente: Utente }>('/me').then(({ utente }) => {
+          const precedente = utenteSalvato(salvato);
+          const conferma = leggiMe(precedente?.ruolo).then(({ utente }) => {
             if (generazione.current !== mia) return;
             setUtente(utente);
             archivio.scrivi(CHIAVE_UTENTE, JSON.stringify(utente)).catch(() => {});
           });
-          const precedente = utenteSalvato(salvato);
           if (precedente) {
             // Già dentro: aspettare /me (350 ms a rete buona, fino a 20 s se il server non
             // risponde) lasciava una schermata vuota a ogni avvio. Si mostra l'app subito e il
@@ -99,27 +117,59 @@ export function SessioneProvider({ children }: { children: ReactNode }) {
     })();
   }, [dimentica]);
 
-  const entra = useCallback(async (username: string, password: string) => {
-    const { token, utente } = await chiamaApi<{ token: string; utente: Utente }>('/login', {
-      metodo: 'POST',
-      corpo: { username, password, dispositivo: Platform.OS },
-    });
+  // Si è entrati (accesso o registrazione): il token si usa e si salva, e si ricorda a quale tipo di accesso appartiene chi è entrato, così all'uscita (o alla
+  // prossima apertura) si ritrova la sua schermata.
+  const apri = useCallback(async (token: string, utente: Utente) => {
     generazione.current += 1;
     impostaToken(token);
     await Promise.all([archivio.scrivi(CHIAVE_TOKEN, token), archivio.scrivi(CHIAVE_UTENTE, JSON.stringify(utente))]);
+    impostaProfiloAccesso(utente.ruolo === 'corriere' ? 'corriere' : 'installatore');
     setUtente(utente);
   }, []);
 
-  const registra = useCallback(async (dati: Record<string, string>) => {
-    const { token, utente } = await chiamaApi<{ token: string; utente: Utente }>('/registrazione', {
-      metodo: 'POST',
-      corpo: { ...dati, dispositivo: Platform.OS },
-    });
-    generazione.current += 1;
-    impostaToken(token);
-    await Promise.all([archivio.scrivi(CHIAVE_TOKEN, token), archivio.scrivi(CHIAVE_UTENTE, JSON.stringify(utente))]);
-    setUtente(utente);
-  }, []);
+  const entra = useCallback(
+    async (username: string, password: string) => {
+      const { token, utente } = await chiamaApi<{ token: string; utente: Utente }>('/login', {
+        metodo: 'POST',
+        corpo: { username, password, dispositivo: Platform.OS },
+      });
+      await apri(token, utente);
+    },
+    [apri]
+  );
+
+  const registra = useCallback(
+    async (dati: Record<string, string>) => {
+      const { token, utente } = await chiamaApi<{ token: string; utente: Utente }>('/registrazione', {
+        metodo: 'POST',
+        corpo: { ...dati, dispositivo: Platform.OS },
+      });
+      await apri(token, utente);
+    },
+    [apri]
+  );
+
+  const entraCorriere = useCallback(
+    async (email: string, password: string) => {
+      const { token, utente } = await chiamaApi<{ token: string; utente: Utente }>('/corrieri/accedi', {
+        metodo: 'POST',
+        corpo: { email, password, dispositivo: Platform.OS },
+      });
+      await apri(token, utente);
+    },
+    [apri]
+  );
+
+  const registraCorriere = useCallback(
+    async (dati: Record<string, string>) => {
+      const { token, utente } = await chiamaApi<{ token: string; utente: Utente }>('/corrieri/registrati', {
+        metodo: 'POST',
+        corpo: { ...dati, dispositivo: Platform.OS },
+      });
+      await apri(token, utente);
+    },
+    [apri]
+  );
 
   const esci = useCallback(async () => {
     try {
@@ -149,8 +199,8 @@ export function SessioneProvider({ children }: { children: ReactNode }) {
   );
 
   const valore = useMemo(
-    () => ({ pronta, utente, entra, registra, esci, cambiaPassword, eliminaAccount }),
-    [pronta, utente, entra, registra, esci, cambiaPassword, eliminaAccount]
+    () => ({ pronta, utente, entra, registra, entraCorriere, registraCorriere, esci, cambiaPassword, eliminaAccount }),
+    [pronta, utente, entra, registra, entraCorriere, registraCorriere, esci, cambiaPassword, eliminaAccount]
   );
   return <ContestoSessione.Provider value={valore}>{children}</ContestoSessione.Provider>;
 }

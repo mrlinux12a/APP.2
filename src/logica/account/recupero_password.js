@@ -7,8 +7,9 @@
 //  4. scegliendo la nuova password si chiudono TUTTE le sessioni web dell'account e si revocano gli accessi dell'app: chi aveva la vecchia password esce.
 //
 // La risposta alla richiesta è SEMPRE la stessa, che l'account esista o no (niente elenco di chi è iscritto), e l'invio dell'email non si aspetta: nemmeno
-// il tempo di risposta dice qualcosa. Vale solo per i clienti (gli installatori): banco e agente hanno altri canali. Senza email nell'account (o senza
-// SMTP configurato, vedi src/logica/notifiche/email.js) non parte niente: in quel caso resta solo il supporto.
+// il tempo di risposta dice qualcosa. Vale per i clienti (gli installatori, dal sito) e per i corrieri (dall'app, 06/11/2026): banco e agente hanno altri canali.
+// La richiesta cerca solo gli account del tipo del canale (il sito non manda email ai corrieri e l'app non ai clienti), mentre il link scelto dall'email vale
+// per entrambi. Senza email nell'account (o senza SMTP configurato, vedi src/logica/notifiche/email.js) non parte niente: in quel caso resta solo il supporto.
 const crypto = require('crypto');
 const db = require('../../../db');
 const email = require('../notifiche/email');
@@ -25,28 +26,30 @@ const codiceBenFatto = (codice) => typeof codice === 'string' && /^[A-Za-z0-9_-]
 // Controlla che un testo sia un indirizzo email scritto in modo plausibile.
 const emailValida = (testo) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(testo || '').trim());
 
-// I clienti attivi con questo nome utente o questa email (senza badare alle maiuscole).
-async function accountDa(identificativo) {
+// Gli account attivi di questo ruolo con questo nome utente o questa email (senza badare alle maiuscole). Il sito cerca fra i clienti (installatori); l'app dei
+// corrieri passa 'corriere' (vedi src/routes/api_v1/corrieri.js): ogni canale recupera solo gli account del suo tipo.
+async function accountDa(identificativo, ruolo = 'cliente') {
   const testo = String(typeof identificativo === 'string' ? identificativo : '').trim().slice(0, 200);
   if (!testo) return [];
   return db
     .prepare(
       `SELECT id, username, email, referente, ragione_sociale
          FROM users
-        WHERE ruolo = 'cliente' AND attivo = 1
+        WHERE ruolo = ? AND attivo = 1
           AND (lower(username) = lower(?) OR (email <> '' AND lower(email) = lower(?)))
         ORDER BY id
         LIMIT ${MAX_ACCOUNT_PER_RICHIESTA}`
     )
-    .all(testo, testo);
+    .all(ruolo, testo, testo);
 }
 
 // Prepara i link e manda le email. `baseUrl`: l'indirizzo pubblico del sito (senza barra finale); senza, non si manda niente (un link con un indirizzo
 // scelto da chi chiede permetterebbe di rubare il codice). `invia`: per le prove.
 // Ritorna { trovati, consegne }: `trovati` = account che corrispondono; `consegne` = la promessa dell'invio (CHI RISPONDE ALLA RICHIESTA NON LA ASPETTA, i
 // test sì), che si risolve con la lista dei link generati ([{ username, link, inviata }]).
-async function richiedi(identificativo, { baseUrl, invia = email.inviaRecuperoPassword } = {}) {
-  const accounts = (await accountDa(identificativo)).filter((a) => emailValida(a.email));
+// `ruolo`: il tipo di account che si recupera ('cliente' per il sito, 'corriere' per l'app dei corrieri).
+async function richiedi(identificativo, { baseUrl, invia = email.inviaRecuperoPassword, ruolo = 'cliente' } = {}) {
+  const accounts = (await accountDa(identificativo, ruolo)).filter((a) => emailValida(a.email));
   const preparati = [];
   for (const a of accounts) {
     const codice = crypto.randomBytes(32).toString('base64url');
@@ -83,7 +86,7 @@ async function accountDaCodice(codice) {
       `SELECT r.id AS recupero_id, u.id, u.username
          FROM recupero_password r
          JOIN users u ON u.id = r.user_id
-        WHERE r.token_hash = ? AND r.usato_il IS NULL AND r.scade_il > NOW() AND u.attivo = 1 AND u.ruolo = 'cliente'`
+        WHERE r.token_hash = ? AND r.usato_il IS NULL AND r.scade_il > NOW() AND u.attivo = 1 AND u.ruolo IN ('cliente', 'corriere')`
     )
     .get(hashCodice(codice));
   return riga || null;

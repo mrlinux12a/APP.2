@@ -2,7 +2,7 @@
 // funzioni di catalogo, prezzi, richieste e ordini sono quelle di src/ — ma
 // autenticazione con token invece del cookie di sessione.
 //
-// Per ora l'app è solo per gli installatori (ruolo 'cliente'): il banco e l'agente
+// L'app è per gli installatori (ruolo 'cliente') e, con le rotte di corrieri.js, per i corrieri (ruolo 'corriere'): il banco e l'agente
 // continuano a usare il sito.
 const express = require('express');
 const accesso = require('./accesso');
@@ -12,6 +12,7 @@ const richieste = require('./richieste');
 const ordini = require('./ordini');
 const ricevute = require('./ricevute');
 const storico = require('./storico');
+const corrieri = require('./corrieri');
 
 const router = express.Router();
 
@@ -30,6 +31,8 @@ router.use((req, res, next) => {
 
 // Le rotte, una cartella per argomento. L'ordine è quello di prima della divisione: Express prova le rotte in fila.
 router.use(accesso, profilo, catalogo, richieste, ordini, ricevute, storico);
+// L'API dei corrieri (solo app): registrazione, accesso, password dimenticata. Tutte le rotte stanno sotto /corrieri.
+router.use(corrieri);
 
 // Qualsiasi altro indirizzo dell'API: 404 in JSON.
 router.use((req, res) => {

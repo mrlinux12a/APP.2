@@ -21,6 +21,7 @@ Leggi il file **prima** di modificare quella parte: ogni file porta le scelte es
 | Notifiche | [docs/notifiche.md](docs/notifiche.md) | notifiche in-app e Web Push ad app chiusa |
 | Gruppo WhatsApp dei corrieri | [docs/whatsapp.md](docs/whatsapp.md) | `src/logica/whatsapp/whatsapp.js`, sondaggi, "preso", istanza proprietaria |
 | App nativa e Android | [docs/app-nativa.md](docs/app-nativa.md) | `mobile/`, API `/api/v1`, pagamento nell'app, test di sicurezza |
+| App dei corrieri | [docs/app-corrieri.md](docs/app-corrieri.md) | ruoli `corriere` e `supervisore_corrieri`, `corriere_id`, utente di prova, script per crearne, accesso e registrazione del corriere (solo nell'app, con l'email; il sito li rifiuta), cosa manca per sostituire WhatsApp |
 | Convenzioni web e audit | [docs/convenzioni-web-e-audit.md](docs/convenzioni-web-e-audit.md) | `src/comune/http.js`, `src/middleware/errori.js`, input, accesso, fusi orari, cache degli asset, PWA, CSS, come si provano le cose |
 | Banco: home | [docs/banco/home-e-aggiornamento.md](docs/banco/home-e-aggiornamento.md) | bacheca a 3 colonne, aggiornamento automatico |
 | Banco: richiesta e ordine | [docs/banco/richiesta-e-ordine.md](docs/banco/richiesta-e-ordine.md) | dettaglio richiesta, pagina dell'ordine (da preparare / in consegna / consegnato) |

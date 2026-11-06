@@ -290,6 +290,9 @@ const iconaLucchetto = svg('<rect x="5.5" y="10.5" width="13" height="9.5" rx="2
 const iconaGiu = svg('<path d="M5.5 9.5 12 16l6.5-6.5"/>');
 const iconaStampante = svg('<path d="M7.5 9V4h9v5"/><rect x="4" y="9" width="16" height="8" rx="2"/><path d="M7.5 14h9v6h-9Z"/><path d="M16.5 12h.01"/>');
 
+// Casco da cantiere: la voce "Installatore" del selettore di accesso dell'app nativa (accanto al furgone del corriere). Il sito non lo usa.
+const iconaCasco = svg('<path d="M5.5 16.5a6.5 6.5 0 0 1 13 0"/><rect x="3" y="16.5" width="18" height="3" rx="1"/><path d="M10 10.3V7.5h4v2.8"/>');
+
 module.exports = {
   ICONE_CATEGORIA: ICONE, // letto da scripts/genera/genera_icone_app.js per l'app nativa
   iconaCategoria,
@@ -299,6 +302,7 @@ module.exports = {
   iconaCarrello,
   iconaOrdini,
   iconaFurgone,
+  iconaCasco,
   iconaInvio,
   iconaInquadra,
   iconaHome,

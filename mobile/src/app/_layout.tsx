@@ -38,8 +38,14 @@ function Navigazione() {
   const { pronta, utente } = useSessione();
   const { c } = useTema();
 
-  // Le notifiche push servono a chi è dentro: registra il telefono e porta alla richiesta o all'ordine quando si tocca una notifica.
-  useNotifichePush(utente ? utente.id : null);
+  // Chi è dentro è un installatore ("cliente") o un corriere: ognuno ha le sue schermate (docs/app-corrieri.md). Qualunque altro ruolo, che l'API dell'app non
+  // dovrebbe mai dare, non vede né le une né le altre e resta alla schermata di accesso.
+  const eCliente = !!utente && utente.ruolo === 'cliente';
+  const eCorriere = !!utente && utente.ruolo === 'corriere';
+
+  // Le notifiche push servono all'installatore: registra il telefono e porta alla richiesta o all'ordine quando si tocca una notifica. Il corriere non ne ha
+  // ancora (le sue arriveranno con le consegne): così non gli si chiede nemmeno il permesso.
+  useNotifichePush(eCliente && utente ? utente.id : null);
 
   // All'uscita si butta la cache: chi entra dopo sullo stesso telefono non deve vedere,
   // nemmeno per un attimo, dati letti con l'account precedente.
@@ -73,7 +79,7 @@ function Navigazione() {
           headerTitleStyle: STILE_TITOLO,
         }}
       >
-        <Stack.Protected guard={!!utente}>
+        <Stack.Protected guard={eCliente}>
           <Stack.Screen name="(schede)" />
           {/* «La mia anagrafica» (si apre dal menu del profilo): stessa barra delle altre pagine, con la freccia indietro e il pulsante del profilo come sul sito. */}
           <Stack.Screen
@@ -90,9 +96,16 @@ function Navigazione() {
             })}
           />
         </Stack.Protected>
+        {/* La schermata del corriere (solo nell'app). */}
+        <Stack.Protected guard={eCorriere}>
+          <Stack.Screen name="corriere" />
+        </Stack.Protected>
+        {/* Accesso e registrazione, dell'installatore e del corriere: si passa dall'uno all'altro con il selettore in cima. */}
         <Stack.Protected guard={!utente}>
           <Stack.Screen name="login" />
           <Stack.Screen name="registrati" />
+          <Stack.Screen name="accesso-corriere" />
+          <Stack.Screen name="registrati-corriere" />
         </Stack.Protected>
       </Stack>
     </>

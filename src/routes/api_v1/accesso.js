@@ -1,6 +1,7 @@
 // Accesso dell'app: login, registrazione, logout e "chi sono" (`/api/v1/login`, `/registrazione`, `/logout`, `/me`).
 const { creaRouter } = require('../base');
 const utenti = require('../../logica/account/utenti');
+const corrieri = require('../../logica/account/corrieri');
 const tokenApp = require('../../logica/account/token_app');
 const anagrafiche = require('../../logica/account/anagrafiche');
 const push = require('../../logica/notifiche/push');
@@ -24,6 +25,8 @@ router.post('/login', limiti.accesso, async (req, res) => {
   }
   accessoRiuscito(req, username);
   if (user.ruolo !== 'cliente') {
+    // Un corriere (o il suo supervisore) ha la sua schermata di accesso nell'app: qui gli si dice che è quella sbagliata. Banco e agente usano il sito.
+    if (corrieri.eSoloApp(user.ruolo)) return res.status(403).json({ errore: 'Questo account non è un account installatore' });
     return res.status(403).json({ errore: "Per ora l'app è riservata agli installatori: accedi dal sito." });
   }
   const token = await tokenApp.creaToken(user.id, req.body && req.body.dispositivo);

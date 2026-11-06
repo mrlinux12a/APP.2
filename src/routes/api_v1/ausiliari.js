@@ -26,6 +26,21 @@ async function richiedeCliente(req, res, next) {
   next();
 }
 
+// I dati del corriere che l'app può vedere: quelli dell'utente più nome, cognome ed email (il corriere entra con l'email, vedi src/logica/account/corrieri.js).
+function utenteCorriereJson(u) {
+  return { ...utenteJson(u), nome: u.nome || '', cognome: u.cognome || '', email: u.email || '' };
+}
+
+// Controllo d'accesso dell'API dei corrieri: lascia passare solo un corriere con un token valido (401 se il token manca o è scaduto, 403 per un altro
+// ruolo). È il gemello di `richiedeCliente`: le due API restano separate, l'una non apre l'altra.
+async function richiedeCorriere(req, res, next) {
+  const utente = await tokenApp.utenteDaToken(tokenDellaRichiesta(req));
+  if (!utente) return res.status(401).json({ errore: 'Accesso scaduto: entra di nuovo.' });
+  if (utente.ruolo !== 'corriere') return res.status(403).json({ errore: 'Accesso non consentito.' });
+  req.utente = utente;
+  next();
+}
+
 // Scrive un importo in euro come testo, con due decimali.
 const e2 = (n) => pricing.euro(n);
 
@@ -85,4 +100,4 @@ async function ordineDelCliente(req, res) {
   return ordine;
 }
 
-module.exports = { e2, importiJson, ordineDelCliente, richiedeCliente, statoPagamentoJson, tokenDellaRichiesta, utenteJson };
+module.exports = { e2, importiJson, ordineDelCliente, richiedeCliente, richiedeCorriere, statoPagamentoJson, tokenDellaRichiesta, utenteCorriereJson, utenteJson };

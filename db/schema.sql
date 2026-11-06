@@ -2,7 +2,7 @@
 
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
-  ruolo TEXT NOT NULL CHECK (ruolo IN ('cliente', 'agente', 'distributore')),
+  ruolo TEXT NOT NULL CHECK (ruolo IN ('cliente', 'agente', 'distributore', 'corriere', 'supervisore_corrieri')),
   username TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   ragione_sociale TEXT NOT NULL,
@@ -739,3 +739,18 @@ CREATE INDEX IF NOT EXISTS idx_iscrizioni_push_user ON iscrizioni_push(user_id);
 -- tipo = 'sondaggio' (testo = domanda e opzioni in JSON, wa_msg_id = id del sondaggio nel gruppo). Il blocco si puo' rilanciare. Senza la colonna il sondaggio
 -- non parte (il server lo scrive nel log) e la consegna si prende come prima, con "preso <minuti>".
 ALTER TABLE whatsapp_messaggi ADD COLUMN IF NOT EXISTS segreto_sondaggio TEXT;
+
+-- App dei corrieri: ruoli e legami (06/11/2026)
+-- Il corriere entra dall'app mobile (mai dal sito) con un utente di `users` di ruolo 'corriere'. Il ruolo 'supervisore_corrieri' (chi coordina i corrieri) e'
+-- ammesso fin da ora, cosi' quando arrivera' non serve un'altra modifica al vincolo. `supervisore_id` lega un corriere al suo supervisore (stesso schema di
+-- `distributor_id` per i dipendenti di un banco); NULL = nessun supervisore. `corriere_id` dice QUALE corriere (account dell'app) ha preso la consegna, accanto
+-- a `corriere_nome` (il nome scritto nel gruppo WhatsApp, che resta): sta sulla risposta del banco quando il corriere "prende" e passa all'ordine quando nasce.
+-- NULL = consegna presa su WhatsApp o di prima. Nessun dato esistente cambia. Il blocco si puo' rilanciare.
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_ruolo_check;
+ALTER TABLE users ADD CONSTRAINT users_ruolo_check
+  CHECK (ruolo IN ('cliente', 'agente', 'distributore', 'corriere', 'supervisore_corrieri'));
+ALTER TABLE users ADD COLUMN IF NOT EXISTS supervisore_id INTEGER REFERENCES users(id);
+CREATE INDEX IF NOT EXISTS idx_users_supervisore ON users(supervisore_id) WHERE supervisore_id IS NOT NULL;
+ALTER TABLE request_responses ADD COLUMN IF NOT EXISTS corriere_id INTEGER REFERENCES users(id);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS corriere_id INTEGER REFERENCES users(id);
+CREATE INDEX IF NOT EXISTS idx_orders_corriere ON orders(corriere_id) WHERE corriere_id IS NOT NULL;

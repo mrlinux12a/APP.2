@@ -2,20 +2,32 @@
 // link in fondo alla pagina.
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { FONT, useTema } from '../tema';
+import { FONT, useTema, useTemaAccesso } from '../tema';
 
-// Il pulsante principale (.acc-btn): alto 54, tutto tondo, blu; da spento resta blu chiaro con il cerchio che gira.
+// Il pulsante principale (.acc-btn): alto 54, tutto tondo, nel colore dell'accento (blu per l'installatore; giallo con testo scuro per il corriere, vedi
+// `TemaAccesso`); da spento resta più chiaro con il cerchio che gira.
 export function PulsanteAcc({ titolo, onPress, inCorso }: { titolo: string; onPress: () => void; inCorso?: boolean }) {
-  const { c } = useTema();
+  const t = useTemaAccesso();
   return (
     <Pressable
       onPress={onPress}
       disabled={inCorso}
       accessibilityRole="button"
-      style={({ pressed }) => [stili.pulsante, { backgroundColor: pressed ? c.accentoScuro : c.accento, opacity: inCorso ? 0.75 : 1 }]}
+      style={({ pressed }) => [stili.pulsante, { backgroundColor: pressed ? t.accentoScuro : t.accento, opacity: inCorso ? 0.75 : 1 }]}
     >
-      {inCorso ? <ActivityIndicator color={c.suAccento} /> : <Text style={[stili.pulsanteTesto, { color: c.suAccento }]}>{titolo}</Text>}
+      {inCorso ? <ActivityIndicator color={t.suAccento} /> : <Text style={[stili.pulsanteTesto, { color: t.suAccento }]}>{titolo}</Text>}
     </Pressable>
+  );
+}
+
+// Un avviso che non è un errore (es. "Ti abbiamo mandato un'email"): stesso riquadro del rosso ma nei toni chiari dell'accento, con il testo scuro.
+export function AvvisoAcc({ testo }: { testo: string }) {
+  const { c } = useTema();
+  const t = useTemaAccesso();
+  return (
+    <View style={[stili.errori, { backgroundColor: t.accentoChiaro }]} accessibilityRole="alert">
+      <Text style={[stili.erroriTesto, { color: c.testo }]}>{testo}</Text>
+    </View>
   );
 }
 

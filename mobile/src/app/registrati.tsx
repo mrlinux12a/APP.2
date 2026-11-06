@@ -8,6 +8,7 @@ import { ErroreApi, SERVER } from '@/api';
 import { ErroriAcc, PulsanteAcc } from '@/componenti/acc';
 import { Campo } from '@/componenti/Campo';
 import { Icona } from '@/componenti/Icona';
+import { SelettoreProfilo } from '@/componenti/SelettoreProfilo';
 import { useSessione } from '@/sessione';
 import { FONT, useTema } from '@/tema';
 
@@ -100,6 +101,8 @@ export default function Registrati() {
     <SafeAreaView style={{ flex: 1, backgroundColor: c.sfondo }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView ref={scorri} contentContainerStyle={stili.pagina} keyboardShouldPersistTaps="handled">
+          {/* Solo nell'app: "Installatore | Corriere" porta alla registrazione dell'uno o dell'altro. */}
+          <SelettoreProfilo attivo="installatore" dove="registrazione" />
           {/* La testata: il cerchio bianco per tornare indietro e il titolo al centro (.reg-testata). */}
           <View style={stili.testata}>
             <Pressable onPress={indietro} accessibilityRole="button" accessibilityLabel="Indietro" style={stili.indietro}>
