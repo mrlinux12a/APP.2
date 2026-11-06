@@ -6,7 +6,7 @@ const aiuti = require('./_aiuti/server_finto');
 
 aiuti.avvia(38474);
 const {
-  chiedi, erroriServer, fa, form, ordiniProva, storico, stripeRighe,
+  chiedi, erroriServer, fa, form, notificheCliente, ordiniProva, storico, stripeRighe,
 } = aiuti;
 
 // Si comincia già entrati come installatore: le prime prove contano su una sessione aperta (nel file unico di prima la lasciavano le prove di accesso).
@@ -42,6 +42,25 @@ test('Stato ordini vuoto: furgone, "Come funziona" in tre passaggi, catalogo e r
     assert.equal(r2.headers.get('location'), '/richieste/6');
   } finally {
     storico.attivo = false;
+  }
+});
+
+test('Stato ordini vuoto: le notifiche appena lette non lasciano il "+N" sull\'icona (il contatore è calcolato prima che la pagina le segni lette)', async () => {
+  notificheCliente.nonLette = 1;
+  try {
+    // senza attività in corso l'icona mostra quante notifiche di ordini e richieste non sono state lette...
+    let t = await (await chiedi('/home')).text();
+    assert.match(t, /<span class="pallino pallino-azzurro">\+1<\/span>/);
+    // ...ma aprendo "Stato ordini" vuoto si segnano lette e il pallino non deve restare nemmeno in quella pagina
+    const r = await chiedi('/ordini');
+    assert.equal(r.status, 200);
+    t = await r.text();
+    assert.doesNotMatch(t, /pallino-azzurro/);
+    assert.equal(notificheCliente.nonLette, 0);
+    t = await (await chiedi('/home')).text();
+    assert.doesNotMatch(t, /pallino-azzurro/);
+  } finally {
+    notificheCliente.nonLette = 0;
   }
 });
 

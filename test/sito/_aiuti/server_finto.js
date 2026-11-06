@@ -239,6 +239,8 @@ function eseguiMaterialeProva(s, p) {
 const banco = { attivo: false, decisioni: [], sqlHome: { contatore: '', colonna: '' }, daRispondere: 2, primaScade: 98 };
 // Avvisi del banco (src/logica/banco/avvisi.js): le richieste ancora da confermare, le notifiche nuove con gli ordini a cui si riferiscono e gli id segnati letti.
 const avvisiBanco = { richieste: [], notifiche: [], ordini: [], ordiniDaPreparare: [{ id: 1280 }, { id: 1281 }], lette: [], viste: [] };
+// Notifiche non lette dell'installatore nella categoria "ordini" (quelle del pallino "+N" sotto "Stato ordini"): `segnaLetteCategoria` le azzera, come nel DB vero.
+const notificheCliente = { nonLette: 0 };
 // Clienti del banco (filiale 2): uno da verificare, due approvati (uno senza codice e senza ordini, uno con poche
 // informazioni) e uno rifiutato. `utentiClienti` sono le righe di users, `legamiClienti` quelle di client_distributors.
 const iscritto = naive(new Date(Date.UTC(2026, 8, 8, 17, 9)));
@@ -564,6 +566,11 @@ function esegui(sql, p, modo) {
   }
   if (/FROM macro_categorie m/.test(s)) return [{ slug: 'idraulica', nome: 'Idraulica', in_evidenza: 1, n_prodotti: 2 }, { slug: 'scarichi', nome: 'Scarichi', in_evidenza: 0, n_prodotti: 1 }];
   if (/COUNT\(\*\) AS n FROM products WHERE attivo = 1 AND foto_url/.test(s)) return { n: 0 };
+  if (/^SELECT COUNT\(\*\) AS n FROM notifications WHERE user_id = \? AND categoria = \? AND letta = 0$/.test(s)) return { n: p[1] === 'ordini' ? notificheCliente.nonLette : 0 };
+  if (/^UPDATE notifications SET letta = 1 WHERE user_id = \? AND categoria = \?$/.test(s)) {
+    if (p[1] === 'ordini') notificheCliente.nonLette = 0;
+    return { changes: 1 };
+  }
   if (/COUNT\(\*\)/.test(s)) return modo === 'get' ? { n: 0 } : [];
   return modo === 'all' ? [] : modo === 'get' ? null : { changes: 0, lastInsertRowid: null };
 }
@@ -700,7 +707,7 @@ module.exports = {
   chiaviVapidProva, chiedi, config, consegnatoIl, dataProva, dbFinto, distributoreBanco, elencoClienti, erroriServer, esegui, eseguiBanco,
   eseguiIscrizioniPush, eseguiMaterialeProva, eseguiOrdineProva, eseguiRegistrazione, eseguiRicevute, eseguiRichiestaProva, eseguiStorico,
   eseguiStripe, fa, form, importiNuovi, iscritto, iscrizione, iscrizioniPush, json, legamiClienti, materialeProva, naive, nominatim,
-  oraRoma, ordine1295, ordiniBanco, ordiniDelBanco, ordiniProva, pagatoIlProva, pagina, posizioniProva, preparaRichiesta, radice,
+  notificheCliente, oraRoma, ordine1295, ordiniBanco, ordiniDelBanco, ordiniProva, pagatoIlProva, pagina, posizioniProva, preparaRichiesta, radice,
   registrazione, registro, ricevuteFinte, richiestaProva, richiesteBanco, richiesteTempiProva, rigaRichiestaProva, righeOrdineBanco,
   righeOrdineNuovo, righeOrdineProva, righeRichiesteBanco, ritiroTra, scrittureAnagrafica, scrittureOrdini, sessioni, storico,
   storicoBanco, stripeRighe, ultimiOrdini, ultimoOrdineRighe, utc, utente, utenteBanco, utentiClienti,

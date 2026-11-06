@@ -6,6 +6,7 @@ Estratto da [`CLAUDE.md`](../CLAUDE.md) nel riordino della documentazione (31/10
 
 Badge "Stato ordini" somma non lette di `ordini`+`richieste`. Ricalcolare **dopo** averle
 marcate lette se la route fa render diretto (non redirect), altrimenti resta il valore vecchio.
+Il "+N" compare **solo sull'icona a riposo** (nessuna attività in corso: con una richiesta o una consegna l'icona mostra anello/furgone) e si azzera aprendo una richiesta, un ordine o `/ordini`. Anche `/ordini` vuoto deve azzerarlo (`res.locals.ordiniNonLetti = 0`, 06/11/2026): prima la pagina segnava lette le notifiche ma l'icona mostrava ancora il "+1" fino alla pagina dopo. Prova: «Stato ordini vuoto: le notifiche appena lette…» in `test/sito/stato_ordini_e_richieste.test.js`.
 Le notifiche del **banco** hanno anche `tipo` e `request_id` e diventano avvisi a comparsa: vedi "Avvisi del banco fuori dalla home".
 
 ## Notifiche ad app chiusa: Web Push (21/10/2026, richiesta esplicita, Android e iPhone)

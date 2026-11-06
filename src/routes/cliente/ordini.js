@@ -40,6 +40,9 @@ router.get('/ordini', requireRole('cliente'), async (req, res) => {
     return res.redirect((scelta || voci[0]).href);
   }
   if (voci.length === 1) return res.redirect(voci[0].href);
+  // vociStriscia ha appena segnato lette le notifiche, ma il contatore dell'icona in basso è già stato calcolato dal middleware prima di questa route:
+  // senza azzerarlo la pagina vuota mostrerebbe ancora il "+N" (vedi docs/notifiche.md).
+  res.locals.ordiniNonLetti = 0;
   res.render('cliente/ordini_cliente', { titolo: 'Stato ordini', minutiTesto: await pricing.getFinestraMinutiTesto() });
 });
 

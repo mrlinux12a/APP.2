@@ -312,3 +312,23 @@ test('il messaggio nel gruppo: i minuti sono il tempo per arrivare dal venditore
   assert.match(testo, /«preso <minuti>» \(es\. preso 30\)\. I minuti sono il tempo che ci metti ad arrivare dal venditore \(tappa 1, prelievo merci\)\./);
   assert.doesNotMatch(testo, /tempo totale|dal ritiro alla consegna/);
 });
+
+test('il messaggio nel gruppo: il cellulare dell\'installatore sta nella tappa della consegna, solo se c\'è', () => {
+  ambiente({ WHATSAPP_ATTIVO: '1', WHATSAPP_ISTANZA: 'locale' });
+  const dati = (telefono) => ({
+    richiestaId: 12,
+    banco: { nome: 'BOREA SRL — Fegino', indirizzo: 'Via Castel Morrone 1', lat: 44.44, lng: 8.93 },
+    consegnaA: { indirizzo: 'Via Puggia 22/3, 16131 Genova (GE)', lat: 44.43, lng: 8.95, telefono },
+  });
+  // c'è: dopo l'indirizzo e prima del link alla mappa, su una riga sola anche se nel profilo ha spazi o a capo di troppo
+  const con = wa.testoRitiroConsegna(dati('  333 123\n 4567 '));
+  assert.match(con, /2️⃣ CONSEGNA MERCE\nVia Puggia 22\/3, 16131 Genova \(GE\)\n📞 Installatore: 333 123 4567\n📍 https:\/\/www\.google\.com\/maps/);
+  assert.equal((con.match(/📞/g) || []).length, 1); // solo nella consegna, non nel prelievo
+  // non c'è (vuoto, mancante, solo spazi): il messaggio è quello di prima
+  for (const telefono of ['', '   ', null, undefined]) {
+    assert.doesNotMatch(wa.testoRitiroConsegna(dati(telefono)), /📞|Installatore/);
+  }
+  // un testo lungo infilato nel campo non gonfia il messaggio
+  const lungo = wa.testoRitiroConsegna(dati('3'.repeat(200)));
+  assert.match(lungo, /📞 Installatore: 3{30}\n/);
+});

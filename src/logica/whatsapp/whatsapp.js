@@ -264,11 +264,19 @@ function linkMappa(lat, lng) {
   return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
 }
 
-// Scrive una tappa del messaggio ai corrieri: titolo, nome, indirizzo e il link alla mappa.
-function tappa(titolo, nome, indirizzo, lat, lng) {
+// Il cellulare dell'installatore come lo scrive nel profilo, su una riga sola e di lunghezza ragionevole (il messaggio finisce in un gruppo: niente a capo
+// né testi lunghi infilati in quel campo). Vuoto se non c'è.
+function pulisciTelefono(telefono) {
+  return String(telefono || '').replace(/\s+/g, ' ').trim().slice(0, 30);
+}
+
+// Scrive una tappa del messaggio ai corrieri: titolo, nome, indirizzo, (se c'è) il cellulare di chi aspetta la merce e il link alla mappa.
+function tappa(titolo, nome, indirizzo, lat, lng, telefono = '') {
   const righe = [titolo];
   if (nome) righe.push(nome);
   if (indirizzo) righe.push(indirizzo);
+  const numero = pulisciTelefono(telefono);
+  if (numero) righe.push(`📞 Installatore: ${numero}`);
   const link = linkMappa(lat, lng);
   if (link) righe.push(`📍 ${link}`);
   return righe.join('\n');
@@ -285,7 +293,7 @@ function testoRitiroConsegna({ richiestaId, banco, consegnaA, conSondaggio = fal
     '',
     tappa('1️⃣ PRELIEVO MERCI', banco.nome, banco.indirizzo, banco.lat, banco.lng),
     '',
-    tappa('2️⃣ CONSEGNA MERCE', null, consegnaA.indirizzo, consegnaA.lat, consegnaA.lng),
+    tappa('2️⃣ CONSEGNA MERCE', null, consegnaA.indirizzo, consegnaA.lat, consegnaA.lng, consegnaA.telefono),
     '',
     come,
   ].join('\n');
@@ -313,13 +321,15 @@ async function datiRitiro(distributorId) {
 }
 
 // Dove si consegna: l'indirizzo scritto nel carrello (`destinazione` della richiesta) e la posizione che l'installatore ha mandato con quello stesso invio
-// (users.geo_*). Per le richieste senza destinazione (app, vecchio flusso) l'indirizzo di consegna abituale.
+// (users.geo_*). Per le richieste senza destinazione (app, vecchio flusso) l'indirizzo di consegna abituale. Porta anche il cellulare dell'installatore
+// (users.telefono, vuoto se non c'è), che il corriere trova nel messaggio per chiamarlo all'arrivo.
 async function datiConsegna(clienteId, destinazione) {
   const c = await db.prepare('SELECT * FROM users WHERE id = ?').get(clienteId);
   return {
     indirizzo: String(destinazione || '').trim() || (c.indirizzo_consegna || '').trim() || format.indirizzoCompleto(c),
     lat: c.geo_lat,
     lng: c.geo_lng,
+    telefono: pulisciTelefono(c.telefono),
   };
 }
 
