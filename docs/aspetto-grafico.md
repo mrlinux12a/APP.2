@@ -98,7 +98,7 @@ provvisorie). Variabili CSS in cima a `assets/css`.
   la campanella (il banco nella sua barra, l'agente nell'appbar). Il sottotitolo "referente · cliente di DISTRIBUTORE" viene da `res.locals.profiloCliente`
   (`anagrafiche.intestazioneCliente`, in cache 60 s per cliente: un'approvazione appena fatta compare entro un
   minuto). Script in `app.js` ("Menu del profilo"): Esc e tocco sul velo chiudono e riportano il focus sul
-  pulsante, frecce/Home/End scorrono le voci, Tab fuori dal pannello lo chiude.
+  pulsante, frecce/Home/End scorrono le voci, Tab fuori dal pannello lo chiude. L'app ha lo stesso menu (`mobile/src/componenti/PulsanteAccount.tsx`, vedi «Menu del profilo» in docs/app-nativa.md): se le voci cambiano sul sito, vanno cambiate anche lì.
 - **Accedi, Registrati, Benvenuto** (`views/auth/login.ejs`, `auth/registrati.ejs`, `cliente/benvenuto.ejs`, richiesta esplicita del
   05/10/2026; classi `acc-*`, `reg-*`, `ben-*`; campi dal partial `partials/comune/acc_campo.ejs`, che disegna anche
   l'occhio della password). Non rimettere: la nota "i distributori che indichi dovranno confermare…", gli asterischi

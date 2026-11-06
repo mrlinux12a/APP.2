@@ -15,6 +15,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { CarrelloProvider } from '@/carrello';
 import { intestazione } from '@/componenti/BarraTitolo';
+import { PulsanteAccount } from '@/componenti/PulsanteAccount';
 import { useNotifichePush } from '@/notifiche';
 import { SessioneProvider, useSessione } from '@/sessione';
 import { FONT, STILE_TITOLO, useTema } from '@/tema';
@@ -74,7 +75,11 @@ function Navigazione() {
       >
         <Stack.Protected guard={!!utente}>
           <Stack.Screen name="(schede)" />
-          <Stack.Screen name="profilo" options={{ presentation: 'modal', animation: 'none', headerShown: true, title: 'Il mio account' }} />
+          {/* «La mia anagrafica» (si apre dal menu del profilo): stessa barra delle altre pagine, con la freccia indietro e il pulsante del profilo come sul sito. */}
+          <Stack.Screen
+            name="profilo"
+            options={{ headerShown: true, header: intestazione, title: 'La mia anagrafica', headerRight: () => <PulsanteAccount /> }}
+          />
           {/* "Orari di BOREA": ci si arriva da "Vedi orari" del carrello. Il titolo arriva dal parametro "titolo" (vedi apriOrari), come per le categorie. */}
           <Stack.Screen
             name="orari"

@@ -17,7 +17,8 @@ const FRECCIA =
 
 // Come getDefaultHeaderHeight di react-navigation: sugli iPhone con Dynamic Island la fascia
 // della barra di stato è più bassa dell'area sicura, e il contenuto ne guadagna.
-function altezzaTotale(sopra: number) {
+// Esportata perché il menu del profilo (PulsanteAccount) parte appena sotto la barra, come .profilo-velo del sito.
+export function altezzaTotale(sopra: number) {
   const base = Platform.OS === 'ios' ? 44 : 64;
   const fascia = Platform.OS === 'ios' && sopra > 50 ? sopra - (5 + 1 / PixelRatio.get()) : sopra;
   return base + fascia;

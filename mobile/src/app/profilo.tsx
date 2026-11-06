@@ -1,6 +1,5 @@
 import Constants from 'expo-constants';
 import * as Linking from 'expo-linking';
-import { router } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -13,7 +12,7 @@ import { Campo } from '@/componenti/Campo';
 import { informa } from '@/componenti/dialoghi';
 import { Icona } from '@/componenti/Icona';
 import { Caricamento, Errore } from '@/componenti/Stato';
-import { Avviso, Bottone } from '@/componenti/ui';
+import { Avviso } from '@/componenti/ui';
 import { useProfilo } from '@/dati';
 import { useSessione } from '@/sessione';
 import { FONT, useTema } from '@/tema';
@@ -35,10 +34,10 @@ function Elenco({ voci }: { voci: string[] }) {
 
 // "La mia anagrafica" come sul sito (views/cliente/profilo.ejs): schede in sola lettura (nome, distributore, dati di fatturazione, contatti), l'accesso con il cambio della
 // password, "Sul telefono" con gli avvisi, e in fondo l'eliminazione dell'account (richiesta da Google Play e dall'App Store per le app con registrazione). In più, solo
-// nell'app, le informazioni (privacy, assistenza, versione) e il pulsante Esci, che sul sito stanno nel menu del profilo.
+// nell'app, le informazioni (privacy, assistenza, versione). «Esci» non è qui: come sul sito sta nel menu del profilo (PulsanteAccount).
 export default function Profilo() {
   const { c } = useTema();
-  const { utente, esci, eliminaAccount } = useSessione();
+  const { utente, eliminaAccount } = useSessione();
   const q = useProfilo();
   const [eliminando, setEliminando] = useState(false);
   const [password, setPassword] = useState('');
@@ -166,15 +165,6 @@ export default function Profilo() {
           ) : null}
           <RigaAn icona="info" etichetta="Versione dell’app" valore={Constants.expoConfig?.version || ''} />
         </SchedaAn>
-
-        <Bottone
-          titolo="Esci"
-          tipo="chiaro"
-          onPress={async () => {
-            if (router.canGoBack()) router.back();
-            await esci();
-          }}
-        />
 
         {/* Elimina account: chiusa è un avviso e un pulsante; aperta spiega cosa si cancella e cosa resta (come la pagina /profilo/elimina) e chiede la password. */}
         <SchedaAn titolo={eliminando ? 'Vuoi eliminare il tuo account?' : 'Elimina account'} pericolo>

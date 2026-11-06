@@ -4,6 +4,7 @@ import { usePezziNelCarrello } from '@/carrello';
 import { intestazione } from '@/componenti/BarraTitolo';
 import { Icona } from '@/componenti/Icona';
 import { EtichettaStatoOrdini, IconaStatoOrdini } from '@/componenti/NavStatoOrdini';
+import { PulsanteAccount } from '@/componenti/PulsanteAccount';
 import { useAttivitaInCorso } from '@/dati';
 import { FONT, useTema } from '@/tema';
 
@@ -45,6 +46,8 @@ export default function Schede() {
         name="carrello"
         options={{
           title: 'Carrello',
+          // Il pulsante del profilo e il suo menu ci sono in ogni pagina del cliente, anche nel carrello (views/partials/comune/appbar.ejs).
+          headerRight: () => <PulsanteAccount />,
           tabBarIcon: ({ color }) => <Icona nome="carrello" colore={color} />,
           tabBarBadge: pezzi > 0 ? pezzi : undefined,
           tabBarBadgeStyle: { backgroundColor: c.rosso, color: '#fff', fontFamily: FONT.testoForte, fontSize: 11 },
