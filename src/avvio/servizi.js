@@ -5,6 +5,8 @@ const flusso = require('../logica/ordini/flusso_cliente');
 const stripePagamenti = require('../logica/pagamenti/stripe_pagamenti');
 const webPush = require('../logica/notifiche/web_push');
 const whatsapp = require('../logica/whatsapp/whatsapp');
+const modalita = require('../logica/ordini/modalita_corrieri');
+const { descriviIndirizzoDatabase } = require('../comune/indirizzo_database');
 
 // Un solo giro alla volta: se il DB è lento e uno dura più di 30 s, il successivo aspetta invece di sovrapporsi (le scritture sono atomiche, ma due giri
 // insieme raddoppiano inutilmente il carico).
@@ -33,11 +35,27 @@ function avviaControlloScadenze() {
   setInterval(controllaScadenze, 30 * 1000).unref();
 }
 
-// Scrive nel log come sono configurati Stripe e le notifiche: meglio accorgersi di un .env incompleto all'avvio che al primo cliente.
+// Controlla, prima di partire, che i corrieri arrivino da un solo posto: l'app (CORRIERI_APP=1) o il gruppo WhatsApp (WHATSAPP_ATTIVO=1), mai tutti e due
+// (ogni consegna andrebbe in due posti e due corrieri potrebbero prenderla). Ritorna il testo dell'errore, o null se va bene: se c'è, server.js non parte.
+function controllaModalitaCorrieri() {
+  return modalita.erroreConfigurazione();
+}
+
+// Scrive nel log come sono configurati il database, Stripe, le notifiche e i corrieri: meglio accorgersi di un .env sbagliato o incompleto all'avvio che al
+// primo cliente. Il database si scrive senza utente né password: con due ambienti sulla stessa macchina (docs/ambienti.md) è la prima riga da controllare.
 function descriviServizi() {
+  console.log('[db] database: ' + (descriviIndirizzoDatabase(process.env.DATABASE_URL) || 'DATABASE_URL non scritta nel .env: si prova il Postgres di default sul computer'));
   if (stripePagamenti.attivo()) console.log('[stripe] ' + stripePagamenti.descrizioneModo());
   for (const avviso of stripePagamenti.controllaConfigurazione()) console.warn('[stripe] ' + avviso);
   console.log(webPush.descriviConfigurazione());
+  console.log(
+    '[corrieri] ' +
+      (modalita.appAttiva()
+        ? 'ambiente «app»: le consegne vanno ai corrieri nella loro app (CORRIERI_APP=1)'
+        : whatsapp.attivo()
+        ? 'ambiente «reale»: le consegne vanno al gruppo WhatsApp dei corrieri'
+        : 'nessun canale per i corrieri: il banco conferma e l\'ordine nasce subito')
+  );
 }
 
 // Avvia il gruppo WhatsApp dei corrieri: si collega solo con WHATSAPP_ATTIVO=1 (vedi src/logica/whatsapp/whatsapp.js).
@@ -49,6 +67,7 @@ function avviaWhatsapp() {
 
 module.exports = {
   avviaControlloScadenze,
+  controllaModalitaCorrieri,
   descriviServizi,
   avviaWhatsapp,
 };

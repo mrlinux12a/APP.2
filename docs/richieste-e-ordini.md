@@ -27,7 +27,7 @@ Estratto da [`CLAUDE.md`](../CLAUDE.md) nel riordino della documentazione (31/10
   "riepilogo / Invia l'ordine", finestra di scelta, assegnatore a tolleranza, ritiro al banco: l'ordine
   nasce da solo (`richieste.assegnaOrdine` → `flusso_cliente.creaOrdineDaRisposta`) quando una risposta
   del banco è valida (`OFFERTA_VISIBILE`: senza corriere, o con `corriere_stato = 'preso'`), cioè subito
-  dopo `rispondi()` a modulo spento e subito dopo `corriereHaPreso()` con WhatsApp. Se la creazione
+  dopo `rispondi()` a modulo spento e subito dopo `corriereHaPreso()` con WhatsApp (o `corriereAccetta()` con l'app dei corrieri, ambiente «app»: `rispondi` aspetta un corriere con `modalita.conCorriere()`, cioè se `CORRIERI_APP=1` o `WHATSAPP_ATTIVO=1`; vedi [ambienti.md](ambienti.md) e [app-corrieri.md](app-corrieri.md)). Se la creazione
   fallisce la riprova `aggiornaScadenzeAperte` (timer di 30 s, **non** la lettura della richiesta:
   `aggiornaScadenza` ora chiude solo le finestre). L'assegnatore si registra in `src/logica/ordini/flusso_cliente.js`:
   uno script che usa solo `src/logica/ordini/richieste.js` non lo ha (anche `scripts/verifica/prova_whatsapp.js` lo importa).

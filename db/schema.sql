@@ -754,3 +754,14 @@ CREATE INDEX IF NOT EXISTS idx_users_supervisore ON users(supervisore_id) WHERE 
 ALTER TABLE request_responses ADD COLUMN IF NOT EXISTS corriere_id INTEGER REFERENCES users(id);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS corriere_id INTEGER REFERENCES users(id);
 CREATE INDEX IF NOT EXISTS idx_orders_corriere ON orders(corriere_id) WHERE corriere_id IS NOT NULL;
+
+-- App dei corrieri: disponibilita', tragitto e ritiro (06/11/2026)
+-- Servono SOLO all'installazione "app" (CORRIERI_APP=1, vedi docs/ambienti.md): quella col gruppo WhatsApp non le legge ne' le scrive, e il suo database puo'
+-- restare com'e'. `users.corriere_disponibile`: 1 = il corriere ha acceso "Sei disponibile" e riceve le richieste, 0 = no (all'inizio e dopo l'uscita dall'app).
+-- `request_responses.consegna_km`: km del tragitto banco -> cantiere, scritti quando il banco conferma (accanto a consegna_minuti_stimati); `corriere_km`: km
+-- dalla posizione del corriere al banco, scritti quando accetta (accanto a corriere_minuti). `orders.ritirato_il`: l'istante in cui il corriere ha premuto
+-- "Ho ritirato il materiale" (NULL = non ancora ritirato). Nessun dato esistente cambia. Il blocco si puo' rilanciare.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS corriere_disponibile INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE request_responses ADD COLUMN IF NOT EXISTS consegna_km NUMERIC(6,1);
+ALTER TABLE request_responses ADD COLUMN IF NOT EXISTS corriere_km NUMERIC(6,1);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS ritirato_il TIMESTAMPTZ;

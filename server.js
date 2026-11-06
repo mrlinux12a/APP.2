@@ -12,6 +12,13 @@ const { creaApp } = require('./src/app');
 const processo = require('./src/avvio/processo');
 const servizi = require('./src/avvio/servizi');
 
+// I corrieri arrivano o dall'app o da WhatsApp, mai da tutti e due: con un .env che li accende insieme il server non parte (docs/ambienti.md).
+const erroreCorrieri = servizi.controllaModalitaCorrieri();
+if (erroreCorrieri) {
+  console.error('[config] ' + erroreCorrieri);
+  process.exit(1);
+}
+
 const app = creaApp();
 
 processo.installaGestoriProcesso();

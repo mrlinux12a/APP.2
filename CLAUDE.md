@@ -21,7 +21,8 @@ Leggi il file **prima** di modificare quella parte: ogni file porta le scelte es
 | Notifiche | [docs/notifiche.md](docs/notifiche.md) | notifiche in-app e Web Push ad app chiusa |
 | Gruppo WhatsApp dei corrieri | [docs/whatsapp.md](docs/whatsapp.md) | `src/logica/whatsapp/whatsapp.js`, sondaggi, "preso", istanza proprietaria |
 | App nativa e Android | [docs/app-nativa.md](docs/app-nativa.md) | `mobile/`, API `/api/v1`, pagamento nell'app, test di sicurezza |
-| App dei corrieri | [docs/app-corrieri.md](docs/app-corrieri.md) | ruoli `corriere` e `supervisore_corrieri`, `corriere_id`, utente di prova, script per crearne, accesso e registrazione del corriere (solo nell'app, con l'email; il sito li rifiuta), cosa manca per sostituire WhatsApp |
+| App dei corrieri | [docs/app-corrieri.md](docs/app-corrieri.md) | ruoli `corriere` e `supervisore_corrieri`, `corriere_id`, utente di prova, script per crearne, accesso e registrazione del corriere (solo nell'app, con l'email; il sito li rifiuta), le schermate di lavoro (richieste, accetta, ritiro, consegna), l'API `/api/v1/corrieri`, le notifiche, punti aperti; **funziona solo nell'ambiente «app»** |
+| Due ambienti: «reale» e «app» | [docs/ambienti.md](docs/ambienti.md) | l'interruttore `CORRIERI_APP=1`, i due `.env`, il database nuovo e la copia del catalogo (`scripts/ambiente_app/prepara_database.js`), il controllo `scripts/verifica/ambiente.js`, i passi sulla VPS, le prove in locale con database `prova_…`, come passare il reale all'app |
 | Convenzioni web e audit | [docs/convenzioni-web-e-audit.md](docs/convenzioni-web-e-audit.md) | `src/comune/http.js`, `src/middleware/errori.js`, input, accesso, fusi orari, cache degli asset, PWA, CSS, come si provano le cose |
 | Banco: home | [docs/banco/home-e-aggiornamento.md](docs/banco/home-e-aggiornamento.md) | bacheca a 3 colonne, aggiornamento automatico |
 | Banco: richiesta e ordine | [docs/banco/richiesta-e-ordine.md](docs/banco/richiesta-e-ordine.md) | dettaglio richiesta, pagina dell'ordine (da preparare / in consegna / consegnato) |
@@ -42,15 +43,15 @@ server.js        avvio: ambiente, database, app, cicli di vita (l'app Express si
 src/config/      ambiente, viste, soglie dei limiti e della bacheca
 src/middleware/  un file per ogni passo dell'app (sicurezza, limiti, sessione, corpo, origine, auth, errori, percorso...)
 src/routes/      solo HTTP (nessuna query SQL: stanno tutte in logica/): una cartella per interfaccia, routes/cliente/ (pagine e API dell'installatore) e routes/banco/ (pagine del banco), più routes/api_v1/ (API dell'app); fuori dalle cartelle i file usati da più ruoli (autenticazione, notifiche, eventi, webhook_stripe) e agente
-src/logica/      la logica di business, una cartella per area: account/ · banco/ · catalogo/ · notifiche/ · ordini/ (flusso_cliente, richieste, consegna...) · pagamenti/ (pricing, Stripe...) · whatsapp/
+src/logica/      la logica di business, una cartella per area: account/ · banco/ · catalogo/ · corrieri/ (l'app dei corrieri, solo ambiente «app») · notifiche/ · ordini/ (flusso_cliente, richieste, consegna, modalita_corrieri, tappe...) · pagamenti/ (pricing, Stripe...) · whatsapp/
 src/comune/      pezzi senza database usati ovunque (format, http, input, memo, icone, testi_legali, url_sito)
 src/avvio/       ciò che parte con il server: processo (errori, porta, chiusura), servizi (scadenze, Stripe, WhatsApp), database
 db/              index.js (unico accesso a Postgres), resilienza.js, schema.sql, seed.js
-scripts/         db/ (schema, config, listini, sottocategorie) · una_tantum/ (migrazioni sul DB condiviso) · genera/ (icone, suono) · setup/ (chiavi VAPID, file Apple Pay) · verifica/ (prove e controlli: `verifica_stripe`, `stato_orari`, `prova_tragitto` solo leggono; `prova_push` e `prova_whatsapp` mandano messaggi veri)
+scripts/         db/ (schema, config, listini, sottocategorie) · ambiente_app/ (copia del catalogo nel database dell'ambiente «app») · una_tantum/ (migrazioni sul DB condiviso) · genera/ (icone, suono) · setup/ (chiavi VAPID, file Apple Pay) · verifica/ (prove e controlli: `verifica_stripe`, `stato_orari`, `prova_tragitto`, `ambiente` solo leggono; `prova_push` e `prova_whatsapp` mandano messaggi veri)
 views/           pagine EJS per area: auth/ · cliente/ · banco/ · agente/ · comune/ · partials/<area>/ (gli `include` sono relativi al file che li chiama, es. `../partials/comune/app_head`)
 assets/          js/ e css/: i pezzi (numerati, uno per argomento) di app.js e style.css, che il server riunisce in un solo file (src/comune/asset_composti.js)
 public/          sw.js, manifest, icone, mappa.js, pagamento.js, landing.css e landing.js (la landing, vedi docs/landing.md), img/, vendor/: file serviti così come sono
-test/            node:test (`npm test`): una cartella per area (come src/logica, più middleware/, db/, comune/); sito/ ha un file per argomento che avvia il vero server con un DB finto (preparato in sito/_aiuti/server_finto.js)
+test/            node:test (`npm test`): una cartella per area (come src/logica, più middleware/, db/, comune/, ambiente_app/); sito/ ha un file per argomento che avvia il vero server con un DB finto (preparato in sito/_aiuti/server_finto.js)
 mobile/          app React Native / Expo (ha il suo CLAUDE.md)
 docs/            questa documentazione, divisa per argomento
 backup/          copie di sicurezza degli script una tantum (fuori da git)
@@ -81,6 +82,7 @@ backup/          copie di sicurezza degli script una tantum (fuori da git)
   le variabili WhatsApp). Dopo un `git pull` serve `npm ci` e il riavvio: due processi pm2 sullo stesso
   `server.js` si contendono la porta e, con WhatsApp acceso, la stessa sessione. `npm run seed` è manuale,
   **riscrive le password demo** e riattiva i banchi disattivati.
+- **Due ambienti (06/11/2026, vedi [docs/ambienti.md](docs/ambienti.md))**: lo stesso codice gira in due installazioni, ognuna col suo `.env` e il suo database: **«reale»** (sito + gruppo WhatsApp dei corrieri + banco sul sito: è quello di tutto il resto di questo file) e **«app»** (app degli installatori + app dei corrieri + banco sul sito, database nuovo con catalogo e listini copiati dal reale, solo sandbox di Stripe). L'unico interruttore è `CORRIERI_APP=1` (`src/logica/ordini/modalita_corrieri.js`): senza, tutto resta com'era e le rotte `/api/v1/corrieri/*` danno 404; con `CORRIERI_APP=1` e `WHATSAPP_ATTIVO=1` insieme il server non parte. **Il `.env` del PC (database condiviso = reale) non deve mai avere `CORRIERI_APP=1`**; le prove dei corrieri si fanno solo su un database locale `prova_…` (`TEST_DATABASE_URL`, vedi la guida). All'avvio il log scrive `[db] database: host:porta/nome` e `[corrieri] ambiente …`: sono le righe da guardare. Il blocco di schema «App dei corrieri: disponibilità, tragitto e ritiro» **non è applicato al database condiviso** (il reale non ne ha bisogno).
 - `.env` locale punta al **database di produzione condiviso** (il Postgres sul server, raggiunto con un **tunnel SSH** su `127.0.0.1:5433` che apre l'utente: senza tunnel gli script e il server locale danno `ECONNREFUSED`), nessun DB di test — girare in
   locale scrive sul DB vero, e il server locale esegue anche il timer delle scadenze (30 s) come
   la VPS: fermarlo quando non serve.

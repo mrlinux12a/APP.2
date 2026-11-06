@@ -2,6 +2,7 @@
 const { creaRouter } = require('../base');
 const utenti = require('../../logica/account/utenti');
 const corrieri = require('../../logica/account/corrieri');
+const consegneCorrieri = require('../../logica/corrieri/consegne');
 const tokenApp = require('../../logica/account/token_app');
 const anagrafiche = require('../../logica/account/anagrafiche');
 const push = require('../../logica/notifiche/push');
@@ -67,6 +68,8 @@ router.post('/logout', async (req, res) => {
   const tokenPush = req.body && req.body.token_push;
   if (utente && tokenPush) await push.rimuovi(tokenPush, utente.id).catch(() => {});
   await tokenApp.revocaToken(token);
+  // Un corriere che esce non è più raggiungibile: «Sei disponibile» si spegne da solo (rientrando lo riaccende lui). Non lancia mai.
+  if (utente && utente.ruolo === corrieri.RUOLO_CORRIERE) await consegneCorrieri.esciDalServizio(utente.id);
   res.json({ ok: true });
 });
 

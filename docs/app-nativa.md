@@ -11,12 +11,13 @@ Panoramica e avvio in README. Qui solo ciò che non si deduce dal codice.
   cambiano a ogni SDK: guida e regole in `mobile/AGENTS.md`, doc versionata prima di scrivere.
 - `src/routes/api_v1/` è montata in `src/app.js` **prima** di controllo origine, sessione e middleware
   `res.locals`: solo token Bearer (`src/logica/account/token_app.js`), CORS aperto (nessun cookie in gioco).
-  `/api/v1/login` rifiuta i ruoli diversi da `cliente` («Questo account non è un account installatore»): i corrieri hanno un accesso e una registrazione a parte, solo nell'app (`/api/v1/corrieri/*`, schermate `accesso-corriere`, `registrati-corriere`, `corriere`, selettore «Installatore | Corriere»): [app-corrieri.md](app-corrieri.md).
+  `/api/v1/login` rifiuta i ruoli diversi da `cliente` («Questo account non è un account installatore»): i corrieri hanno un accesso e una registrazione a parte, solo nell'app (`/api/v1/corrieri/*`, accesso unico con due metà che scorrono nel `login`, `registrati-corriere`, l'area `corriere/` con le sue quattro schede, selettore «Installatore | Corriere» animato): [app-corrieri.md](app-corrieri.md). **Le rotte dei corrieri esistono solo nell'ambiente «app»** (`CORRIERI_APP=1`, 404 altrove): un'app costruita parla con **un solo** server, quello scritto nella build (`EXPO_PUBLIC_API_URL`), quindi l'app dei corrieri funziona solo contro un server dell'ambiente «app» ([ambienti.md](ambienti.md)).
 - Logica condivisa col sito, non duplicata: tutto il flusso richiesta pagata → ordine →
   stato ordini in **`src/logica/ordini/flusso_cliente.js`** (le route di `server.js` fanno solo render/redirect:
   non rimetterci logica), più `src/logica/catalogo/prodotto_json.js` e `src/logica/account/limite_login.js`.
 - `EXPO_PUBLIC_API_URL` si imposta in `mobile/.env.local` (Expo legge i `.env` solo da `mobile/`,
-  non da quello alla radice, che è del server): senza, l'app cerca il server sul PC.
+  non da quello alla radice, che è del server): senza, l'app cerca il server sul PC. Nelle build (`mobile/eas.json`) il profilo `preview` è quello dell'ambiente «app» di prova e `production` quello del reale: entrambi hanno ancora il segnaposto `https://INSERISCI-IL-DOMINIO.invalid` e si compilano a mano (vedi [ambienti.md](ambienti.md), «L'app sul telefono»).
+- **Posizione (06/11/2026)**: `expo-location` (`mobile/app.json`), solo con l'app aperta, senza permessi in background; la usa solo l'area del corriere (`mobile/src/corriere/posizione.tsx`). Dipendenza nuova: `@expo-google-fonts/manrope` (il font delle schermate del corriere).
 - Carrello sul telefono (AsyncStorage per utente), totali ricalcolati dal server (con 300 ms di
   attesa fra un tocco e l'altro). Stato in `mobile/src/negozio.ts` con abbonamento per
   selettore: con un Context normale ogni "+" ridisegnava tutto l'elenco — non tornarci.

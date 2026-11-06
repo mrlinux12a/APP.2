@@ -1,7 +1,11 @@
-// L'API dell'app per i corrieri (`/api/v1/corrieri/...`): registrazione, accesso, "chi sono" e password dimenticata. Esiste SOLO per l'app nativa: il sito non ha
-// nessuna pagina per i corrieri (vedi docs/app-corrieri.md). Stesso token (`app_tokens`), stessi limiti di tentativi e stessi messaggi dell'accesso degli
-// installatori; l'uscita è la `/logout` comune.
+// L'API dell'app per i corrieri (`/api/v1/corrieri/...`): registrazione, accesso, "chi sono" e password dimenticata, più il lavoro vero e proprio (richieste,
+// accettazione, ritiro, consegna) che sta in corrieri_consegne.js. Esiste SOLO per l'app nativa: il sito non ha nessuna pagina per i corrieri (vedi
+// docs/app-corrieri.md). Stesso token (`app_tokens`), stessi limiti di tentativi e stessi messaggi dell'accesso degli installatori; l'uscita è la `/logout` comune.
+//
+// Esiste SOLO nell'ambiente «app» (CORRIERI_APP=1, docs/ambienti.md): nell'ambiente reale i corrieri stanno su WhatsApp e tutto `/corrieri/...` risponde 404, come
+// un indirizzo qualsiasi.
 const { creaRouter } = require('../base');
+const modalita = require('../../logica/ordini/modalita_corrieri');
 const corrieri = require('../../logica/account/corrieri');
 const tokenApp = require('../../logica/account/token_app');
 const recuperoPassword = require('../../logica/account/recupero_password');
@@ -12,6 +16,12 @@ const limiti = require('../../middleware/limiti');
 const { richiedeCorriere, utenteCorriereJson } = require('./ausiliari');
 
 const router = creaRouter();
+
+// Il cancello: senza CORRIERI_APP=1 nessuna rotta dei corrieri esiste (nemmeno registrazione e accesso). Si legge a ogni richiesta, non una volta all'avvio.
+router.use('/corrieri', (req, res, next) => {
+  if (modalita.appAttiva()) return next();
+  res.status(404).json({ errore: 'Risorsa non trovata.' });
+});
 
 // Registrazione: nome, cognome, email e password. Si entra subito (arriva il token), senza un secondo passaggio dall'accesso. Con dati sbagliati risponde
 // 400 con `errori` ([{ testo, campi }]) e l'app segna i campi.
@@ -85,5 +95,8 @@ router.post('/corrieri/password-dimenticata', limiti.accesso, async (req, res) =
   });
   res.json({ ok: true, minuti_validita: recuperoPassword.VALIDITA_MIN });
 });
+
+// Il lavoro del corriere: disponibilità, richieste, accettazione, ritiro, consegna, notifiche sul telefono.
+router.use(require('./corrieri_consegne'));
 
 module.exports = router;

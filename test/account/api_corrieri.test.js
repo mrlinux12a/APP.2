@@ -11,6 +11,8 @@ const bcrypt = require('bcryptjs');
 // I limiti per indirizzo (express-rate-limit) restano spenti: qui si provano i contatori per utente di limite_login.
 process.env.LIMITE_RICHIESTE_DISATTIVATO = '1';
 process.env.APP_URL = '';
+// L'API dei corrieri esiste solo nell'ambiente «app» (docs/ambienti.md): qui si prova quello. Il comportamento senza (404) lo prova l'ultimo test del file.
+process.env.CORRIERI_APP = '1';
 
 const impronta = (t) => crypto.createHash('sha256').update(t).digest('hex');
 
@@ -315,4 +317,25 @@ test('password-dimenticata: troppe richieste dalla stessa email -> 429', async (
     if (ultimo.status === 429) break;
   }
   assert.equal(ultimo.status, 429);
+});
+
+// ---------------- ambiente senza l'app dei corrieri ----------------
+
+test('senza CORRIERI_APP=1 nessuna rotta dei corrieri esiste (404, anche registrazione e accesso): l\'ambiente reale non cambia', async () => {
+  utenti.push(corriere());
+  const prima = process.env.CORRIERI_APP;
+  delete process.env.CORRIERI_APP;
+  try {
+    for (const percorso of ['/corrieri/registrati', '/corrieri/accedi', '/corrieri/password-dimenticata']) {
+      const r = await post(percorso, { nome: 'Marco', cognome: 'Bianchi', email: 'marco@example.com', password: 'password-giusta' });
+      assert.equal(r.status, 404, percorso);
+      assert.deepEqual(await r.json(), { errore: 'Risorsa non trovata.' });
+    }
+    assert.equal((await fetch(base + '/corrieri/me')).status, 404);
+    assert.equal((await fetch(base + '/corrieri/richieste')).status, 404);
+    assert.equal(utenti.length, 1, 'niente account creato');
+    assert.equal(inserimenti.length, 0, 'niente token');
+  } finally {
+    process.env.CORRIERI_APP = prima;
+  }
 });

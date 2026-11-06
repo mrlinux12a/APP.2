@@ -68,6 +68,8 @@ commit tocca lo schema (`db/schema.sql`), il blocco nuovo si applica una volta s
 perché funzionino il service worker (`public/sw.js`), le notifiche su Chrome Android e l'installazione
 sulla schermata Home (`public/manifest.webmanifest`); in HTTP semplice il sito va, ma senza queste tre cose.
 
+**Due ambienti.** Oltre a questo («reale»: sito, gruppo WhatsApp dei corrieri, banco sul sito) si può installare un secondo ambiente, **«app»** (app mobile di installatori e corrieri, banco sul sito), in una seconda cartella con un suo `.env` (`CORRIERI_APP=1`, WhatsApp spento, solo la sandbox di Stripe), un suo database e un suo processo pm2: i passi, lo script che copia il catalogo e i controlli sono in [`docs/ambienti.md`](docs/ambienti.md). L'ambiente reale non cambia se non lo aggiorni tu.
+
 Le prove automatiche (`npm test`, senza dipendenze nuove) non toccano il database vero: vedi la sezione
 «Audit web del 05/10/2026» di `CLAUDE.md`.
 

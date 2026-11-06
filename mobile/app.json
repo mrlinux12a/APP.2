@@ -41,6 +41,17 @@
       "expo-router",
       "expo-status-bar",
       "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Flash Delivery usa la tua posizione, solo mentre l’app è aperta, per calcolare quanto manca al banco e al cantiere quando accetti una consegna.",
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false,
+          "motionUsagePermission": false,
+          "isAndroidBackgroundLocationEnabled": false,
+          "isIosBackgroundLocationEnabled": false
+        }
+      ],
       "expo-image",
       "expo-font",
       [

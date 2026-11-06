@@ -1,3 +1,7 @@
+import { Manrope_500Medium } from '@expo-google-fonts/manrope/500Medium';
+import { Manrope_600SemiBold } from '@expo-google-fonts/manrope/600SemiBold';
+import { Manrope_700Bold } from '@expo-google-fonts/manrope/700Bold';
+import { Manrope_800ExtraBold } from '@expo-google-fonts/manrope/800ExtraBold';
 import { Sora_600SemiBold } from '@expo-google-fonts/sora/600SemiBold';
 import { Sora_700Bold } from '@expo-google-fonts/sora/700Bold';
 import { Sora_800ExtraBold } from '@expo-google-fonts/sora/800ExtraBold';
@@ -43,9 +47,9 @@ function Navigazione() {
   const eCliente = !!utente && utente.ruolo === 'cliente';
   const eCorriere = !!utente && utente.ruolo === 'corriere';
 
-  // Le notifiche push servono all'installatore: registra il telefono e porta alla richiesta o all'ordine quando si tocca una notifica. Il corriere non ne ha
-  // ancora (le sue arriveranno con le consegne): così non gli si chiede nemmeno il permesso.
-  useNotifichePush(eCliente && utente ? utente.id : null);
+  // Le notifiche push: registrano il telefono e portano alla schermata giusta quando si tocca una notifica. L'installatore le riceve per richieste e ordini, il
+  // corriere per le nuove richieste di consegna (il suo telefono si registra sull'API dei corrieri).
+  useNotifichePush(utente && (eCliente || eCorriere) ? utente.id : null, eCorriere ? 'corriere' : 'cliente');
 
   // All'uscita si butta la cache: chi entra dopo sullo stesso telefono non deve vedere,
   // nemmeno per un attimo, dati letti con l'account precedente.
@@ -96,15 +100,14 @@ function Navigazione() {
             })}
           />
         </Stack.Protected>
-        {/* La schermata del corriere (solo nell'app). */}
+        {/* L'area del corriere (solo nell'app): src/app/corriere/, con le sue quattro schede. */}
         <Stack.Protected guard={eCorriere}>
           <Stack.Screen name="corriere" />
         </Stack.Protected>
-        {/* Accesso e registrazione, dell'installatore e del corriere: si passa dall'uno all'altro con il selettore in cima. */}
+        {/* L'accesso è una schermata sola per installatore e corriere (le due metà scorrono con il selettore); le registrazioni sono due. */}
         <Stack.Protected guard={!utente}>
           <Stack.Screen name="login" />
           <Stack.Screen name="registrati" />
-          <Stack.Screen name="accesso-corriere" />
           <Stack.Screen name="registrati-corriere" />
         </Stack.Protected>
       </Stack>
@@ -129,6 +132,11 @@ export default function Radice() {
     Sora_600SemiBold,
     Sora_700Bold,
     Sora_800ExtraBold,
+    // Manrope: il font delle schermate di lavoro del corriere (src/corriere/tema.ts).
+    Manrope_500Medium,
+    Manrope_600SemiBold,
+    Manrope_700Bold,
+    Manrope_800ExtraBold,
     SourceSans3_400Regular,
     SourceSans3_600SemiBold,
     SourceSans3_700Bold,

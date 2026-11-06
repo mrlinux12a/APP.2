@@ -107,4 +107,4 @@ function inParole(minuti) {
   return `${parteOre} e ${resto} minuti`;
 }
 
-module.exports = { minutiStimati, inParole, FATTORE_STRADA };
+module.exports = { minutiStimati, inParole, FATTORE_STRADA, velocitaMedia };

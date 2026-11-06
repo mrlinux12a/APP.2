@@ -3,6 +3,7 @@ const { calcolaOrdine, calcolaDaRigheDb, getFinestraMinuti, getFinestraMinutiTes
 const whatsapp = require('../whatsapp/whatsapp');
 const pagamenti = require('../pagamenti/pagamenti');
 const orari = require('./orari');
+const modalita = require('./modalita_corrieri');
 const format = require('../../comune/format');
 
 // Con il corriere via WhatsApp il banco accetta, ma l'offerta esiste per l'installatore solo quando
@@ -326,6 +327,11 @@ async function reinviaRichiesta(requestId, { metodoPagamento = pagamenti.METODO_
         WHERE request_id = ?`
     ).run(requestId);
 
+    // App dei corrieri: il corriere e i km di prima non valgono più (colonne presenti solo nel database dell'ambiente «app»).
+    if (modalita.appAttiva()) {
+      await db.prepare('UPDATE request_responses SET corriere_id = NULL, corriere_km = NULL, consegna_km = NULL WHERE request_id = ?').run(requestId);
+    }
+
     await db.prepare(
       `DELETE FROM request_response_items WHERE response_id IN
         (SELECT id FROM request_responses WHERE request_id = ?)`
@@ -583,6 +589,12 @@ async function corriereHaPreso(responseId, minuti, nome) {
     return { esito: 'scaduta' };
   }
 
+  return ordineDaPreso(responseId, risposta);
+}
+
+// Dopo che una risposta è passata a 'preso' (da WhatsApp o dall'app): fa nascere l'ordine. Esiti come corriereHaPreso: { esito: 'preso', ordineId? } oppure
+// { esito: 'scaduta' }.
+async function ordineDaPreso(responseId, risposta) {
   let ordineId;
   try {
     ordineId = await assegnaOrdine(risposta.request_id, risposta);
@@ -599,6 +611,59 @@ async function corriereHaPreso(responseId, minuti, nome) {
     return { esito: 'scaduta' };
   }
   return { esito: 'preso', ordineId };
+}
+
+// Un corriere dell'APP accetta la consegna (src/logica/corrieri/consegne.js). Fa quello che fa corriereHaPreso per WhatsApp e in più scrive QUALE corriere è
+// (`corriere_id`) e i km fino al banco, e garantisce che un corriere abbia una consegna sola alla volta. `minuti` e `km` sono il tragitto dalla sua posizione al
+// banco, calcolato dal server; `nome` è il suo nome, come lo vedono banco e installatore. Ripetere la stessa accettazione (doppio tocco, risposta persa) non
+// fa danni: dà lo stesso esito. Esiti:
+//   { esito: 'preso', ordineId? }   la consegna è sua (l'ordine è nato, o nasce al prossimo giro del timer)
+//   { esito: 'gia_preso', nome }    un altro corriere l'aveva già presa
+//   { esito: 'occupato' }           ha già una consegna in corso
+//   { esito: 'scaduta' }            finestra chiusa, richiesta annullata o già ordinata altrove
+async function corriereAccetta(responseId, corriereId, { minuti, km = null, nome = '' }) {
+  await assicuraTragitto(responseId);
+  const rivendica = db.transaction(async () => {
+    // Le accettazioni dello stesso corriere si mettono in fila: due insieme non possono prendere due consegne.
+    await db.prepare('SELECT id FROM users WHERE id = ? FOR UPDATE').get(corriereId);
+    const gia = await db.prepare('SELECT corriere_id, corriere_stato FROM request_responses WHERE id = ?').get(responseId);
+    if (gia && gia.corriere_stato === 'preso') return gia.corriere_id === corriereId ? 'mia' : 'altrui';
+    const occupato = await db
+      .prepare(
+        `SELECT 1 AS si FROM orders WHERE corriere_id = ? AND consegnato_il IS NULL
+         UNION ALL
+         SELECT 1 FROM request_responses rr JOIN requests rq ON rq.id = rr.request_id
+          WHERE rr.corriere_id = ? AND rr.corriere_stato = 'preso' AND rq.stato = 'in_attesa'
+         LIMIT 1`
+      )
+      .get(corriereId, corriereId);
+    if (occupato) return 'occupato';
+    const preso = await db
+      .prepare(
+        `UPDATE request_responses
+            SET corriere_stato = 'preso', corriere_minuti = ?, corriere_km = ?, corriere_nome = ?, corriere_id = ?, corriere_preso_il = NOW(),
+                consegna_minuti_stimati = COALESCE(consegna_minuti_stimati, 0) + ?
+          WHERE id = ? AND esito = 'confermato' AND corriere_stato = 'in_attesa'
+            AND request_id IN (SELECT id FROM requests WHERE scade_il > NOW() AND stato = 'in_attesa')`
+      )
+      .run(minuti, km, nome || '', corriereId, minuti, responseId);
+    return preso.changes ? 'preso' : 'no';
+  });
+  const esito = await rivendica();
+  if (esito === 'occupato') return { esito: 'occupato' };
+
+  const risposta = await db.prepare('SELECT * FROM request_responses WHERE id = ?').get(responseId);
+  if (esito === 'altrui') return { esito: 'gia_preso', nome: risposta ? risposta.corriere_nome : '' };
+  if (esito === 'no') {
+    if (risposta && risposta.corriere_stato === 'preso') return { esito: 'gia_preso', nome: risposta.corriere_nome };
+    return { esito: 'scaduta' };
+  }
+  if (esito === 'mia') {
+    // Già sua: se l'ordine è nato lo dice, altrimenti lo si prova a far nascere adesso (come farebbe il timer).
+    const richiesta = risposta ? await getRichiesta(risposta.request_id) : null;
+    if (richiesta && richiesta.order_id) return { esito: 'preso', ordineId: richiesta.order_id };
+  }
+  return ordineDaPreso(responseId, risposta);
 }
 
 // Passata utile all'avvio e a ogni tanto: chiude le finestre scadute e riprova gli ordini rimasti a
@@ -708,8 +773,8 @@ async function rispondi(
   const tuttoCoperto = coperture.every((r) => r.quantita_disponibile === r.quantita_richiesta);
   const esito = pezziDisponibili === 0 ? 'non_disponibile' : 'confermato';
   const copertura = tuttoCoperto ? 'totale' : 'parziale';
-  // Con il gruppo WhatsApp acceso la conferma aspetta un corriere prima di arrivare all'installatore.
-  const attesaCorriere = esito === 'confermato' && whatsapp.attivo();
+  // Con il gruppo WhatsApp acceso, o con l'app dei corrieri (modalita_corrieri.js), la conferma aspetta un corriere prima di arrivare all'installatore.
+  const attesaCorriere = esito === 'confermato' && modalita.conCorriere();
 
   // Il tempo di consegna non può precedere quello di partenza.
   // Con un tetto (30 giorni): un numero enorme non entra in una colonna intera (errore "out of range", 500).
@@ -831,15 +896,25 @@ async function rispondi(
       stima.minuti,
       risposta.id
     );
+    // App dei corrieri: i km del tragitto banco → cantiere servono alle schede dell'app (src/logica/corrieri/consegne.js). La colonna c'è solo nel database
+    // dell'ambiente «app», quindi si scrive a parte e solo lì.
+    if (modalita.appAttiva() && stima.km !== null && stima.km !== undefined) {
+      await db.prepare('UPDATE request_responses SET consegna_km = ? WHERE id = ?').run(stima.km, risposta.id);
+    }
 
     // Con il corriere l'installatore non sa ancora niente: nessun ordine e nessuna notifica finché
-    // nel gruppo qualcuno non scrive "preso <minuti>" (corriereHaPreso). Se la finestra scade prima,
-    // la risposta si ritira da sola e il pagamento torna all'installatore.
+    // nel gruppo qualcuno non scrive "preso <minuti>" (corriereHaPreso), o finché un corriere dell'app non accetta (corriereAccetta). Se la finestra scade
+    // prima, la risposta si ritira da sola e il pagamento torna all'installatore.
     if (attesaCorriere) {
-      try {
-        await whatsapp.accodaRitiroConsegna(requestId, risposta.id);
-      } catch (err) {
-        console.error(`[richieste] WhatsApp: messaggio non accodato per la richiesta ${requestId}:`, err.message);
+      if (modalita.appAttiva()) {
+        // Niente messaggio su WhatsApp: la richiesta compare nell'app dei corrieri disponibili, e a loro arriva una notifica (senza aspettarla: non lancia mai).
+        require('../corrieri/avvisi').avvisaNuovaRichiesta(risposta.id).catch(() => {});
+      } else {
+        try {
+          await whatsapp.accodaRitiroConsegna(requestId, risposta.id);
+        } catch (err) {
+          console.error(`[richieste] WhatsApp: messaggio non accodato per la richiesta ${requestId}:`, err.message);
+        }
       }
       return { ok: true, esito, copertura, attesaCorriere: true };
     }
@@ -994,6 +1069,7 @@ module.exports = {
   aggiornaScadenzeAperte,
   rispondi,
   corriereHaPreso,
+  corriereAccetta,
   calcolaOfferta,
   round2,
 };

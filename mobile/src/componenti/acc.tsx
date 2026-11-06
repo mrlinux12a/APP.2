@@ -1,5 +1,6 @@
 // I pezzi comuni delle pagine di accesso e registrazione (views/auth/*.ejs, assets/css/11_accesso_e_registrazione.css): il pulsante grande, la riga di errori e il
 // link in fondo alla pagina.
+import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { FONT, useTema, useTemaAccesso } from '../tema';
@@ -17,6 +18,20 @@ export function PulsanteAcc({ titolo, onPress, inCorso }: { titolo: string; onPr
     >
       {inCorso ? <ActivityIndicator color={t.suAccento} /> : <Text style={[stili.pulsanteTesto, { color: t.suAccento }]}>{titolo}</Text>}
     </Pressable>
+  );
+}
+
+// Una delle due metà dell'accesso (installatore o corriere), larga quanto lo schermo: stanno una accanto all'altra e scorrono quando si cambia con il selettore.
+// Quella fuori vista non si tocca e non la legge nessuno (né il dito né il lettore dello schermo).
+export function PannelloAcc({ larghezza, attivo, children }: { larghezza: number; attivo: boolean; children: ReactNode }) {
+  return (
+    <View
+      style={{ width: larghezza, paddingHorizontal: 20, pointerEvents: attivo ? 'auto' : 'none' }}
+      aria-hidden={!attivo}
+      importantForAccessibility={attivo ? 'auto' : 'no-hide-descendants'}
+    >
+      {children}
+    </View>
   );
 }
 

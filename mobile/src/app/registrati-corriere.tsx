@@ -39,8 +39,8 @@ export default function RegistratiCorriere() {
   const sbagliato = (k: string) => errori.some((e) => e.campi.includes(k));
   const testoErrore = (k: string) => errori.find((e) => e.campi.includes(k))?.testo;
 
-  // Indietro: alla schermata di prima; se non ce n'è una (si è arrivati con il selettore) all'accesso dei corrieri.
-  const indietro = () => (router.canGoBack() ? router.back() : router.replace('/accesso-corriere'));
+  // Indietro: alla schermata di prima; se non ce n'è una (si è arrivati con il selettore) all'accesso (che mostra quello dei corrieri: il profilo ricordato è il loro).
+  const indietro = () => (router.canGoBack() ? router.back() : router.replace('/login'));
 
   const invia = async () => {
     const mancanti = MANCANTI.filter(([k]) => !(k === 'password' ? dati[k] || '' : (dati[k] || '').trim()));

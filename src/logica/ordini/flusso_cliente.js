@@ -476,6 +476,8 @@ async function creaOrdineDaRisposta(richiesta, risposta) {
                 corriere_arrivo_il = COALESCE(?::timestamptz, NOW()) + (? * INTERVAL '1 minute')
           WHERE id = ?`
       ).run(risposta.corriere_minuti, risposta.corriere_nome || '', risposta.corriere_preso_il, risposta.corriere_preso_il, minutiConsegna(risposta), orderId);
+      // Consegna presa da un corriere dell'APP: l'ordine porta anche QUALE corriere è (su WhatsApp resta vuoto).
+      if (risposta.corriere_id) await db.prepare('UPDATE orders SET corriere_id = ? WHERE id = ?').run(risposta.corriere_id, orderId);
     }
     // Chiuso l'ordine, gli altri banchi non devono più poter rispondere.
     await db.prepare(
@@ -504,7 +506,8 @@ async function creaOrdineDaRisposta(richiesta, risposta) {
   // Al banco l'ordine arriva già pagato: deve solo prepararlo.
   await notifiche.notificaDistributore(distributorId, {
     titolo: 'Nuovo ordine da preparare',
-    testo: `${cliente.ragione_sociale} — ordine #${orderId}, già pagato.${ritiro ? ` Il corriere ritira alle ${ritiro}.` : ''}`,
+    // Con il corriere dell'app (corriere_id) il banco sa anche chi aspettare.
+    testo: `${cliente.ragione_sociale} — ordine #${orderId}, già pagato.${ritiro ? ` ${risposta.corriere_id && risposta.corriere_nome ? `Il corriere ${risposta.corriere_nome}` : 'Il corriere'} ritira alle ${ritiro}.` : ''}`,
     link: '/distributore/ordini/' + orderId,
     categoria: 'ordini',
     sottostato: 'in_approvazione',
