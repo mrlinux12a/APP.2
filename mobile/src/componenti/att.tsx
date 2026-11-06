@@ -205,6 +205,24 @@ export function SchedaBanco({ occhiello, nome, destra }: { occhiello: string; no
   );
 }
 
+// La scheda "Consegna in cantiere": sta SOTTO la scheda del banco ("Banco interpellato" / "Materiale da") in ogni fase e porta l'indirizzo scritto nell'ordine,
+// con la stessa forma della scheda del banco (icona della posizione, occhiello, indirizzo che va a capo se è lungo). Senza indirizzo non si disegna.
+export function SchedaConsegna({ indirizzo }: { indirizzo?: string | null }) {
+  const { c } = useTema();
+  if (!indirizzo || !indirizzo.trim()) return null;
+  return (
+    <CardAtt stile={stili.banco}>
+      <View style={stili.bancoIcona}>
+        <Icona nome="posizione" colore={c.grigio} dimensione={20} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={[stili.occhiello, { color: c.grigio }]}>Consegna in cantiere</Text>
+        <Text style={[stili.consegnaIndirizzo, { color: c.testo }]}>{indirizzo.trim()}</Text>
+      </View>
+    </CardAtt>
+  );
+}
+
 // "Sta verificando" / "Disponibile" / "Non disponibile" / "Nessuna risposta" con il suo puntino colorato (.stato-badge dentro #stato-distributori).
 export function BadgeBanco({ testo, esito }: { testo: string; esito: string }) {
   const { c } = useTema();
@@ -415,6 +433,7 @@ const stili = StyleSheet.create({
   banco: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingVertical: 10, paddingHorizontal: 14 },
   bancoIcona: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#f1efea', alignItems: 'center', justifyContent: 'center' },
   bancoNome: { fontFamily: FONT.testoForte, fontSize: 16, lineHeight: 20 },
+  consegnaIndirizzo: { fontFamily: FONT.testoForte, fontSize: 15, lineHeight: 20 },
   badgeBanco: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999 },
   badgePunto: { width: 6, height: 6, borderRadius: 3 },
   badgeTesto: { fontFamily: FONT.testoMedio, fontSize: 13, lineHeight: 16 },

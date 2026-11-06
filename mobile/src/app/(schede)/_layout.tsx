@@ -1,19 +1,24 @@
-import { Tabs } from 'expo-router';
+import { router, Tabs } from 'expo-router';
 
+import type { VoceAttivita } from '@/api';
 import { usePezziNelCarrello } from '@/carrello';
 import { intestazione } from '@/componenti/BarraTitolo';
 import { Icona } from '@/componenti/Icona';
-import { EtichettaStatoOrdini, IconaStatoOrdini } from '@/componenti/NavStatoOrdini';
+import { EtichettaStatoOrdini, fraseStatoOrdini, IconaStatoOrdini, useVoceMostrata } from '@/componenti/NavStatoOrdini';
 import { PulsanteAccount } from '@/componenti/PulsanteAccount';
 import { useAttivitaInCorso } from '@/dati';
 import { FONT, useTema } from '@/tema';
+
+// Nessuna attività in corso: sempre lo stesso elenco vuoto, così non si crea un array nuovo a ogni disegno.
+const NESSUNA_VOCE: VoceAttivita[] = [];
 
 // Barra in basso come sul sito: Catalogo, Carrello, Stato ordini.
 export default function Schede() {
   const { c } = useTema();
   const pezzi = usePezziNelCarrello();
-  // Quante attività ci sono in corso (richieste in attesa e ordini in consegna): con due o più la scheda "Stato ordini" lo dice con un numero.
-  const attivita = useAttivitaInCorso().data?.voci.length ?? 0;
+  // Le attività in corso (richieste in attesa e ordini in consegna): la scheda "Stato ordini" le alterna e il suo tocco porta a quella che si vede.
+  const voci = useAttivitaInCorso().data?.voci ?? NESSUNA_VOCE;
+  const voceMostrata = useVoceMostrata();
 
   return (
     <Tabs
@@ -58,11 +63,21 @@ export default function Schede() {
         options={{
           title: 'Stato ordini',
           headerShown: false,
-          // Icona ed etichetta seguono la prima attività (anello e conto alla rovescia, furgone e minuti all'arrivo); con più attività un numero dice quante sono.
+          // Icona ed etichetta come sul sito: un'icona per fase (anello, furgone, scatola con "!") e, con due o più attività, una alla volta ogni 2,5 secondi con i puntini
+          // sotto (NavStatoOrdini). Il numero delle attività lo scrive l'icona stessa, solo con «riduci movimento».
           tabBarIcon: ({ color }) => <IconaStatoOrdini color={color} />,
           tabBarLabel: ({ color }) => <EtichettaStatoOrdini color={color} />,
-          tabBarBadge: attivita >= 2 ? attivita : undefined,
-          tabBarBadgeStyle: { backgroundColor: c.accento, color: '#fff', fontFamily: FONT.testoForte, fontSize: 11 },
+          // I fotogrammi cambiano da soli: il lettore di schermo legge una frase sola con tutte le attività.
+          tabBarAccessibilityLabel: voci.length >= 2 ? fraseStatoOrdini(voci) : undefined,
+        }}
+        listeners={{
+          // Con due o più attività il tocco porta dritto alla pagina di quella che si vede in quel momento (come sul sito); con meno vale il tocco di sempre.
+          tabPress: (e) => {
+            const v = voceMostrata();
+            if (!v) return;
+            e.preventDefault();
+            router.navigate({ pathname: '/ordini', params: { voce: `${v.tipo}-${v.id}`, n: String(Date.now()) } });
+          },
         }}
       />
     </Tabs>

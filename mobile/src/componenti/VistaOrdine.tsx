@@ -8,7 +8,7 @@ import { riordina } from '../carrello';
 import { useContoAllaRovescia, useOrdine } from '../dati';
 import { ICONE } from '../icone';
 import { FONT, useTema } from '../tema';
-import { AnelloAtt, CardAtt, ChipOk, EsitoConsegnato, PassiAtt, PillolaArrivato, PulsanteBlu, SchedaBanco, SchedaMateriale, SottoAtt, stileTimer, TestaOrdineAtt, TitoloAtt, VERDE_SCURO } from './att';
+import { AnelloAtt, CardAtt, ChipOk, EsitoConsegnato, PassiAtt, PillolaArrivato, PulsanteBlu, SchedaBanco, SchedaConsegna, SchedaMateriale, SottoAtt, stileTimer, TestaOrdineAtt, TitoloAtt, VERDE_SCURO } from './att';
 import { informa } from './dialoghi';
 import { Pagamenti } from './Pagamenti';
 import { Caricamento, Errore } from './Stato';
@@ -92,10 +92,8 @@ export function VistaOrdine({ id, compatta }: { id: number; compatta?: boolean }
     }
   };
 
-  const dettagli = [
-    o.destinazione ? { etichetta: 'Consegna in cantiere', dettaglio: o.destinazione } : null,
-    o.note ? { etichetta: 'Note', dettaglio: o.note } : null,
-  ].filter(Boolean) as { etichetta: string; dettaglio: string }[];
+  // In fondo restano le sole note: l'indirizzo di consegna ha la sua scheda sotto il banco (SchedaConsegna).
+  const dettagli = [o.note ? { etichetta: 'Note', dettaglio: o.note } : null].filter(Boolean) as { etichetta: string; dettaglio: string }[];
 
   const righe = o.righe.map((r) => ({ quantita: r.quantita, nome: r.nome, codice: r.codice, cad: r.cad, totale: r.subtotale }));
   const nomeBanco = o.ditta || (o.distributore ? o.distributore.nome : '');
@@ -123,6 +121,9 @@ export function VistaOrdine({ id, compatta }: { id: number; compatta?: boolean }
 
         <SchedaMateriale testa={<TestaOrdineAtt nome={nomeBanco} id={o.id} />} righe={righe} etichettaMerce="Merce · IVA esclusa" merce={o.importi.materiale.imponibile} />
 
+        {/* Il banco sta in testa alla scheda del materiale: l'indirizzo viene subito dopo. */}
+        <SchedaConsegna indirizzo={o.destinazione} />
+
         <Pagamenti importi={o.importi} stato={o.stato_pagamento} fallback="ordine" ditta={o.ditta || null} ordineId={o.id} />
       </ScrollView>
     );
@@ -133,6 +134,8 @@ export function VistaOrdine({ id, compatta }: { id: number; compatta?: boolean }
       <Consegna o={o} lettoIl={q.dataUpdatedAt} compatta={compatta} />
 
       {nomeBanco ? <SchedaBanco occhiello="Materiale da" nome={nomeBanco} destra={<ChipOk testo="Confermato" />} /> : null}
+
+      <SchedaConsegna indirizzo={o.destinazione} />
 
       <SchedaMateriale occhiello="Materiale in arrivo" righe={righe} etichettaMerce="Merce · IVA esclusa" merce={o.importi.materiale.imponibile} />
 

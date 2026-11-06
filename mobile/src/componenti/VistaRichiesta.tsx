@@ -8,7 +8,7 @@ import { useContoAllaRovescia, useRichiesta } from '../dati';
 import { completaInvio, type RispostaInvio } from '../pagamento';
 import { useSessione } from '../sessione';
 import { FONT, useTema } from '../tema';
-import { AnelloAtt, BadgeBanco, CardAtt, ChipNo, ChipOk, LinkRosso, PallinoAllarme, PassiAtt, PillolaOk, PulsanteBlu, SchedaBanco, SchedaMateriale, SottoAtt, stileTimer, TempoAnello, TitoloAtt } from './att';
+import { AnelloAtt, BadgeBanco, CardAtt, ChipNo, ChipOk, LinkRosso, PallinoAllarme, PassiAtt, PillolaOk, PulsanteBlu, SchedaBanco, SchedaConsegna, SchedaMateriale, SottoAtt, stileTimer, TempoAnello, TitoloAtt } from './att';
 import { chiedi, informa } from './dialoghi';
 import { Pagamenti } from './Pagamenti';
 import { Caricamento, Errore } from './Stato';
@@ -174,6 +174,9 @@ export function VistaRichiesta({
           <SchedaBanco key={x.distributore} occhiello="Banco interpellato" nome={x.distributore} destra={<BadgeBanco testo={testoBancoAttesa(x.esito)} esito={x.esito} />} />
         ))}
 
+        {/* L'indirizzo mandato con la richiesta, subito sotto il banco (come sul sito, in ogni fase). */}
+        <SchedaConsegna indirizzo={r.destinazione} />
+
         <Materiale r={r} />
 
         <Pagamenti importi={r.importi} stato={r.stato_pagamento} fallback="attesa" ditta={r.ditta} />
@@ -222,6 +225,8 @@ export function VistaRichiesta({
           />
         ))}
 
+        <SchedaConsegna indirizzo={r.destinazione} />
+
         <Materiale r={r} />
 
         <Pagamenti
@@ -250,6 +255,8 @@ export function VistaRichiesta({
           <Distributori risposte={r.risposte} />
         </>
       ) : null}
+
+      <SchedaConsegna indirizzo={r.destinazione} />
 
       <Materiale r={r} />
 

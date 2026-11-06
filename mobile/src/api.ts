@@ -229,6 +229,8 @@ export type Richiesta = {
   stato: StatoRichiesta;
   order_id: number | null;
   creato_il: string;
+  // L'indirizzo di consegna scritto nel carrello (la scheda "Consegna in cantiere" sotto il banco); null se non ne ha.
+  destinazione: string | null;
   secondi: number;
   // Durata della finestra in secondi (per l'anello): la stessa dell'anello della pagina del sito.
   durata: number;

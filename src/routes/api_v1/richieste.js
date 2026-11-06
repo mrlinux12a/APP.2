@@ -190,6 +190,8 @@ router.get('/richieste/:id', richiedeCliente, async (req, res) => {
     stato: richiesta.stato,
     order_id: richiesta.stato === 'ordinata' ? richiesta.order_id : null,
     creato_il: format.dataOraRoma(richiesta.creato_il, ', '),
+    // Dove va consegnato il materiale (l'indirizzo scritto nel carrello): l'app lo mostra nella scheda "Consegna in cantiere" sotto il banco, in ogni fase.
+    destinazione: richiesta.destinazione || null,
     secondi: d.secondi,
     // Quanto dura la finestra di questa richiesta (secondi): serve all'anello dell'app, che si svuota da `secondi` a 0. Stessa formula della pagina del sito.
     durata: format.durataFinestraSec(richiesta.creato_il, richiesta.scade_il, d.minutiRisposta),
