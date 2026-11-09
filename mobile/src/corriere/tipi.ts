@@ -35,7 +35,8 @@ export type DettaglioRichiesta = {
   al_cantiere: Tragitto;
   banco: BancoRitiro;
   cantiere: { installatore: string; indirizzo: string; zona: string; note: string };
-  mappe: { percorso: string };
+  // `al_banco`: dalla posizione del telefono al banco; `al_cantiere`: dal banco al cantiere; `percorso`: come `al_cantiere` (resta per compatibilità).
+  mappe: { al_banco: string; al_cantiere: string; percorso: string };
 };
 
 // La consegna in corso: `fase` 1 = «Vai al ritiro», 2 = «Vai al cantiere».

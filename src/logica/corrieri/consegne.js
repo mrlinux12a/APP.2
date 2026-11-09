@@ -359,7 +359,9 @@ async function dettaglioRichiesta(corriereId, rispostaId, pos) {
       zona: zonaDaIndirizzo(cantiere.indirizzo),
       note: (r.note || '').trim(),
     },
-    mappe: { percorso: urlMappe(banco, cantiere) },
+    // Due tappe, ognuna col suo link: 1) da dove sei adesso al banco (senza partenza: la prende il telefono), 2) dal banco al cantiere (il corriere non ha ancora
+    // ritirato, quindi la seconda parte dal banco). `percorso` (banco → cantiere) resta per chi lo usava.
+    mappe: { al_banco: urlMappe(null, banco), al_cantiere: urlMappe(banco, cantiere), percorso: urlMappe(banco, cantiere) },
   };
 }
 

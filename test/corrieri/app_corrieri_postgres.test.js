@@ -255,6 +255,13 @@ function eseguiProve() {
     assert.ok(d.al_cantiere.minuti > 0 && d.al_cantiere.km > 0, 'tratta banco → cantiere');
     assert.equal(d.tempo_totale_min, d.alla_sede.minuti + d.al_cantiere.minuti);
     assert.equal(Math.round(d.km_totali * 10), Math.round((d.alla_sede.km + d.al_cantiere.km) * 10));
+    // Le due tappe: 1) dal telefono al banco (nessuna partenza scritta), 2) dal banco al cantiere.
+    const tappaBanco = new URL(d.mappe.al_banco);
+    assert.equal(tappaBanco.searchParams.get('origin'), null);
+    assert.equal(tappaBanco.searchParams.get('destination'), `${BANCO.lat},${BANCO.lng}`);
+    const tappaCantiere = new URL(d.mappe.al_cantiere);
+    assert.equal(tappaCantiere.searchParams.get('origin'), `${BANCO.lat},${BANCO.lng}`);
+    assert.equal(tappaCantiere.searchParams.get('destination'), `${CANTIERE.lat},${CANTIERE.lng}`);
     const mappa = new URL(d.mappe.percorso);
     assert.equal(mappa.origin + mappa.pathname, 'https://www.google.com/maps/dir/');
     assert.equal(mappa.searchParams.get('origin'), `${BANCO.lat},${BANCO.lng}`);

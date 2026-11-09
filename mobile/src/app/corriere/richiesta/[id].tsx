@@ -150,7 +150,10 @@ export default function DettaglioRichiestaSchermata() {
           />
         </Scheda>
 
-        <Pulsante titolo="Apri il percorso in Maps" icona="esterno" tipo="chiaro" altezza={50} onPress={() => apriMappa(d.mappe.percorso)} />
+        <View style={stili.mappe}>
+          <Pulsante titolo="1 · Maps fino al banco" icona="esterno" tipo="chiaro" altezza={50} onPress={() => apriMappa(d.mappe.al_banco)} />
+          <Pulsante titolo="2 · Maps dal banco al cantiere" icona="esterno" tipo="chiaro" altezza={50} onPress={() => apriMappa(d.mappe.al_cantiere)} />
+        </View>
       </ScrollView>
 
       <Piede sullaPagina>
@@ -191,5 +194,6 @@ const stili = StyleSheet.create({
   tappaTesto: { flex: 1, gap: 2 },
   tappaTitolo: { fontFamily: FC.extra, fontSize: 17, lineHeight: 24, color: COL.testo, marginTop: 6 },
   tappaRiga: { fontFamily: FC.medio, fontSize: 14, lineHeight: 20, color: COL.grigio },
+  mappe: { gap: 10 },
   tappaAzione: { marginTop: 8, alignSelf: 'flex-start', minWidth: 190 },
 });
