@@ -60,6 +60,7 @@
           </div>
         <% }); %>
       </div>
+      <%- include('../partials/cliente/scheda_consegna', { indirizzo: richiesta.destinazione }) %>
 
       <%# 3. Materiale richiesto: righe a prezzo del banco, IVA esclusa, e "Merce · IVA esclusa · prezzi del banco" %>
       <%- include('../partials/cliente/richiesta_materiale', { righePrezzi, importi }) %>

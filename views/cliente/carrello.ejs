@@ -151,11 +151,25 @@
                 </div>
                 <div class="consegna-campo" data-consegna-campo <%= indirizzo ? 'hidden' : '' %>>
                   <%# Due modi per dare l'indirizzo: scriverlo, o toccare il mirino accanto al campo (usa la posizione di questo dispositivo). %>
+                  <%# L'indirizzo è spezzato in campi (10/11/2026, richiesta esplicita): indirizzo, numero civico, interno (facoltativo), CAP, città. Il titolo è il
+                      segnaposto sbiadito. Il mirino compila tutto TRANNE il numero civico, che si scrive sempre a mano. `destinazione` resta come campo nascosto,
+                      che lo script tiene uguale ai campi (l'indirizzo in una riga); il server ricompone e ricontrolla comunque i campi. %>
+                  <input type="hidden" id="destinazione" name="destinazione" value="" data-ind-riga>
                   <div class="consegna-input-riga">
-                    <input type="text" id="destinazione" name="destinazione" value="" required
-                           placeholder="Via, numero, CAP, città" aria-label="Indirizzo di consegna" autocomplete="street-address">
+                    <input type="text" name="indirizzo" value="" required data-ind-campo="indirizzo"
+                           placeholder="Indirizzo (via, piazza…)" aria-label="Indirizzo" autocomplete="address-line1">
                     <button type="button" class="consegna-pos-btn" data-consegna-pos-usa
                             aria-label="Usa la mia posizione" title="Usa la mia posizione"><%- iconaMirino %></button>
+                  </div>
+                  <div class="consegna-griglia">
+                    <input type="text" name="civico" value="" required maxlength="12" data-ind-campo="civico"
+                           placeholder="Numero civico" aria-label="Numero civico" autocomplete="off" enterkeyhint="next">
+                    <input type="text" name="interno" value="" required maxlength="12" data-ind-campo="interno"
+                           placeholder="Interno" aria-label="Interno" autocomplete="off" enterkeyhint="next">
+                    <input type="text" name="cap" value="" required inputmode="numeric" pattern="[0-9]{5}" maxlength="5" data-ind-campo="cap"
+                           placeholder="CAP" aria-label="CAP" autocomplete="postal-code" enterkeyhint="next">
+                    <input type="text" name="citta" value="" required maxlength="80" data-ind-campo="citta"
+                           placeholder="Città" aria-label="Città" autocomplete="address-level2" enterkeyhint="done">
                   </div>
                   <%# Coordinate del dispositivo, scritte dallo script quando l'indirizzo viene dal mirino (e tolte appena lo si modifica). %>
                   <input type="hidden" name="dest_lat" value="" data-dest-lat>

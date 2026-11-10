@@ -109,6 +109,7 @@
             <span class="att-chip-ok"><%- spunta %>Confermato</span>
           </div>
         <% } %>
+        <%- include('../partials/cliente/scheda_consegna', { indirizzo: ordine.destinazione }) %>
 
         <%# 3. Materiale in arrivo: righe a PREZZO DEL BANCO e "Merce · IVA esclusa". Niente più consegna, IVA e totale qui:
             stanno in "Pagamenti". %>
@@ -194,6 +195,7 @@
           </div>
           <%- include('../partials/cliente/ordine_righe', { righe, importi }) %>
         </div>
+        <%- include('../partials/cliente/scheda_consegna', { indirizzo: ordine.destinazione }) %>
 
         <%# 4. Pagamenti: stessa scheda dell'ordine in consegna (la consegna pagata in app, il materiale da pagare a BOREA). %>
         <%- include('../partials/cliente/pagamenti', { importi, stato: 'consegnato', ditta: fmt.nomeCommerciale(distributore ? distributore.nome : ''), statoPag, ordineId: ordine.id }) %>

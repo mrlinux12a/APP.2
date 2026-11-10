@@ -1,0 +1,12 @@
+<%# La scheda "Consegna in cantiere": sta SOTTO la scheda del banco ("Banco interpellato" / "Materiale da") in ogni fase della richiesta e dell'ordine e porta l'indirizzo
+    di consegna scritto nel carrello (richiesta.destinazione / ordine.destinazione). Stessa forma della scheda del banco (icona, occhiello, testo che va a capo).
+    Senza indirizzo non si disegna (richieste e ordini nati prima che l'indirizzo si salvasse). Gemella di SchedaConsegna in mobile/src/componenti/att.tsx. %>
+<% if (typeof indirizzo !== 'undefined' && indirizzo && String(indirizzo).trim()) { %>
+  <div class="card att-card att-banco att-consegna">
+    <span class="att-icona" aria-hidden="true"><%- iconaPosizione %></span>
+    <div class="att-banco-testo">
+      <div class="att-occhiello">Consegna in cantiere</div>
+      <div class="att-consegna-indirizzo"><%= String(indirizzo).trim() %></div>
+    </div>
+  </div>
+<% } %>

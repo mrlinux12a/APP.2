@@ -309,36 +309,64 @@
   });
 
   // ---------- Carrello: indirizzo di consegna ("Cambia") e nota facoltativa ----------
-  // Il campo "destinazione" è sempre nel form (anche nascosto, parte comunque con la richiesta): "Cambia"
-  // lo mostra, "Fatto" lo richiude e riscrive la scheda. Invio dentro il campo vale "Fatto": prima
-  // inviava il form, cioè pagava.
+  // L'indirizzo è a campi separati (indirizzo, numero civico, interno, CAP, città; richiesta del 10/11/2026). `campo` è il campo nascosto "destinazione" (l'indirizzo in
+  // una riga, tenuto uguale ai campi da `aggiorna`: serve a sapere se è cambiato e ai vecchi controlli). "Cambia" mostra i campi, "Fatto" li richiude e riscrive
+  // la scheda, ma SOLO se sono tutti compilati (l'interno è facoltativo). Invio dentro un campo vale "Fatto": prima inviava il form, cioè pagava.
   (function () {
     const consegna = document.querySelector('[data-consegna]');
-    const campo = consegna && consegna.querySelector('input[name="destinazione"]');
+    const campo = consegna && consegna.querySelector('[data-ind-riga]');
+    const campiInd = consegna ? Array.prototype.slice.call(consegna.querySelectorAll('[data-ind-campo]')) : [];
     const zonaCampo = consegna && consegna.querySelector('[data-consegna-campo]');
     const bottone = consegna && consegna.querySelector('[data-consegna-cambia]');
     const via = consegna && consegna.querySelector('[data-consegna-via]');
     const citta = consegna && consegna.querySelector('[data-consegna-citta]');
     // Se manca un solo pezzo della scheda non si fa niente: un errore qui fermerebbe tutto il resto dello script.
-    if (campo && zonaCampo && bottone && via && citta) {
-      // `senzaFuoco`: dal pulsante della posizione il campo si apre ma la tastiera no (sul telefono si coprirebbe il messaggio).
+    if (campo && campiInd.length === 5 && zonaCampo && bottone && via && citta) {
+      const ind = {};
+      campiInd.forEach(function (c) { ind[c.getAttribute('data-ind-campo')] = c; });
+      const val = function (nome) { return ind[nome].value.replace(/\s+/g, ' ').trim(); };
+      // Quelli da compilare, nell'ordine in cui si scrivono (tutti, anche l'interno); il CAP ha cinque cifre.
+      const OBBLIGATORI = ['indirizzo', 'civico', 'interno', 'cap', 'citta'];
+      const NOMI = { indirizzo: 'l’indirizzo', civico: 'il numero civico', interno: 'l’interno', cap: 'il CAP (5 cifre)', citta: 'la città' };
+      const primoMancante = function () {
+        for (let i = 0; i < OBBLIGATORI.length; i++) {
+          const n = OBBLIGATORI[i];
+          if (!val(n) || (n === 'cap' && !/^\d{5}$/.test(val(n)))) return n;
+        }
+        return null;
+      };
+      // L'indirizzo dei campi in una riga ("Via Puggia 22 int. 3, 16141 Genova (GE)"): lo stesso testo che compone il server (src/comune/indirizzo.js).
+      const viaCivico = function () { return [val('indirizzo'), val('civico')].filter(Boolean).join(' ') + (val('interno') ? ' int. ' + val('interno') : ''); };
+      const capCitta = function () { return [val('cap'), val('citta')].filter(Boolean).join(' '); };
+      const aggiorna = function () { campo.value = [viaCivico(), capCitta()].filter(Boolean).join(', '); };
+      // Il messaggio sotto la scheda (lo stesso di posizione e permessi): resta visibile anche a scheda chiusa.
+      const boxMsg = consegna.querySelector('[data-consegna-pos]');
+      const boxMsgTesto = consegna.querySelector('[data-consegna-pos-testo]');
+      const dire = function (testo) {
+        if (!boxMsg || !boxMsgTesto) return;
+        boxMsg.hidden = !testo;
+        boxMsgTesto.textContent = testo || '';
+      };
+      // `senzaFuoco`: dal pulsante della posizione i campi si aprono ma la tastiera no (sul telefono si coprirebbe il messaggio).
       const apri = function (senzaFuoco) {
         zonaCampo.hidden = false;
         bottone.textContent = 'Fatto';
-        if (senzaFuoco !== true) campo.focus();
+        if (senzaFuoco !== true) { const m = primoMancante(); (ind[m || 'indirizzo']).focus(); }
       };
       const conferma = function () {
-        const testo = campo.value.trim();
-        if (!testo) { campo.focus(); return; }
-        const taglio = testo.indexOf(',');
-        via.textContent = taglio === -1 ? testo : testo.slice(0, taglio).trim();
-        citta.textContent = taglio === -1 ? '' : testo.slice(taglio + 1).trim();
+        const m = primoMancante();
+        if (m) { ind[m].focus(); dire('Manca ' + NOMI[m] + ': compila tutti i campi per andare avanti.'); return; }
+        aggiorna();
+        via.textContent = viaCivico();
+        citta.textContent = capCitta();
         zonaCampo.hidden = true;
         bottone.textContent = 'Cambia';
       };
       bottone.addEventListener('click', function () { if (zonaCampo.hidden) apri(); else conferma(); });
-      campo.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') { e.preventDefault(); conferma(); }
+      campiInd.forEach(function (c) {
+        c.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') { e.preventDefault(); conferma(); }
+        });
       });
 
       // Posizione di consegna: due modi. O l'installatore scrive l'indirizzo (il server ne ricava la posizione), oppure tocca il mirino accanto al campo:
@@ -353,14 +381,15 @@
       const posizioneTesto = consegna.querySelector('[data-consegna-pos-testo]');
       const bottonePos = consegna.querySelector('[data-consegna-pos-usa]');
       if (form && destLat && destLng && posizione && posizioneTesto && bottonePos) {
-        let daPosizione = ''; // l'indirizzo ricavato dalla posizione, per accorgersi che è stato cambiato
-        const dice = function (testo) {
-          posizione.hidden = !testo;
-          posizioneTesto.textContent = testo || '';
-        };
-        campo.addEventListener('input', function () {
-          if (campo.value.trim() !== daPosizione) { destLat.value = ''; destLng.value = ''; }
-          dice('');
+        let daPosizione = ''; // via, CAP e città ricavati dalla posizione, per accorgersi che sono stati cambiati (civico e interno non contano: li scrive sempre l'installatore)
+        const dice = dire;
+        const luogoDaPosizione = function () { return [val('indirizzo'), val('cap'), val('citta')].join('|'); };
+        campiInd.forEach(function (c) {
+          c.addEventListener('input', function () {
+            aggiorna();
+            if (luogoDaPosizione() !== daPosizione) { destLat.value = ''; destLng.value = ''; }
+            dice('');
+          });
         });
 
         // Come riattivare il permesso, detto per il dispositivo che si ha davanti (iPad con Safari "desktop" compreso).
@@ -455,27 +484,28 @@
                 .then(leggiJson)
                 .then(function (dati) {
                   fine();
-                  if (!dati || !dati.ok || !dati.indirizzo) {
+                  if (!dati || !dati.ok || !dati.campi) {
                     apri(true);
-                    dice('Ho trovato la posizione ma non l’indirizzo: scrivilo qui sopra.');
+                    dice('Ho trovato la posizione ma non l’indirizzo: compila i campi qui sopra.');
                     return;
                   }
-                  campo.value = dati.indirizzo;
-                  daPosizione = dati.indirizzo;
+                  // Il pulsante compila tutto TRANNE il numero civico (richiesta del 10/11/2026): indirizzo, CAP e città dalla posizione, civico e interno li scrive
+                  // l'installatore. Se erano già scritti si svuotano: potrebbero essere di un altro indirizzo.
+                  ind.indirizzo.value = dati.campi.indirizzo || '';
+                  ind.cap.value = dati.campi.cap || '';
+                  ind.citta.value = dati.campi.citta || '';
+                  ind.civico.value = '';
+                  ind.interno.value = '';
+                  aggiorna();
+                  daPosizione = luogoDaPosizione();
                   destLat.value = String(lat);
                   destLng.value = String(lng);
-                  // Un server che non manda `civico` (non ancora riavviato) vale come "c'è": la scheda si chiude come prima.
-                  if (dati.civico !== false) {
-                    dice('');
-                    conferma();
-                  } else if (dati.precisa === false) {
-                    // La posizione sbaglia di troppo per scegliere il numero (il server non lo scrive: sarebbe quello di un'altra casa): il campo resta aperto.
-                    apri(true);
-                    dice('Posizione precisa solo a circa ' + metriInTesto(metri) + ': controlla la via e aggiungi il numero civico.');
-                  } else {
-                    apri(true);
-                    dice('Non trovo il numero civico di questo punto: aggiungilo all’indirizzo.');
-                  }
+                  // I campi restano aperti (senza dare il fuoco: la tastiera coprirebbe il messaggio) perché il numero civico manca per forza. Con la posizione poco
+                  // precisa il messaggio avverte anche di controllare la via.
+                  apri(true);
+                  dice(dati.precisa === false
+                    ? 'Posizione precisa solo a circa ' + metriInTesto(metri) + ': controlla la via e scrivi il numero civico.'
+                    : 'Scrivi il numero civico e l’interno per andare avanti.');
                 }, function (errore) {
                   fine();
                   if (errore && errore.sessioneScaduta) return;
@@ -494,11 +524,13 @@
 
         // Senza indirizzo non si invia: il campo si apre e dice cosa manca. Il gestore del form sta sul form (prima di quello sul documento) e ferma la propagazione.
         form.addEventListener('submit', function (e) {
-          if (campo.value.trim()) return;
+          aggiorna();
+          const manca = primoMancante();
+          if (!manca) return;
           e.preventDefault();
           e.stopPropagation();
           apri();
-          dice('Scrivi l’indirizzo di consegna, oppure tocca il mirino per usare la tua posizione.');
+          dice('Manca ' + NOMI[manca] + ': compila indirizzo, numero civico, interno, CAP e città, oppure tocca il mirino per usare la tua posizione.');
         });
       }
     }

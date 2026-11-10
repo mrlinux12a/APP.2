@@ -11,6 +11,7 @@ const whatsapp = require('../whatsapp/whatsapp');
 const pagamenti = require('../pagamenti/pagamenti');
 const consegna = require('./consegna');
 const format = require('../../comune/format');
+const indirizzoCampi = require('../../comune/indirizzo');
 const eventi = require('../notifiche/eventi');
 const orari = require('./orari');
 const { QUANTITA_MASSIMA, leggiId, leggiQuantita } = require('../../comune/input');
@@ -161,6 +162,25 @@ function chiaveInvioValida(valore) {
 function giaInviata(requestId, inCasoDiDuplicato) {
   if (inCasoDiDuplicato !== 'rifiuta') return requestId;
   throw new ErroreFlusso('gia_inviata', 'Ordine già inviato', 'Questo ordine è già stato inviato: non ne parte un altro.', { requestId });
+}
+
+// L'indirizzo di consegna dal corpo di un invio (sito o app). Se arrivano i campi separati (indirizzo = via, civico, interno, cap, citta) vanno compilati tutti
+// (l'interno è facoltativo) e si compongono in una riga ("Via Puggia 22 int. 3, 16141 Genova (GE)"): se ne manca uno, ErroreFlusso('destinazione') con
+// l'elenco in `campi`. Senza campi vale `destinazione` come prima (vecchi client). Il testo vuoto lo decide chi chiama (`obbligatoria`).
+function destinazioneDaCorpo(corpo, { obbligatoria = false } = {}) {
+  if (indirizzoCampi.haCampi(corpo)) {
+    const campi = indirizzoCampi.leggiCampi(corpo);
+    const mancanti = indirizzoCampi.campiMancanti(campi);
+    if (mancanti.length) {
+      throw new ErroreFlusso('destinazione', 'Indirizzo di consegna incompleto', 'Compila indirizzo, numero civico, interno, CAP (5 cifre) e città prima di pagare.', { campi: mancanti });
+    }
+    return indirizzoCampi.componi(campi);
+  }
+  const testo = String((corpo && corpo.destinazione) || '').trim();
+  if (!testo && obbligatoria) {
+    throw new ErroreFlusso('destinazione', 'Manca l’indirizzo di consegna', 'Scrivi dove consegnare il materiale (via, numero civico, CAP, città) prima di pagare.');
+  }
+  return testo;
 }
 
 // Paga e invia la richiesta ai distributori. Ritorna l'id creato. `destinazione` e `note` sono quelle
@@ -1094,6 +1114,7 @@ async function statoIconaOrdini(clienteId) {
 
 module.exports = {
   ErroreFlusso,
+  destinazioneDaCorpo,
   testoOrdineConfermato,
   statoIconaOrdini,
   ordinaVociIcona,

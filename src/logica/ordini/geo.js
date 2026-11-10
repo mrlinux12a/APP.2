@@ -131,7 +131,10 @@ async function indirizzoDaPosizioneDettaglio(lat, lng, opzioni = {}) {
     // e sceglierne uno a caso sarebbe peggio di niente. Può comunque essere di una zona vicina (a Genova 16141 al posto di 16138): al tragitto non serve, usa le coordinate.
     const cap = String(a.postcode || '').match(/\b\d{5}\b/g) || [];
     const luogo = [cap.length === 1 ? cap[0] : '', citta].filter(Boolean).join(' ') + (provincia && citta ? ' (' + provincia + ')' : '');
-    return { indirizzo: [[via, civico].filter(Boolean).join(' '), luogo].filter(Boolean).join(', '), civico: !!civico, precisa };
+    // `campi` = l'indirizzo già diviso per il carrello a campi separati (richiesta del 10/11/2026): via, CAP (solo se univoco) e città con la provincia. Il
+    // numero civico NON c'è mai: lo scrive sempre l'installatore (un civico preso dalla posizione poteva essere quello di un'altra casa).
+    const campi = { indirizzo: via, cap: cap.length === 1 ? cap[0] : '', citta: citta + (provincia && citta ? ' (' + provincia + ')' : '') };
+    return { indirizzo: [[via, civico].filter(Boolean).join(' '), luogo].filter(Boolean).join(', '), civico: !!civico, precisa, campi };
   } catch (e) {
     return null;
   } finally {

@@ -331,10 +331,12 @@ test('indirizzoDaPosizione: il civico si scrive solo se la posizione è abbastan
   const puggia = { country_code: 'it', road: 'Via Puggia', house_number: '22', postcode: '16141', city: 'Genova', 'ISO3166-2-lvl6': 'IT-GE' };
   const p = [44.4019645, 8.9742339];
 
+  // `campi`: lo stesso indirizzo diviso per il carrello a campi separati (10/11/2026), SENZA il numero civico (lo scrive sempre l'installatore)
+  const CAMPI_PUGGIA = { indirizzo: 'Via Puggia', cap: '16141', citta: 'Genova (GE)' };
   // senza la precisione, o entro 30 m: la casa più vicina, con il CAP di OpenStreetMap
   for (const opzioni of [{}, { precisioneM: 5 }, { precisioneM: 30 }, { precisioneM: NaN }]) {
     visti.length = 0;
-    assert.deepEqual(await geo.indirizzoDaPosizioneDettaglio(...p, { fetch: inversa(puggia), ...opzioni }), { indirizzo: 'Via Puggia 22, 16141 Genova (GE)', civico: true, precisa: true }, JSON.stringify(opzioni));
+    assert.deepEqual(await geo.indirizzoDaPosizioneDettaglio(...p, { fetch: inversa(puggia), ...opzioni }), { indirizzo: 'Via Puggia 22, 16141 Genova (GE)', civico: true, precisa: true, campi: CAMPI_PUGGIA }, JSON.stringify(opzioni));
     assert.match(visti[0], /^https:\/\/nominatim\.openstreetmap\.org\/reverse\?/);
     assert.match(visti[0], /zoom=18/);
   }
@@ -351,14 +353,14 @@ test('indirizzoDaPosizione: il civico si scrive solo se la posizione è abbastan
   for (const precisioneM of [31, 100, 4000]) {
     visti.length = 0;
     const r = await geo.indirizzoDaPosizioneDettaglio(...p, { fetch: inversa({ ...puggia, house_number: '17' }), precisioneM });
-    assert.deepEqual(r, { indirizzo: 'Via Puggia, 16141 Genova (GE)', civico: false, precisa: false }, String(precisioneM));
+    assert.deepEqual(r, { indirizzo: 'Via Puggia, 16141 Genova (GE)', civico: false, precisa: false, campi: CAMPI_PUGGIA }, String(precisioneM));
     assert.match(visti[0], /zoom=17/);
     assert.doesNotMatch(r.indirizzo, /17/);
   }
   assert.equal(geo.PRECISIONE_CIVICO_M, 30);
 
   // posizione precisa ma OpenStreetMap non ha un numero lì: via sola, e `precisa` resta vero (il messaggio è un altro)
-  assert.deepEqual(await geo.indirizzoDaPosizioneDettaglio(...p, { fetch: inversa({ ...puggia, house_number: undefined }), precisioneM: 8 }), { indirizzo: 'Via Puggia, 16141 Genova (GE)', civico: false, precisa: true });
+  assert.deepEqual(await geo.indirizzoDaPosizioneDettaglio(...p, { fetch: inversa({ ...puggia, house_number: undefined }), precisioneM: 8 }), { indirizzo: 'Via Puggia, 16141 Genova (GE)', civico: false, precisa: true, campi: CAMPI_PUGGIA });
 
   // senza una via, fuori dall'Italia, con coordinate che non valgono, con la rete giù: null, mai un'eccezione
   assert.equal(await geo.indirizzoDaPosizioneDettaglio(...p, { fetch: inversa({ country_code: 'it', city: 'Genova' }) }), null);

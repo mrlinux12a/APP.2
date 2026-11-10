@@ -1,4 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
+import * as Location from 'expo-location';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -74,6 +75,30 @@ function TotaleCp({ etichetta, nota, valore, colore, linea }: { etichetta: strin
     </View>
   );
 }
+
+// L'indirizzo di consegna a campi separati (come sul sito, richiesta del 10/11/2026): indirizzo = la via, numero civico, interno (facoltativo), CAP, città. Parte
+// vuoto; il mirino compila tutto TRANNE il numero civico. Il server (src/comune/indirizzo.js) ricontrolla e li compone in una riga.
+type CampiIndirizzo = { indirizzo: string; civico: string; interno: string; cap: string; citta: string };
+const INDIRIZZO_VUOTO: CampiIndirizzo = { indirizzo: '', civico: '', interno: '', cap: '', citta: '' };
+
+// Gli spazi doppi e di bordo tolti, come fa il server.
+const pulito = (t: string) => t.replace(/\s+/g, ' ').trim();
+
+// Il primo campo da compilare (nell'ordine in cui si scrivono) con il suo nome per il messaggio, o null se c'è tutto. L'interno non serve; il CAP ha cinque cifre.
+function primoMancante(c: CampiIndirizzo): { chiave: keyof CampiIndirizzo; nome: string } | null {
+  if (!pulito(c.indirizzo)) return { chiave: 'indirizzo', nome: 'l’indirizzo' };
+  if (!pulito(c.civico)) return { chiave: 'civico', nome: 'il numero civico' };
+  if (!pulito(c.interno)) return { chiave: 'interno', nome: 'l’interno' };
+  if (!/^\d{5}$/.test(pulito(c.cap))) return { chiave: 'cap', nome: 'il CAP (5 cifre)' };
+  if (!pulito(c.citta)) return { chiave: 'citta', nome: 'la città' };
+  return null;
+}
+
+// La scheda "Consegna in cantiere" a scheda chiusa: la via col civico e l'interno in evidenza ("Via Puggia 22 int. 3"), sotto CAP e città.
+function viaCivico(c: CampiIndirizzo) {
+  return [pulito(c.indirizzo), pulito(c.civico)].filter(Boolean).join(' ') + (pulito(c.interno) ? ' int. ' + pulito(c.interno) : '');
+}
+const capCittaDi = (c: CampiIndirizzo) => [pulito(c.cap), pulito(c.citta)].filter(Boolean).join(' ');
 
 // Una stringa casuale per distinguere un invio dall'altro (lettere e cifre, tra 8 e 64 caratteri: lo chiede il server).
 function nuovaChiave() {
@@ -178,20 +203,83 @@ export default function Carrello() {
   const orari = useOrari(righe.length > 0);
   const bancoChiuso = orari.data ? !orari.data.aperto : false;
   const [invio, setInvio] = useState(false);
-  const [destinazione, setDestinazione] = useState<string | null>(null);
-  // La scheda "Consegna in cantiere": chiusa (via e città + "Cambia") o aperta sul campo; si apre da sola se l'indirizzo è vuoto.
-  const [modificaIndirizzo, setModificaIndirizzo] = useState(false);
+  // L'indirizzo di consegna a campi: parte VUOTO (come sul sito), lo scrive l'installatore o lo compila il mirino (tranne il civico).
+  const [ind, setInd] = useState<CampiIndirizzo>(INDIRIZZO_VUOTO);
+  // La scheda "Consegna in cantiere": chiusa (via e città + "Cambia") o aperta sui campi; parte aperta perché l'indirizzo è vuoto.
+  const [modificaIndirizzo, setModificaIndirizzo] = useState(true);
+  // Il messaggio sotto la scheda (posizione in cerca, permesso negato, cosa manca) e il mirino che gira mentre cerca.
+  const [messaggio, setMessaggio] = useState('');
+  const [cercando, setCercando] = useState(false);
   const [notaAperta, setNotaAperta] = useState(false);
   const [note, setNote] = useState('');
   const [altezzaBarra, setAltezzaBarra] = useState(110);
   const [tastiera, setTastiera] = useState(false);
   const tolti = new Set(riepilogo.data?.non_piu_disponibili || []);
 
-  // La destinazione parte dall'indirizzo di consegna abituale (una volta sola: poi resta quello che l'installatore ha scritto).
-  if (riepilogo.data && destinazione === null) {
-    setDestinazione(riepilogo.data.indirizzo_consegna);
-    setModificaIndirizzo(!riepilogo.data.indirizzo_consegna);
-  }
+  const cambiaCampo = (chiave: keyof CampiIndirizzo, valore: string) => {
+    setInd((v) => ({ ...v, [chiave]: chiave === 'cap' ? valore.replace(/\D/g, '').slice(0, 5) : valore }));
+    setMessaggio('');
+  };
+
+  // "Fatto": si richiude la scheda solo se i campi ci sono tutti (l'interno è facoltativo); altrimenti dice cosa manca.
+  const conferma = () => {
+    const m = primoMancante(ind);
+    if (m) {
+      setMessaggio('Manca ' + m.nome + ': compila tutti i campi per andare avanti.');
+      return;
+    }
+    setMessaggio('');
+    setModificaIndirizzo(false);
+  };
+
+  // Il mirino: legge la posizione del telefono SOLO al tocco (mai da sola), la trasforma in indirizzo sul server (GET /indirizzo) e compila indirizzo, CAP e città.
+  // Il numero civico e l'interno restano vuoti: li scrive l'installatore (un civico preso dalla posizione poteva essere quello di un'altra casa).
+  const usaPosizione = async () => {
+    if (cercando) return;
+    setCercando(true);
+    setMessaggio('Cerco la tua posizione…');
+    setModificaIndirizzo(true);
+    let scadenza: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const permesso = await Location.requestForegroundPermissionsAsync();
+      if (!permesso.granted) {
+        setMessaggio(
+          permesso.canAskAgain
+            ? 'Posizione non consentita. Tocca di nuovo il mirino per consentirla, oppure compila i campi.'
+            : 'Posizione non consentita. Dalle impostazioni del telefono consenti la Posizione a Flash Delivery, poi riprova. Oppure compila i campi.'
+        );
+        return;
+      }
+      const p = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+        new Promise<null>((fine) => {
+          scadenza = setTimeout(() => fine(null), 15000);
+        }),
+      ]);
+      if (!p) {
+        setMessaggio('La posizione non arriva: prova all’aperto o compila i campi.');
+        return;
+      }
+      const q = new URLSearchParams({ lat: String(p.coords.latitude), lng: String(p.coords.longitude), precisione: String(Math.round(p.coords.accuracy || 0)) });
+      const r = await chiamaApi<{ ok: boolean; campi: { indirizzo: string; cap: string; citta: string } | null }>('/indirizzo?' + q.toString());
+      if (!r.ok || !r.campi) {
+        setMessaggio('Ho trovato la posizione ma non l’indirizzo: compila i campi.');
+        return;
+      }
+      const campi = r.campi;
+      setInd({ indirizzo: campi.indirizzo || '', civico: '', interno: '', cap: campi.cap || '', citta: campi.citta || '' });
+      setMessaggio(
+        (p.coords.accuracy || 0) > 30
+          ? 'Posizione precisa solo a circa ' + Math.round(p.coords.accuracy || 0) + ' m: controlla la via e scrivi il numero civico.'
+          : 'Scrivi il numero civico e l’interno per andare avanti.'
+      );
+    } catch {
+      setMessaggio('Non riesco a leggere la posizione di questo telefono: compila i campi.');
+    } finally {
+      clearTimeout(scadenza);
+      setCercando(false);
+    }
+  };
 
   // Con la tastiera aperta la barra di pagamento non deve coprire il campo che si sta scrivendo.
   useEffect(() => {
@@ -238,7 +326,16 @@ export default function Carrello() {
     try {
       const risposta = await chiamaApi<RispostaInvio>('/richieste', {
         metodo: 'POST',
-        corpo: { righe: carrello.voci(), destinazione: (destinazione || '').trim(), note, chiave: chiaveInvio.current },
+        corpo: {
+          righe: carrello.voci(),
+          indirizzo: pulito(ind.indirizzo),
+          civico: pulito(ind.civico),
+          interno: pulito(ind.interno),
+          cap: pulito(ind.cap),
+          citta: pulito(ind.citta),
+          note,
+          chiave: chiaveInvio.current,
+        },
       });
       const idRichiesta = await completaInvio(risposta, utente?.ragione_sociale);
       // Foglio di pagamento chiuso senza pagare: non è partito niente, il carrello resta com'è.
@@ -260,16 +357,15 @@ export default function Carrello() {
   if (!righe.length) return <CarrelloVuoto />;
 
   const r = riepilogo.data;
-  const indirizzo = (destinazione || '').trim();
-  // L'indirizzo è una riga sola ("Via Puggia 22/3, 16131 Genova (GE)"): la via in evidenza, il resto sotto.
-  const taglio = indirizzo.indexOf(',');
-  const via = taglio === -1 ? indirizzo : indirizzo.slice(0, taglio).trim();
-  const capCitta = taglio === -1 ? '' : indirizzo.slice(taglio + 1).trim();
+  // Scheda chiusa: la via col civico in evidenza, sotto CAP e città.
+  const via = viaCivico(ind);
+  const capCitta = capCittaDi(ind);
+  const indirizzoCompleto = primoMancante(ind) === null;
   const nomeDitta = r?.ditta || '';
   const dopoA = nomeDitta ? 'a ' + nomeDitta : 'al banco';
   const campo = [stili.campo, { color: c.testo, borderColor: c.bordo, backgroundColor: c.sfondo }];
-  // Non si paga senza un indirizzo (il campo del sito è `required`).
-  const puoPagare = !!r && r.raggiunto && !riepilogo.isFetching && !riepilogo.inAttesa && !bancoChiuso && indirizzo.length > 0;
+  // Non si paga finché l'indirizzo non è completo (indirizzo, civico, CAP, città: i campi del sito sono `required`).
+  const puoPagare = !!r && r.raggiunto && !riepilogo.isFetching && !riepilogo.inAttesa && !bancoChiuso && indirizzoCompleto;
   const strisciaChiusura = !!orari.data && orari.data.aperto && !!orari.data.chiude && orari.data.chiude.in_chiusura;
 
   return (
@@ -327,10 +423,7 @@ export default function Carrello() {
               {capCitta ? <Text style={[stili.consegnaCitta, { color: c.grigio }]}>{capCitta}</Text> : null}
             </View>
             <Pressable
-              onPress={() => {
-                if (modificaIndirizzo && !indirizzo) return;
-                setModificaIndirizzo(!modificaIndirizzo);
-              }}
+              onPress={() => (modificaIndirizzo ? conferma() : setModificaIndirizzo(true))}
               accessibilityRole="button"
               hitSlop={6}
               style={stili.cambia}
@@ -339,18 +432,82 @@ export default function Carrello() {
             </Pressable>
           </View>
           {modificaIndirizzo ? (
-            <View style={{ marginTop: 10 }}>
-              <TextInput
-                value={destinazione || ''}
-                onChangeText={setDestinazione}
-                placeholder="Via, numero, CAP, città"
-                placeholderTextColor={c.grigio}
-                accessibilityLabel="Indirizzo di consegna"
-                autoComplete="street-address"
-                style={campo}
-              />
+            <View style={{ marginTop: 10, gap: 8 }}>
+              {/* Indirizzo a campi (come sul sito): il titolo è il segnaposto sbiadito. Il mirino compila tutto TRANNE il numero civico. */}
+              <View style={stili.indirizzoRiga}>
+                <TextInput
+                  value={ind.indirizzo}
+                  onChangeText={(t) => cambiaCampo('indirizzo', t)}
+                  placeholder="Indirizzo (via, piazza…)"
+                  placeholderTextColor={c.grigio}
+                  accessibilityLabel="Indirizzo"
+                  autoComplete="street-address"
+                  returnKeyType="next"
+                  style={[campo, { flex: 1, minWidth: 0 }]}
+                />
+                <Pressable
+                  onPress={usaPosizione}
+                  disabled={cercando}
+                  accessibilityRole="button"
+                  accessibilityLabel="Usa la mia posizione"
+                  style={[stili.mirino, { borderColor: c.bordo, backgroundColor: c.superficie, opacity: cercando ? 0.6 : 1 }]}
+                >
+                  {cercando ? <ActivityIndicator color={c.accento} /> : <Icona nome="mirino" colore={c.accento} dimensione={24} />}
+                </Pressable>
+              </View>
+              <View style={stili.indirizzoRiga}>
+                <TextInput
+                  value={ind.civico}
+                  onChangeText={(t) => cambiaCampo('civico', t)}
+                  placeholder="Numero civico"
+                  placeholderTextColor={c.grigio}
+                  accessibilityLabel="Numero civico"
+                  autoComplete="off"
+                  maxLength={12}
+                  returnKeyType="next"
+                  style={[campo, { flex: 1, minWidth: 0 }]}
+                />
+                <TextInput
+                  value={ind.interno}
+                  onChangeText={(t) => cambiaCampo('interno', t)}
+                  placeholder="Interno"
+                  placeholderTextColor={c.grigio}
+                  accessibilityLabel="Interno"
+                  autoComplete="off"
+                  maxLength={12}
+                  returnKeyType="next"
+                  style={[campo, { flex: 1, minWidth: 0 }]}
+                />
+              </View>
+              <View style={stili.indirizzoRiga}>
+                <TextInput
+                  value={ind.cap}
+                  onChangeText={(t) => cambiaCampo('cap', t)}
+                  placeholder="CAP"
+                  placeholderTextColor={c.grigio}
+                  accessibilityLabel="CAP"
+                  autoComplete="postal-code"
+                  keyboardType="number-pad"
+                  maxLength={5}
+                  returnKeyType="next"
+                  style={[campo, { flex: 1, minWidth: 0 }]}
+                />
+                <TextInput
+                  value={ind.citta}
+                  onChangeText={(t) => cambiaCampo('citta', t)}
+                  placeholder="Città"
+                  placeholderTextColor={c.grigio}
+                  accessibilityLabel="Città"
+                  autoComplete="off"
+                  maxLength={80}
+                  returnKeyType="done"
+                  onSubmitEditing={conferma}
+                  style={[campo, { flex: 1, minWidth: 0 }]}
+                />
+              </View>
             </View>
           ) : null}
+          {messaggio ? <Text style={[stili.messaggioPos, { color: c.grigio }]}>{messaggio}</Text> : null}
         </View>
 
         {/* Nota facoltativa: riquadro tratteggiato che si apre sul campo di testo. */}
@@ -487,6 +644,9 @@ const stili = StyleSheet.create({
   cambia: { minHeight: 44, paddingHorizontal: 4, justifyContent: 'center' },
   cambiaTesto: { fontFamily: FONT.testoMedio, fontSize: 15 },
   campo: { borderWidth: 1, borderRadius: 10, padding: 12, fontSize: 16, fontFamily: FONT.testo },
+  indirizzoRiga: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
+  mirino: { width: 48, borderWidth: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  messaggioPos: { marginTop: 10, fontFamily: FONT.testo, fontSize: 13, lineHeight: 18 },
   nota: { marginBottom: 12, borderWidth: 1.5, borderStyle: 'dashed', borderColor: 'rgba(107,106,95,0.45)', borderRadius: 12 },
   notaTesta: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44, paddingVertical: 10, paddingHorizontal: 14 },
   notaPiu: { width: 16, textAlign: 'center', fontFamily: FONT.testoMedio, fontSize: 18, lineHeight: 20 },

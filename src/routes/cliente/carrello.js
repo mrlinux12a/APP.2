@@ -103,7 +103,7 @@ router.get('/api/indirizzo', limiti.indirizzo, requireRole('cliente'), async (re
   const precisioneM = req.query.precisione ? Number(req.query.precisione) : NaN;
   const trovato = await geo.indirizzoDaPosizioneDettaglio(Number(req.query.lat), Number(req.query.lng), { precisioneM });
   if (!trovato) return res.json({ ok: false, indirizzo: '' });
-  res.json({ ok: true, indirizzo: trovato.indirizzo, civico: trovato.civico, precisa: trovato.precisa });
+  res.json({ ok: true, indirizzo: trovato.indirizzo, civico: trovato.civico, precisa: trovato.precisa, campi: trovato.campi });
 });
 
 // ---------- Pagine del carrello ----------

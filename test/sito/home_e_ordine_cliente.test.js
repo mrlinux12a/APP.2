@@ -25,6 +25,8 @@ test('l\'installatore NON conferma la consegna: nessun pulsante né rotta; la pa
     const inConsegna = await (await chiedi('/ordini/72')).text();
     assert.doesNotMatch(inConsegna, /consegnato-prova|Ho ricevuto il materiale|\/ordini\/72\/consegnato"/);
     assert.match(inConsegna, /<span data-attendi-consegna="72" hidden><\/span>/);
+    // la scheda "Consegna in cantiere" (10/11/2026) sta SOTTO la scheda del banco ("Materiale da") e sopra il materiale, con l'indirizzo dell'ordine
+    assert.match(inConsegna, /Materiale da<\/div>[\s\S]*?<div class="att-occhiello">Consegna in cantiere<\/div>\s*<div class="att-consegna-indirizzo">[^<]+<\/div>[\s\S]*?Materiale in arrivo/);
     // lo stato che la pagina interroga: non consegnato -> false, consegnato -> true, ordine di un altro -> 404
     ordiniProva.ordini[72].consegnato_il = null;
     let s = await chiedi('/api/ordini/72/consegnato');

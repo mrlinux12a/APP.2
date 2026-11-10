@@ -44,7 +44,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Flash Delivery usa la tua posizione, solo mentre l’app è aperta, per calcolare quanto manca al banco e al cantiere quando accetti una consegna.",
+          "locationWhenInUsePermission": "Flash Delivery usa la tua posizione, solo mentre l’app è aperta, per calcolare quanto manca al banco e al cantiere quando accetti una consegna, e per compilare l’indirizzo di consegna nel carrello.",
           "locationAlwaysAndWhenInUsePermission": false,
           "locationAlwaysPermission": false,
           "motionUsagePermission": false,

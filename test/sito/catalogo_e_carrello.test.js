@@ -39,9 +39,16 @@ test('posizione di consegna: l\'indirizzo del carrello parte VUOTO, due modi per
   await chiedi('/api/carrello/imposta', json({ id: 1, qty: 5 }));
   const t = await (await chiedi('/carrello')).text();
   // il campo non è precompilato (nemmeno con l'indirizzo dell'account): vuoto e obbligatorio, aperto, con il pulsante accanto e le coordinate nascoste
-  assert.match(t, /<input type="text" id="destinazione" name="destinazione" value="" required/);
+  // L'indirizzo è a campi (10/11/2026): indirizzo, numero civico, interno, CAP, città (tutti obbligatori); `destinazione` resta solo come campo nascosto
+  assert.match(t, /<input type="hidden" id="destinazione" name="destinazione" value="" data-ind-riga>/);
+  for (const [nome, segnaposto] of [['indirizzo', 'Indirizzo \\(via, piazza…\\)'], ['civico', 'Numero civico'], ['interno', 'Interno'], ['cap', 'CAP'], ['citta', 'Città']]) {
+    assert.match(t, new RegExp('<input type="text" name="' + nome + '" value=""[^>]*data-ind-campo="' + nome + '"\\s+placeholder="' + segnaposto + '"'), 'campo ' + nome + ' vuoto, col titolo sbiadito');
+  }
+  for (const nome of ['indirizzo', 'civico', 'interno', 'cap', 'citta']) {
+    assert.match(t, new RegExp('<input type="text" name="' + nome + '" value="" required'), nome + ' obbligatorio');
+  }
   assert.doesNotMatch(t, /value="Via Puggia 22\/3, Genova"/);
-  assert.match(t, /<div class="consegna-input-riga">\s*<input type="text" id="destinazione"[^>]*>\s*<button type="button" class="consegna-pos-btn" data-consegna-pos-usa\s+aria-label="Usa la mia posizione" title="Usa la mia posizione"><svg/, 'il pulsante sta accanto al campo');
+  assert.match(t, /<div class="consegna-input-riga">\s*<input type="text" name="indirizzo"[^>]*>\s*<button type="button" class="consegna-pos-btn" data-consegna-pos-usa\s+aria-label="Usa la mia posizione" title="Usa la mia posizione"><svg/, 'il pulsante sta accanto al campo indirizzo');
   assert.match(t, /<input type="hidden" name="dest_lat" value="" data-dest-lat>/);
   assert.match(t, /<input type="hidden" name="dest_lng" value="" data-dest-lng>/);
   assert.match(t, /<div class="consegna-pos" data-consegna-pos role="status" hidden>/);
@@ -52,7 +59,9 @@ test('posizione di consegna: l\'indirizzo del carrello parte VUOTO, due modi per
   nominatim.chiamate.length = 0;
   let r = await chiedi('/api/indirizzo?lat=44.4019&lng=8.9742');
   assert.equal(r.status, 200);
-  assert.deepEqual(await r.json(), { ok: true, indirizzo: 'Via Puggia 22/3, 16131 Genova (GE)', civico: true, precisa: true });
+  // `campi` = l'indirizzo già diviso per il carrello a campi: via, CAP, città (provincia compresa), MAI il numero civico (lo scrive sempre l'installatore)
+  const CAMPI = { indirizzo: 'Via Puggia', cap: '16131', citta: 'Genova (GE)' };
+  assert.deepEqual(await r.json(), { ok: true, indirizzo: 'Via Puggia 22/3, 16131 Genova (GE)', civico: true, precisa: true, campi: CAMPI });
   assert.match(nominatim.chiamate[0], /\/reverse\?.*lat=44\.4019.*lon=8\.9742/);
   assert.match(nominatim.chiamate[0], /zoom=18/, 'senza la precisione del dispositivo ci si fida: la casa più vicina');
   // con la precisione dichiarata dal dispositivo: fino a 30 m il civico vale; oltre sarebbe quello di un'altra casa (da Via Puggia 22 usciva il 17, 106 m più in là),
@@ -61,8 +70,8 @@ test('posizione di consegna: l\'indirizzo del carrello parte VUOTO, due modi per
     nominatim.chiamate.length = 0;
     r = await chiedi('/api/indirizzo?lat=44.4019&lng=8.9742&precisione=' + precisione);
     assert.deepEqual(await r.json(), giusto
-      ? { ok: true, indirizzo: 'Via Puggia 22/3, 16131 Genova (GE)', civico: true, precisa: true }
-      : { ok: true, indirizzo: 'Via Puggia, 16131 Genova (GE)', civico: false, precisa: false }, 'precisione ' + precisione);
+      ? { ok: true, indirizzo: 'Via Puggia 22/3, 16131 Genova (GE)', civico: true, precisa: true, campi: CAMPI }
+      : { ok: true, indirizzo: 'Via Puggia, 16131 Genova (GE)', civico: false, precisa: false, campi: CAMPI }, 'precisione ' + precisione);
     assert.match(nominatim.chiamate[0], giusto ? /zoom=18/ : /zoom=17/, 'precisione ' + precisione);
   }
   // una precisione che non è un numero non cambia nulla (come se mancasse)
@@ -105,19 +114,20 @@ test('posizione di consegna: l\'indirizzo del carrello parte VUOTO, due modi per
   assert.match(js, /encodeURIComponent\(lng\) \+ '&precisione=' \+ encodeURIComponent\(metri\)/, 'il server sa quanto è incerta la posizione');
   assert.doesNotMatch(js, /maximumAge: 300000/, 'niente posizioni vecchie di cinque minuti');
   assert.match(js, /setTimeout\(function \(\) \{\s*\/\/[^\n]*\n\s*if \(e\.defaultPrevented\) return;\s*bottoni\.forEach/, 'un invio fermato (manca il civico) non lascia il pulsante "Paga" disabilitato');
-  assert.match(js, /if \(dati\.civico !== false\) \{/);
-  assert.match(js, /aggiungi il numero civico\./);
+  assert.match(js, /ind\.civico\.value = '';/, 'il pulsante della posizione compila tutto tranne il numero civico');
+  assert.match(js, /ind\.indirizzo\.value = dati\.campi\.indirizzo \|\| '';/);
+  assert.match(js, /scrivi il numero civico\./);
   assert.doesNotMatch(js, /senzaCivico/, 'nessun blocco del pagamento per il civico mancante: chi scrive "via puggia" paga lo stesso');
   assert.match(js, /bottonePos\.addEventListener\('click', cercaPosizione\)/);
   assert.doesNotMatch(js, /\n\s*cercaPosizione\(\);?\s*\n/, 'mai chiamata da sola all\'apertura');
   assert.doesNotMatch(js, /if \(!campo\.value\.trim\(\)\) cercaPosizione/);
   assert.match(js, /enableHighAccuracy: true[\s\S]*?enableHighAccuracy: false/, 'prima preciso, poi approssimato');
   assert.match(js, /fetch\('\/api\/indirizzo\?lat='/);
-  assert.match(js, /if \(campo\.value\.trim\(\) !== daPosizione\) \{ destLat\.value = ''; destLng\.value = ''; \}/);
+  assert.match(js, /if \(luogoDaPosizione\(\) !== daPosizione\) \{ destLat\.value = ''; destLng\.value = ''; \}/, 'via, CAP o città cambiati: le coordinate si tolgono');
   assert.match(js, /!window\.isSecureContext/);
   assert.match(js, /Impostazioni › Privacy e sicurezza › Localizzazione/, 'come riattivare il permesso su iPhone');
   assert.match(js, /lucchetto accanto all’indirizzo/, 'e su Android');
-  assert.match(js, /form\.addEventListener\('submit'[\s\S]*?if \(campo\.value\.trim\(\)\) return;[\s\S]*?e\.preventDefault\(\);/);
+  assert.match(js, /form\.addEventListener\('submit'[\s\S]*?if \(!manca\) return;[\s\S]*?e\.preventDefault\(\);/, 'non si va avanti finché indirizzo, civico, CAP e città non sono scritti');
   assert.doesNotMatch(js, /\/api\/posizione/, 'la posizione non si legge più in background: viaggia solo col pagamento');
 });
 
@@ -181,6 +191,25 @@ test('posizione di consegna: col pagamento vale la posizione dell\'account se l\
     } finally {
       nominatim.cerca = cercaPrima;
     }
+
+    // 6. indirizzo a campi (10/11/2026): indirizzo, civico, CAP e città servono tutti (anche l'interno); se ne manca uno non parte niente
+    await chiedi('/api/carrello/imposta', json({ id: 3, qty: 1 })); // il passo 5 ha svuotato il carrello
+    posizioniProva.length = 0;
+    nominatim.chiamate.length = 0;
+    prima = registro.length;
+    const completo = { modo: 'imposta', indirizzo: 'Via Puggia', civico: '22', interno: '3', cap: '16131', citta: 'Genova (GE)' };
+    for (const mancante of ['indirizzo', 'civico', 'interno', 'cap', 'citta']) {
+      r = await chiedi('/richieste', form({ ...completo, [mancante]: '  ', chiave_invio: 'campi-manca-' + mancante }));
+      assert.equal(r.status, 400, mancante);
+      assert.match(await r.text(), /Indirizzo di consegna incompleto/, mancante);
+    }
+    r = await chiedi('/richieste', form({ ...completo, cap: '1613', chiave_invio: 'campi-cap-corto' }));
+    assert.equal(r.status, 400, 'il CAP ha cinque cifre');
+    assert.deepEqual(nuove(prima), [], 'nessuna richiesta');
+    assert.deepEqual(nominatim.chiamate, []);
+    r = await chiedi('/richieste', form({ ...completo, chiave_invio: 'campi-completi' }));
+    assert.equal(r.status, 302, 'con tutti i campi si invia');
+    assert.match(nominatim.chiamate[nominatim.chiamate.length - 1], /\/search\?.*q=Via\+Puggia\+22\+int\.\+3%2C\+16131\+Genova/, 'la posizione si ricava dall\'indirizzo composto');
   });
 });
 

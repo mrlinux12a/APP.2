@@ -20,10 +20,9 @@ router.post('/richieste', requireRole('cliente'), async (req, res) => {
   let requestId;
   try {
     // Non si invia senza un indirizzo di consegna (la pagina lo precompila dalla posizione, se c'è; altrimenti è vuoto e lo scrive l'installatore).
-    const destinazione = String((req.body && req.body.destinazione) || '').trim();
-    if (!destinazione) {
-      throw new flusso.ErroreFlusso('destinazione', 'Manca l’indirizzo di consegna', 'Scrivi dove consegnare il materiale (via, numero, CAP, città) prima di pagare.');
-    }
+    // L'indirizzo arriva a campi (indirizzo, civico, interno, cap, citta: tutti tranne l'interno) e si compone in una riga; un vecchio modulo con la sola
+    // `destinazione` vale come prima.
+    const destinazione = flusso.destinazioneDaCorpo(req.body, { obbligatoria: true });
     // La posizione per il tragitto banco -> installatore è quella di questo indirizzo: le coordinate del dispositivo, se la pagina le ha mandate
     // (indirizzo preso dal pulsante "posizione" accanto al campo), altrimenti quelle dell'indirizzo scritto. Se non si trovano resta l'ultima posizione
     // nota (o la sede provvisoria).
@@ -31,7 +30,7 @@ router.post('/richieste', requireRole('cliente'), async (req, res) => {
     if (posizione) await geo.salvaPosizioneCliente(req.session.user.id, posizione.lat, posizione.lng, null);
     // `chiave_invio` è scritta nella pagina del carrello: la stessa pagina dà una richiesta sola, comunque si clicchi.
     const dati = {
-      destinazione: req.body && req.body.destinazione,
+      destinazione,
       note: req.body && req.body.note,
       chiaveInvio: req.body && req.body.chiave_invio,
     };

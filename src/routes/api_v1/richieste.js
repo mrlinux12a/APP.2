@@ -6,6 +6,8 @@ const flusso = require('../../logica/ordini/flusso_cliente');
 const format = require('../../comune/format');
 const orari = require('../../logica/ordini/orari');
 const anagrafiche = require('../../logica/account/anagrafiche');
+const geo = require('../../logica/ordini/geo');
+const limiti = require('../../middleware/limiti');
 const pagamentiModulo = require('../../logica/pagamenti/pagamenti');
 const stripePagamenti = require('../../logica/pagamenti/stripe_pagamenti');
 const { e2, importiJson, richiedeCliente, statoPagamentoJson } = require('./ausiliari');
@@ -109,6 +111,15 @@ router.get('/orari', richiedeCliente, async (req, res) => {
   });
 });
 
+// Dalla posizione del telefono ai campi dell'indirizzo (il pulsante con il mirino del carrello dell'app, gemello di GET /api/indirizzo del sito): via, CAP e città
+// già divisi in `campi`; il numero civico non c'è mai, lo scrive l'installatore. Senza una via trovata (o fuori dall'Italia) `ok` è false e i campi restano da scrivere.
+router.get('/indirizzo', limiti.indirizzo, richiedeCliente, async (req, res) => {
+  const precisioneM = req.query.precisione ? Number(req.query.precisione) : NaN;
+  const trovato = await geo.indirizzoDaPosizioneDettaglio(Number(req.query.lat), Number(req.query.lng), { precisioneM });
+  if (!trovato) return res.json({ ok: false, campi: null });
+  res.json({ ok: true, campi: trovato.campi });
+});
+
 // Paga e invia la richiesta, con destinazione e note scritte nel carrello. `chiave` (facoltativa) identifica l'invio dal carrello: lo
 // stesso invio ripetuto (doppio tocco, ritentativo) risponde con la richiesta già partita, senza crearne un'altra.
 //  · Senza Stripe (sviluppo, prove, pagamento simulato): la richiesta parte subito → { id }.
@@ -119,7 +130,8 @@ router.post('/richieste', richiedeCliente, async (req, res) => {
   try {
     const body = req.body || {};
     const righe = await flusso.righeDaQuantita(body.righe);
-    const dati = { destinazione: body.destinazione, note: body.note, chiaveInvio: body.chiave };
+    // Con i campi separati dell'app (indirizzo, civico, interno, cap, citta) l'indirizzo è composto e controllato qui; un'app vecchia manda `destinazione`.
+    const dati = { destinazione: flusso.destinazioneDaCorpo(body), note: body.note, chiaveInvio: body.chiave };
     if (stripePagamenti.pagaConStripe()) {
       const pagamentoId = await stripePagamenti.avviaPagamento(req.utente.id, righe, dati);
       const pagamento = await esitoPagamentoJson(pagamentoId, req.utente.id);
