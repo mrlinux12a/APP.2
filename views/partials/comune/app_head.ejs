@@ -23,4 +23,10 @@
     esterno "bloccante" teneva la pagina bianca finché Google non rispondeva. Nel frattempo valgono i font di sistema. %>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Source+Sans+3:wght@400;600&display=swap" media="print" onload="this.media='all'">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Source+Sans+3:wght@400;600&display=swap"></noscript>
+<%# Pagine del banco (restyling del 10/11/2026): in più Inter (testo) e Space Grotesk (titoli e timer grandi) per l'intestazione, la bacheca e il popup "Ispeziona". Si caricano
+    solo per il distributore, nello stesso modo non bloccante. %>
+<% if (typeof currentUser !== 'undefined' && currentUser && currentUser.ruolo === 'distributore') { %>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap"></noscript>
+<% } %>
 <link rel="stylesheet" href="<%= asset('/style.css') %>">

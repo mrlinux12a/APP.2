@@ -1,7 +1,7 @@
 // La pagina dell'ordine del banco (`GET /distributore/ordini/:id`), "Preparato" e "Elimina dal banco"; i vecchi link alla lista degli ordini rimandano allo Storico.
 const { creaRouter } = require('../base');
 const { requireRole } = require('../../middleware/auth');
-const { ritornoBanco, conRitorno } = require('../../comune/http');
+const { ritornoBanco, conRitorno, vuoleJson } = require('../../comune/http');
 const pricing = require('../../logica/pagamenti/pricing');
 const format = require('../../comune/format');
 const orariCorriere = require('../../logica/ordini/corriere');
@@ -128,12 +128,15 @@ router.get('/distributore/ordini/:id', requireRole('distributore'), async (req, 
   });
 });
 
-// "Preparato": dalla card "Da preparare" in home (`torna` = 'home': la card sparisce da lì) o dalla pagina dell'ordine (`torna` = la pagina da cui si era
-// arrivati: si resta sull'ordine, che ora è "In consegna", e la sua freccia riporta ancora lì). Il materiale parte e il cliente è avvisato.
+// "Ritirato dal corriere" (il vecchio "Preparato": la stessa azione, dal 10/11/2026 con il nome nuovo nella home e nel popup "Ispeziona"): dalla card
+// "Da preparare" in home (`torna` = 'home': la card sparisce da lì) o dalla pagina dell'ordine (`torna` = la pagina da cui si era arrivati: si resta
+// sull'ordine, che ora è "In consegna", e la sua freccia riporta ancora lì). Il materiale parte e il cliente è avvisato. Dal popup (Accept: application/json)
+// risponde `{ ok }` senza redirect.
 router.post('/distributore/ordini/:id/preparazione', requireRole('distributore'), async (req, res) => {
   const ordine = await ordineDelBanco(req);
-  if (!ordine) return res.redirect('/distributore/storico');
+  if (!ordine) return vuoleJson(req) ? res.status(404).json({ ok: false, errore: 'Ordine non trovato.' }) : res.redirect('/distributore/storico');
   await prendiInCarico(ordine);
+  if (vuoleJson(req)) return res.json({ ok: true });
   if (req.body.torna === 'home') return res.redirect('/distributore');
   res.redirect(conRitorno('/distributore/ordini/' + ordine.id, ritornoBanco(req.body.torna, '')));
 });

@@ -1,9 +1,23 @@
-/* ---------- Home del banco: bacheca a 3 colonne (views/banco/richieste.ejs) ---------- */
+/* ---------- Home del banco: intestazione e bacheca a 3 colonne (views/banco/richieste.ejs) ----------
+   Rifatta il 10/11/2026 (branch test/v2-grafica, richiesta esplicita, mockup della home): colori, font e misure sono quelli del mockup. Inter per il testo, Space Grotesk
+   per i titoli delle colonne e i timer grandi (il sito per il resto usa Sora e Source Sans 3: i due font nuovi si caricano solo sulle pagine del banco, vedi
+   partials/comune/app_head.ejs, e si usano solo qui dentro: intestazione, bacheca e popup). Il popup "Ispeziona" ha il suo blocco in fondo a questo file. */
+:root {
+  --bk-font: "Inter", "Source Sans 3", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  --bk-titoli: "Space Grotesk", "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  --bk-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --bk-testo: #111827;
+  --bk-sec: #374151;
+  --bk-sec2: #4b5563;
+  --bk-bordo: #e5e7eb;
+  --bk-sfondo: #f3f4f6;
+  --bk-colonna: #e9ebef;
+}
 
 /* Intestazione (views/partials/banco/banco_testa.ejs): è la stessa su TUTTE le pagine del banco, non solo sulla home.
-   Barra bianca da 64px con ditta e filiale, menu a schede (Banco, Clienti, Storico ordini) e cerchio con le iniziali (niente campanella).
-   Da 900px in su il menu sospeso in basso (nav_distributore, .nav-solo-stretta) non si mostra, su nessuna pagina del
-   banco: il menu sta qui. Sotto, il menu in basso resta e le schede qui spariscono. */
+   Striscia piena da 8px (#22332E) e barra bianca da 64px con ditta in maiuscolo e banco, menu a schede (Banco, Clienti, Storico ordini) e cerchio con le iniziali (niente
+   campanella). Da 900px in su il menu sospeso in basso (nav_distributore, .nav-solo-stretta) non si mostra, su nessuna pagina del banco: il menu sta qui. Sotto, il menu
+   in basso resta e le schede qui spariscono. */
 .banco-testa {
   position: sticky;
   top: 0;
@@ -11,22 +25,26 @@
   display: flex;
   align-items: center;
   gap: 24px;
-  min-height: 64px;
+  min-height: 72px;
   padding: env(safe-area-inset-top, 0px) max(24px, env(safe-area-inset-right, 0px)) 0 max(24px, env(safe-area-inset-left, 0px));
-  background: var(--surface);
-  border-bottom: 1px solid var(--bordo);
+  background: #fff;
+  border-top: 8px solid #22332e;
+  border-bottom: 1px solid var(--bk-bordo);
+  font-family: var(--bk-font);
 }
 .banco-identita { min-width: 0; }
 .banco-ditta {
-  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  color: var(--bk-testo);
+  font-family: var(--bk-font);
   font-weight: 800;
-  font-size: 18px;
+  font-size: 19px;
   line-height: 1.2;
+  text-transform: uppercase;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.banco-filiale { color: var(--grigio); font-size: 13px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.banco-filiale { color: var(--bk-sec2); font-size: 13px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .banco-menu { display: flex; gap: 8px; }
 .banco-voce {
@@ -34,15 +52,15 @@
   align-items: center;
   gap: 8px;
   height: 44px;
-  padding: 0 18px;
-  border-radius: 22px;
-  color: var(--grigio);
-  font-size: 16px;
+  padding: 0 16px;
+  border-radius: 12px;
+  color: var(--bk-sec);
+  font-size: 15px;
   font-weight: 600;
   text-decoration: none;
 }
-.banco-voce:hover { background: var(--sfondo); }
-.banco-voce.attiva { background: var(--blu-chiaro); color: var(--blu-scuro); }
+.banco-voce:hover { background: var(--bk-sfondo); }
+.banco-voce.attiva { background: #e3edf7; color: #1e3a5f; }
 .banco-voce-ico { display: inline-flex; font-size: 20px; }
 .banco-voce-pallino {
   min-width: 20px;
@@ -88,12 +106,13 @@
 @media (min-width: 720px) {
   .app > .banco-titolo { max-width: 1400px; margin-left: auto; margin-right: auto; padding-left: 14px; padding-right: 14px; }
 }
+/* Cerchio con le iniziali: 46px, fondo #2B5A8C e bordo da 3px #DCE7F3. Apre la tendina (ditta e banco in testa, Anagrafica, Esci in rosso). */
 .banco-avatar-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
   margin: 0;
   padding: 0;
   border: none;
@@ -101,195 +120,148 @@
   background: none;
   cursor: pointer;
 }
-.banco-avatar-btn .avatar { box-shadow: 0 0 0 3px var(--blu-chiaro); }
+.banco-avatar-btn .avatar.avatar-40 {
+  width: 46px;
+  height: 46px;
+  background: #2b5a8c;
+  border: 3px solid #dce7f3;
+  box-shadow: none;
+  color: #fff;
+  font-family: var(--bk-font);
+  font-size: 15px;
+  font-weight: 700;
+}
 .banco-avatar-btn:focus-visible, .banco-voce:focus-visible { outline: 2px solid var(--blu); outline-offset: 1px; }
+.banco-account .tendina { font-family: var(--bk-font); border-color: var(--bk-bordo); border-radius: 14px; }
+.banco-account .tendina-testata { background: #fff; }
+.banco-account .tendina-testata .nome { color: var(--bk-testo); font-size: 15px; font-weight: 800; text-transform: uppercase; }
+.banco-account .tendina-testata .ruolo { color: var(--bk-sec2); font-size: 13px; }
+.banco-account .tendina .voce-esci { color: #b91c1c; }
 /* Le voci della tendina già presenti nella barra (o nel menu in basso) si mostrano solo dove la barra non le ha. */
 .menu-account .tendina .voce-solo-stretta { display: none; }
 
-/* Corpo: tre colonne uguali che riempiono l'altezza rimasta; ogni colonna scorre per conto suo e ha la
-   propria testata fissa. */
+/* Pagina della home: una colonna di blocchi, la barra in alto e la bacheca grigia che riempie il resto. La pagina scorre (le colonne hanno la loro altezza). */
+.pagina-banco { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; background: var(--bk-sfondo); }
 .bacheca {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-rows: minmax(0, 1fr);
-  gap: 16px;
   flex: 1 1 auto;
-  min-height: 0;
   max-width: none; /* è un <main>: senza questo varrebbe il `main { max-width: 900px }` delle viste desktop */
   margin: 0;
-  padding: 16px 24px 20px;
+  padding: 24px clamp(16px, 4vw, 48px) 40px;
+  background: var(--bk-sfondo);
+  color: var(--bk-testo);
+  font-family: var(--bk-font);
 }
+/* Contenitore da 1360px al centro; tre colonne affiancate (320px minimo) che vanno a capo e su telefono si impilano. */
+.bacheca-colonne { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 20px; max-width: 1360px; margin: 0 auto; }
 
-/* Colori di fase (--fase*): striscia in cima, riquadro icona e pillola del numero. */
+/* Colori di fase (--fase*): pallino, pillola del numero. */
 .colonna {
-  --fase: var(--arancio);
-  --fase-chiaro: var(--arancio-chiaro);
-  --fase-scuro: var(--arancio);
+  --fase: #d97706;
+  --fase-chiaro: #fef3c7;
+  --fase-scuro: #92400e;
   display: flex;
+  flex: 1 1 320px;
   flex-direction: column;
   min-width: 0;
-  min-height: 0;
-  background: #e9e6df;
-  border-top: 4px solid var(--fase);
-  border-radius: 18px;
-  overflow: hidden;
+  padding: 16px;
+  background: var(--bk-colonna);
+  border-radius: 20px;
 }
-.colonna-corriere { --fase: var(--viola); --fase-chiaro: var(--viola-chiaro); --fase-scuro: #4b3480; }
-.colonna-preparare { --fase: var(--verde); --fase-chiaro: var(--verde-chiaro); --fase-scuro: var(--verde); }
+.colonna-corriere { --fase: #2563eb; --fase-chiaro: #dbeafe; --fase-scuro: #1e40af; }
+.colonna-preparare { --fase: #059669; --fase-chiaro: #d1fae5; --fase-scuro: #065f46; }
 
-.colonna-testa { display: flex; align-items: center; gap: 12px; flex: none; padding: 14px 16px 12px; }
-.colonna-icona {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  background: var(--fase-chiaro);
-  color: var(--fase);
-  font-size: 18px;
-}
-.colonna-titolo {
-  margin: 0;
-  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-  font-size: 17px;
-  font-weight: 700;
-  line-height: 1.2;
-}
+.colonna-testa { display: flex; align-items: center; gap: 10px; flex: none; padding: 0 2px 14px; }
+.colonna-punto { flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--fase); }
+.colonna-titolo { margin: 0; color: var(--bk-testo); font-family: var(--bk-titoli); font-size: 18px; font-weight: 600; line-height: 1.2; }
 .colonna-conta {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 34px;
-  height: 32px;
+  min-width: 28px;
+  height: 26px;
   margin-left: auto;
-  padding: 0 10px;
-  border-radius: 16px;
+  padding: 0 9px;
+  border-radius: 13px;
   background: var(--fase-chiaro);
   color: var(--fase-scuro);
-  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-  font-size: 16px;
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-.colonna-lista {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  gap: 12px;
-  min-height: 0;
-  padding: 4px 12px 12px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+.colonna-lista { display: flex; flex-direction: column; gap: 12px; }
+/* Colonna vuota: riquadro tratteggiato. */
+.colonna-vuota {
+  margin: 0;
+  padding: 28px 16px;
+  border: 2px dashed #c4c9d2;
+  border-radius: 14px;
+  color: var(--bk-sec2);
+  font-size: 14px;
+  text-align: center;
 }
-.colonna-vuota { margin: 28px 12px; color: var(--grigio); font-size: 15px; text-align: center; }
 
-/* Scheda: bianca, uguale nelle tre colonne; cambiano solo la testa e le azioni. */
+/* Scheda: bianca, bordo #E5E7EB, raggio 16px, uguale nelle tre colonne; cambiano la testa e le azioni. */
 .scheda {
   display: flex;
   flex-direction: column;
-  flex: none;
   gap: 12px;
   min-width: 0;
-  padding: 14px;
-  background: var(--surface);
-  border: 1px solid rgba(35, 32, 25, 0.07);
+  padding: 16px;
+  background: #fff;
+  border: 1px solid var(--bk-bordo);
   border-radius: 16px;
-  box-shadow: 0 1px 2px rgba(35, 32, 25, 0.06);
 }
-.scheda-testa { display: flex; align-items: center; gap: 14px; }
-.scheda-testa-alto { align-items: flex-start; }
-.scheda-testi { flex: 1 1 auto; min-width: 0; }
-.scheda-nome-riga { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.scheda-nome {
-  margin: 0;
-  min-width: 0;
-  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-  font-size: 16px;
-  font-weight: 700;
-  line-height: 1.25;
-  overflow-wrap: anywhere;
-}
-.scheda-nome a { color: inherit; text-decoration: none; }
-.scheda-nome a:hover { text-decoration: underline; }
-.scheda-sotto { margin-top: 2px; color: var(--grigio); font-size: 13px; line-height: 1.3; }
+.scheda-alto { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.scheda-codice { color: var(--bk-sec2); font-family: var(--bk-mono); font-size: 13px; }
+.scheda-cliente { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.scheda-nome { margin: 0; min-width: 0; color: var(--bk-testo); font-size: 15px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+/* Iniziali del cliente: quadrato arrotondato azzurro (il cerchio blu di prima resta nel resto del sito). */
+.scheda-cliente .avatar, .isp-cliente .avatar { flex: none; border-radius: 12px; background: #e3edf7; color: #1e3a5f; box-shadow: none; font-family: var(--bk-font); font-weight: 700; }
 
-/* Da confermare: bordo e ombra color fase; negli ultimi minuti tutto passa al rosso e la scheda pulsa piano. */
-.scheda-richiesta { border: 1.5px solid #f1c4ac; box-shadow: 0 2px 10px rgba(171, 77, 36, 0.12); }
-.scheda-richiesta.urgente { border-color: #e29a96; box-shadow: 0 2px 10px rgba(189, 58, 58, 0.14); animation: bacheca-pulsa 1.8s ease-out infinite; }
-.scheda-richiesta.scaduta { opacity: 0.55; pointer-events: none; }
-
-/* Anello da 56px: la barra è il tempo rimasto e si svuota in senso orario; dentro, mm:ss. */
-.anello { position: relative; flex: none; width: 56px; height: 56px; }
-.anello svg { display: block; width: 56px; height: 56px; }
-.anello circle { fill: none; stroke-width: 5; }
-.anello-traccia { stroke: var(--arancio-chiaro); transition: stroke 0.3s; }
-.anello-barra { stroke: var(--arancio); stroke-linecap: round; transition: stroke-dashoffset 1s linear, stroke 0.3s; }
-.anello-tempo {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--arancio);
-  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-  font-size: 13.5px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  transition: color 0.3s;
-}
-.scheda-richiesta.urgente .anello-traccia { stroke: var(--rosso-chiaro); }
-.scheda-richiesta.urgente .anello-barra { stroke: var(--rosso); }
-.scheda-richiesta.urgente .anello-tempo { color: var(--rosso); }
-.etichetta-nuova {
-  flex: none;
-  padding: 3px 8px;
-  border-radius: 6px;
-  background: var(--arancio);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  line-height: 1.2;
-  text-transform: uppercase;
-}
-
-/* Articoli: "2×" in un riquadro, nome e codice sotto. */
-.articoli { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
-.articolo { display: flex; align-items: flex-start; gap: 10px; }
-.articolo-qta {
-  flex: none;
+/* Timer a pillola (mm:ss, parte dal tempo che il server dice rimasto) con sotto la barra che si accorcia. Oltre 2 minuti ambra; negli ultimi 2 rosso; a zero "Scaduto". */
+.timer-pillola {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  min-width: 34px;
-  height: 24px;
-  padding: 0 7px;
-  border-radius: 7px;
-  background: var(--blu-chiaro);
-  color: var(--blu-scuro);
-  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-  font-size: 12px;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 14px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+  white-space: nowrap;
+  transition: background-color 0.3s, color 0.3s;
 }
-.articolo-testo { display: flex; flex-direction: column; min-width: 0; }
-.articolo-nome { font-size: 15px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
-.articolo-cod { color: var(--grigio); font-size: 12.5px; line-height: 1.35; }
-.articolo-altre { padding-left: 44px; color: var(--grigio); font-size: 13px; }
+.timer-ico { display: inline-flex; font-size: 15px; }
+.timer-barra { height: 6px; border-radius: 3px; background: #f3f4f6; overflow: hidden; }
+.timer-barra-riempita { display: block; height: 100%; border-radius: 3px; background: #d97706; transition: width 1s linear, background-color 0.3s; }
+.scheda-richiesta.urgente .timer-pillola { background: #fee2e2; color: #991b1b; }
+.scheda-richiesta.urgente .timer-barra-riempita { background: #dc2626; }
+.scheda-richiesta.scaduta { opacity: 0.6; }
+.scheda-richiesta.scaduta .timer-pillola { background: #f3f4f6; color: var(--bk-sec2); }
+.scheda-richiesta.scaduta .scheda-azioni { pointer-events: none; opacity: 0.5; }
 
-/* Pulsanti a pillola da 50px. */
+/* Materiale: SOLO il codice prodotto (monospace) e la quantità; niente nomi. */
+.codici { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 10px 12px; list-style: none; border-radius: 10px; background: #f9fafb; }
+.codice-riga { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.codice-cod { min-width: 0; color: var(--bk-testo); font-family: var(--bk-mono); font-size: 12.5px; overflow-wrap: anywhere; }
+.codice-qta { flex: none; color: var(--bk-sec); font-family: var(--bk-mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.codice-altre { color: var(--bk-sec2); font-size: 12.5px; }
+
+/* Pulsanti alti 44px, raggio 10px. */
 .btn-banco {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-height: 50px;
-  padding: 0 18px;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px;
   border: 1.5px solid transparent;
-  border-radius: 25px;
-  font-family: inherit;
-  font-size: 16px;
+  border-radius: 10px;
+  font-family: var(--bk-font);
+  font-size: 13.5px;
   font-weight: 600;
   line-height: 1.2;
   text-align: center;
@@ -297,107 +269,99 @@
   white-space: nowrap;
   cursor: pointer;
 }
-.btn-banco svg { width: 20px; height: 20px; }
-.btn-banco:focus-visible { outline: 3px solid var(--blu); outline-offset: 2px; }
-.btn-banco-conferma { background: var(--arancio); color: #fff; }
-.btn-banco-conferma:hover { background: #963f1b; }
-.btn-banco-secondario { background: var(--surface); border-color: #d6d1c6; color: var(--testo); }
-.btn-banco-secondario:hover { background: var(--sfondo); }
-.btn-banco-prepara { width: 100%; background: var(--blu); color: #fff; }
-.btn-banco-prepara:hover { background: var(--blu-scuro); }
-/* Da confermare: "Conferma" a tutta larghezza (conferma subito, senza aprire il dettaglio), sotto "Ispeziona" e "Non disponibile"
-   affiancati e larghi metà ciascuno. */
-.scheda-azioni { display: flex; flex-direction: column; gap: 8px; }
-.scheda-azioni form { margin: 0; }
-.scheda-azione-conferma .btn-banco { width: 100%; }
-.scheda-azioni-secondarie { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.scheda-azioni-secondarie > a, .scheda-azioni-secondarie > form { min-width: 0; }
-.scheda-azioni-secondarie .btn-banco { width: 100%; }
-/* Da preparare: "Ispeziona" e "Preparato" affiancati e uguali; senza Ispeziona (ordine senza richiesta) "Preparato" occupa tutta la riga. */
-.scheda-azioni-ordine { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
-.scheda-azioni-ordine .btn-banco { width: 100%; }
-.btn-banco-medio { min-height: 46px; }
-.btn-banco-piccolo { min-height: 42px; gap: 6px; padding: 0 8px; font-size: 14.5px; }
-.btn-banco-piccolo svg { width: 18px; height: 18px; stroke-width: 1.9; }
-.scheda { container-type: inline-size; }
+.btn-banco svg { width: 18px; height: 18px; stroke-width: 1.9; }
+.btn-banco:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
+.btn-banco-secondario { background: #fff; border-color: #d1d5db; color: var(--bk-testo); }
+.btn-banco-secondario:hover { background: #f9fafb; }
+.btn-banco-rifiuta { background: #fff; border-color: #fca5a5; color: #b91c1c; }
+.btn-banco-rifiuta:hover { background: #fef2f2; }
+.btn-banco-accetta { width: 100%; background: #111827; color: #fff; }
+.btn-banco-accetta:hover { background: #1f2937; }
+.btn-banco-ritirato { width: 100%; background: #047857; color: #fff; }
+.btn-banco-ritirato:hover { background: #065f46; }
+.btn-banco:disabled { opacity: 0.55; cursor: default; }
+.scheda-azioni { display: flex; flex-wrap: wrap; gap: 8px; }
+.scheda-azioni form { display: flex; margin: 0; }
+/* "Accetta" e "Ritirato dal corriere" prendono lo spazio che resta; con la scheda stretta vanno a capo sotto agli altri. */
+.scheda-azioni .azione-principale { flex: 1 1 96px; min-width: 0; }
+.scheda-azioni-ordine .azione-principale { flex-basis: 150px; }
+/* Da confermare: "Ispeziona" e "Non disponibile" si dividono la prima riga a metà, "Accetta" sta sempre sotto, a tutta larghezza (a qualunque larghezza di scheda). */
+.scheda-azioni-conferma > a, .scheda-azioni-conferma > form:not(.azione-principale) { flex: 1 1 calc(50% - 4px); min-width: 0; }
+.scheda-azioni-conferma > form:not(.azione-principale) .btn-banco { flex: 1; }
+.scheda-azioni-conferma .azione-principale { flex-basis: 100%; }
+.btn-banco-pieno { flex: 1 1 100%; }
 
-/* Attesa corriere: icona viola, riga di stato e una nota grigia. */
-.scheda-icona {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: var(--viola-chiaro);
-  color: var(--viola);
-  font-size: 20px;
-}
-/* "Ispeziona": pillola secondaria da 38px in cima a destra della scheda (apre il dettaglio). Se il nome non ci sta, va a capo sotto. */
-.scheda-testa-corriere { flex-wrap: wrap; row-gap: 10px; }
-.scheda-testa-corriere .scheda-testi { flex: 1 1 150px; }
-.btn-ispeziona {
-  position: relative; flex: none; align-self: flex-start; margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
-  height: 38px; padding: 0 14px 0 12px; border: 1.5px solid #d6d1c6; border-radius: 19px; background: var(--surface);
-  color: var(--testo); font-family: inherit; font-size: 14px; font-weight: 600; line-height: 1; text-decoration: none; white-space: nowrap;
-}
-.btn-ispeziona::after { content: ""; position: absolute; inset: -3px; } /* area di tocco da 44px */
-.btn-ispeziona svg { width: 18px; height: 18px; stroke-width: 1.9; }
-.btn-ispeziona:hover { background: var(--sfondo); }
-.btn-ispeziona:focus-visible { outline: 3px solid var(--blu); outline-offset: 2px; }
-.stato-corriere { margin-top: 2px; color: #4b3480; font-size: 13px; font-weight: 600; line-height: 1.35; }
-.stato-corriere::before {
-  content: "";
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  margin-right: 7px;
-  border-radius: 50%;
-  background: var(--viola);
-  vertical-align: 0.05em;
-}
-.scheda-nota { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--sfondo); color: var(--grigio); font-size: 14px; line-height: 1.4; }
+/* Attesa corriere: riquadro animato #EFF6FF. Furgone in un cerchio blu con due onde che pulsano, "Cerco un corriere…" con tre puntini, barra senza fine. */
+.cerca { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 12px; background: #eff6ff; }
+.cerca-riga { display: flex; align-items: center; gap: 14px; }
+.cerca-icona { position: relative; flex: none; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; }
+.cerca-furgone { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: #2563eb; color: #fff; font-size: 20px; }
+.cerca-onda { position: absolute; inset: 2px; border-radius: 50%; background: rgba(37, 99, 235, 0.3); animation: cerca-onda 2s ease-out infinite; }
+.cerca-onda-2 { animation-delay: 1s; }
+.cerca-testi { display: flex; flex-direction: column; min-width: 0; }
+.cerca-titolo { color: #1e40af; font-size: 14px; font-weight: 700; line-height: 1.3; }
+.cerca-sotto { color: #1d4ed8; font-size: 13px; line-height: 1.35; }
+.puntini i { display: inline-block; font-style: normal; animation: cerca-punto 1.4s infinite both; }
+.puntini i::before { content: "."; }
+.puntini i:nth-child(2) { animation-delay: 0.2s; }
+.puntini i:nth-child(3) { animation-delay: 0.4s; }
+.cerca-barra { position: relative; height: 6px; border-radius: 3px; background: #dbeafe; overflow: hidden; }
+.cerca-barra span { position: absolute; top: 0; bottom: 0; left: 0; width: 38%; border-radius: 3px; background: #2563eb; animation: cerca-scorri 1.6s ease-in-out infinite; }
+.da-tempo { color: #1e40af; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
 
-/* Da preparare: a destra i minuti che mancano al ritiro del corriere, sempre in verde (21/10/2026: niente orario né rosso negli ultimi minuti). */
-.pillola-arrivo {
-  flex: none;
-  padding: 6px 10px 5px;
-  border-radius: 12px;
-  background: var(--verde-chiaro);
-  color: var(--verde);
-  text-align: center;
-  line-height: 1.15;
-  transition: background-color 0.3s, color 0.3s;
-}
-.pillola-min {
-  display: block;
-  font-family: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-  font-size: 17px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
+/* Da preparare: etichetta scura col codice dell'ordine in evidenza ("ORDINE" piccolo + codice monospace bianco). */
+.ordine-codice-riga { display: flex; }
+.ordine-etichetta { display: inline-flex; align-items: baseline; gap: 8px; padding: 6px 12px; border-radius: 10px; background: #111827; color: #fff; }
+.ordine-etichetta-tit { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.8; }
+.ordine-etichetta-cod { font-family: var(--bk-mono); font-size: 17px; font-weight: 700; }
+
+/* Corriere in arrivo: riquadro #ECFDF5 con il conto alla rovescia grande e la barra che si riempie. A zero verde pieno, "Corriere arrivato al banco" in bianco e un puntino che pulsa. */
+.arrivo { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: 12px; background: #ecfdf5; color: #065f46; transition: background-color 0.3s, color 0.3s; }
+.arrivo-riga { display: flex; align-items: center; gap: 8px; }
+.arrivo-ico { display: inline-flex; font-size: 20px; }
+.arrivo-testo { min-width: 0; font-size: 14px; font-weight: 600; }
+.arrivo-tempo { margin-left: auto; font-family: var(--bk-titoli); font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+.arrivo-punto { display: none; flex: none; width: 10px; height: 10px; border-radius: 50%; background: #fff; animation: arrivo-pulsa 1.4s ease-out infinite; }
+.arrivo .timer-barra { background: #d1fae5; }
+.arrivo .timer-barra-riempita { background: #059669; }
+.arrivo.arrivato { background: #059669; color: #fff; }
+.arrivo.arrivato .arrivo-punto { display: inline-block; }
+.arrivo.arrivato .arrivo-tempo, .arrivo.arrivato .timer-barra { display: none; }
+.arrivo.arrivato .arrivo-testo { font-size: 15px; font-weight: 700; }
 
 @keyframes bacheca-entra {
   from { opacity: 0; transform: translateY(-8px) scale(0.985); }
   to { opacity: 1; transform: none; }
 }
 @keyframes bacheca-pulsa {
-  0%, 100% { box-shadow: 0 2px 10px rgba(189, 58, 58, 0.14), 0 0 0 0 rgba(189, 58, 58, 0.3); }
-  60% { box-shadow: 0 2px 10px rgba(189, 58, 58, 0.14), 0 0 0 7px rgba(189, 58, 58, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.3); }
+  60% { box-shadow: 0 0 0 7px rgba(220, 38, 38, 0); }
+}
+@keyframes cerca-onda {
+  0% { transform: scale(0.8); opacity: 0.7; }
+  100% { transform: scale(1.7); opacity: 0; }
+}
+@keyframes cerca-punto { 0%, 80%, 100% { opacity: 0.2; } 40% { opacity: 1; } }
+@keyframes cerca-scorri { 0% { left: -40%; } 100% { left: 102%; } }
+@keyframes arrivo-pulsa {
+  0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.6); }
+  70% { box-shadow: 0 0 0 8px rgba(255, 255, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
 }
 .scheda.entra { animation: bacheca-entra 0.35s ease-out; }
+.scheda-richiesta.urgente { animation: bacheca-pulsa 1.8s ease-out infinite; }
 .scheda-richiesta.urgente.entra { animation: bacheca-entra 0.35s ease-out, bacheca-pulsa 1.8s ease-out 0.35s infinite; }
 @media (prefers-reduced-motion: reduce) {
   .scheda.entra, .scheda-richiesta.urgente, .scheda-richiesta.urgente.entra { animation: none; }
-  .anello-barra, .anello-traccia, .anello-tempo, .pillola-arrivo { transition: none; }
+  .cerca-onda, .puntini i, .cerca-barra span, .arrivo-punto { animation: none; }
+  .puntini i { opacity: 1; }
+  .cerca-barra span { left: 0; width: 38%; }
+  .cerca-onda { display: none; }
+  .timer-barra-riempita, .timer-pillola, .arrivo { transition: none; }
 }
 
-/* Da schermo largo la pagina è una sola schermata (le colonne scorrono dentro). Il menu in basso non serve. */
+/* Da schermo largo il menu in basso non serve. */
 @media (min-width: 900px) {
-  .pagina-banco { display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
-  .banco-testa { flex: none; }
   .navbar.nav-solo-stretta { display: none !important; }
 }
 
@@ -406,6 +370,143 @@
   .banco-testa { gap: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
   .banco-menu { display: none; }
   .menu-account .tendina .voce-solo-stretta { display: block; }
-  .bacheca { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; padding: 12px 12px calc(var(--barra-bassa) + 24px); }
-  .colonna-lista { overflow: visible; }
+  .bacheca { padding-bottom: calc(var(--barra-bassa) + 24px); }
+}
+
+/* ---------- Popup "Ispeziona" (partials/banco/ispeziona.ejs; lo apre assets/js, "Popup Ispeziona del banco") ----------
+   Si apre SOPRA la bacheca, senza cambiare pagina: overlay rgba(17,24,39,0.5), pannello bianco raggio 20px, padding 24px, al massimo 940px di larghezza e 92vh di
+   altezza (scorre dentro). Uguale nelle tre fasi: intestazione, cliente + blocco del tempo, tabella del materiale, pulsanti. */
+.isp-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(17, 24, 39, 0.5);
+  font-family: var(--bk-font);
+}
+.isp-overlay[hidden] { display: none; }
+body.isp-aperto { overflow: hidden; }
+.isp-pannello {
+  width: 100%;
+  max-width: 940px;
+  max-height: 92vh;
+  max-height: 92dvh;
+  padding: 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: 0 24px 64px rgba(17, 24, 39, 0.35);
+  color: var(--bk-testo);
+}
+.isp-pannello:focus { outline: none; }
+
+.isp-testa { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.isp-testa-testi { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
+.isp-pillola { display: inline-block; padding: 3px 10px; border-radius: 999px; background: #fef3c7; color: #92400e; font-size: 12px; font-weight: 700; line-height: 1.4; }
+.isp-pillola-attesa_corriere { background: #dbeafe; color: #1e40af; }
+.isp-pillola-da_preparare { background: #d1fae5; color: #065f46; }
+.isp-pillola-chiuso { background: #f3f4f6; color: var(--bk-sec2); }
+.isp-titolo { margin: 0; font-family: var(--bk-mono); font-size: 22px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+.isp-x {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--bk-testo);
+  font-size: 20px;
+  cursor: pointer;
+}
+.isp-x:hover { background: #f9fafb; }
+.isp-x:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
+.isp-avviso { display: flex; align-items: center; gap: 10px; margin: 0 0 16px; padding: 12px 14px; border-radius: 12px; background: #fff7ed; color: #9a3412; font-size: 14px; font-weight: 600; line-height: 1.4; }
+.isp-avviso svg { flex: none; width: 20px; height: 20px; }
+
+.isp-blocchi { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
+.isp-eti { margin: 0 0 8px; color: #6b6458; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+.isp-cliente { flex: 1 1 340px; min-width: 0; padding: 16px; border: 1px solid #e7e2d9; border-radius: 14px; }
+.isp-cliente-riga { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.isp-cliente-testi { display: flex; flex: 1 1 140px; flex-direction: column; gap: 2px; min-width: 0; }
+.isp-cliente-nome { font-size: 17px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.isp-cliente-piva { color: var(--bk-sec2); font-size: 13px; }
+.isp-cliente-piva b { color: var(--bk-testo); font-weight: 500; }
+.isp-cliente-tel { display: inline-flex; align-items: center; gap: 4px; color: #1d4ed8; font-size: 13px; font-variant-numeric: tabular-nums; }
+.isp-cliente-tel svg { width: 14px; height: 14px; }
+.isp-apri { flex: none; }
+.isp-apri svg { width: 16px; height: 16px; }
+
+/* Blocco del tempo (nei tre stati). */
+.isp-tempo { flex: 1 1 280px; min-width: 0; padding: 16px 18px; border-radius: 14px; background: #fef3c7; color: #92400e; }
+.isp-tempo .isp-eti { color: inherit; }
+.isp-tempo-valore { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-family: var(--bk-titoli); font-size: 40px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.isp-tempo-riga { display: flex; align-items: center; gap: 14px; }
+.isp-tempo-riga .isp-tempo-valore { margin-bottom: 0; }
+.isp-tempo-sotto { margin: 8px 0 10px; font-size: 14px; font-weight: 600; }
+.isp-tempo-conferma .timer-barra { background: #fff; }
+.isp-tempo-conferma .timer-barra-riempita { background: #d97706; }
+.isp-tempo-conferma.urgente { background: #fee2e2; color: #991b1b; }
+.isp-tempo-conferma.urgente .timer-barra-riempita { background: #dc2626; }
+.isp-tempo-corriere { background: #eff6ff; color: #1e3a8a; }
+.cerca-icona-grande { width: 48px; height: 48px; }
+.isp-tempo-corriere .cerca-furgone { width: 44px; height: 44px; font-size: 22px; }
+.isp-tempo-preparare { background: #ecfdf5; color: #065f46; }
+.isp-tempo-preparare .timer-barra { background: #d1fae5; }
+.isp-tempo-preparare .timer-barra-riempita { background: #059669; }
+.isp-tempo-preparare.arrivato { background: #059669; color: #fff; }
+.isp-tempo-preparare.arrivato .isp-tempo-valore { display: none; }
+.isp-tempo-preparare.arrivato .arrivo-punto { display: inline-block; }
+.isp-tempo-preparare.arrivato .timer-barra { display: none; }
+.isp-tempo-preparare.arrivato .isp-eti { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 18px; letter-spacing: 0; text-transform: none; }
+.isp-tempo-semplice .isp-tempo-sotto, .isp-tempo-chiuso .isp-tempo-sotto { margin: 0; }
+.isp-tempo-chiuso { background: #f3f4f6; color: var(--bk-sec); }
+
+/* Tabella "Materiale richiesto": contenitore con bordo #E7E2D9 e raggio 14px, intestazioni maiuscole, righe separate, piede con il totale. Su schermo stretto scorre di lato. */
+.isp-eti-tabella { margin-bottom: 10px; }
+.isp-tabella-box { overflow: hidden; border: 1px solid #e7e2d9; border-radius: 14px; }
+.isp-tabella-scorri { overflow-x: auto; }
+.isp-tabella { width: 100%; min-width: 640px; border-collapse: collapse; }
+.isp-tabella th {
+  padding: 14px 20px;
+  background: #fbf9f5;
+  color: #6b6458;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  line-height: 1.3;
+  text-align: left;
+  text-transform: uppercase;
+}
+.isp-tabella td { padding: 18px 20px; border-top: 1px solid #ede9e1; vertical-align: middle; }
+.isp-tabella .isp-num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.isp-tabella small { display: block; margin-top: 2px; color: #6b6458; font-size: 12px; font-weight: 400; }
+.isp-qta { display: inline-block; padding: 6px 12px; border-radius: 8px; background: #e3edf7; color: #1e3a5f; font-size: 15px; font-weight: 700; white-space: nowrap; }
+.isp-c-art { min-width: 160px; font-size: 15px; }
+.isp-c-cod code { font-family: var(--bk-mono); font-size: 14px; }
+.isp-listino { color: #6b6458; }
+.isp-totale-riga { font-weight: 700; }
+.isp-piede { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: flex-end; gap: 12px; padding: 18px 20px; background: #f7f4ee; }
+.isp-piede-eti { color: var(--bk-sec2); font-size: 16px; }
+.isp-piede-val { font-family: var(--bk-titoli); font-size: 32px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.isp-piede-iva { color: var(--bk-sec2); font-size: 14px; }
+
+.isp-errore { margin: 16px 0 0; padding: 10px 14px; border-radius: 10px; background: #fee2e2; color: #991b1b; font-size: 14px; font-weight: 600; }
+.isp-azioni { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.isp-azioni .btn-banco { width: auto; padding: 0 20px; font-size: 14.5px; }
+
+@media (max-width: 899.98px) {
+  .isp-pannello { padding: 16px; border-radius: 16px; }
+  .isp-azioni .btn-banco { flex: 1 1 auto; }
+}
+@media (max-width: 520px) {
+  .isp-tempo-valore { font-size: 34px; }
+  .isp-piede-val { font-size: 26px; }
 }

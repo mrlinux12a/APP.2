@@ -53,57 +53,74 @@ test('home del banco: bacheca a tre colonne, senza interruttore né riquadri con
     assert.match(t, /col-conferma">Da confermare<\/h2>\s*<span class="colonna-conta" aria-label="2 richieste">2</);
     assert.match(t, /col-corriere">Attesa corriere<\/h2>\s*<span class="colonna-conta" aria-label="1 richieste">1</);
     assert.match(t, /col-preparare">Da preparare<\/h2>\s*<span class="colonna-conta" aria-label="2 ordini">2</);
-    assert.ok(t.includes('data-soglia-urgente="180"'));
+    assert.ok(t.includes('data-soglia-urgente="120"'), 'rossa negli ultimi 2 minuti');
     assert.doesNotMatch(t, /data-soglia-arrivo/, 'la scheda "Da preparare" non ha più una soglia rossa');
+    // il restyling del 10/11/2026: tre colonne affiancate dentro un contenitore e un pallino di fase per colonna
+    assert.match(t, /<div class="bacheca-colonne">/);
+    assert.equal(t.match(/<span class="colonna-punto" aria-hidden="true"><\/span>/g).length, 3);
+    // nessuna informazione di magazzino nella pagina
+    assert.doesNotMatch(t, /giacenza|magazzino/i);
 
-    // ogni scheda ha la sua identità (data-chiave): la home si aggiorna sul posto e aggiunge, toglie e riordina solo quelle cambiate (assets/js, "Home del banco")
-    assert.deepEqual([...t.matchAll(/<article class="scheda scheda-(richiesta|corriere|ordine)[^"]*"\s+data-chiave="([^"]+)"/g)].map((m) => m[2]), ['richiesta-11', 'richiesta-12', 'corriere-21', 'ordine-1280', 'ordine-1281']);
-    // Da confermare: anello, timer, "Nuova" (447 s rimasti su 600: arrivata da 2 min 33 s), articoli, due pulsanti
+    // ogni scheda ha la sua identità (data-chiave) e il suo lavoro (data-lavoro: "r" + richiesta, "o" + ordine senza richiesta, uguale quando la richiesta diventa ordine):
+    // la home si aggiorna sul posto e il popup "Ispeziona" segue il lavoro (assets/js). Da confermare: la scadenza più vicina in alto; Da preparare: il corriere più vicino in alto
+    assert.deepEqual([...t.matchAll(/<article class="scheda scheda-(richiesta|corriere|ordine)[^"]*"\s+data-chiave="([^"]+)" data-lavoro="([^"]+)"/g)].map((m) => [m[2], m[3]]),
+      [['richiesta-12', 'r12'], ['richiesta-11', 'r11'], ['corriere-21', 'r21'], ['ordine-1280', 'r177'], ['ordine-1281', 'o1281']]);
+
+    // Da confermare: "#ORD-xxxx" e timer a pillola mm:ss con la barra che si accorcia (447 s rimasti su 600), niente "Nuova"
     assert.equal(t.match(/data-richiesta /g).length, 2);
+    assert.match(t, /<span class="scheda-codice">#ORD-11<\/span>/);
     assert.match(t, /data-secondi="447" data-finestra="600"/);
-    assert.match(t, /data-tempo>07:27</);
-    assert.equal(t.match(/data-nuova>Nuova</g).length, 1, 'solo la prima è ancora "Nuova"');
-    assert.match(t, /scheda-richiesta urgente/); // la seconda: 95 s
-    assert.match(t, /2 articoli · 3 pezzi/);
-    assert.match(t, /1 articolo · 1 pezzo/);
-    assert.match(t, /<span class="articolo-qta">2×<\/span>[\s\S]*?Bocchettone A 90°[\s\S]*?Cod\. 12352992/);
-    assert.doesNotMatch(t, /Verifica e conferma/);
-    // "Conferma": un form che risponde subito (prezzo_richiesto) e torna alla home, senza passare dal dettaglio
-    assert.equal(t.match(/>Conferma<\/button>/g).length, 2);
-    assert.match(t, /<form class="scheda-azione-conferma" method="POST" action="\/distributore\/richieste\/11\/rispondi">\s*<input type="hidden" name="azione" value="prezzo_richiesto">\s*<input type="hidden" name="torna" value="home">\s*<button class="btn-banco btn-banco-conferma btn-banco-medio" type="submit">Conferma<\/button>/);
-    // sotto, affiancati: "Ispeziona" (un link al dettaglio, con l'occhio) e "Non disponibile" (rifiuta subito)
-    assert.match(t, /<div class="scheda-azioni-secondarie">\s*<a class="btn-banco btn-banco-secondario btn-banco-piccolo" href="\/distributore\/richieste\/11"><svg[\s\S]*?<\/svg>Ispeziona<\/a>/);
-    assert.match(t, /action="\/distributore\/richieste\/11\/rispondi">\s*<input type="hidden" name="azione" value="rifiuta">\s*<input type="hidden" name="torna" value="home">\s*<button class="btn-banco btn-banco-secondario btn-banco-piccolo" type="submit">Non disponibile</);
-    assert.equal(t.match(/>Ispeziona<\/a>/g).length, 5, 'due in "Da confermare", uno in "Attesa corriere" e due in "Da preparare" (uno per ordine)');
+    assert.match(t, /<span data-tempo>07:27<\/span>/);
+    assert.match(t, /<span class="timer-barra-riempita" data-barra style="width: 74.5%"><\/span>/);
+    assert.doesNotMatch(t, /data-nuova|etichetta-nuova|>Nuova</);
+    assert.match(t, /scheda-richiesta urgente[^"]*"\s+data-chiave="richiesta-12"/); // 95 s: negli ultimi 2 minuti
+    assert.doesNotMatch(t, /scheda-richiesta urgente[^"]*"\s+data-chiave="richiesta-11"/);
+    // il materiale: SOLO il codice prodotto e la quantità (×2), niente nomi degli articoli né "Cod."
+    assert.match(t, /<span class="codice-cod">12352992<\/span>\s*<span class="codice-qta">×2<\/span>/);
+    assert.match(t, /<span class="codice-cod">10880380<\/span>\s*<span class="codice-qta">×1<\/span>/);
+    assert.doesNotMatch(t, /Bocchettone A 90°|Valvola Deviatrice 3vie|Adattatore Ø80\/100mm|Cod\. 1\d{7}|articolo-nome|articolo-qta/);
+    // nessun indirizzo né posizione del cliente sulle schede
+    assert.doesNotMatch(t, /Via Puggia|posizione di consegna|destinazione/i);
+    // "Accetta" conferma subito (prezzo_richiesto, torna alla home); "Non disponibile" rifiuta subito; "Ispeziona" è il collegamento alla pagina (con JS apre il popup)
+    assert.equal(t.match(/>Accetta<\/button>/g).length, 2);
+    assert.doesNotMatch(t, /Verifica e conferma|>Conferma<\/button>|>Preparato<\/button>/);
+    assert.match(t, /<a class="btn-banco btn-banco-secondario" href="\/distributore\/richieste\/11" data-ispeziona="r11"><svg[\s\S]*?<\/svg>Ispeziona<\/a>/);
+    assert.match(t, /<form method="POST" action="\/distributore\/richieste\/11\/rispondi">\s*<input type="hidden" name="azione" value="rifiuta">\s*<input type="hidden" name="torna" value="home">\s*<button class="btn-banco btn-banco-rifiuta" type="submit">Non disponibile<\/button>\s*<\/form>\s*<form class="azione-principale" method="POST" action="\/distributore\/richieste\/11\/rispondi">\s*<input type="hidden" name="azione" value="prezzo_richiesto">\s*<input type="hidden" name="torna" value="home">\s*<button class="btn-banco btn-banco-accetta" type="submit">Accetta<\/button>/);
+    assert.equal(t.match(/data-ispeziona="/g).length, 5, 'un Ispeziona per scheda: due in "Da confermare", uno in "Attesa corriere" e due in "Da preparare"');
     // i nomi vengono dal DB: mai HTML grezzo
     assert.ok(t.includes('Rossi &lt;b&gt;Impianti&lt;/b&gt; S.r.l.'));
     assert.doesNotMatch(t, /<b>Impianti<\/b>/);
 
-    // Attesa corriere: "da 3 min" (190 s), nota grigia; "Ispeziona" nella riga del titolo, il nome non è più un link
-    assert.match(t, /Corriere avvisato · da <span data-da>3 min</);
+    // Attesa corriere: "#ORD-21", "da 03:10" (190 s, mm:ss che sale), il riquadro animato "Cerco un corriere…" con le onde, i puntini e la barra; solo "Ispeziona"
+    assert.match(t, /<span class="scheda-codice">#ORD-21<\/span>\s*<span class="da-tempo">da <span data-da>03:10<\/span><\/span>/);
     assert.match(t, /<h3 class="scheda-nome">Verdi S\.n\.c\.<\/h3>/);
-    assert.match(t, /<a class="btn-ispeziona" href="\/distributore\/richieste\/21" aria-label="Ispeziona la richiesta di Verdi S\.n\.c\."><svg[\s\S]*?<\/svg>Ispeziona<\/a>/);
-    assert.doesNotMatch(t, /<a href="\/distributore\/richieste\/21">/);
-    // "Da preparare": Ispeziona su ogni ordine, anche senza richiesta (porta alla pagina dell'ordine)
-    assert.equal(t.slice(t.indexOf('id="col-preparare"')).match(/>Ispeziona<\/a>/g).length, 2);
-    assert.match(t, /Confermato da te\. Non preparare ancora: aspetta che un corriere prenda la consegna\./);
+    assert.match(t, /<span class="cerca-onda"><\/span><span class="cerca-onda cerca-onda-2"><\/span>/);
+    assert.match(t, /Cerco un corriere<span class="puntini" aria-hidden="true"><i><\/i><i><\/i><i><\/i><\/span>/);
+    assert.match(t, /In attesa della sua conferma/);
+    assert.match(t, /<div class="cerca-barra" aria-hidden="true"><span><\/span><\/div>/);
+    assert.match(t, /<a class="btn-banco btn-banco-secondario btn-banco-pieno" href="\/distributore\/richieste\/21" data-ispeziona="r21" aria-label="Ispeziona l'ordine di Verdi S\.n\.c\."><svg[\s\S]*?<\/svg>Ispeziona<\/a>/);
     assert.match(t, /data-corriere data-trascorsi="190"/);
+    assert.doesNotMatch(t, /Confermato da te\. Non preparare ancora|Corriere avvisato/);
 
-    // Da preparare: pillola SOLO con i minuti che mancano (niente orario "ore HH:MM"), sempre verde (nemmeno sotto i 15 minuti diventa rossa), solo se c'è il corriere
-    assert.match(t, /Ordine #1280 · ritira Marco/);
-    assert.match(t, /<div class="pillola-arrivo" data-arrivo data-secondi="480">\s*<span class="pillola-min" data-arrivo-min>8 min<\/span>\s*<\/div>/);
-    assert.doesNotMatch(t, /pillola-arrivo vicino|pillola-ora|>ore \d\d:\d\d</);
-    assert.match(t, /Ordine #1281\s*<\/div>/); // senza corriere nessun "ritira", nessuna pillola
-    assert.equal(t.match(/data-arrivo /g).length, 1);
-    // ... con "Ispeziona" (la pagina dell'ordine, senza prenderlo in carico) e "Preparato" (toglie l'ordine dalla colonna: "In consegna")
-    assert.doesNotMatch(t, /btn-banco-prepara"[^>]*href|>\s*<svg[^>]*>[\s\S]*?<\/svg>Prepara\s*</);
-    assert.match(t, /<a class="btn-banco btn-banco-secondario btn-banco-piccolo" href="\/distributore\/ordini\/1280"><svg[\s\S]*?<\/svg>Ispeziona<\/a>\s*<form method="POST" action="\/distributore\/ordini\/1280\/preparazione">\s*<input type="hidden" name="torna" value="home">\s*<button class="btn-banco btn-banco-prepara btn-banco-piccolo" type="submit"><svg[\s\S]*?<\/svg>Preparato<\/button>/);
-    // anche l'ordine 1281, che non ha una richiesta, ha il suo Ispeziona (l'ordine c'è sempre)
-    assert.match(t, /<div class="scheda-azioni-ordine">\s*<a class="btn-banco btn-banco-secondario btn-banco-piccolo" href="\/distributore\/ordini\/1281"><svg[\s\S]*?<\/svg>Ispeziona<\/a>\s*<form method="POST" action="\/distributore\/ordini\/1281\/preparazione">/);
-    assert.equal(t.match(/>Preparato<\/button>/g).length, 2);
+    // Da preparare: etichetta scura con "ORDINE" + il codice, nome del cliente, riquadro del corriere in arrivo (mm:ss + barra) solo se c'è il corriere
+    assert.match(t, /<span class="ordine-etichetta"><span class="ordine-etichetta-tit">Ordine<\/span><span class="ordine-etichetta-cod">ORD-1280<\/span><\/span>/);
+    assert.match(t, /<span class="ordine-etichetta-cod">ORD-1281<\/span>/);
+    assert.match(t, /<div class="arrivo" data-arrivo data-secondi="480" data-totale="900">/);
+    assert.match(t, /<span class="arrivo-testo" data-arrivo-testo>Corriere in arrivo tra<\/span>\s*<span class="arrivo-punto" aria-hidden="true"><\/span>\s*<span class="arrivo-tempo" data-arrivo-tempo>08:00<\/span>/);
+    assert.match(t, /<span class="timer-barra-riempita" data-barra style="width: 46.7%"><\/span>/);
+    assert.equal(t.match(/data-arrivo /g).length, 1, 'senza corriere nessun riquadro d\'arrivo');
+    assert.doesNotMatch(t, /pillola-arrivo|pillola-ora|ritira Marco|>ore \d\d:\d\d</);
+    // "Ispeziona" (la pagina dell'ordine; con JS il popup, che segue lo stesso lavoro della richiesta: r177) e "Ritirato dal corriere" (il vecchio "Preparato", stessa rotta)
+    assert.match(t, /<a class="btn-banco btn-banco-secondario" href="\/distributore\/ordini\/1280" data-ispeziona="r177"><svg[\s\S]*?<\/svg>Ispeziona<\/a>\s*<form class="azione-principale" method="POST" action="\/distributore\/ordini\/1280\/preparazione">\s*<input type="hidden" name="torna" value="home">\s*<button class="btn-banco btn-banco-ritirato" type="submit"><svg[\s\S]*?<\/svg>Ritirato dal corriere<\/button>/);
+    // anche l'ordine 1281, che non ha una richiesta, ha il suo Ispeziona (l'ordine c'è sempre) con la chiave dell'ordine
+    assert.match(t, /<a class="btn-banco btn-banco-secondario" href="\/distributore\/ordini\/1281" data-ispeziona="o1281">[\s\S]*?<form class="azione-principale" method="POST" action="\/distributore\/ordini\/1281\/preparazione">/);
+    assert.equal(t.match(/>Ritirato dal corriere<\/button>/g).length, 2);
     // "Da preparare" (colonna e contatore) esclude gli ordini segnati consegnati: restano 'inviato' ma la loro pagina rimanda allo Storico, quindi "Ispeziona" non porterebbe da nessuna parte
     assert.match(banco.sqlHome.colonna, /o\.stato = 'inviato' AND o\.consegnato_il IS NULL/);
     assert.match(banco.sqlHome.contatore, /stato = 'inviato' AND consegnato_il IS NULL\) AS da_preparare/);
+
+    // il popup: il contenitore è nella pagina, nascosto e vuoto (lo riempie lo script con GET /distributore/ispeziona/<lavoro>)
+    assert.match(t, /<div class="isp-overlay" data-isp-overlay hidden>\s*<div class="isp-pannello" role="dialog" aria-modal="true" aria-labelledby="isp-titolo" tabindex="-1" data-isp-pannello><\/div>\s*<\/div>/);
 
     // la pausa della ricezione non esiste più
     r = await chiedi('/api/distributore/stato', json({ attivo: false }));

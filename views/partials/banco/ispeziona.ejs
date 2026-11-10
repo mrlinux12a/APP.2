@@ -1,0 +1,134 @@
+<%
+  // Il contenuto del popup "Ispeziona" della home del banco (richiesta del 10/11/2026). Non è una pagina: è il pezzo che lo script mette dentro il pannello
+  // (GET /distributore/ispeziona/:chiave, src/routes/banco/home.js) e che rilegge a ogni cambiamento della bacheca. Il disegno è uguale in tutte le fasi:
+  // intestazione (pillola della fase + codice + X), cliente e blocco del tempo affiancati, tabella "Materiale richiesto", pulsanti. Cambiano solo il blocco
+  // del tempo e i pulsanti. Parametro: scheda (src/logica/banco/ispeziona.js: { chiave, fase, etichetta, codice, motivo, cliente, tempo, materiale, richiestaId, ordineId, firma }).
+  // `data-isp-firma` dice allo script se il contenuto è cambiato (fase, materiale, cliente...): finché è uguale non lo ridisegna, e i conti alla rovescia non ripartono.
+  // Il telefono è testo, non un collegamento (richiesta esplicita del 21/10/2026: niente tel:). I prezzi sono quelli del banco, IVA esclusa.
+  const fase = scheda.fase;
+  const c = scheda.cliente;
+  const m = scheda.materiale;
+  const t = scheda.tempo;
+  const perc = (frazione) => Math.max(0, Math.min(100, Math.round(frazione * 1000) / 10));
+%>
+<div class="isp isp-<%= fase %>" data-isp data-isp-chiave="<%= scheda.chiave %>" data-isp-fase="<%= fase %>" data-isp-firma="<%= scheda.firma %>">
+
+  <div class="isp-testa">
+    <div class="isp-testa-testi">
+      <span class="isp-pillola isp-pillola-<%= fase %>"><%= scheda.etichetta %></span>
+      <h2 class="isp-titolo" id="isp-titolo">Ordine <%= scheda.codice %></h2>
+    </div>
+    <button class="isp-x" type="button" data-isp-chiudi aria-label="Chiudi"><%- iconaChiudi %></button>
+  </div>
+
+  <% if (scheda.motivo) { %>
+    <p class="isp-avviso" role="status"><span aria-hidden="true"><%- iconaAvviso %></span><span><%= scheda.motivo %></span></p>
+  <% } %>
+
+  <div class="isp-blocchi">
+    <section class="isp-cliente" aria-label="Cliente ordinante">
+      <h3 class="isp-eti">Cliente ordinante</h3>
+      <div class="isp-cliente-riga">
+        <%- include('../comune/iniziali', { nome: c.nome, misura: 48 }) %>
+        <div class="isp-cliente-testi">
+          <strong class="isp-cliente-nome"><%= c.nome %></strong>
+          <% if (c.piva) { %><span class="isp-cliente-piva">P.IVA <b><%= c.piva %></b></span><% } %>
+          <% if (c.telefono) { %><span class="isp-cliente-tel"><span aria-hidden="true"><%- iconaTelefono %></span><%= c.telefono %></span><% } %>
+        </div>
+        <% if (c.scheda) { %><a class="btn-banco btn-banco-secondario isp-apri" href="<%= c.scheda %>">Apri scheda cliente<%- iconaEsterno %></a><% } %>
+      </div>
+    </section>
+
+    <%# ---- Blocco del tempo: uno per fase. Lo script lo muove (data-secondi, data-trascorsi, data-totale: secondi del server, trasformati in istanti nel browser). ---- %>
+    <% if (fase === 'da_confermare') { %>
+      <section class="isp-tempo isp-tempo-conferma<%= t.secondi <= bacheca.urgenteSec ? ' urgente' : '' %>" data-isp-tempo data-secondi="<%= t.secondi %>" data-finestra="<%= t.finestra %>">
+        <h3 class="isp-eti" data-isp-eti>Tempo per confermare</h3>
+        <div class="isp-tempo-valore" data-isp-valore role="timer"><%= t.secondi > 0 ? fmt.mmss(t.secondi) : 'Scaduto' %></div>
+        <div class="timer-barra" aria-hidden="true"><span class="timer-barra-riempita" data-barra style="width: <%= perc(t.secondi / t.finestra) %>%"></span></div>
+      </section>
+    <% } else if (fase === 'attesa_corriere') { %>
+      <section class="isp-tempo isp-tempo-corriere" data-isp-tempo data-trascorsi="<%= t.trascorsi %>">
+        <h3 class="isp-eti">In attesa del corriere da</h3>
+        <div class="isp-tempo-riga">
+          <span class="cerca-icona cerca-icona-grande" aria-hidden="true">
+            <span class="cerca-onda"></span><span class="cerca-onda cerca-onda-2"></span>
+            <span class="cerca-furgone"><%- iconaFurgone %></span>
+          </span>
+          <span class="isp-tempo-valore" data-isp-valore><%= fmt.tempoTrascorso(t.trascorsi) %></span>
+        </div>
+        <p class="isp-tempo-sotto">Cerco un corriere<span class="puntini" aria-hidden="true"><i></i><i></i><i></i></span></p>
+        <div class="cerca-barra" aria-hidden="true"><span></span></div>
+      </section>
+    <% } else if (fase === 'da_preparare' && t.arrivo) { %>
+      <section class="isp-tempo isp-tempo-preparare<%= t.arrivo.secondi <= 0 ? ' arrivato' : '' %>" data-isp-tempo data-secondi="<%= t.arrivo.secondi %>" data-totale="<%= t.arrivo.totale %>">
+        <h3 class="isp-eti" data-isp-eti><span class="arrivo-punto" aria-hidden="true"></span><span data-isp-eti-testo><%= t.arrivo.secondi <= 0 ? 'Corriere arrivato al banco' : 'Corriere in arrivo tra' %></span></h3>
+        <div class="isp-tempo-valore" data-isp-valore role="timer"><%= fmt.mmss(Math.max(0, t.arrivo.secondi)) %></div>
+        <div class="timer-barra" aria-hidden="true"><span class="timer-barra-riempita" data-barra style="width: <%= perc(1 - Math.max(0, t.arrivo.secondi) / t.arrivo.totale) %>%"></span></div>
+      </section>
+    <% } else if (fase === 'da_preparare') { %>
+      <section class="isp-tempo isp-tempo-preparare isp-tempo-semplice">
+        <h3 class="isp-eti">Da preparare</h3>
+        <p class="isp-tempo-sotto">Ordine già pagato: prepara il materiale.</p>
+      </section>
+    <% } else { %>
+      <section class="isp-tempo isp-tempo-chiuso">
+        <h3 class="isp-eti">Non più in bacheca</h3>
+        <p class="isp-tempo-sotto">Chiudi il popup: la bacheca è già aggiornata.</p>
+      </section>
+    <% } %>
+  </div>
+
+  <% if (m) { %>
+    <h3 class="isp-eti isp-eti-tabella">Materiale richiesto</h3>
+    <div class="isp-tabella-box">
+      <div class="isp-tabella-scorri">
+        <table class="isp-tabella">
+          <thead>
+            <tr>
+              <th class="isp-c-qta" scope="col">Q.tà</th>
+              <th scope="col">Articolo</th>
+              <th scope="col">Codice prodotto</th>
+              <th class="isp-num" scope="col">Listino</th>
+              <th class="isp-num" scope="col">Prezzo cliente</th>
+              <th class="isp-num" scope="col">Totale</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% m.righe.forEach(function (r) { %>
+              <tr>
+                <td class="isp-c-qta"><span class="isp-qta"><%= r.quantita %>×</span></td>
+                <td class="isp-c-art">
+                  <strong><%= r.nome %></strong>
+                  <% if (r.mancano > 0) { %><small>richiesti <%= r.richiesta %>, mancano <%= r.mancano %></small><% } %>
+                </td>
+                <td class="isp-c-cod"><code><%= r.codice %></code></td>
+                <td class="isp-num isp-listino">€ <%= euro(r.listino) %></td>
+                <td class="isp-num"><strong>€ <%= euro(r.unitario) %></strong><small>cad. + IVA</small></td>
+                <td class="isp-num isp-totale-riga">€ <%= euro(r.totale) %></td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+      <div class="isp-piede">
+        <span class="isp-piede-eti">Totale per il cliente</span>
+        <strong class="isp-piede-val">€ <%= euro(m.totale) %></strong>
+        <span class="isp-piede-iva">+ IVA</span>
+      </div>
+    </div>
+  <% } %>
+
+  <p class="isp-errore" data-isp-errore role="alert" hidden></p>
+
+  <%# Pulsanti: Chiudi sempre; Non disponibile e Accetta ordine da confermare; Ritirato dal corriere da preparare. Le azioni sono le rotte di sempre
+      (rispondi, preparazione), chiamate dallo script senza lasciare la pagina. %>
+  <div class="isp-azioni">
+    <button class="btn-banco btn-banco-secondario" type="button" data-isp-chiudi>Chiudi</button>
+    <% if (fase === 'da_confermare') { %>
+      <button class="btn-banco btn-banco-rifiuta" type="button" data-isp-azione="rifiuta" data-isp-url="/distributore/richieste/<%= scheda.richiestaId %>/rispondi" data-isp-corpo="azione=rifiuta">Non disponibile</button>
+      <button class="btn-banco btn-banco-accetta" type="button" data-isp-azione="accetta" data-isp-url="/distributore/richieste/<%= scheda.richiestaId %>/rispondi" data-isp-corpo="azione=prezzo_richiesto"><%- iconaSpunta %>Accetta ordine</button>
+    <% } else if (fase === 'da_preparare') { %>
+      <button class="btn-banco btn-banco-ritirato" type="button" data-isp-azione="ritirato" data-isp-url="/distributore/ordini/<%= scheda.ordineId %>/preparazione" data-isp-corpo=""><%- iconaSpunta %>Ritirato dal corriere</button>
+    <% } %>
+  </div>
+</div>

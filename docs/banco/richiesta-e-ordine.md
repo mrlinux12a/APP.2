@@ -32,7 +32,7 @@ timer, "Elimina dal banco" solo come link di testo in fondo.
   e il `secondi_arrivo` della lettura dell'ordine; `passiDopoConferma` non conosce più `corriere`/`daPreparare`. Il CSS `.ric-arrivo-*` resta perché lo usa il riquadro "Ritiro" della pagina dell'ordine. Dopo "Preparato" l'ordine è
   `in_evasione` e la richiesta torna "Confermata". Prova: "banco: la richiesta con l'ordine "Da preparare" non ha una pagina…" e "banco: la freccia di ordine e richiesta riporta…" in `test/sito/banco_avvisi.test.js`, `test/sito/banco_ordine.test.js`, `test/sito/banco_richiesta.test.js`.
 - **Timer** (`[data-ric-timer]`, blocco "Dettaglio richiesta del banco" di `app.js`): anello da 80px arancio come sulla home, **rosso negli ultimi
-  2 minuti** (`SOGLIA_URGENTE_SEC = 120`; la home usa 3 minuti, `BACHECA.urgenteSec`). Come sulla home parte dai secondi rimasti e li trasforma in un
+  2 minuti** (`SOGLIA_URGENTE_SEC = 120`; anche la home dal 10/11/2026: `BACHECA.urgenteSec` = 120; prima era 180). Come sulla home parte dai secondi rimasti e li trasforma in un
   istante col `Date.now()` del browser; a zero ricarica. "Rispondi entro le HH:MM" è `requests.scade_il` in ora italiana.
 - **Tabella del materiale** (`tabellaMateriale`): Q.tà, articolo e codice, listino, prezzo per il cliente (sconto del banco + servizio, `cad. + IVA`),
   totale di riga. **"Totale per il cliente" = merce + contributo RAEE, IVA esclusa, senza la spedizione fissa** (che l'installatore paga alla piattaforma, non

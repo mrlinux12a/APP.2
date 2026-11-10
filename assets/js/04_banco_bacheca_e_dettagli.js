@@ -1,18 +1,19 @@
-/* Home del banco (bacheca a 3 colonne, views/banco/richieste.ejs): fa muovere timer ed etichette a tempo.
+/* Home del banco (bacheca a 3 colonne, views/banco/richieste.ejs): fa muovere timer ed etichette a tempo. Rifatta il 10/11/2026 (restyling del banco).
    Ogni valore parte da quanti secondi mancano (o sono passati) quando il server ha disegnato la pagina, trasformati
    in un istante con l'orologio del browser: un conteggio non perde colpi se la scheda resta in secondo piano (i
    timer delle schede nascoste vengono rallentati) e l'orologio del PC, magari sfasato, non conta.
-   - richiesta da confermare: anello che si svuota e mm:ss; rosso negli ultimi minuti (data-soglia-urgente); etichetta
-     "Nuova" per i primi minuti; allo scadere la scheda si spegne e la pagina si ricarica (la richiesta non c'è più);
-   - corriere avvisato: "da N min", da quando il banco ha confermato;
-   - ordine da preparare: solo i minuti che mancano al ritiro del corriere, sempre in verde (niente orario, niente rosso: richiesta esplicita del 21/10/2026).
-   La soglia della richiesta da confermare la scrive il server (BACHECA in server.js): la stessa che ha usato per le classi iniziali. */
+   - richiesta da confermare: pillola mm:ss con la barra che si accorcia; rossa negli ultimi minuti (data-soglia-urgente: 2 minuti); a zero dice "Scaduto", la scheda
+     si spegne e la bacheca si aggiorna (la richiesta non c'è più);
+   - corriere avvisato: "da mm:ss" che sale, da quando il banco ha confermato;
+   - ordine da preparare: conto alla rovescia mm:ss del corriere (il tempo che ha scritto) con la barra che si riempie; a zero il riquadro diventa verde pieno
+     "Corriere arrivato al banco" (è la stima che scade: non c'è un segnale vero di arrivo).
+   La soglia della richiesta da confermare la scrive il server (BACHECA in src/config/bacheca.js): la stessa che ha usato per le classi iniziali. */
 (function () {
   'use strict';
   const bacheca = document.querySelector('[data-bacheca]');
   if (!bacheca) return;
 
-  const sogliaUrgente = parseInt(bacheca.getAttribute('data-soglia-urgente'), 10) || 180;
+  const sogliaUrgente = parseInt(bacheca.getAttribute('data-soglia-urgente'), 10) || 120;
 
   function numero(el, nome) {
     const n = parseInt(el.getAttribute(nome), 10);
@@ -23,12 +24,16 @@
     return String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
   }
 
-  // "8 min", "1 h 05": uguale a durata() nella vista (e a quello del dettaglio della richiesta).
-  const durata = Minuteria.durataMinuti;
-
   // Scrive solo se il testo cambia: ogni secondo si controllano tutte le schede, ma il DOM si tocca di rado.
   function scrivi(el, testo) {
     if (el && el.textContent !== testo) el.textContent = testo;
+  }
+
+  // La barra: larghezza in percentuale (con una cifra decimale), solo se cambia.
+  function larghezza(barra, frazione) {
+    if (!barra) return;
+    const w = (Math.max(0, Math.min(1, frazione)) * 100).toFixed(1) + '%';
+    if (barra.style.width !== w) barra.style.width = w;
   }
 
   // Gli istanti di ogni scheda si calcolano la PRIMA volta che la si vede, dai secondi scritti dal server, e da lì restano: la bacheca si aggiorna sul posto
@@ -37,15 +42,11 @@
   function statoRichiesta(el, adesso) {
     let r = stati.get(el);
     if (!r) {
-      const anello = el.querySelector('[data-anello]');
       r = {
-        anello: anello,
-        circ: anello ? parseFloat(anello.getAttribute('stroke-dasharray')) : 0,
         tempo: el.querySelector('[data-tempo]'),
-        nuova: el.querySelector('[data-nuova]'),
+        barra: el.querySelector('[data-barra]'),
         fine: adesso + numero(el, 'data-secondi') * 1000,
         finestra: Math.max(1, numero(el, 'data-finestra')),
-        nuovaFine: adesso + numero(el, 'data-nuova-sec') * 1000,
         chiusa: false,
       };
       stati.set(el, r);
@@ -63,7 +64,14 @@
   function statoArrivo(el, adesso) {
     let a = stati.get(el);
     if (!a) {
-      a = { min: el.querySelector('[data-arrivo-min]'), fine: adesso + numero(el, 'data-secondi') * 1000 };
+      a = {
+        testo: el.querySelector('[data-arrivo-testo]'),
+        tempo: el.querySelector('[data-arrivo-tempo]'),
+        barra: el.querySelector('[data-barra]'),
+        fine: adesso + numero(el, 'data-secondi') * 1000,
+        totale: Math.max(1, numero(el, 'data-totale')),
+        arrivato: el.classList.contains('arrivato'),
+      };
       stati.set(el, a);
     }
     return a;
@@ -75,18 +83,13 @@
     bacheca.querySelectorAll('[data-richiesta]').forEach(function (el) {
       const r = statoRichiesta(el, adesso);
       const sec = Math.max(0, Math.ceil((r.fine - adesso) / 1000));
-      scrivi(r.tempo, mmss(sec));
-      if (r.anello) r.anello.style.strokeDashoffset = String((r.circ * (1 - Math.min(1, sec / r.finestra))).toFixed(2));
-      el.classList.toggle('urgente', sec <= sogliaUrgente);
-      if (r.nuova && adesso >= r.nuovaFine) {
-        r.nuova.remove();
-        r.nuova = null;
-      }
+      scrivi(r.tempo, sec > 0 ? mmss(sec) : 'Scaduto');
+      larghezza(r.barra, sec / r.finestra);
+      el.classList.toggle('urgente', sec > 0 && sec <= sogliaUrgente);
       if (sec === 0 && !r.chiusa) {
         // La richiesta è scaduta: sparirà dalla colonna aggiornando la bacheca (lo farebbe da solo anche il controllo ogni 5 secondi, ma così la scheda non resta
         // lì a contare zero). Se l'aggiornamento sul posto non riesce si ricarica la pagina.
         r.chiusa = true;
-        el.classList.remove('urgente');
         el.classList.add('scaduta');
         setTimeout(function () { rinfresca().then(function (ok) { if (!ok) window.location.reload(); }); }, 2500);
       }
@@ -94,13 +97,20 @@
 
     bacheca.querySelectorAll('[data-corriere]').forEach(function (el) {
       const c = statoCorriere(el, adesso);
-      scrivi(c.da, Minuteria.daMinuti((adesso - c.inizio) / 1000));
+      scrivi(c.da, Minuteria.tempoTrascorso((adesso - c.inizio) / 1000));
     });
 
     bacheca.querySelectorAll('[data-arrivo]').forEach(function (el) {
       const a = statoArrivo(el, adesso);
-      const min = Math.ceil((a.fine - adesso) / 60000);
-      scrivi(a.min, min <= 0 ? 'In ritardo' : durata(min));
+      const sec = Math.max(0, Math.ceil((a.fine - adesso) / 1000));
+      scrivi(a.tempo, mmss(sec));
+      larghezza(a.barra, 1 - sec / a.totale);
+      const arrivato = sec <= 0;
+      if (arrivato !== a.arrivato) {
+        a.arrivato = arrivato;
+        el.classList.toggle('arrivato', arrivato);
+        scrivi(a.testo, arrivato ? 'Corriere arrivato al banco' : 'Corriere in arrivo tra');
+      }
     });
   }
 

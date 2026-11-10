@@ -1,0 +1,16 @@
+<%
+  // Materiale di una scheda della home del banco: SOLO il codice prodotto (monospace) e la quantità ("×24"), niente nomi degli articoli (restyling
+  // del 10/11/2026: il banco controlla i codici a mano; il nome e i prezzi stanno nel popup "Ispeziona"). Parametri: articoli (le righe da mostrare,
+  // { quantita, codice, nome }) e altre (quante righe in più non entrano: "+2 altri codici"). Senza codice si scrive il nome, per non lasciare una riga vuota.
+%>
+<ul class="codici" aria-label="Materiale">
+  <% articoli.forEach(function (a) { %>
+    <li class="codice-riga">
+      <span class="codice-cod"><%= a.codice || a.nome %></span>
+      <span class="codice-qta">×<%= a.quantita %></span>
+    </li>
+  <% }); %>
+  <% if (altre > 0) { %>
+    <li class="codice-altre">+<%= altre %> altr<%= altre === 1 ? 'o codice' : 'i codici' %></li>
+  <% } %>
+</ul>
